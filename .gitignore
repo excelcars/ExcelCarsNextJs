@@ -1,0 +1,12 @@
+.next
+node_modules
+coverage
+dist
+.turbo
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging.local
+.vercel
+/db

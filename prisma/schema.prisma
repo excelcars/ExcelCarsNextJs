@@ -1,0 +1,850 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AccessFunction {
+  accessFunctionId   Int                  @id(map: "idx_16391_pk_access_function") @default(autoincrement()) @map("access_function_id")
+  accessFunctionName String?              @map("access_function_name")
+  roleIdLegacy       String?              @map("role_id_legacy")
+  createdDate        DateTime?            @map("created_date") @db.Timestamptz(6)
+  createdBy          Int?                 @map("created_by")
+  updatedDate        DateTime?            @map("updated_date") @db.Timestamptz(6)
+  updatedBy          Int?                 @map("updated_by")
+  createdByUser      UserTable?           @relation("access_function_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_access_function_created_by_user")
+  updatedByUser      UserTable?           @relation("access_function_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_access_function_updated_by_user")
+  accessFunctionRole AccessFunctionRole[]
+
+  @@map("access_function")
+}
+
+model AccessFunctionRole {
+  accessFunctionId Int            @map("access_function_id")
+  roleId           Int            @map("role_id")
+  accessFunction   AccessFunction @relation(fields: [accessFunctionId], references: [accessFunctionId], onDelete: NoAction, onUpdate: NoAction, map: "fk_afr_function")
+  roleMaster       RoleMaster     @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "fk_afr_role")
+
+  @@id([accessFunctionId, roleId], map: "idx_16397_pk_access_function_role")
+  @@map("access_function_role")
+}
+
+model AddEmployee {
+  empId              Int                 @id(map: "idx_16401_pk_add_employee") @default(autoincrement()) @map("emp_id")
+  empFirstName       String?             @map("emp_first_name")
+  empLastName        String?             @map("emp_last_name")
+  empGender          String?             @map("emp_gender")
+  empAddress         String?             @map("emp_address")
+  empCity            String?             @map("emp_city")
+  empStateLegacy     String?             @map("emp_state_legacy")
+  empPincode         String?             @map("emp_pincode")
+  empMobileNo        String?             @map("emp_mobile_no")
+  empPhoneNo         String?             @map("emp_phone_no")
+  empEmailId         String?             @map("emp_email_id")
+  createdDate        DateTime?           @map("created_date") @db.Timestamptz(6)
+  createdBy          Int?                @map("created_by")
+  updatedDate        DateTime?           @map("updated_date") @db.Timestamptz(6)
+  updatedBy          Int?                @map("updated_by")
+  fkStateId          Int?                @map("fk_state_id")
+  createdByUser      UserTable?          @relation("add_employee_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_add_employee_created_by_user")
+  updatedByUser      UserTable?          @relation("add_employee_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_add_employee_updated_by_user")
+  indianStatesMaster IndianStatesMaster? @relation(fields: [fkStateId], references: [stateId], onDelete: NoAction, onUpdate: NoAction, map: "fk_addemployee_state")
+  userAccounts       UserTable[]         @relation("user_table_emp_idToadd_employee")
+
+  @@map("add_employee")
+}
+
+model CarMakeMaster {
+  pkMakeId         Int                @id(map: "idx_16408_pk_make") @default(autoincrement()) @map("pk_make_id")
+  make             String?
+  createdBy        Int?               @map("created_by")
+  createdDt        DateTime?          @map("created_dt") @db.Timestamptz(6)
+  updatedBy        Int?               @map("updated_by")
+  updatedDt        DateTime?          @map("updated_dt") @db.Timestamptz(6)
+  createdByUser    UserTable?         @relation("car_make_master_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_make_master_created_by_user")
+  updatedByUser    UserTable?         @relation("car_make_master_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_make_master_updated_by_user")
+  carModelMaster   CarModelMaster[]
+  carVariantMaster CarVariantMaster[]
+
+  @@map("car_make_master")
+}
+
+model CarModelMaster {
+  pkModelId        Int                @id(map: "idx_16415_pk_car_model_master") @default(autoincrement()) @map("pk_model_id")
+  fkMakeId         Int?               @map("fk_make_id")
+  model            String?
+  createdBy        Int?               @map("created_by")
+  createdDt        DateTime?          @map("created_dt") @db.Timestamptz(6)
+  updatedBy        Int?               @map("updated_by")
+  updatedDt        DateTime?          @map("updated_dt") @db.Timestamptz(6)
+  createdByUser    UserTable?         @relation("car_model_master_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_model_master_created_by_user")
+  carMakeMaster    CarMakeMaster?     @relation(fields: [fkMakeId], references: [pkMakeId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_model_master_fk_make_id")
+  updatedByUser    UserTable?         @relation("car_model_master_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_model_master_updated_by_user")
+  carVariantMaster CarVariantMaster[]
+
+  @@index([fkMakeId], map: "idx_16415_ix_car_model_master_fk_make_id")
+  @@map("car_model_master")
+}
+
+model CarVariantMaster {
+  pkVariantId         Int                   @id(map: "idx_16422_pk_car_variant_master") @default(autoincrement()) @map("pk_variant_id")
+  fkMakeId            Int?                  @map("fk_make_id")
+  fkModelId           Int?                  @map("fk_model_id")
+  variant             String?
+  createdBy           Int?                  @map("created_by")
+  createdDt           DateTime?             @map("created_dt") @db.Timestamptz(6)
+  updatedBy           Int?                  @map("updated_by")
+  updatedDt           DateTime?             @map("updated_dt") @db.Timestamptz(6)
+  createdByUser       UserTable?            @relation("car_variant_master_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_variant_master_created_by_user")
+  carMakeMaster       CarMakeMaster?        @relation(fields: [fkMakeId], references: [pkMakeId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_variant_master_fk_make_id")
+  carModelMaster      CarModelMaster?       @relation(fields: [fkModelId], references: [pkModelId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_variant_master_fk_model_id")
+  updatedByUser       UserTable?            @relation("car_variant_master_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_car_variant_master_updated_by_user")
+  customerFeedback    CustomerFeedback[]
+  dsaManagement       DsaManagement[]
+  inquiryCarDetails   InquiryCarDetails[]
+  insuranceMain       InsuranceMain[]
+  inventoryManagement InventoryManagement[]
+  loanManagement      LoanManagement[]
+  rtoAgent            RtoAgent[]
+
+  @@index([fkMakeId], map: "idx_16422_ix_car_variant_master_fk_make_id")
+  @@index([fkModelId], map: "idx_16422_ix_car_variant_master_fk_model_id")
+  @@map("car_variant_master")
+}
+
+model CheckListDocMain {
+  documentId           Int                   @id(map: "idx_16429_pk_check_list_documents") @default(autoincrement()) @map("document_id")
+  inventoryId          Int?                  @map("inventory_id")
+  make                 String?
+  model                String?
+  variant              String?
+  colour               String?
+  registrationNo       String?               @map("registration_no")
+  year                 Int?
+  fuelType             String?               @map("fuel_type")
+  customerId           Int?                  @map("customer_id")
+  customerNameLegacy   String?               @map("customer_name_legacy")
+  customerMobileLegacy String?               @map("customer_mobile_legacy")
+  customerEmailLegacy  String?               @map("customer_email_legacy")
+  createdBy            Int?                  @map("created_by")
+  createdDate          DateTime?             @map("created_date") @db.Timestamptz(6)
+  updatedBy            Int?                  @map("updated_by")
+  updatedDate          DateTime?             @map("updated_date") @db.Timestamptz(6)
+  customer             Customer?             @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_check_list_doc_main_customer_id")
+  inventoryManagement  InventoryManagement?  @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_check_list_doc_main_inventory_id")
+  checklistDocDetails  ChecklistDocDetails[]
+
+  @@index([customerId], map: "idx_16429_ix_check_list_doc_main_customer_id")
+  @@index([inventoryId], map: "idx_16429_ix_check_list_doc_main_inventory_id")
+  @@map("check_list_doc_main")
+}
+
+model ChecklistDocDetails {
+  checklistDetailsId Int               @id(map: "idx_16436_pk_checklist_doc_details") @default(autoincrement()) @map("checklist_details_id")
+  fkDocumentId       Int?              @map("fk_document_id")
+  documentName       String?           @map("document_name")
+  applicable         String?
+  received           String?
+  originalCopy       String?           @map("original_copy")
+  createdBy          Int?              @map("created_by")
+  createdDt          DateTime?         @map("created_dt") @db.Timestamptz(6)
+  updatedBy          Int?              @map("updated_by")
+  updatedDt          DateTime?         @map("updated_dt") @db.Timestamptz(6)
+  checkListDocMain   CheckListDocMain? @relation(fields: [fkDocumentId], references: [documentId], onDelete: NoAction, onUpdate: NoAction, map: "fk_checklist_doc_details_fk_document_id")
+
+  @@index([fkDocumentId], map: "idx_16436_ix_checklist_doc_details_fk_document_id")
+  @@map("checklist_doc_details")
+}
+
+model Customer {
+  custId              Int                   @id(map: "idx_16443_pk_customer") @default(autoincrement()) @map("cust_id")
+  type                String?
+  custName            String                @map("cust_name")
+  custAddress         String?               @map("cust_address")
+  custMobile          String?               @map("cust_mobile")
+  mobile_2            String?
+  custEmail           String?               @map("cust_email")
+  custDob             DateTime?             @map("cust_dob") @db.Timestamptz(6)
+  custAnniversaryDt   DateTime?             @map("cust_anniversary_dt") @db.Timestamptz(6)
+  comments            String?
+  companyName         String?               @map("company_name")
+  createdDt           DateTime?             @map("created_dt") @db.Timestamptz(6)
+  createdBy           Int?                  @map("created_by")
+  updatedDt           DateTime?             @map("updated_dt") @db.Timestamptz(6)
+  updatedBy           Int                   @map("updated_by")
+  fkStateId           Int?                  @map("fk_state_id")
+  checkListDocMain    CheckListDocMain[]
+  createdByUser       UserTable?            @relation("customer_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_created_by_user")
+  indianStatesMaster  IndianStatesMaster?   @relation(fields: [fkStateId], references: [stateId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_state")
+  updatedByUser       UserTable             @relation("customer_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_updated_by_user")
+  customerFeedback    CustomerFeedback[]
+  dsaManagement       DsaManagement[]
+  inquiry             Inquiry[]
+  insuranceMain       InsuranceMain[]
+  inventoryManagement InventoryManagement[]
+  loanManagement      LoanManagement[]
+  rtoAgent            RtoAgent[]
+
+  @@map("customer")
+}
+
+model CustomerFeedback {
+  feedbackId            Int               @id(map: "idx_16450_pk_customer_feedback") @default(autoincrement()) @map("feedback_id")
+  customerId            Int?              @map("customer_id")
+  customerName          String?           @map("customer_name")
+  customerMob           String?           @map("customer_mob")
+  customerEmail         String?           @map("customer_email")
+  customerDob           DateTime?         @map("customer_dob") @db.Timestamptz(6)
+  customerAnniversaryDt DateTime?         @map("customer_anniversary_dt") @db.Timestamptz(6)
+  carMakeLegacy         String?           @map("car_make_legacy")
+  carModelLegacy        String?           @map("car_model_legacy")
+  carVariantLegacy      String?           @map("car_variant_legacy")
+  carYear               Int?              @map("car_year")
+  carRegistrationNo     String?           @map("car_registration_no")
+  answer_1              String?
+  answer_2              String?
+  answer_3              String?
+  answer_4              String?
+  answer_5              String?
+  comments              String?
+  createdDate           DateTime?         @map("created_date") @db.Timestamptz(6)
+  createdBy             Int?              @map("created_by")
+  updatedDate           DateTime?         @map("updated_date") @db.Timestamptz(6)
+  updatedBy             Int?              @map("updated_by")
+  fkVariantId           Int?              @map("fk_variant_id")
+  createdByUser         UserTable?        @relation("customer_feedback_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_created_by_user")
+  customer              Customer?         @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_customer_id")
+  updatedByUser         UserTable?        @relation("customer_feedback_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_updated_by_user")
+  carVariantMaster      CarVariantMaster? @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_variant")
+
+  @@index([customerId], map: "idx_16450_ix_customer_feedback_customer_id")
+  @@index([fkVariantId], map: "idx_16450_ix_customer_feedback_variant")
+  @@map("customer_feedback")
+}
+
+model DealerMaster {
+  dealerId          Int        @id(map: "idx_16457_pk_dealer_master") @default(autoincrement()) @map("dealer_id")
+  dealerName        String?    @map("dealer_name")
+  dealerMobileNo    String?    @map("dealer_mobile_no")
+  dealerMobileNo_2  String?    @map("dealer_mobile_no_2")
+  dealerEmail       String?    @map("dealer_email")
+  dealerAddress     String?    @map("dealer_address")
+  dealerCompanyName String?    @map("dealer_company_name")
+  dealerWebsite     String?    @map("dealer_website")
+  createdBy         Int?       @map("created_by")
+  createdDate       DateTime?  @map("created_date") @db.Timestamptz(6)
+  updatedBy         Int?       @map("updated_by")
+  updatedDate       DateTime?  @map("updated_date") @db.Timestamptz(6)
+  createdByUser     UserTable? @relation("dealer_master_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_dealer_master_created_by_user")
+  updatedByUser     UserTable? @relation("dealer_master_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_dealer_master_updated_by_user")
+
+  @@map("dealer_master")
+}
+
+model DsaManagement {
+  dsaMainId           Int                  @id(map: "idx_16464_pk_dsa_management") @default(autoincrement()) @map("dsa_main_id")
+  inventoryId         Int?                 @map("inventory_id")
+  dsaAgentName        String?              @map("dsa_agent_name")
+  dsaAgentMobileNo    String?              @map("dsa_agent_mobile_no")
+  dsaAgentEmail       String?              @map("dsa_agent_email")
+  dsaEntryDate        DateTime?            @map("dsa_entry_date") @db.Timestamptz(6)
+  dsaBankName         String?              @map("dsa_bank_name")
+  customerId          Int?                 @map("customer_id")
+  customerNameLegacy  String?              @map("customer_name_legacy")
+  carModelLegacy      String?              @map("car_model_legacy")
+  carRegistrationNo   String?              @map("car_registration_no")
+  loanAmount          Decimal?             @map("loan_amount") @db.Decimal
+  percentageOfPayout  Decimal?             @map("percentage_of_payout") @db.Decimal
+  payoutAmount        Decimal?             @map("payout_amount") @db.Decimal
+  paymentStatus       String?              @map("payment_status")
+  amountPaid          Decimal?             @map("amount_paid") @db.Decimal
+  remark              String?
+  createdDate         DateTime?            @map("created_date") @db.Timestamptz(6)
+  createdBy           Int?                 @map("created_by")
+  updatedDate         DateTime?            @map("updated_date") @db.Timestamptz(6)
+  updatedBy           Int?                 @map("updated_by")
+  fkPartnerId         Int?                 @map("fk_partner_id")
+  fkVariantId         Int?                 @map("fk_variant_id")
+  customer            Customer?            @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_dsa_management_customer_id")
+  inventoryManagement InventoryManagement? @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_dsa_management_inventory_id")
+  partnerMaster       PartnerMaster?       @relation(fields: [fkPartnerId], references: [partnerId], onDelete: NoAction, onUpdate: NoAction, map: "fk_dsa_management_partner")
+  carVariantMaster    CarVariantMaster?    @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_dsa_management_variant")
+
+  @@index([customerId], map: "idx_16464_ix_dsa_management_customer_id")
+  @@index([inventoryId], map: "idx_16464_ix_dsa_management_inventory_id")
+  @@index([fkVariantId], map: "ix_dsa_management_variant")
+  @@map("dsa_management")
+}
+
+model EmailAttachment {
+  attachmentId    Int              @id(map: "idx_16471_pk_email_attachment") @default(autoincrement()) @map("attachment_id")
+  fkTypeId        Int?             @map("fk_type_id")
+  path            String?
+  message         String?
+  messageTemplate MessageTemplate? @relation(fields: [fkTypeId], references: [typeId], onDelete: NoAction, onUpdate: NoAction, map: "fk_email_attachment_type")
+
+  @@index([fkTypeId], map: "idx_16471_ix_email_attachment_type")
+  @@map("email_attachment")
+}
+
+model ExceptionLogging {
+  logginsId Int       @id(map: "idx_16478_pk_loggin") @default(autoincrement()) @map("loggins_id")
+  sessionId String    @map("session_id")
+  userId    Int       @map("user_id")
+  userName  String?   @map("user_name")
+  url       String?
+  code      String?
+  message   String?
+  error     String?
+  datetime  DateTime? @db.Timestamptz(6)
+  source    String?
+  ipaddress String?
+  createDt  DateTime  @map("create_dt") @db.Timestamptz(6)
+  createdBy Int       @map("created_by")
+  updateDt  DateTime  @map("update_dt") @db.Timestamptz(6)
+  updateBy  Int       @map("update_by")
+
+  @@map("exception_logging")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model FollowupInquiry {
+  pkFollowupId           Int        @id(map: "idx_16485_pk_followup_inquiry") @default(autoincrement()) @map("pk_followup_id")
+  fkInquiryId            Int?       @map("fk_inquiry_id")
+  followupDate           DateTime?  @map("followup_date") @db.Timestamptz(6)
+  followupStatus         String?    @map("followup_status")
+  followupSubStatus      String?    @map("followup_sub_status")
+  comments               String?
+  followupClassification String?    @map("followup_classification")
+  createdDt              DateTime?  @map("created_dt") @db.Timestamptz(6)
+  createdBy              Int?       @map("created_by")
+  updatedDt              DateTime?  @map("updated_dt") @db.Timestamptz(6)
+  updatedBy              Int?       @map("updated_by")
+  createdByUser          UserTable? @relation("followup_inquiry_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_followup_inquiry_created_by_user")
+  inquiry                Inquiry?   @relation(fields: [fkInquiryId], references: [inquiryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_followup_inquiry_inquiry")
+  updatedByUser          UserTable? @relation("followup_inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_followup_inquiry_updated_by_user")
+
+  @@index([fkInquiryId], map: "ix_followup_inquiry_inquiry")
+  @@map("followup_inquiry")
+}
+
+model ForgotPassword {
+  forgotPasswordId Int       @id(map: "idx_16492_pk_forgot_password") @default(autoincrement()) @map("forgot_password_id")
+  verificationCode String?   @map("verification_code")
+  emailAddress     String?   @map("email_address")
+  activeFl         Boolean?  @map("active_fl")
+  createdBy        Int?      @map("created_by")
+  createdDt        DateTime? @map("created_dt") @db.Timestamptz(6)
+  updatedBy        Int?      @map("updated_by")
+  updatedDt        DateTime? @map("updated_dt") @db.Timestamptz(6)
+
+  @@map("forgot_password")
+}
+
+model IndianStatesMaster {
+  statename   String        @unique(map: "idx_16499_uq_indian_states_master_name")
+  stateId     Int           @id(map: "idx_16499_pk_indian_states_master") @default(autoincrement()) @map("state_id")
+  addEmployee AddEmployee[]
+  customer    Customer[]
+
+  @@map("indian_states_master")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model Inquiry {
+  inquiryId             Int                 @id(map: "idx_16506_pk_inquiry") @default(autoincrement()) @map("inquiry_id")
+  inquiryNo             String?             @map("inquiry_no")
+  dateOfInquiry         DateTime?           @map("date_of_inquiry") @db.Timestamptz(6)
+  website               String?
+  customerId            Int?                @map("customer_id")
+  customerNameLegacy    String?             @map("customer_name_legacy")
+  mobileno              String?
+  email                 String?
+  budgetOfCustomer      Decimal?            @map("budget_of_customer") @db.Decimal
+  visitedDateOfCustomer DateTime?           @map("visited_date_of_customer") @db.Timestamptz(6)
+  classification        String?
+  status                String?
+  subStatus             String?             @map("sub_status")
+  followUpDate          DateTime?           @map("follow_up_date") @db.Timestamptz(6)
+  remark                String?
+  createdDt             DateTime?           @map("created_dt") @db.Timestamptz(6)
+  createdBy             Int?                @map("created_by")
+  updatedDt             DateTime?           @map("updated_dt") @db.Timestamptz(6)
+  updatedBy             Int?                @map("updated_by")
+  followupInquiry       FollowupInquiry[]
+  createdByUser         UserTable?          @relation("inquiry_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_created_by_user")
+  customer              Customer?           @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_customer_id")
+  updatedByUser         UserTable?          @relation("inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_updated_by_user")
+  inquiryCarDetails     InquiryCarDetails[]
+
+  @@index([customerId], map: "idx_16506_ix_inquiry_customer_id")
+  @@map("inquiry")
+}
+
+model InquiryCarDetails {
+  inquiryCarDetailsId Int               @id(map: "idx_16513_pk_inquiry_car_details") @default(autoincrement()) @map("inquiry_car_details_id")
+  fkInquiryId         Int?              @map("fk_inquiry_id")
+  makeLegacy          String?           @map("make_legacy")
+  modelLegacy         String?           @map("model_legacy")
+  variantLegacy       String?           @map("variant_legacy")
+  subVariant          String?           @map("sub_variant")
+  year                Int?
+  createdDt           DateTime?         @map("created_dt") @db.Timestamptz(6)
+  createdBy           Int?              @map("created_by")
+  updatedDt           DateTime?         @map("updated_dt") @db.Timestamptz(6)
+  updatedBy           Int?              @map("updated_by")
+  fkVariantId         Int?              @map("fk_variant_id")
+  createdByUser       UserTable?        @relation("inquiry_car_details_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_car_details_created_by_user")
+  inquiry             Inquiry?          @relation(fields: [fkInquiryId], references: [inquiryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_car_details_inquiry")
+  updatedByUser       UserTable?        @relation("inquiry_car_details_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_car_details_updated_by_user")
+  carVariantMaster    CarVariantMaster? @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_car_details_variant")
+
+  @@index([fkVariantId], map: "idx_16513_ix_inquiry_car_details_variant")
+  @@index([fkInquiryId], map: "ix_inquiry_car_details_inquiry")
+  @@map("inquiry_car_details")
+}
+
+model InsuranceFollowupDetails {
+  insuranceFollowupId Int            @id(map: "idx_16520_pk_insurance_followup_details") @default(autoincrement()) @map("insurance_followup_id")
+  fkInsuranceMainId   Int?           @map("fk_insurance_main_id")
+  followupDate        DateTime?      @map("followup_date") @db.Timestamptz(6)
+  remark              String?
+  createdBy           Int?           @map("created_by")
+  createdDt           DateTime?      @map("created_dt") @db.Timestamptz(6)
+  updatedBy           Int?           @map("updated_by")
+  updatedDt           DateTime?      @map("updated_dt") @db.Timestamptz(6)
+  createdByUser       UserTable?     @relation("insurance_followup_details_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_followup_details_created_by_user")
+  insuranceMain       InsuranceMain? @relation(fields: [fkInsuranceMainId], references: [insuranceMainId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_followup_details_fk_insurance_main_id")
+  updatedByUser       UserTable?     @relation("insurance_followup_details_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_followup_details_updated_by_user")
+
+  @@index([fkInsuranceMainId], map: "idx_16520_ix_insurance_followup_details_fk_insurance_main_id")
+  @@map("insurance_followup_details")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model InsuranceMain {
+  insuranceMainId           Int                        @id(map: "idx_16527_pk_insurance_details") @default(autoincrement()) @map("insurance_main_id")
+  inventoryId               Int?                       @map("inventory_id")
+  agentNameLegacy           String?                    @map("agent_name_legacy")
+  agentMobileNoLegacy       String?                    @map("agent_mobile_no_legacy")
+  agentEmailIdLegacy        String?                    @map("agent_email_id_legacy")
+  entryDate                 DateTime?                  @map("entry_date") @db.Timestamptz(6)
+  renewalDate               DateTime?                  @map("renewal_date") @db.Timestamptz(6)
+  expiryDate                DateTime?                  @map("expiry_date") @db.Timestamptz(6)
+  customerId                Int?                       @map("customer_id")
+  customerNameLegacy        String?                    @map("customer_name_legacy")
+  customerMobileLegacy      String?                    @map("customer_mobile_legacy")
+  customerEmailLegacy       String?                    @map("customer_email_legacy")
+  carType                   String?                    @map("car_type")
+  carMakeLegacy             String?                    @map("car_make_legacy")
+  carModelLegacy            String?                    @map("car_model_legacy")
+  carVariantLegacy          String?                    @map("car_variant_legacy")
+  carYear                   Int?                       @map("car_year")
+  carRegistrationNo         String?                    @map("car_registration_no")
+  insurancePremium          Decimal?                   @map("insurance_premium") @db.Decimal
+  oDPremium                 Decimal?                   @map("o_d_premium") @db.Decimal
+  payoutPercentageOdPremium Decimal?                   @map("payout_percentage_od_premium") @db.Decimal
+  payoutAmount              Decimal?                   @map("payout_amount") @db.Decimal
+  totalAmountReceived       Decimal?                   @map("total_amount_received") @db.Decimal
+  payoutPaymentStatus       String?                    @map("payout_payment_status")
+  policyStatus              String?                    @map("policy_status")
+  followupDate              DateTime?                  @map("followup_date") @db.Timestamptz(6)
+  remark                    String?
+  createdDate               DateTime?                  @map("created_date") @db.Timestamptz(6)
+  createdBy                 Int?                       @map("created_by")
+  updatedDate               DateTime?                  @map("updated_date") @db.Timestamptz(6)
+  updatedBy                 Int?                       @map("updated_by")
+  fkVariantId               Int?                       @map("fk_variant_id")
+  fkPartnerId               Int?                       @map("fk_partner_id")
+  insuranceFollowupDetails  InsuranceFollowupDetails[]
+  createdByUser             UserTable?                 @relation("insurance_main_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_created_by_user")
+  customer                  Customer?                  @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_customer_id")
+  inventoryManagement       InventoryManagement?       @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_inventory_id")
+  partnerMaster             PartnerMaster?             @relation(fields: [fkPartnerId], references: [partnerId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_partner")
+  updatedByUser             UserTable?                 @relation("insurance_main_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_updated_by_user")
+  carVariantMaster          CarVariantMaster?          @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_variant")
+  insurancePaymentDetails   InsurancePaymentDetails[]
+
+  @@index([customerId], map: "idx_16527_ix_insurance_main_customer_id")
+  @@index([inventoryId], map: "idx_16527_ix_insurance_main_inventory_id")
+  @@index([fkPartnerId], map: "idx_16527_ix_insurance_main_partner")
+  @@index([fkVariantId], map: "idx_16527_ix_insurance_main_variant")
+  @@map("insurance_main")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model InsurancePaymentDetails {
+  insurancePaymentId  Int            @id(map: "idx_16534_pk_insurance_payment_details") @default(autoincrement()) @map("insurance_payment_id")
+  fkInsuranceMainId   Int?           @map("fk_insurance_main_id")
+  amountReceived      Decimal?       @map("amount_received") @db.Decimal
+  payoutAmount        Decimal?       @map("payout_amount") @db.Decimal
+  payoutPaymentStatus String?        @map("payout_payment_status")
+  policyStatus        String?        @map("policy_status")
+  createdBy           Int?           @map("created_by")
+  createdDt           DateTime?      @map("created_dt") @db.Timestamptz(6)
+  updatedBy           Int?           @map("updated_by")
+  updatedDt           DateTime?      @map("updated_dt") @db.Timestamptz(6)
+  createdByUser       UserTable?     @relation("insurance_payment_details_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_payment_details_created_by_user")
+  insuranceMain       InsuranceMain? @relation(fields: [fkInsuranceMainId], references: [insuranceMainId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_payment_details_fk_insurance_main_id")
+  updatedByUser       UserTable?     @relation("insurance_payment_details_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_payment_details_updated_by_user")
+
+  @@index([fkInsuranceMainId], map: "idx_16534_ix_insurance_payment_details_fk_insurance_main_id")
+  @@map("insurance_payment_details")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model InventoryManagement {
+  inventoryId      Int                @id(map: "idx_16541_pk_inventory_management") @default(autoincrement()) @map("inventory_id")
+  inventoryNumber  String?            @map("inventory_number")
+  makeLegacy       String?            @map("make_legacy")
+  modelLegacy      String?            @map("model_legacy")
+  variantLegacy    String?            @map("variant_legacy")
+  colour           String?
+  sku              String?
+  year             Int?
+  month            String?
+  fuelType         String?            @map("fuel_type")
+  noOfOwners       Int?               @map("no_of_owners")
+  tax              String?
+  isCarRegistered  Boolean?           @map("is_car_registered")
+  registrationNo   String?            @map("registration_no")
+  kmsDriven        Decimal?           @map("kms_driven") @db.Decimal
+  insuranceType    String?            @map("insurance_type")
+  price            Decimal?           @db.Decimal
+  otherRemarks     String?            @map("other_remarks")
+  status           String?
+  ownedType        String?            @map("owned_type")
+  ownedBy          String?            @map("owned_by")
+  mobileNoOwnedBy  String?            @map("mobile_no_owned_by")
+  emailIdOwnedBy   String?            @map("email_id_owned_by")
+  customerId       Int?               @map("customer_id")
+  customerName     String?            @map("customer_name")
+  internalComments String?            @map("internal_comments")
+  createdDate      DateTime?          @map("created_date") @db.Timestamptz(6)
+  createdBy        Int?               @map("created_by")
+  updatedDate      DateTime?          @map("updated_date") @db.Timestamptz(6)
+  updatedBy        Int?               @map("updated_by")
+  fkVariantId      Int?               @map("fk_variant_id")
+  checkListDocMain CheckListDocMain[]
+  dsaManagement    DsaManagement[]
+  insuranceMain    InsuranceMain[]
+  createdByUser    UserTable?         @relation("inventory_management_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_created_by_user")
+  customer         Customer?          @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_customer_id")
+  updatedByUser    UserTable?         @relation("inventory_management_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_updated_by_user")
+  carVariantMaster CarVariantMaster?  @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
+  inventoryPhotos  InventoryPhotos[]
+  loanManagement   LoanManagement[]
+  rtoAgent         RtoAgent[]
+
+  @@index([customerId], map: "idx_16541_ix_inventory_management_customer_id")
+  @@index([fkVariantId], map: "idx_16541_ix_inventory_management_variant")
+  @@map("inventory_management")
+}
+
+model InventoryPhotos {
+  documentId            Int                  @id(map: "idx_16548_pk_inventory_photos") @default(autoincrement()) @map("document_id")
+  inventoryNumberLegacy String?              @map("inventory_number_legacy")
+  path                  String?
+  fkInventoryId         Int?                 @map("fk_inventory_id")
+  inventoryManagement   InventoryManagement? @relation(fields: [fkInventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_photos_inventory")
+
+  @@index([fkInventoryId], map: "idx_16548_ix_inventory_photos_inventory")
+  @@map("inventory_photos")
+}
+
+model LoanFollowupDetails {
+  loanFollowupId     Int             @id(map: "idx_16555_pk_loan_followup_details") @default(autoincrement()) @map("loan_followup_id")
+  fkLoanManagementId Int?            @map("fk_loan_management_id")
+  followupDate       DateTime?       @map("followup_date") @db.Timestamptz(6)
+  remark             String?
+  createdDt          DateTime?       @map("created_dt") @db.Timestamptz(6)
+  createdBy          Int?            @map("created_by")
+  updatedDt          DateTime?       @map("updated_dt") @db.Timestamptz(6)
+  updatedBy          Int?            @map("updated_by")
+  loanManagement     LoanManagement? @relation(fields: [fkLoanManagementId], references: [loanManagementId], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_followup_details_fk_loan_management_id")
+
+  @@index([fkLoanManagementId], map: "idx_16555_ix_loan_followup_details_fk_loan_management_id")
+  @@map("loan_followup_details")
+}
+
+model LoanManagement {
+  loanManagementId       Int                   @id(map: "idx_16562_pk_financial_management") @default(autoincrement()) @map("loan_management_id")
+  entryDate              DateTime?             @map("entry_date") @db.Timestamptz(6)
+  bankName               String?               @map("bank_name")
+  bankPersonName         String?               @map("bank_person_name")
+  bankPersonMobileNo     String?               @map("bank_person_mobile_no")
+  bankPersonEmailId      String?               @map("bank_person_email_id")
+  customerId             Int?                  @map("customer_id")
+  customerNameLegacy     String?               @map("customer_name_legacy")
+  customerMobileLegacy   String?               @map("customer_mobile_legacy")
+  customerEmailLegacy    String?               @map("customer_email_legacy")
+  inventoryId            Int?                  @map("inventory_id")
+  registrationNo         String?               @map("registration_no")
+  carType                String?               @map("car_type")
+  carMake                String?               @map("car_make")
+  carModel               String?               @map("car_model")
+  carVariant             String?               @map("car_variant")
+  carYear                Int?                  @map("car_year")
+  loanAmount             Decimal?              @map("loan_amount") @db.Decimal
+  percentagePayoutAmount Decimal?              @map("percentage_payout_amount") @db.Decimal
+  payoutAmount           Decimal?              @map("payout_amount") @db.Decimal
+  totalAmountReceived    Decimal?              @map("total_amount_received") @db.Decimal
+  paymentStatus          String?               @map("payment_status")
+  paymentDate            DateTime?             @map("payment_date") @db.Timestamptz(6)
+  remarks                String?
+  followupDate           DateTime?             @map("followup_date") @db.Timestamptz(6)
+  createdDate            DateTime?             @map("created_date") @db.Timestamptz(6)
+  createdBy              Int?                  @map("created_by")
+  updatedDate            DateTime?             @map("updated_date") @db.Timestamptz(6)
+  updatedBy              Int?                  @map("updated_by")
+  fkVariantId            Int?                  @map("fk_variant_id")
+  fkPartnerId            Int?                  @map("fk_partner_id")
+  loanFollowupDetails    LoanFollowupDetails[]
+  customer               Customer?             @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_management_customer_id")
+  inventoryManagement    InventoryManagement?  @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_management_inventory_id")
+  partnerMaster          PartnerMaster?        @relation(fields: [fkPartnerId], references: [partnerId], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_management_partner")
+  carVariantMaster       CarVariantMaster?     @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_management_variant")
+  loanPaymentDetails     LoanPaymentDetails[]
+
+  @@index([customerId], map: "idx_16562_ix_loan_management_customer_id")
+  @@index([inventoryId], map: "idx_16562_ix_loan_management_inventory_id")
+  @@map("loan_management")
+}
+
+model LoanPaymentDetails {
+  loanPaymentId      Int             @id(map: "idx_16569_pk_loan_payment_details") @default(autoincrement()) @map("loan_payment_id")
+  fkLoanManagementId Int?            @map("fk_loan_management_id")
+  loanAmount         Decimal?        @map("loan_amount") @db.Decimal
+  payoutAmount       Decimal?        @map("payout_amount") @db.Decimal
+  amountPaid         Decimal?        @map("amount_paid") @db.Decimal
+  bankName           String?         @map("bank_name")
+  paymentDate        DateTime?       @map("payment_date") @db.Timestamptz(6)
+  paymentStatus      String?         @map("payment_status")
+  createdBy          Int?            @map("created_by")
+  createdDt          DateTime?       @map("created_dt") @db.Timestamptz(6)
+  updatedBy          Int?            @map("updated_by")
+  updatedDt          DateTime?       @map("updated_dt") @db.Timestamptz(6)
+  loanManagement     LoanManagement? @relation(fields: [fkLoanManagementId], references: [loanManagementId], onDelete: NoAction, onUpdate: NoAction, map: "fk_loan_payment_details_fk_loan_management_id")
+
+  @@index([fkLoanManagementId], map: "idx_16569_ix_loan_payment_details_fk_loan_management_id")
+  @@map("loan_payment_details")
+}
+
+model MessageTemplate {
+  typeId          Int               @id(map: "idx_16576_pk_message_template") @default(autoincrement()) @map("type_id")
+  messageType     String?           @map("message_type")
+  messageSubject  String?           @map("message_subject")
+  messageBody     String?           @map("message_body")
+  createdDate     DateTime?         @map("created_date") @db.Timestamptz(6)
+  createdBy       Int?              @map("created_by")
+  updatedDate     DateTime?         @map("updated_date") @db.Timestamptz(6)
+  updatedBy       Int?              @map("updated_by")
+  emailAttachment EmailAttachment[]
+  createdByUser   UserTable?        @relation("message_template_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_created_by_user")
+  updatedByUser   UserTable?        @relation("message_template_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_updated_by_user")
+
+  @@map("message_template")
+}
+
+model PartnerMaster {
+  partnerId      Int              @id(map: "idx_16583_pk__partner___93b7f6d5beabac5c") @default(autoincrement()) @map("partner_id")
+  partnerType    String           @map("partner_type")
+  name           String
+  mobile         String?
+  email          String?
+  dsaManagement  DsaManagement[]
+  insuranceMain  InsuranceMain[]
+  loanManagement LoanManagement[]
+  rtoAgent       RtoAgent[]
+
+  @@map("partner_master")
+}
+
+model RoleMaster {
+  roleId             Int                  @id(map: "idx_16590_pk_role_master") @default(autoincrement()) @map("role_id")
+  roleName           String?              @map("role_name")
+  createdBy          Int?                 @map("created_by")
+  createdDate        DateTime?            @map("created_date") @db.Timestamptz(6)
+  updatedBy          Int?                 @map("updated_by")
+  updatedDate        DateTime?            @map("updated_date") @db.Timestamptz(6)
+  accessFunctionRole AccessFunctionRole[]
+  createdByUser      UserTable?           @relation("role_master_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_role_master_created_by_user")
+  updatedByUser      UserTable?           @relation("role_master_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_role_master_updated_by_user")
+  users              UserTable[]          @relation("user_table_role_idTorole_master")
+
+  @@map("role_master")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model RtoAgent {
+  rtoAgentMainId      Int                  @id(map: "idx_16597_pk_rto_agent") @default(autoincrement()) @map("rto_agent_main_id")
+  inventoryId         Int?                 @map("inventory_id")
+  agentNameLegacy     String?              @map("agent_name_legacy")
+  agentMobileNoLegacy String?              @map("agent_mobile_no_legacy")
+  agentEmailIdLegacy  String?              @map("agent_email_id_legacy")
+  dateOfEntry         DateTime?            @map("date_of_entry") @db.Timestamptz(6)
+  customerId          Int?                 @map("customer_id")
+  customerNameLegacy  String?              @map("customer_name_legacy")
+  customerMobLegacy   String?              @map("customer_mob_legacy")
+  customerEmailLegacy String?              @map("customer_email_legacy")
+  carType             String?              @map("car_type")
+  carMakeLegacy       String?              @map("car_make_legacy")
+  carModelLegacy      String?              @map("car_model_legacy")
+  carVariantLegacy    String?              @map("car_variant_legacy")
+  carRegistrationNo   String?              @map("car_registration_no")
+  carYear             Int?                 @map("car_year")
+  transferCharges     Decimal?             @map("transfer_charges") @db.Decimal
+  amtPaid             Decimal?             @map("amt_paid") @db.Decimal
+  paymentStatus       String?              @map("payment_status")
+  paymentDate         DateTime?            @map("payment_date") @db.Timestamptz(6)
+  rcStatus            String?              @map("rc_status")
+  transferStatus      String?              @map("transfer_status")
+  followupDate        DateTime?            @map("followup_date") @db.Timestamptz(6)
+  remark              String?
+  createdDt           DateTime?            @map("created_dt") @db.Timestamptz(6)
+  createdBy           Int?                 @map("created_by")
+  updatedDt           DateTime?            @map("updated_dt") @db.Timestamptz(6)
+  updatedBy           Int?                 @map("updated_by")
+  fkVariantId         Int?                 @map("fk_variant_id")
+  fkPartnerId         Int?                 @map("fk_partner_id")
+  createdByUser       UserTable?           @relation("rto_agent_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_agent_created_by_user")
+  customer            Customer?            @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_agent_customer_id")
+  inventoryManagement InventoryManagement? @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_agent_inventory_id")
+  partnerMaster       PartnerMaster?       @relation(fields: [fkPartnerId], references: [partnerId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_agent_partner")
+  updatedByUser       UserTable?           @relation("rto_agent_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_agent_updated_by_user")
+  carVariantMaster    CarVariantMaster?    @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_agent_variant")
+  rtoFollowupDetails  RtoFollowupDetails[]
+  rtoPaymentDetails   RtoPaymentDetails[]
+
+  @@index([customerId], map: "idx_16597_ix_rto_agent_customer_id")
+  @@index([inventoryId], map: "idx_16597_ix_rto_agent_inventory_id")
+  @@index([fkPartnerId], map: "idx_16597_ix_rto_agent_partner")
+  @@index([fkVariantId], map: "idx_16597_ix_rto_agent_variant")
+  @@map("rto_agent")
+}
+
+model RtoFollowupDetails {
+  rtoFollowupId    Int        @id(map: "idx_16604_pk_rto_followup_details") @default(autoincrement()) @map("rto_followup_id")
+  fkRtoAgentMainId Int?       @map("fk_rto_agent_main_id")
+  followupDate     DateTime?  @map("followup_date") @db.Timestamptz(6)
+  remark           String?
+  createdDt        DateTime?  @map("created_dt") @db.Timestamptz(6)
+  createdBy        Int?       @map("created_by")
+  updatedDt        DateTime?  @map("updated_dt") @db.Timestamptz(6)
+  updatedBy        Int?       @map("updated_by")
+  createdByUser    UserTable? @relation("rto_followup_details_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_followup_details_created_by_user")
+  rtoAgent         RtoAgent?  @relation(fields: [fkRtoAgentMainId], references: [rtoAgentMainId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_followup_details_fk_rto_agent_main_id")
+  updatedByUser    UserTable? @relation("rto_followup_details_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_followup_details_updated_by_user")
+
+  @@index([fkRtoAgentMainId], map: "idx_16604_ix_rto_followup_details_fk_rto_agent_main_id")
+  @@map("rto_followup_details")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model RtoPaymentDetails {
+  rtoPaymentId     Int        @id(map: "idx_16611_pk_rto_payment_details") @default(autoincrement()) @map("rto_payment_id")
+  fkRtoAgentMainId Int?       @map("fk_rto_agent_main_id")
+  transferCharges  Decimal?   @map("transfer_charges") @db.Decimal
+  amountPaid       Decimal?   @map("amount_paid") @db.Decimal
+  paymentStatus    String?    @map("payment_status")
+  paymentDate      DateTime?  @map("payment_date") @db.Timestamptz(6)
+  transferStatus   String?    @map("transfer_status")
+  rcStatus         String?    @map("rc_status")
+  createdDt        DateTime?  @map("created_dt") @db.Timestamptz(6)
+  createdBy        Int?       @map("created_by")
+  updatedDt        DateTime?  @map("updated_dt") @db.Timestamptz(6)
+  updatedBy        Int?       @map("updated_by")
+  createdByUser    UserTable? @relation("rto_payment_details_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_payment_details_created_by_user")
+  rtoAgent         RtoAgent?  @relation(fields: [fkRtoAgentMainId], references: [rtoAgentMainId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_payment_details_fk_rto_agent_main_id")
+  updatedByUser    UserTable? @relation("rto_payment_details_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_rto_payment_details_updated_by_user")
+
+  @@index([fkRtoAgentMainId], map: "idx_16611_ix_rto_payment_details_fk_rto_agent_main_id")
+  @@map("rto_payment_details")
+}
+
+model SystemDefault {
+  systemDefaultId   Int       @id(map: "pk_system_default") @map("system_default_id")
+  systemDefaultName String?   @map("system_default_name")
+  value             String?
+  createdBy         Int       @map("created_by")
+  createdDt         DateTime  @map("created_dt") @db.Timestamptz(6)
+  updatedBy         Int       @map("updated_by")
+  updatedDt         DateTime  @map("updated_dt") @db.Timestamptz(6)
+  createdByUser     UserTable @relation("system_default_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_system_default_created_by_user")
+  updatedByUser     UserTable @relation("system_default_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_system_default_updated_by_user")
+
+  @@map("system_default")
+}
+
+model UserTable {
+  userId                            Int                        @id(map: "idx_16623_pk_user_table") @default(autoincrement()) @map("user_id")
+  userName                          String?                    @map("user_name")
+  passwordHash                      String?                    @map("password_hash")
+  roleId                            Int?                       @map("role_id")
+  roleName                          String?                    @map("role_name")
+  status                            String?
+  empId                             Int?                       @map("emp_id")
+  displayName                       String?                    @map("display_name")
+  emailId                           String?                    @map("email_id")
+  lastLoginTime                     DateTime?                  @map("last_login_time") @db.Timestamptz(6)
+  lastLogoutTime                    DateTime?                  @map("last_logout_time") @db.Timestamptz(6)
+  createdDate                       DateTime?                  @map("created_date") @db.Timestamptz(6)
+  createdBy                         Int?                       @map("created_by")
+  updatedDate                       DateTime?                  @map("updated_date") @db.Timestamptz(6)
+  updatedBy                         Int?                       @map("updated_by")
+  createdAccessFunctions            AccessFunction[]           @relation("access_function_created_byTouser_table")
+  updatedAccessFunctions            AccessFunction[]           @relation("access_function_updated_byTouser_table")
+  createdAddEmployees               AddEmployee[]              @relation("add_employee_created_byTouser_table")
+  updatedAddEmployees               AddEmployee[]              @relation("add_employee_updated_byTouser_table")
+  createdCarMakeMasters             CarMakeMaster[]            @relation("car_make_master_created_byTouser_table")
+  updatedCarMakeMasters             CarMakeMaster[]            @relation("car_make_master_updated_byTouser_table")
+  createdCarModelMasters            CarModelMaster[]           @relation("car_model_master_created_byTouser_table")
+  updatedCarModelMasters            CarModelMaster[]           @relation("car_model_master_updated_byTouser_table")
+  createdCarVariantMasters          CarVariantMaster[]         @relation("car_variant_master_created_byTouser_table")
+  updatedCarVariantMasters          CarVariantMaster[]         @relation("car_variant_master_updated_byTouser_table")
+  createdCustomers                  Customer[]                 @relation("customer_created_byTouser_table")
+  updatedCustomers                  Customer[]                 @relation("customer_updated_byTouser_table")
+  createdCustomerFeedbacks          CustomerFeedback[]         @relation("customer_feedback_created_byTouser_table")
+  updatedCustomerFeedbacks          CustomerFeedback[]         @relation("customer_feedback_updated_byTouser_table")
+  createdDealerMasters              DealerMaster[]             @relation("dealer_master_created_byTouser_table")
+  updatedDealerMasters              DealerMaster[]             @relation("dealer_master_updated_byTouser_table")
+  createdFollowupInquiries          FollowupInquiry[]          @relation("followup_inquiry_created_byTouser_table")
+  updatedFollowupInquiries          FollowupInquiry[]          @relation("followup_inquiry_updated_byTouser_table")
+  createdInquiries                  Inquiry[]                  @relation("inquiry_created_byTouser_table")
+  updatedInquiries                  Inquiry[]                  @relation("inquiry_updated_byTouser_table")
+  createdInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_created_byTouser_table")
+  updatedInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_updated_byTouser_table")
+  createdInsuranceFollowupDetailses InsuranceFollowupDetails[] @relation("insurance_followup_details_created_byTouser_table")
+  updatedInsuranceFollowupDetailses InsuranceFollowupDetails[] @relation("insurance_followup_details_updated_byTouser_table")
+  createdInsuranceMains             InsuranceMain[]            @relation("insurance_main_created_byTouser_table")
+  updatedInsuranceMains             InsuranceMain[]            @relation("insurance_main_updated_byTouser_table")
+  createdInsurancePaymentDetailses  InsurancePaymentDetails[]  @relation("insurance_payment_details_created_byTouser_table")
+  updatedInsurancePaymentDetailses  InsurancePaymentDetails[]  @relation("insurance_payment_details_updated_byTouser_table")
+  createdInventoryManagements       InventoryManagement[]      @relation("inventory_management_created_byTouser_table")
+  updatedInventoryManagements       InventoryManagement[]      @relation("inventory_management_updated_byTouser_table")
+  createdMessageTemplates           MessageTemplate[]          @relation("message_template_created_byTouser_table")
+  updatedMessageTemplates           MessageTemplate[]          @relation("message_template_updated_byTouser_table")
+  createdRoleMasters                RoleMaster[]               @relation("role_master_created_byTouser_table")
+  updatedRoleMasters                RoleMaster[]               @relation("role_master_updated_byTouser_table")
+  createdRtoAgents                  RtoAgent[]                 @relation("rto_agent_created_byTouser_table")
+  updatedRtoAgents                  RtoAgent[]                 @relation("rto_agent_updated_byTouser_table")
+  createdRtoFollowupDetailses       RtoFollowupDetails[]       @relation("rto_followup_details_created_byTouser_table")
+  updatedRtoFollowupDetailses       RtoFollowupDetails[]       @relation("rto_followup_details_updated_byTouser_table")
+  createdRtoPaymentDetailses        RtoPaymentDetails[]        @relation("rto_payment_details_created_byTouser_table")
+  updatedRtoPaymentDetailses        RtoPaymentDetails[]        @relation("rto_payment_details_updated_byTouser_table")
+  createdSystemDefaults             SystemDefault[]            @relation("system_default_created_byTouser_table")
+  updatedSystemDefaults             SystemDefault[]            @relation("system_default_updated_byTouser_table")
+  createdByUser                     UserTable?                 @relation("user_table_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_table_created_by_user")
+  createdUsers                      UserTable[]                @relation("user_table_created_byTouser_table")
+  employee                          AddEmployee?               @relation("user_table_emp_idToadd_employee", fields: [empId], references: [empId], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_table_emp_id")
+  role                              RoleMaster?                @relation("user_table_role_idTorole_master", fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_table_role_id")
+  updatedByUser                     UserTable?                 @relation("user_table_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_table_updated_by_user")
+  updatedUsers                      UserTable[]                @relation("user_table_updated_byTouser_table")
+
+  @@index([empId], map: "idx_16623_ix_user_table_emp_id")
+  @@index([roleId], map: "idx_16623_ix_user_table_role_id")
+  @@map("user_table")
+}
