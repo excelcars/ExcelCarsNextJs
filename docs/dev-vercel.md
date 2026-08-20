@@ -24,10 +24,10 @@ Optional extra stage:
 
 ## Files in this repo
 
-- Development env template: [.env.development.example](/D:/projects/ExcelCarsNextJs/.env.development.example)
-- Preview env template: [.env.preview.example](/D:/projects/ExcelCarsNextJs/.env.preview.example)
-- Staging env template: [.env.staging.example](/D:/projects/ExcelCarsNextJs/.env.staging.example)
-- Production env template: [.env.production.example](/D:/projects/ExcelCarsNextJs/.env.production.example)
+- Development env template: [.env.development.example](../.env.development.example)
+- Preview env template: [.env.preview.example](../.env.preview.example)
+- Staging env template: [.env.staging.example](../.env.staging.example)
+- Production env template: [.env.production.example](../.env.production.example)
 
 ## Install Vercel CLI
 
@@ -99,7 +99,7 @@ npm run vercel:deploy:production
 
 ## Environment-variable rules
 
-- local development runs the web app natively and uses `.env` plus `.env.local` (see [dev-docker.md](/D:/projects/ExcelCarsNextJs/docs/dev-docker.md)) — PostgreSQL and Redis run in Docker, the web app does not
+- local development runs the web app natively and uses `.env` plus `.env.local` (see [dev-docker.md](./dev-docker.md)) — PostgreSQL and Redis run in Docker, the web app does not
 - `.env.docker` is only needed if you run the full stack (web included) in Docker
 - preview values should live in Vercel `Preview`
 - production values should live in Vercel `Production`
@@ -175,7 +175,7 @@ npm run vercel:deploy:production
 
 ## Recommended project flow from the beginning
 
-1. Start local feature work using [dev-docker.md](/D:/projects/ExcelCarsNextJs/docs/dev-docker.md) (web app native, database and Redis in Docker)
+1. Start local feature work using [dev-docker.md](./dev-docker.md) (web app native, database and Redis in Docker)
 2. Link Vercel once
 3. Keep real secrets in Vercel, not in committed env files
 4. Use preview deployments for QA

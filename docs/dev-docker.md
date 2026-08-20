@@ -17,8 +17,8 @@ This guide is the default local setup for ExcelCars: the web app runs natively o
 
 ## Files used
 
-- Compose file: [docker-compose.yml](/D:/projects/ExcelCarsNextJs/docker-compose.yml)
-- Base env: [.env](/D:/projects/ExcelCarsNextJs/.env)
+- Compose file: [docker-compose.yml](../docker-compose.yml)
+- Base env: [.env](../.env)
 - Local override env: `.env.local` (not committed — points `DATABASE_URL`/`REDIS_*` at `localhost`)
 
 ## First-time setup
@@ -131,7 +131,7 @@ Use this mode for day-to-day feature development — it's the default. Native lo
 
 ## Verifying a production build
 
-The web app also ships as a Docker image (see [Dockerfile](/D:/projects/ExcelCarsNextJs/Dockerfile)) for actual deployment. Before shipping a change, verify it builds in that image rather than only locally:
+The web app also ships as a Docker image (see [Dockerfile](../Dockerfile)) for actual deployment. Before shipping a change, verify it builds in that image rather than only locally:
 
 ```bash
 docker build --target builder -t excelcars-build-check .
