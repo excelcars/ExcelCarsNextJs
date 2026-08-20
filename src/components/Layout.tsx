@@ -39,7 +39,6 @@ const navItems: NavItem[] = [
       { label: 'Customers', href: '/config/customers' },
       { label: 'Feedback', href: '/config/feedback' },
       { label: 'SMS / Email', href: '/config/sms-email' },
-      { label: 'Notifications', href: '/config/notifications' },
     ],
   },
   {

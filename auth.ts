@@ -38,9 +38,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         return {
           id: String(user.userId),
-          name: user.displayName || user.userName,
-          username: user.userName,
-          roleName: user.roleName,
+          name: user.displayName || user.userName || undefined,
+          username: user.userName || undefined,
+          roleName: user.roleName ?? null,
         };
       },
     }),
@@ -55,6 +55,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session: async ({ session, token }) => {
       if (session.user) {
+        session.user.id = token.sub as string;
         session.user.username = token.username as string;
         session.user.roleName = token.roleName as string | null;
       }

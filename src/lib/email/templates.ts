@@ -1,0 +1,51 @@
+interface VehicleDetailsEmailInput {
+  customerName: string
+  make: string
+  model: string
+  variant: string
+  year: number | null
+  colour: string
+  fuelType: string
+  noOfOwners: number | null
+  registrationNo: string
+  kmsDriven: string | number | null
+  price: string | number | null
+  signedBy: string
+}
+
+const row = (label: string, value: string) =>
+  `<tr><td style="padding:8px 14px;border:1px solid #d8d2c2;background:#f8f6f0;font-weight:600;">${label}</td><td style="padding:8px 14px;border:1px solid #d8d2c2;">${value || '—'}</td></tr>`
+
+export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject: string; html: string } {
+  // legacy masked registration numbers to the first 5 characters in customer-facing emails
+  const maskedReg = input.registrationNo ? input.registrationNo.trim().slice(0, 5) : ''
+  const price = input.price ? `₹${Number(input.price).toLocaleString('en-IN')}` : ''
+  const km = input.kmsDriven ? `${Number(input.kmsDriven).toLocaleString('en-IN')} km` : ''
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#1c2438;line-height:1.6;max-width:560px;">
+      <p>Dear ${input.customerName},</p>
+      <p>Thank you for choosing Excel Cars for buying your dream car.</p>
+      <p>Below are the car details:</p>
+      <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+        ${row('Make', input.make)}
+        ${row('Model / Variant', [input.model, input.variant].filter(Boolean).join(' / '))}
+        ${row('Year', input.year ? String(input.year) : '')}
+        ${row('Colour', input.colour)}
+        ${row('Fuel Type', input.fuelType)}
+        ${row('No. of Owners', input.noOfOwners != null ? String(input.noOfOwners) : '')}
+        ${row('Registration', maskedReg)}
+        ${row('Kilometers', km)}
+        ${row('Price', price)}
+      </table>
+      <p>Hope you have a splendid buying experience with Excel Cars' wide range and easy financing options.</p>
+      <p>For more information and personal assistance, walk in to our showroom at:<br>
+      Gujral House, 167 CST Road, Opp. Central Bank Of India,<br>
+      Off. BKC, Kalina, Santacruz East, Mumbai 400098.</p>
+      <p>Happy buying with Excel Cars.</p>
+      <p>Best Regards,<br>${input.signedBy}</p>
+    </div>
+  `
+
+  return { subject: 'Car Details', html }
+}
