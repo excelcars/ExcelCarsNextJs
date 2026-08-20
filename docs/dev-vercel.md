@@ -99,8 +99,8 @@ npm run vercel:deploy:production
 
 ## Environment-variable rules
 
-- local development should use `.env.local`
-- Docker local development should use `.env.docker`
+- local development runs the web app natively and uses `.env` plus `.env.local` (see [dev-docker.md](/D:/projects/ExcelCarsNextJs/docs/dev-docker.md)) — PostgreSQL and Redis run in Docker, the web app does not
+- `.env.docker` is only needed if you run the full stack (web included) in Docker
 - preview values should live in Vercel `Preview`
 - production values should live in Vercel `Production`
 - staging values should live in a custom Vercel environment if your plan supports it, or in a dedicated staging project
@@ -109,8 +109,8 @@ npm run vercel:deploy:production
 
 Development:
 
-- local database
-- local Redis or Docker Redis
+- Dockerized database
+- Dockerized Redis
 - test email/SMS credentials
 - sandbox storage bucket
 
@@ -175,7 +175,7 @@ npm run vercel:deploy:production
 
 ## Recommended project flow from the beginning
 
-1. Start local feature work with Docker using [dev-docker.md](/D:/projects/ExcelCarsNextJs/docs/dev-docker.md)
+1. Start local feature work using [dev-docker.md](/D:/projects/ExcelCarsNextJs/docs/dev-docker.md) (web app native, database and Redis in Docker)
 2. Link Vercel once
 3. Keep real secrets in Vercel, not in committed env files
 4. Use preview deployments for QA

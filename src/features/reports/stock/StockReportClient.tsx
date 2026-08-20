@@ -136,7 +136,7 @@ export function StockReportClient({ initialData }: { initialData: StockRow[] }) 
 
       <Modal title={`Photos — ${photoRow?.registrationNo ?? ''}`} open={!!photoRow} onClose={() => setPhotoRow(null)}>
         <div className="space-y-2">
-          <p className="text-xs text-gray-500">Image files from the legacy system were not migrated to this app's storage — filenames are shown for reference.</p>
+          <p className="text-xs text-gray-500">Image files from the legacy system were not migrated to this app&apos;s storage — filenames are shown for reference.</p>
           {photosLoading ? (
             <div className="text-sm text-gray-400">Loading...</div>
           ) : photos.length === 0 ? (

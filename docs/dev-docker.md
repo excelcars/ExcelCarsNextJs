@@ -1,18 +1,18 @@
-# Docker Development Setup
+# Local Development Setup
 
-This guide is the default local setup for ExcelCars when we want the web app, worker, PostgreSQL, and Redis to run together.
+This guide is the default local setup for ExcelCars: the web app runs natively on your machine (fast reload, no container rebuilds), while PostgreSQL and Redis run in Docker.
 
 ## Ports
 
-- Web app: `3000`
-- PostgreSQL: `5432`
-- Redis: `6379`
+- Web app: `3000` (local, `npm run dev`)
+- PostgreSQL: `5432` (Docker)
+- Redis: `6379` (Docker)
 
 ## Files used
 
-- Docker config: [Dockerfile](/D:/projects/ExcelCarsNextJs/Dockerfile)
 - Compose file: [docker-compose.yml](/D:/projects/ExcelCarsNextJs/docker-compose.yml)
-- Docker env: [.env.docker](/D:/projects/ExcelCarsNextJs/.env.docker)
+- Base env: [.env](/D:/projects/ExcelCarsNextJs/.env)
+- Local override env: `.env.local` (not committed — points `DATABASE_URL`/`REDIS_*` at `localhost`)
 
 ## First-time setup
 
@@ -22,42 +22,63 @@ This guide is the default local setup for ExcelCars when we want the web app, wo
 npm install
 ```
 
-2. Review Docker env values:
+2. Start PostgreSQL and Redis:
 
 ```bash
-copy .env.docker .env
+docker compose up -d db redis
 ```
 
-3. Start all local services:
+3. Create `.env.local` so the local web app reaches the Dockerized database and Redis:
+
+```text
+DATABASE_URL=postgresql://excelcars:excelcars@localhost:5432/excelcars
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_URL=redis://localhost:6379
+```
+
+4. Generate the Prisma client:
 
 ```bash
-npm run docker:up
+npx prisma generate
+```
+
+5. Start the web app:
+
+```bash
+npm run dev
 ```
 
 ## Daily commands
 
-Start the stack:
+Start PostgreSQL and Redis:
 
 ```bash
-npm run docker:up
+docker compose up -d db redis
 ```
 
-Stop the stack:
+Stop PostgreSQL and Redis:
 
 ```bash
-npm run docker:down
+docker compose stop db redis
 ```
 
-Watch container logs:
+Start the web app:
 
 ```bash
-npm run docker:logs
+npm run dev
+```
+
+Watch database/Redis logs:
+
+```bash
+docker compose logs -f db redis
 ```
 
 Check running containers:
 
 ```bash
-npm run docker:ps
+docker compose ps
 ```
 
 ## Validation
@@ -76,19 +97,13 @@ Expected result:
 
 ## Local environment strategy
 
-- `docker-compose` reads [.env.docker](/D:/projects/ExcelCarsNextJs/.env.docker)
-- the `web` container uses service names like `db` and `redis`
-- local non-Docker app runs should use `.env.local` or `.env.development.local`
+- `.env` holds shared, safe local defaults
+- `.env.local` overrides `DATABASE_URL` and `REDIS_*` to point at `localhost` so the locally-running web app reaches the Dockerized database and Redis
+- `.env.local` is gitignored and should never be committed
 
 ## Database notes
 
-Inside Docker:
-
-```text
-postgresql://excelcars:excelcars@db:5432/excelcars
-```
-
-From the host machine:
+From the host machine (web app, Prisma CLI, migrations):
 
 ```text
 postgresql://excelcars:excelcars@localhost:5432/excelcars
@@ -97,19 +112,20 @@ postgresql://excelcars:excelcars@localhost:5432/excelcars
 ## Recommended startup path
 
 1. `npm install`
-2. `npm run docker:up`
-3. open `http://localhost:3000`
-4. verify `http://localhost:3000/api/health`
+2. `docker compose up -d db redis`
+3. `npx prisma generate`
+4. `npm run dev`
+5. open `http://localhost:3000`
+6. verify `http://localhost:3000/api/health`
 
 ## When to use this mode
 
-Use Docker development when:
+Use this mode for day-to-day feature development — it's the default. Native local dev gives the fastest reload and avoids container rebuilds for code changes, while Docker still gives you a real, consistent PostgreSQL and Redis.
 
-- you want a predictable shared environment
-- you need PostgreSQL and Redis running together
-- you are testing worker flows or queue-backed features
+## Verifying a production build
 
-Use plain `npm run dev` only when:
+The web app also ships as a Docker image (see [Dockerfile](/D:/projects/ExcelCarsNextJs/Dockerfile)) for actual deployment. Before shipping a change, verify it builds in that image rather than only locally:
 
-- Docker is not needed
-- you already have database and Redis running separately
+```bash
+docker build --target builder -t excelcars-build-check .
+```

@@ -4,7 +4,7 @@ import { X, ChevronDown } from 'lucide-react'
 export const R = '#C8102E'
 export const N = '#1B2A6B'
 
-export function Badge({ label, color = 'gray' }: { label: string; color?: string }) {
+export function Badge({ label }: { label: string }) {
   const map: Record<string, string> = {
     Active: 'bg-green-100 text-green-700',
     Available: 'bg-green-100 text-green-700',

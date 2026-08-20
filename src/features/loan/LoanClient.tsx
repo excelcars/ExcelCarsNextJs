@@ -131,7 +131,6 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
       const computed = Math.round((amt * pct) / 100 * 100) / 100
       setForm(f => (f.payoutAmount === computed ? f : { ...f, payoutAmount: computed }))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.loanAmount, form.percentagePayoutAmount])
 
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }

@@ -136,7 +136,6 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
       const computed = Math.round((od * pct) / 100 * 100) / 100
       setForm(f => (f.payoutAmount === computed ? f : { ...f, payoutAmount: computed }))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.oDPremium, form.payoutPercentageOdPremium])
 
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
