@@ -2,6 +2,13 @@
 
 This guide is the default local setup for ExcelCars: the web app runs natively on your machine (fast reload, no container rebuilds), while PostgreSQL and Redis run in Docker.
 
+## Why Docker for the database and Redis (but not the web app)
+
+- **PostgreSQL and Redis are not something you install and maintain by hand.** Docker gives everyone the exact same versions (`postgres:17-alpine`, `redis:7-alpine`) with zero manual setup — no installing, configuring, or upgrading a database engine on your own machine.
+- **Disposable and resettable.** `docker compose down -v` wipes the data volumes and gets you a clean database in seconds — useful after a bad migration or seed run, without touching a real install.
+- **Matches what runs in every other environment.** The same images back local dev, and the same PostgreSQL/Redis versions are what the app is actually tested against — no "works on my machine because I have a newer Postgres" drift.
+- **The web app is different: it's the thing you're actively editing.** Running it natively means instant hot reload and no container rebuild on every save. Running the *database* natively would just add setup work for no benefit, since you rarely edit the database engine itself. If you do need to validate the web app inside a container (e.g. before deploying), see [Verifying a production build](#verifying-a-production-build) below.
+
 ## Ports
 
 - Web app: `3000` (local, `npm run dev`)
