@@ -6,13 +6,45 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "docker:up": "docker compose --env-file .env.docker up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps",
+    "vercel:link": "npx vercel link",
+    "vercel:pull:dev": "npx vercel env pull .env.local",
+    "vercel:pull:preview": "npx vercel env pull .env.preview.local --environment=preview",
+    "vercel:pull:production": "npx vercel env pull .env.production.local --environment=production",
+    "vercel:dev": "npx vercel env run -- npm run dev",
+    "vercel:build": "npx vercel build",
+    "vercel:deploy:preview": "npx vercel deploy",
+    "vercel:deploy:production": "npx vercel deploy --prod",
     "worker": "node --enable-source-maps src/worker/index.js",
     "worker:dev": "node --watch --enable-source-maps src/worker/index.js"
   },
   "dependencies": {
-    "next": "^15.0.0",
+    "@prisma/client": "^6.19.3",
+    "@tailwindcss/postcss": "^4.3.3",
+    "bcryptjs": "^3.0.3",
+    "lucide-react": "^1.31.0",
+    "next": "^15.5.23",
+    "next-auth": "^5.0.0-beta.32",
+    "nodemailer": "^8.0.11",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.23",
+    "prisma": "^6.0.0",
+    "typescript": "^5.0.0"
   }
 }
