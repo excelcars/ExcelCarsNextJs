@@ -11,6 +11,7 @@ interface VehicleDetailsEmailInput {
   kmsDriven: string | number | null
   price: string | number | null
   signedBy: string
+  viewDetailsUrl?: string | null
 }
 
 const row = (label: string, value: string) =>
@@ -21,6 +22,19 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
   const maskedReg = input.registrationNo ? input.registrationNo.trim().slice(0, 5) : ''
   const price = input.price ? `₹${Number(input.price).toLocaleString('en-IN')}` : ''
   const km = input.kmsDriven ? `${Number(input.kmsDriven).toLocaleString('en-IN')} km` : ''
+  const ctaHtml = input.viewDetailsUrl
+    ? `
+      <div style="margin:24px 0;">
+        <a href="${input.viewDetailsUrl}" style="display:inline-block;background:#c59b3b;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:700;">
+          View Full Vehicle Details &rarr;
+        </a>
+      </div>
+      <p style="font-size:12px;color:#6b7280;word-break:break-all;margin-top:8px;">
+        If the button does not work, open this link:<br>
+        <a href="${input.viewDetailsUrl}" style="color:#1B2A6B;text-decoration:underline;">${input.viewDetailsUrl}</a>
+      </p>
+    `
+    : ''
 
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;color:#1c2438;line-height:1.6;max-width:560px;">
@@ -38,6 +52,7 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
         ${row('Kilometers', km)}
         ${row('Price', price)}
       </table>
+      ${ctaHtml}
       <p>Hope you have a splendid buying experience with Excel Cars' wide range and easy financing options.</p>
       <p>For more information and personal assistance, walk in to our showroom at:<br>
       Gujral House, 167 CST Road, Opp. Central Bank Of India,<br>

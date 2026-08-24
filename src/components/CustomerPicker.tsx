@@ -23,28 +23,57 @@ export function CustomerPicker({
   const [results, setResults] = useState<CustomerOption[]>([])
   const [open, setOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [newName, setNewName] = useState('')
   const [newMobile, setNewMobile] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [creating, setCreating] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.trim().length < 2) {
       setResults([])
+      setLoading(false)
+      setError('')
       return
     }
     debounceRef.current = setTimeout(async () => {
-      const res = await fetch(`/api/customers/search?q=${encodeURIComponent(query)}`)
-      setResults(await res.json())
+      const requestId = ++requestIdRef.current
+      setLoading(true)
+      setError('')
+      try {
+        const res = await fetch(`/api/customers/search?q=${encodeURIComponent(query)}`)
+        const payload = await res.json()
+        if (requestIdRef.current !== requestId) return
+        if (!res.ok) {
+          setResults([])
+          setError(payload.error ?? 'Could not load customers.')
+          return
+        }
+        setResults(payload)
+      } catch {
+        if (requestIdRef.current !== requestId) return
+        setResults([])
+        setError('Could not load customers.')
+      } finally {
+        if (requestIdRef.current === requestId) setLoading(false)
+      }
     }, 300)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [query])
 
   const selectCustomer = (c: CustomerOption) => {
     onChange(c)
     setOpen(false)
     setQuery('')
+    setResults([])
+    setLoading(false)
+    setError('')
   }
 
   const createCustomer = async () => {
@@ -77,12 +106,21 @@ export function CustomerPicker({
       <Input
         placeholder="Search customer by name or mobile..."
         value={query}
-        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onChange={e => {
+          requestIdRef.current += 1
+          setQuery(e.target.value)
+          setOpen(true)
+          setError('')
+        }}
         onFocus={() => setOpen(true)}
       />
       {open && query.trim().length >= 2 && (
         <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-          {results.length === 0 ? (
+          {loading ? (
+            <div className="px-3 py-2 text-sm text-gray-400">Loading customers...</div>
+          ) : error ? (
+            <div className="px-3 py-2 text-sm text-red-500">{error}</div>
+          ) : results.length === 0 ? (
             <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
           ) : results.map(c => (
             <button

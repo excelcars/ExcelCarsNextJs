@@ -185,6 +185,7 @@ model Customer {
   inquiry             Inquiry[]
   insuranceMain       InsuranceMain[]
   inventoryManagement InventoryManagement[]
+  vehicleEmailLinks   VehicleEmailLink[]
   loanManagement      LoanManagement[]
   rtoAgent            RtoAgent[]
 
@@ -498,7 +499,7 @@ model InsurancePaymentDetails {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model InventoryManagement {
   inventoryId      Int                @id(map: "idx_16541_pk_inventory_management") @default(autoincrement()) @map("inventory_id")
-  inventoryNumber  String?            @map("inventory_number")
+  inventoryNumber  String?            @unique(map: "idx_16541_uq_inventory_management_inventory_number") @map("inventory_number")
   makeLegacy       String?            @map("make_legacy")
   modelLegacy      String?            @map("model_legacy")
   variantLegacy    String?            @map("variant_legacy")
@@ -536,12 +537,70 @@ model InventoryManagement {
   updatedByUser    UserTable?         @relation("inventory_management_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_updated_by_user")
   carVariantMaster CarVariantMaster?  @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
   inventoryPhotos  InventoryPhotos[]
+  vehicleEmailLinks VehicleEmailLink[]
   loanManagement   LoanManagement[]
   rtoAgent         RtoAgent[]
 
   @@index([customerId], map: "idx_16541_ix_inventory_management_customer_id")
   @@index([fkVariantId], map: "idx_16541_ix_inventory_management_variant")
   @@map("inventory_management")
+}
+
+model VehicleEmailLink {
+  vehicleEmailLinkId Int                     @id(map: "idx_vehicle_email_links_pk") @default(autoincrement()) @map("vehicle_email_link_id")
+  inventoryId        Int                     @map("inventory_id")
+  customerId         Int?                    @map("customer_id")
+  recipientEmail     String                  @map("recipient_email")
+  recipientName      String?                 @map("recipient_name")
+  tokenHash          String                  @unique(map: "idx_vehicle_email_links_token_hash_uq") @map("token_hash")
+  emailSentAt        DateTime?               @map("email_sent_at") @db.Timestamptz(6)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt          DateTime?               @map("expires_at") @db.Timestamptz(6)
+  firstRequestedAt   DateTime?               @map("first_requested_at") @db.Timestamptz(6)
+  firstHumanViewAt   DateTime?               @map("first_human_view_at") @db.Timestamptz(6)
+  lastRequestedAt    DateTime?               @map("last_requested_at") @db.Timestamptz(6)
+  requestCount       Int                     @default(0) @map("request_count")
+  humanViewCount     Int                     @default(0) @map("human_view_count")
+  isActive           Boolean                 @default(true) @map("is_active")
+  customer           Customer?               @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_vehicle_email_links_customer")
+  inventoryManagement InventoryManagement    @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_vehicle_email_links_inventory")
+  visits             VehicleEmailLinkVisit[]
+  interactions       VehicleEmailLinkInteraction[]
+
+  @@index([inventoryId], map: "idx_vehicle_email_links_inventory_id")
+  @@index([customerId], map: "idx_vehicle_email_links_customer_id")
+  @@index([recipientEmail], map: "idx_vehicle_email_links_recipient_email")
+  @@map("vehicle_email_links")
+}
+
+model VehicleEmailLinkVisit {
+  vehicleEmailLinkVisitId Int              @id(map: "idx_vehicle_email_link_visits_pk") @default(autoincrement()) @map("vehicle_email_link_visit_id")
+  vehicleEmailLinkId      Int              @map("vehicle_email_link_id")
+  visitedAt               DateTime         @default(now()) @map("visited_at") @db.Timestamptz(6)
+  visitKind               String           @map("visit_kind")
+  userAgent               String?          @map("user_agent")
+  ipAddress               String?          @map("ip_address")
+  referrer                String?          @map("referrer")
+  vehicleEmailLink        VehicleEmailLink @relation(fields: [vehicleEmailLinkId], references: [vehicleEmailLinkId], onDelete: Cascade, onUpdate: NoAction, map: "fk_vehicle_email_link_visits_link")
+
+  @@index([vehicleEmailLinkId], map: "idx_vehicle_email_link_visits_link_id")
+  @@map("vehicle_email_link_visits")
+}
+
+model VehicleEmailLinkInteraction {
+  vehicleEmailLinkInteractionId Int              @id(map: "idx_vehicle_email_link_interactions_pk") @default(autoincrement()) @map("vehicle_email_link_interaction_id")
+  vehicleEmailLinkId            Int              @map("vehicle_email_link_id")
+  interactionAt                 DateTime         @default(now()) @map("interaction_at") @db.Timestamptz(6)
+  interactionType               String           @map("interaction_type")
+  interactionLabel              String?          @map("interaction_label")
+  userAgent                     String?          @map("user_agent")
+  ipAddress                     String?          @map("ip_address")
+  referrer                      String?          @map("referrer")
+  vehicleEmailLink              VehicleEmailLink @relation(fields: [vehicleEmailLinkId], references: [vehicleEmailLinkId], onDelete: Cascade, onUpdate: NoAction, map: "fk_vehicle_email_link_interactions_link")
+
+  @@index([vehicleEmailLinkId], map: "idx_vehicle_email_link_interactions_link_id")
+  @@index([interactionType], map: "idx_vehicle_email_link_interactions_type")
+  @@map("vehicle_email_link_interactions")
 }
 
 model InventoryPhotos {

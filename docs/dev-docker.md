@@ -29,46 +29,31 @@ This guide is the default local setup for ExcelCars: the web app runs natively o
 npm install
 ```
 
-2. Start PostgreSQL and Redis:
+2. Start Docker Desktop. Enable **Start Docker Desktop when you log in** in its settings so the supporting services can restart automatically.
 
-```bash
-docker compose up -d db redis
-```
-
-3. Create `.env.local` so the local web app reaches the Dockerized database and Redis:
-
-```text
-DATABASE_URL=postgresql://excelcars:excelcars@localhost:5432/excelcars
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_URL=redis://localhost:6379
-```
-
-4. Generate the Prisma client:
-
-```bash
-npx prisma generate
-```
-
-5. Start the web app:
+3. Start the web app:
 
 ```bash
 npm run dev
 ```
 
+This starts PostgreSQL, Redis, and Adminer; waits for PostgreSQL and Redis; generates Prisma Client; and syncs the local development schema before Next.js starts. Docker Desktop must be running first.
+
 ## Daily commands
 
-Start PostgreSQL and Redis:
+Start PostgreSQL, Redis, and Adminer without starting the web app:
 
 ```bash
-docker compose up -d db redis
+docker compose up -d db redis adminer
 ```
 
-Stop PostgreSQL and Redis:
+Stop PostgreSQL, Redis, and Adminer:
 
 ```bash
-docker compose stop db redis
+docker compose stop db redis adminer
 ```
+
+Adminer is available at `http://localhost:8080`. Sign in with server `db`, username `excelcars`, database `excelcars`, and the password from `POSTGRES_PASSWORD` in `docker-compose.yml`.
 
 Start the web app:
 
@@ -118,12 +103,11 @@ postgresql://excelcars:excelcars@localhost:5432/excelcars
 
 ## Recommended startup path
 
-1. `npm install`
-2. `docker compose up -d db redis`
-3. `npx prisma generate`
-4. `npm run dev`
-5. open `http://localhost:3000`
-6. verify `http://localhost:3000/api/health`
+1. Start Docker Desktop.
+2. `npm install`
+3. `npm run dev`
+4. open `http://localhost:3000`
+5. verify `http://localhost:3000/api/health`
 
 ## When to use this mode
 

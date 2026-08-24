@@ -1,4 +1,6 @@
-import { type ReactNode, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+'use client'
+
+import { useEffect, type ReactNode, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { X, ChevronDown } from 'lucide-react'
 
 export const R = '#C8102E'
@@ -100,9 +102,23 @@ export function Textarea({ label, ...props }: TextareaHTMLAttributes<HTMLTextAre
 export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
   title: string; open: boolean; onClose: () => void; children: ReactNode; width?: string
 }) {
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, open])
+
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
       <div className={`bg-white rounded-xl shadow-2xl w-full ${width} max-h-[90vh] flex flex-col`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h3 className="text-base font-semibold text-gray-900">{title}</h3>
@@ -116,10 +132,10 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
   )
 }
 
-export function Table({ headers, children, empty = false }: { headers: string[]; children: ReactNode; empty?: boolean }) {
+export function Table({ headers, children, empty = false, emptyMessage = 'No records found' }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="bg-gray-50 border-b border-gray-200">
             {headers.map(h => (
@@ -129,7 +145,7 @@ export function Table({ headers, children, empty = false }: { headers: string[];
         </thead>
         <tbody className="divide-y divide-gray-100">
           {empty
-            ? <tr><td colSpan={headers.length} className="text-center py-12 text-gray-400 text-sm">No records found</td></tr>
+            ? <tr><td colSpan={headers.length} className="text-center py-12 text-gray-400 text-sm">{emptyMessage}</td></tr>
             : children}
         </tbody>
       </table>
@@ -149,8 +165,8 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   )
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Search...' }: {
-  value: string; onChange: (v: string) => void; placeholder?: string
+export function SearchBar({ value, onChange, placeholder = 'Search...', disabled = false }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean
 }) {
   return (
     <div className="relative">
@@ -160,7 +176,8 @@ export function SearchBar({ value, onChange, placeholder = 'Search...' }: {
       <input
         value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full sm:w-72"
+        disabled={disabled}
+        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full sm:w-72 disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </div>
   )
@@ -183,18 +200,32 @@ export function StatCard({ label, value, sub, color = N, icon }: { label: string
   )
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, message }: {
-  open: boolean; onClose: () => void; onConfirm: () => void; message: string
+export function ConfirmDialog({ open, onClose, onConfirm, message, title = 'Confirm Delete', confirmLabel = 'Delete' }: {
+  open: boolean; onClose: () => void; onConfirm: () => void; message: string; title?: string; confirmLabel?: string
 }) {
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, open])
+
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
-        <h3 className="text-base font-semibold text-gray-900 mb-2">Confirm Delete</h3>
+        <h3 className="text-base font-semibold text-gray-900 mb-2">{title}</h3>
         <p className="text-sm text-gray-600 mb-5">{message}</p>
         <div className="flex gap-3 justify-end">
           <Btn variant="outline" onClick={onClose}>Cancel</Btn>
-          <Btn variant="danger" onClick={() => { onConfirm(); onClose() }}>Delete</Btn>
+          <Btn variant="danger" onClick={() => { onConfirm(); onClose() }}>{confirmLabel}</Btn>
         </div>
       </div>
     </div>

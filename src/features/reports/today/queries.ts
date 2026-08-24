@@ -26,6 +26,7 @@ export async function listTodayFollowups({ fromDate, toDate, userId, restrictToU
         include: {
           customer: true,
           inquiryCarDetails: {
+            orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
             include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } },
           },
           createdByUser: true,

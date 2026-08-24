@@ -6,6 +6,7 @@ export async function listFollowupQueue() {
     include: {
       customer: true,
       inquiryCarDetails: {
+        orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
         include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } },
       },
     },
