@@ -2,9 +2,6 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-const isWindows = process.platform === 'win32'
-const executable = (name) => (isWindows ? `${name}.cmd` : name)
-
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: 'inherit', ...options })
@@ -54,13 +51,16 @@ async function main() {
   ])
 
   console.log('Local services are ready. Syncing the Prisma schema…')
-  await run(executable('npx'), ['prisma', 'generate'])
-  await run(executable('npx'), ['prisma', 'db', 'push', '--skip-generate'])
+  const prisma = join(process.cwd(), 'node_modules', 'prisma', 'build', 'index.js')
+  if (!existsSync(prisma)) throw new Error('Dependencies are missing. Run npm install first.')
 
-  const next = join(process.cwd(), 'node_modules', '.bin', isWindows ? 'next.cmd' : 'next')
+  await run(process.execPath, [prisma, 'generate'])
+  await run(process.execPath, [prisma, 'db', 'push', '--skip-generate'])
+
+  const next = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next')
   if (!existsSync(next)) throw new Error('Dependencies are missing. Run npm install first.')
 
-  const nextProcess = spawn(next, ['dev', ...process.argv.slice(2)], { stdio: 'inherit' })
+  const nextProcess = spawn(process.execPath, [next, 'dev', ...process.argv.slice(2)], { stdio: 'inherit' })
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.on(signal, () => nextProcess.kill(signal))
   }
