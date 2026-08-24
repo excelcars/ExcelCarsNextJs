@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-local.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test:vehicle-email-links": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts",
     "typecheck": "tsc --noEmit",
     "docker:up": "docker compose --env-file .env.docker up --build -d",
     "docker:down": "docker compose down",

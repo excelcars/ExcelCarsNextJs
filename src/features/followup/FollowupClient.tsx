@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, PhoneCall, AlertTriangle } from 'lucide-react'
+import { Phone, PhoneCall, AlertTriangle, Eye, Pencil } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar } from '@/components/ui'
 import { logFollowup, type LogFollowupInput } from './actions'
 
@@ -12,14 +12,21 @@ const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car
 
 interface FollowupRow {
   inquiryId: number
+  inquiryNo: string | null
+  dateOfInquiry: Date | string | null
+  website: string | null
+  customerId?: number | null
   customerNameLegacy: string | null
   mobileno: string | null
   email: string | null
+  budgetOfCustomer?: string | number | null
   classification: string | null
+  status?: string | null
   subStatus: string | null
   followUpDate: Date | string | null
+  visitedDateOfCustomer?: Date | string | null
   remark: string | null
-  customer: { custName: string } | null
+  customer: { custId?: number; custName: string; custMobile?: string | null; custEmail?: string | null } | null
   inquiryCarDetails: {
     year: number | null
     carVariantMaster: {
@@ -97,6 +104,14 @@ export function FollowupClient({ initialData }: { initialData: FollowupRow[] }) 
     })
   }
 
+  const openInquiryView = (inquiryId: number) => {
+    router.push(`/inquiry?view=${inquiryId}`)
+  }
+
+  const openInquiryEdit = (inquiryId: number) => {
+    router.push(`/inquiry?edit=${inquiryId}`)
+  }
+
   return (
     <div>
       <PageHeader
@@ -146,9 +161,17 @@ export function FollowupClient({ initialData }: { initialData: FollowupRow[] }) 
               </td>
               <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={r.remark ?? ''}>{r.remark ?? '—'}</td>
               <td className="px-4 py-3">
-                <Btn variant="outline" size="sm" onClick={() => openLog(r)}>
-                  <PhoneCall className="w-3.5 h-3.5" />Log
-                </Btn>
+                <div className="flex items-center gap-1.5">
+                  <Btn variant="outline" size="sm" onClick={() => openLog(r)}>
+                    <PhoneCall className="w-3.5 h-3.5" />Log
+                  </Btn>
+                  <Btn variant="outline" size="sm" onClick={() => openInquiryView(r.inquiryId)}>
+                    <Eye className="w-3.5 h-3.5" />View
+                  </Btn>
+                  <Btn variant="outline" size="sm" onClick={() => openInquiryEdit(r.inquiryId)}>
+                    <Pencil className="w-3.5 h-3.5" />Edit
+                  </Btn>
+                </div>
               </td>
             </tr>
           )
@@ -158,6 +181,39 @@ export function FollowupClient({ initialData }: { initialData: FollowupRow[] }) 
       <Modal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={!!logRow} onClose={() => setLogRow(null)}>
         {logRow && (
           <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inquiry Context</div>
+                <div className="mt-3 space-y-2 text-sm text-gray-700">
+                  <div><span className="font-medium text-gray-900">Inquiry ID:</span> {logRow.inquiryId}</div>
+                  <div><span className="font-medium text-gray-900">Inquiry No:</span> {logRow.inquiryNo ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(logRow.dateOfInquiry) || '—'}</div>
+                  <div><span className="font-medium text-gray-900">Source:</span> {logRow.website ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Budget:</span> {logRow.budgetOfCustomer ? `₹${Number(logRow.budgetOfCustomer).toLocaleString('en-IN')}` : '—'}</div>
+                  <div><span className="font-medium text-gray-900">Visited Date:</span> {fmtDate(logRow.visitedDateOfCustomer ?? null) || '—'}</div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer & Vehicle</div>
+                <div className="mt-3 space-y-2 text-sm text-gray-700">
+                  <div><span className="font-medium text-gray-900">Linked Customer ID:</span> {logRow.customer?.custId ?? logRow.customerId ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Customer:</span> {logRow.customer?.custName ?? logRow.customerNameLegacy ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Mobile:</span> {logRow.customer?.custMobile ?? logRow.mobileno ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Email:</span> {logRow.customer?.custEmail ?? logRow.email ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Car of Interest:</span> {(() => {
+                    const car = logRow.inquiryCarDetails[0]
+                    return car?.carVariantMaster
+                      ? [clean(car.carVariantMaster.carMakeMaster?.make), clean(car.carVariantMaster.carModelMaster?.model), clean(car.carVariantMaster.variant)]
+                          .filter(Boolean).join(' ') + (car.year ? ` · ${car.year}` : '') || '—'
+                      : '—'
+                  })()}</div>
+                  <div><span className="font-medium text-gray-900">Current Follow-up Date:</span> {fmtDate(logRow.followUpDate) || '—'}</div>
+                  <div><span className="font-medium text-gray-900">Last Remark:</span> {logRow.remark?.trim() ? logRow.remark : '—'}</div>
+                </div>
+              </div>
+            </div>
+
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Recent activity</div>
               {historyLoading ? (
@@ -199,6 +255,12 @@ export function FollowupClient({ initialData }: { initialData: FollowupRow[] }) 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
             <div className="flex gap-3 justify-end pt-2">
+              <Btn variant="outline" onClick={() => openInquiryView(logRow.inquiryId)}>
+                <Eye className="w-3.5 h-3.5" />View Inquiry
+              </Btn>
+              <Btn variant="outline" onClick={() => openInquiryEdit(logRow.inquiryId)}>
+                <Pencil className="w-3.5 h-3.5" />Edit Inquiry
+              </Btn>
               <Btn variant="outline" onClick={() => setLogRow(null)}>Cancel</Btn>
               <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Follow-up'}</Btn>
             </div>
