@@ -218,6 +218,7 @@ export function FollowupClient({
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [exportError, setExportError] = useState('')
   const [isRoutePending, startRouteTransition] = useTransition()
   const [isPending, startTransition] = useTransition()
@@ -367,6 +368,7 @@ export function FollowupClient({
     setLogRow(r)
     setForm({ ...emptyForm(), classification: r.classification ?? 'Warm' })
     setError('')
+    setErrors({})
     setHistory([])
     setHistoryError('')
     setHistoryLoading(true)
@@ -392,6 +394,28 @@ export function FollowupClient({
   const save = () => {
     if (!logRow) return
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.comments?.trim()) {
+      newErrors.comments = true
+    }
+    if (form.status === 'FollowUp') {
+      if (!form.nextFollowUpDate?.trim()) {
+        newErrors.nextFollowUpDate = true
+      } else {
+        const today = new Date().toISOString().slice(0, 10)
+        if (form.nextFollowUpDate < today) {
+          newErrors.nextFollowUpDate = true
+        }
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = await logFollowup(logRow.inquiryId, form)
       if (!result.success) {
@@ -793,10 +817,10 @@ export function FollowupClient({
                 </datalist>
               </div>
               {form.status === 'FollowUp' && (
-                <Input label="Next Follow-up Date *" type="date" value={form.nextFollowUpDate} onChange={e => f('nextFollowUpDate', e.target.value)} />
+                <Input label="Next Follow-up Date *" type="date" value={form.nextFollowUpDate} onChange={e => f('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
               )}
             </div>
-            <Textarea label="Comments" value={form.comments} onChange={e => f('comments', e.target.value)} placeholder="What was discussed on this call..." />
+            <Textarea label="Comments" value={form.comments} onChange={e => f('comments', e.target.value)} placeholder="What was discussed on this call..." error={errors.comments} />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

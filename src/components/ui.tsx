@@ -59,27 +59,27 @@ export function Btn({ children, onClick, variant = 'primary', size = 'md', type 
   )
 }
 
-export function Input({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+export function Input({ label, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <input
         {...props}
-        className={`border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
-        style={{ '--tw-ring-color': N } as Record<string, string>}
+        className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
+        style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
       />
     </div>
   )
 }
 
-export function Select({ label, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
+export function Select({ label, children, error, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <div className="relative">
         <select
           {...props}
-          className={`w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none pr-8 ${props.className || ''}`}
+          className={`w-full border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none pr-8 ${props.className || ''}`}
         >
           {children}
         </select>
@@ -89,12 +89,14 @@ export function Select({ label, children, ...props }: SelectHTMLAttributes<HTMLS
   )
 }
 
-export function Textarea({ label, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }) {
+export function Textarea({ label, error, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <textarea rows={3} {...props}
-        className={`border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 resize-none ${props.className || ''}`} />
+        className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 resize-none ${props.className || ''}`}
+        style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
+      />
     </div>
   )
 }

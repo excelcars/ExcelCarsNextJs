@@ -7,6 +7,7 @@ import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBa
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
 import { createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmail, getInquiryDetail, type InquiryFormInput } from './actions'
+import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car Not In Stock', 'Not connected', 'Already Bought Car', 'Visited', 'Fresh Lead', 'Sold Car']
 
@@ -269,6 +270,7 @@ export function InquiryClient({
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isRoutePending, startRouteTransition] = useTransition()
   const [isPending, startTransition] = useTransition()
 
@@ -633,6 +635,7 @@ export function InquiryClient({
     setModal(null)
     setDiscardOpen(false)
     setError('')
+    setErrors({})
     clearInquiryEditQuery()
   }
 
@@ -768,11 +771,54 @@ export function InquiryClient({
 
   const save = () => {
     setError('')
-    const workflowError = validateInquiryWorkflow(form)
-    if (workflowError) {
-      setError(workflowError)
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.customerId && !form.customerNameLegacy?.trim()) {
+      newErrors.customer = true
+    }
+    if (!form.mobileno?.trim() || !isValidPhone(form.mobileno)) {
+      newErrors.mobileno = true
+    }
+    if (form.email && !isValidEmail(form.email)) {
+      newErrors.email = true
+    }
+    if (!form.website?.trim()) {
+      newErrors.website = true
+    }
+    if (form.budgetOfCustomer !== null && form.budgetOfCustomer <= 0) {
+      newErrors.budgetOfCustomer = true
+    }
+    if (form.carYear !== null && !isValidYear(form.carYear)) {
+      newErrors.carYear = true
+    }
+
+    // Workflow validations
+    const status = form.status.trim()
+    const subStatus = form.subStatus.trim().toLowerCase()
+    const inquiryDate = form.dateOfInquiry.trim()
+    const followUpDate = form.followUpDate.trim()
+    const visitedDate = form.visitedDateOfCustomer.trim()
+
+    if (status === 'FollowUp' && !followUpDate) {
+      newErrors.followUpDate = true
+    }
+    if (subStatus === 'visited' && !visitedDate) {
+      newErrors.visitedDateOfCustomer = true
+    }
+    if (inquiryDate && followUpDate && followUpDate < inquiryDate) {
+      newErrors.followUpDate = true
+      newErrors.dateOfInquiry = true
+    }
+    if (inquiryDate && visitedDate && visitedDate < inquiryDate) {
+      newErrors.visitedDateOfCustomer = true
+      newErrors.dateOfInquiry = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
       return
     }
+    setErrors({})
     startTransition(async () => {
       const result = editId ? await updateInquiry(editId, form) : await createInquiry(form)
       if (!result.success) {
@@ -1121,7 +1167,7 @@ export function InquiryClient({
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
+            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
           </div>
 
           {selectedCustomer ? (
@@ -1131,13 +1177,13 @@ export function InquiryClient({
           ) : null}
 
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Name" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} />
-            <Input label="Mobile" value={form.mobileno} onChange={e => f('mobileno', e.target.value)} disabled={!!selectedCustomer} />
-            <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} disabled={!!selectedCustomer} />
+            <Input label="Name" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} error={errors.customer} />
+            <Input label="Mobile" value={form.mobileno} onChange={e => f('mobileno', e.target.value)} disabled={!!selectedCustomer} error={errors.mobileno} />
+            <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} disabled={!!selectedCustomer} error={errors.email} />
             <Input label="Inquiry No" value={form.inquiryNo} onChange={e => f('inquiryNo', e.target.value)} />
-            <Input label="Inquiry Date" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} />
+            <Input label="Inquiry Date" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
             <div>
-              <Input label="Source" list="inquiry-source-suggestions" value={form.website} onChange={e => f('website', e.target.value)} placeholder="Type or pick a source" />
+              <Input label="Source" list="inquiry-source-suggestions" value={form.website} onChange={e => f('website', e.target.value)} placeholder="Type or pick a source" error={errors.website} />
               <datalist id="inquiry-source-suggestions">
                 {sourceSuggestions.map(source => <option key={source} value={source} />)}
               </datalist>
@@ -1158,16 +1204,16 @@ export function InquiryClient({
               {variants.map(v => <option key={v.pkVariantId} value={v.pkVariantId}>{v.variant}</option>)}
             </Select>
             <Input label="Sub Variant" value={form.subVariant} onChange={e => f('subVariant', e.target.value)} placeholder="Optional detailed trim / package" />
-            <Input label="Car Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
-            <Input label="Budget (₹)" type="number" value={form.budgetOfCustomer ?? ''} onChange={e => f('budgetOfCustomer', e.target.value ? +e.target.value : null)} />
-            <Input label="Visited Date" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} />
+            <Input label="Car Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
+            <Input label="Budget (₹)" type="number" value={form.budgetOfCustomer ?? ''} onChange={e => f('budgetOfCustomer', e.target.value ? +e.target.value : null)} error={errors.budgetOfCustomer} />
+            <Input label="Visited Date" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} />
             <Select label="Classification" value={form.classification} onChange={e => f('classification', e.target.value)}>
               {INQUIRY_CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
             </Select>
             <Select label="Status" value={form.status} onChange={e => f('status', e.target.value)}>
               {INQUIRY_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Follow-up Date" type="date" value={form.followUpDate} onChange={e => f('followUpDate', e.target.value)} />
+            <Input label="Follow-up Date" type="date" value={form.followUpDate} onChange={e => f('followUpDate', e.target.value)} error={errors.followUpDate} />
             <div>
               <Input label="Sub-status" list="sub-status-suggestions" value={form.subStatus} onChange={e => f('subStatus', e.target.value)} />
               <datalist id="sub-status-suggestions">

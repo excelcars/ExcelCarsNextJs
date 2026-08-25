@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, X, Car, Eye, Download, Loader2 } from 'lucide-rea
 import { Badge, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { createChecklist, updateChecklist, deleteChecklist, type ChecklistFormInput, type DocRow } from './actions'
+import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 const LEGACY_DOCS = [
   'Original Registration Book / RC Card',
@@ -242,6 +243,7 @@ export function ChecklistClient({
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [detailError, setDetailError] = useState('')
   const [isPending, startTransition] = useTransition()
   const [isRoutePending, startRouteTransition] = useTransition()
@@ -435,6 +437,7 @@ export function ChecklistClient({
     setModal(null)
     setDiscardOpen(false)
     setError('')
+    setErrors({})
     setDetailError('')
     setDetailLoading(false)
   }
@@ -450,6 +453,30 @@ export function ChecklistClient({
 
   const save = () => {
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.registrationNo?.trim()) {
+      newErrors.registrationNo = true
+    }
+    if (!form.customerId && !form.customerNameLegacy?.trim()) {
+      newErrors.customer = true
+    }
+    if (form.customerMobileLegacy && !isValidPhone(form.customerMobileLegacy)) {
+      newErrors.customerMobileLegacy = true
+    }
+    if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
+      newErrors.customerEmailLegacy = true
+    }
+    if (form.year !== null && !isValidYear(form.year)) {
+      newErrors.year = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = editId ? await updateChecklist(editId, form) : await createChecklist(form)
       if (!result.success) {
@@ -616,6 +643,7 @@ export function ChecklistClient({
               value={form.registrationNo}
               list="checklist-registration-options"
               onChange={e => onRegistrationChange(e.target.value)}
+              error={errors.registrationNo}
             />
             <datalist id="checklist-registration-options">
               {registrationMatches.map(v => (
@@ -668,7 +696,7 @@ export function ChecklistClient({
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
+            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
           </div>
 
           <div>

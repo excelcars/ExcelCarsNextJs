@@ -9,6 +9,7 @@ import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBa
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { INVENTORY_STATUSES } from './queries'
 import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, syncInventoryToInquiry, type InventoryFormInput } from './actions'
+import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
@@ -490,6 +491,7 @@ export function InventoryClient({
   const [currentInventoryNumber, setCurrentInventoryNumber] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
 
   const [selectedMakeId, setSelectedMakeId] = useState<number | null>(null)
@@ -1081,6 +1083,8 @@ export function InventoryClient({
     setDetailLoading(false)
     setDetailError('')
     setDiscardOpen(false)
+    setError('')
+    setErrors({})
   }
 
   const requestModalClose = () => {
@@ -1353,6 +1357,42 @@ export function InventoryClient({
 
   const save = () => {
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.registrationNo?.trim()) {
+      newErrors.registrationNo = true
+    }
+    if (!form.fkVariantId) {
+      newErrors.fkVariantId = true
+    }
+    if (form.year === null || form.year === undefined) {
+      newErrors.year = true
+    }
+    if (form.year !== null && form.year !== undefined && !isValidYear(form.year)) {
+      newErrors.year = true
+    }
+    if (form.kmsDriven !== null && Number(form.kmsDriven) < 0) {
+      newErrors.kmsDriven = true
+    }
+    if (form.noOfOwners !== null && form.noOfOwners < 1) {
+      newErrors.noOfOwners = true
+    }
+    if (form.price !== null && Number(form.price) <= 0) {
+      newErrors.price = true
+    }
+    if (form.mobileNoOwnedBy && !isValidPhone(form.mobileNoOwnedBy)) {
+      newErrors.mobileNoOwnedBy = true
+    }
+    if (form.emailIdOwnedBy && !isValidEmail(form.emailIdOwnedBy)) {
+      newErrors.emailIdOwnedBy = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = editId ? await updateInventory(editId, form) : await createInventory(form)
       if (!result.success) {
@@ -1740,30 +1780,30 @@ export function InventoryClient({
             <div className="grid grid-cols-3 gap-4">
               <Input label="Inventory No" value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled />
               <Input label="SKU" value={editId ? (data.find(r => r.inventoryId === editId)?.sku ?? 'Auto-generated') : 'Auto-generated on save'} readOnly disabled />
-              <Input label="Registration No *" value={form.registrationNo} onChange={e => f('registrationNo', e.target.value)} placeholder="MH12AB1234" />
+              <Input label="Registration No *" value={form.registrationNo} onChange={e => f('registrationNo', e.target.value)} placeholder="MH12AB1234" error={errors.registrationNo} />
               <Select label="Status" value={form.status} onChange={e => f('status', e.target.value)}>
                 {INVENTORY_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Select label="Make *" value={selectedMakeId ?? ''} onChange={e => onMakeChange(Number(e.target.value))}>
+              <Select label="Make *" value={selectedMakeId ?? ''} onChange={e => onMakeChange(Number(e.target.value))} error={errors.fkVariantId}>
                 <option value="">Select Make</option>
                 {makes.map(m => <option key={m.pkMakeId} value={m.pkMakeId}>{m.make}</option>)}
               </Select>
-              <Select label="Model *" value={selectedModelId ?? ''} onChange={e => onModelChange(Number(e.target.value))} disabled={!selectedMakeId}>
+              <Select label="Model *" value={selectedModelId ?? ''} onChange={e => onModelChange(Number(e.target.value))} disabled={!selectedMakeId} error={errors.fkVariantId}>
                 <option value="">Select Model</option>
                 {models.map(m => <option key={m.pkModelId} value={m.pkModelId}>{m.model}</option>)}
               </Select>
-              <Select label="Variant *" value={form.fkVariantId ?? ''} onChange={e => f('fkVariantId', Number(e.target.value) || null)} disabled={!selectedModelId}>
+              <Select label="Variant *" value={form.fkVariantId ?? ''} onChange={e => f('fkVariantId', Number(e.target.value) || null)} disabled={!selectedModelId} error={errors.fkVariantId}>
                 <option value="">Select Variant</option>
                 {variants.map(v => <option key={v.pkVariantId} value={v.pkVariantId}>{v.variant}</option>)}
               </Select>
               <Input label="Legacy Make" value={form.makeLegacy} onChange={e => f('makeLegacy', e.target.value)} placeholder="Use when variant is unavailable" />
               <Input label="Legacy Model" value={form.modelLegacy} onChange={e => f('modelLegacy', e.target.value)} />
               <Input label="Legacy Variant" value={form.variantLegacy} onChange={e => f('variantLegacy', e.target.value)} />
-              <Input label="Year" type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} />
+              <Input label="Year" type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} error={errors.year} />
               <Input label="Month" value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
               <Input label="Colour" value={form.colour} onChange={e => f('colour', e.target.value)} />
               <Input label="Fuel Type" value={form.fuelType} onChange={e => f('fuelType', e.target.value)} placeholder="Petrol / Diesel / CNG" />
-              <Input label="No. of Owners" type="number" value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} />
+              <Input label="No. of Owners" type="number" value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
               <Select label="Tax" value={form.tax} onChange={e => f('tax', e.target.value)}>
                 <option value="">Select Tax Type</option>
                 <option value="Individual">Individual</option>
@@ -1778,13 +1818,13 @@ export function InventoryClient({
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </Select>
-              <Input label="KM Driven" type="number" value={form.kmsDriven ?? ''} onChange={e => f('kmsDriven', e.target.value ? +e.target.value : null)} />
+              <Input label="KM Driven" type="number" value={form.kmsDriven ?? ''} onChange={e => f('kmsDriven', e.target.value ? +e.target.value : null)} error={errors.kmsDriven} />
               <Input label="Insurance Type" value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" />
-              <Input label="Price (₹)" type="number" value={form.price ?? ''} onChange={e => f('price', e.target.value ? +e.target.value : null)} />
+              <Input label="Price (₹)" type="number" value={form.price ?? ''} onChange={e => f('price', e.target.value ? +e.target.value : null)} error={errors.price} />
               <Input label="Owner Type" value={form.ownedType} onChange={e => f('ownedType', e.target.value)} placeholder="Dealer / Self / Customer" />
               <Input label="Owned By" value={form.ownedBy} onChange={e => f('ownedBy', e.target.value)} />
-              <Input label="Owner Mobile" value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value)} />
-              <Input label="Owner Email" type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} />
+              <Input label="Owner Mobile" value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value)} error={errors.mobileNoOwnedBy} />
+              <Input label="Owner Email" type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">

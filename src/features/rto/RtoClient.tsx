@@ -10,6 +10,7 @@ import {
   type RtoFormInput, type LogRtoPaymentInput,
 } from './actions'
 import { PAYMENT_STATUSES, RC_STATUSES, TRANSFER_STATUSES, CAR_TYPES } from './queries'
+import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
@@ -297,6 +298,7 @@ export function RtoClient({
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
 
   const [payRow, setPayRow] = useState<RtoRow | null>(null)
@@ -386,6 +388,7 @@ export function RtoClient({
     setModal(null)
     setDiscardOpen(false)
     setError('')
+    setErrors({})
   }
 
   const requestCloseForm = () => {
@@ -514,6 +517,43 @@ export function RtoClient({
 
   const save = () => {
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.inventoryId && !form.registrationNo?.trim()) {
+      newErrors.inventoryId = true
+      newErrors.registrationNo = true
+    }
+    if (!form.partnerId && !form.agentNameLegacy?.trim()) {
+      newErrors.partnerId = true
+    }
+    if (!form.customerId && !form.customerNameLegacy?.trim()) {
+      newErrors.customer = true
+    }
+    if (form.transferCharges !== null && form.transferCharges < 0) {
+      newErrors.transferCharges = true
+    }
+    if (form.carYear !== null && !isValidYear(form.carYear)) {
+      newErrors.carYear = true
+    }
+    if (form.agentMobileNoLegacy && !isValidPhone(form.agentMobileNoLegacy)) {
+      newErrors.agentMobileNoLegacy = true
+    }
+    if (form.agentEmailIdLegacy && !isValidEmail(form.agentEmailIdLegacy)) {
+      newErrors.agentEmailIdLegacy = true
+    }
+    if (form.customerMobLegacy && !isValidPhone(form.customerMobLegacy)) {
+      newErrors.customerMobLegacy = true
+    }
+    if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
+      newErrors.customerEmailLegacy = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = editId ? await updateRto(editId, form) : await createRto(form)
       if (!result.success) {
@@ -547,6 +587,7 @@ export function RtoClient({
       transferStatus: r.transferStatus ?? 'Pending',
     })
     setError('')
+    setErrors({})
     setPayments([]); setFollowups([])
     setHistoryLoading(true)
     const res = await fetch(`/api/rto/history?rtoAgentMainId=${r.rtoAgentMainId}`)
@@ -560,6 +601,36 @@ export function RtoClient({
   const savePayment = () => {
     if (!payRow) return
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (payForm.amountPaid !== null && payForm.amountPaid <= 0) {
+      newErrors.amountPaid = true
+    }
+    const totalPaidAlready = payments.reduce((sum, p) => sum + Number(p.amountPaid ?? 0), 0)
+    const charges = Number(payRow.transferCharges ?? 0)
+    if (payForm.amountPaid !== null && (totalPaidAlready + payForm.amountPaid > charges)) {
+      newErrors.amountPaid = true
+    }
+    if (payForm.paymentStatus !== 'Received') {
+      if (!payForm.nextFollowUpDate?.trim()) {
+        newErrors.nextFollowUpDate = true
+      } else {
+        const today = new Date().toISOString().slice(0, 10)
+        if (payForm.nextFollowUpDate < today) {
+          newErrors.nextFollowUpDate = true
+        }
+      }
+    }
+    if (!payForm.remark?.trim()) {
+      newErrors.remark = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = await logRtoPayment(payRow.rtoAgentMainId, payForm)
       if (!result.success) {
@@ -794,18 +865,18 @@ export function RtoClient({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">RTO Agent *</label>
-              <PartnerPicker partnerType="RTO Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} />
+              <PartnerPicker partnerType="RTO Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.partnerId} />
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-              <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
+              <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
             </div>
           </div>
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
-              <div className="flex items-center justify-between border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+              <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
                 <div className="flex items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
@@ -820,6 +891,7 @@ export function RtoClient({
                   value={vehicleQuery}
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}
+                  error={errors.inventoryId}
                 />
                 {vehicleOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
@@ -844,10 +916,10 @@ export function RtoClient({
             <Input label="Make" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} />
             <Input label="Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
             <Input label="Variant" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} />
-            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
+            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
             
             <div className="space-y-1">
-              <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.registrationNo} />
               <div className="flex items-center gap-2">
                 <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
                   Find by Registration
@@ -859,7 +931,7 @@ export function RtoClient({
 
           <div className="grid grid-cols-3 gap-4">
             <Input label="Entry Date" type="date" value={form.dateOfEntry} onChange={e => f('dateOfEntry', e.target.value)} />
-            <Input label="Transfer Charges (₹)" type="number" value={form.transferCharges ?? ''} onChange={e => f('transferCharges', e.target.value ? +e.target.value : null)} />
+            <Input label="Transfer Charges (₹)" type="number" value={form.transferCharges ?? ''} onChange={e => f('transferCharges', e.target.value ? +e.target.value : null)} error={errors.transferCharges} />
             <Select label="Payment Status" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
@@ -919,7 +991,7 @@ export function RtoClient({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} />
+              <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} error={errors.amountPaid} />
               <Select label="Payment Status *" value={payForm.paymentStatus} onChange={e => pf('paymentStatus', e.target.value)}>
                 {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
@@ -929,9 +1001,9 @@ export function RtoClient({
               <Select label="Transfer Status *" value={payForm.transferStatus} onChange={e => pf('transferStatus', e.target.value)}>
                 {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} />
+              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
             </div>
-            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} />
+            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

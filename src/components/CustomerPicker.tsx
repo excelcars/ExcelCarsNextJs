@@ -15,9 +15,11 @@ interface CustomerOption {
 export function CustomerPicker({
   value,
   onChange,
+  error: pickerError,
 }: {
   value: CustomerOption | null
   onChange: (customer: CustomerOption | null) => void
+  error?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CustomerOption[]>([])
@@ -94,7 +96,7 @@ export function CustomerPicker({
 
   if (value) {
     return (
-      <div className="flex items-center justify-between border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+      <div className={`flex items-center justify-between border ${pickerError ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
         <div>
           <div className="text-sm font-medium text-gray-800">{value.custName}</div>
           <div className="text-xs text-gray-500">{value.custMobile ?? '—'} {value.custEmail ? `· ${value.custEmail}` : ''}</div>
@@ -118,6 +120,7 @@ export function CustomerPicker({
           setError('')
         }}
         onFocus={() => setOpen(true)}
+        error={pickerError}
       />
       {open && query.trim().length >= 2 && (
         <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
