@@ -18,8 +18,9 @@ This guide is the default local setup for ExcelCars: the web app runs natively o
 ## Files used
 
 - Compose file: [docker-compose.yml](../docker-compose.yml)
-- Base env: [.env](../.env)
-- Local override env: `.env.local` (not committed — points `DATABASE_URL`/`REDIS_*` at `localhost`)
+- Local app / Prisma env: [.env](../.env)
+- Optional personal override env: `.env.local` (not committed)
+- Docker-only service env: [.env.docker](../.env.docker)
 
 ## First-time setup
 
@@ -89,9 +90,10 @@ Expected result:
 
 ## Local environment strategy
 
-- `.env` holds shared, safe local defaults
-- `.env.local` overrides `DATABASE_URL` and `REDIS_*` to point at `localhost` so the locally-running web app reaches the Dockerized database and Redis
-- `.env.local` is gitignored and should never be committed
+- `.env` is the source of truth for host-local commands like `npx prisma db push` and `npm run dev`
+- `.env` should use `localhost` for `DATABASE_URL` and `REDIS_*`
+- `.env.local` is optional for personal overrides and is gitignored
+- `.env.docker` is only for app processes that run inside Docker and therefore need `db` / `redis` hostnames
 
 ## Database notes
 
@@ -99,6 +101,12 @@ From the host machine (web app, Prisma CLI, migrations):
 
 ```text
 postgresql://excelcars:excelcars@localhost:5432/excelcars
+```
+
+Inside Docker app containers:
+
+```text
+postgresql://excelcars:excelcars@db:5432/excelcars
 ```
 
 ## Recommended startup path
@@ -120,3 +128,15 @@ The web app also ships as a Docker image (see [Dockerfile](../Dockerfile)) for a
 ```bash
 docker build --target builder -t excelcars-build-check .
 ```
+
+
+------------- Do not use just for reference ----------------------
+
+npm run db:push:staging
+npm run db:copy-data:staging -- --force
+npm run db:copy-data:staging -- --force
+
+npm run db:push:production -- --force --confirm-production
+npm run db:copy-data:production -- --force --confirm-production
+
+------------- End Do not use just for reference ----------------------
