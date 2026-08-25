@@ -10,7 +10,7 @@
     "infra:ps": "docker compose ps",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
     "test:vehicle-email-links": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts",
