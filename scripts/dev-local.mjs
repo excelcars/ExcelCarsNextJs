@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 function run(command, args, options = {}) {
@@ -37,6 +37,25 @@ async function waitFor(service, command) {
 }
 
 async function main() {
+  const envDockerPath = join(process.cwd(), '.env.docker')
+  if (!existsSync(envDockerPath)) {
+    console.log('Creating missing .env.docker file…')
+    writeFileSync(
+      envDockerPath,
+      `# Docker Environment Variables (for web and worker services when run inside Docker)
+NODE_ENV=development
+APP_URL=http://localhost:3000
+NEXTAUTH_URL=http://localhost:3000
+AUTH_SECRET=replace-with-a-long-random-string
+
+DATABASE_URL=postgresql://excelcars:excelcars@db:5432/excelcars
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_URL=redis://redis:6379
+`
+    )
+  }
+
   console.log('\nStarting local PostgreSQL, Redis, and Adminer…')
   try {
     await run('docker', ['compose', 'up', '-d', 'db', 'redis', 'adminer'])

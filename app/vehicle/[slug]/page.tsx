@@ -81,7 +81,7 @@ export default async function PublicVehiclePage({
 
             {vehicle.gallery.length > 1 ? (
               <div className="grid grid-cols-4 gap-3">
-                {vehicle.gallery.slice(0, 4).map(photo => (
+                {vehicle.gallery.slice(0, 4).map((photo: { documentId: number; src: string; alt: string }) => (
                   <div key={photo.documentId} className="overflow-hidden rounded-2xl border border-[#e7dcc7] bg-white shadow-sm">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo.src} alt={photo.alt} className="h-24 w-full object-cover" />
