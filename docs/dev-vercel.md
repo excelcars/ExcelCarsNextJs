@@ -77,6 +77,12 @@ Create a preview deployment:
 npm run vercel:deploy:preview
 ```
 
+Apply committed Prisma migrations to staging/preview database:
+
+```bash
+npm run db:migrate:staging
+```
+
 ## Production workflow
 
 Pull production variables for local verification:
@@ -91,11 +97,23 @@ Run a production-style build:
 npm run vercel:build
 ```
 
+Apply committed Prisma migrations to production database:
+
+```bash
+npm run db:migrate:production
+```
+
 Deploy to production:
 
 ```bash
 npm run vercel:deploy:production
 ```
+
+Important:
+
+- the normal workflow for staging and production schema changes is `prisma migrate deploy`
+- do not use `prisma migrate dev` on staging or production
+- use direct `db push` or full data copy scripts only for exceptional/manual operations
 
 ## Environment-variable rules
 
@@ -161,6 +179,18 @@ Pull production env:
 npm run vercel:pull:production
 ```
 
+Apply staging migrations:
+
+```bash
+npm run db:migrate:staging
+```
+
+Apply production migrations:
+
+```bash
+npm run db:migrate:production
+```
+
 Deploy preview:
 
 ```bash
@@ -177,6 +207,25 @@ npm run vercel:deploy:production
 
 1. Start local feature work using [dev-docker.md](./dev-docker.md) (web app native, database and Redis in Docker)
 2. Link Vercel once
-3. Keep real secrets in Vercel, not in committed env files
-4. Use preview deployments for QA
-5. Promote only tested builds to production
+3. Make schema changes locally with:
+
+```bash
+npm run db:migrate:dev -- --name your_change_name
+```
+
+4. Commit schema + migrations
+5. Keep real secrets in Vercel, not in committed env files
+6. Apply migrations to staging:
+
+```bash
+npm run db:migrate:staging
+```
+
+7. Use preview/staging deployments for QA
+8. Apply migrations to production:
+
+```bash
+npm run db:migrate:production
+```
+
+9. Promote only tested builds to production

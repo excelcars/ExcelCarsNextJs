@@ -74,6 +74,35 @@ Check running containers:
 docker compose ps
 ```
 
+## Prisma migration workflow
+
+Use Prisma migrations as the default workflow for schema changes.
+
+Create and apply a new migration locally:
+
+```bash
+npm run db:migrate:dev -- --name your_change_name
+```
+
+Examples:
+
+```bash
+npm run db:migrate:dev -- --name add_customer_notes
+npm run db:migrate:dev -- --name create_message_template_table
+```
+
+Check migration state:
+
+```bash
+npm run db:migrate:status
+```
+
+Important:
+
+- use `migrate dev` on local development only
+- do not use `migrate dev` on staging or production
+- use `db push` only for local prototyping or exceptional/manual recovery
+
 ## Validation
 
 Health check:
@@ -117,6 +146,23 @@ postgresql://excelcars:excelcars@db:5432/excelcars
 4. open `http://localhost:3000`
 5. verify `http://localhost:3000/api/health`
 
+## Schema change flow
+
+When you add a table or update columns:
+
+1. Edit [schema.prisma](../prisma/schema.prisma)
+2. Create a local migration:
+
+```bash
+npm run db:migrate:dev -- --name your_change_name
+```
+
+3. Test locally
+4. Commit:
+   - `prisma/schema.prisma`
+   - `prisma/migrations/...`
+5. Apply the committed migration to staging and production with deploy commands
+
 ## When to use this mode
 
 Use this mode for day-to-day feature development — it's the default. Native local dev gives the fastest reload and avoids container rebuilds for code changes, while Docker still gives you a real, consistent PostgreSQL and Redis.
@@ -129,14 +175,32 @@ The web app also ships as a Docker image (see [Dockerfile](../Dockerfile)) for a
 docker build --target builder -t excelcars-build-check .
 ```
 
+## Manual database operations
 
-------------- Do not use just for reference ----------------------
+These are exceptional/manual operations, not the default schema workflow:
 
+Push schema directly to staging:
+
+```bash
 npm run db:push:staging
-npm run db:copy-data:staging -- --force
-npm run db:copy-data:staging -- --force
+```
 
+Copy local schema and data to staging:
+
+```bash
+npm run db:copy-data:staging -- --force
+```
+
+Push schema directly to production:
+
+```bash
 npm run db:push:production -- --force --confirm-production
-npm run db:copy-data:production -- --force --confirm-production
+```
 
-------------- End Do not use just for reference ----------------------
+Copy local schema and data to production:
+
+```bash
+npm run db:copy-data:production -- --force --confirm-production
+```
+
+Use these only when you intentionally want direct push/restore behavior outside the normal migration process.
