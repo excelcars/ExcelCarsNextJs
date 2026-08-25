@@ -200,32 +200,63 @@ export function StatCard({ label, value, sub, color = N, icon }: { label: string
   )
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, message, title = 'Confirm Delete', confirmLabel = 'Delete' }: {
-  open: boolean; onClose: () => void; onConfirm: () => void; message: string; title?: string; confirmLabel?: string
-}) {
+interface ConfirmDialogProps {
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void
+  message: string
+  title?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  confirmDisabled?: boolean
+  cancelDisabled?: boolean
+  closeOnConfirm?: boolean
+}
+
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  message,
+  title = 'Confirm Delete',
+  confirmLabel = 'Delete',
+  cancelLabel = 'Cancel',
+  confirmDisabled = false,
+  cancelDisabled = false,
+  closeOnConfirm = true,
+}: ConfirmDialogProps) {
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !cancelDisabled) onClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose, open])
+  }, [cancelDisabled, onClose, open])
 
   if (!open) return null
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
       onMouseDown={event => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget && !cancelDisabled) onClose()
       }}
     >
       <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
         <h3 className="text-base font-semibold text-gray-900 mb-2">{title}</h3>
         <p className="text-sm text-gray-600 mb-5">{message}</p>
         <div className="flex gap-3 justify-end">
-          <Btn variant="outline" onClick={onClose}>Cancel</Btn>
-          <Btn variant="danger" onClick={() => { onConfirm(); onClose() }}>{confirmLabel}</Btn>
+          <Btn variant="outline" onClick={onClose} disabled={cancelDisabled}>{cancelLabel}</Btn>
+          <Btn
+            variant="danger"
+            onClick={() => {
+              onConfirm()
+              if (closeOnConfirm) onClose()
+            }}
+            disabled={confirmDisabled}
+          >
+            {confirmLabel}
+          </Btn>
         </div>
       </div>
     </div>

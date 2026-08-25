@@ -10,6 +10,8 @@ export async function listRtoAgents() {
     include: {
       customer: true,
       partnerMaster: true,
+      createdByUser: { select: { userName: true, displayName: true } },
+      updatedByUser: { select: { userName: true, displayName: true } },
     },
     orderBy: { rtoAgentMainId: 'desc' },
   })
@@ -40,6 +42,7 @@ export async function getVehicles() {
   return prisma.inventoryManagement.findMany({
     select: {
       inventoryId: true,
+      fkVariantId: true,
       registrationNo: true,
       sku: true,
       year: true,

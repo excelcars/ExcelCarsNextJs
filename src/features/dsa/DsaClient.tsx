@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { Plus, Pencil, Trash2, X, Car } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Car, Eye, Download } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { PartnerPicker } from '@/components/PartnerPicker'
 import { createDsa, updateDsa, deleteDsa, type DsaFormInput } from './actions'
@@ -44,15 +44,150 @@ interface DsaRow {
   remark: string | null
   fkPartnerId: number | null
   partnerMaster: PartnerOption | null
+  fkVariantId: number | null
+  createdByUser: { userName: string | null; displayName: string | null } | null
+  updatedByUser: { userName: string | null; displayName: string | null } | null
+  createdDate: Date | string | null
+  updatedDate: Date | string | null
+  customer: { custName: string; custMobile: string | null; custEmail: string | null } | null
+  inventoryManagement: {
+    inventoryId: number
+    registrationNo: string | null
+    sku: string | null
+    year: number | null
+    carVariantMaster: {
+      variant: string | null
+      carMakeMaster: { make: string | null } | null
+      carModelMaster: { model: string | null } | null
+    } | null
+  } | null
+}
+
+interface DsaFilters {
+  search: string
+  registrationNo: string
+  customerName: string
+  agentName: string
+  bankName: string
+  paymentStatus: string
+  fromDate: string
+  toDate: string
 }
 
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
+const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
+const fmtDateTime = (d: Date | string | null) => d ? new Date(d).toLocaleString('en-IN') : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+
+function csvValue(value: string | number | boolean | null | undefined) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function optionSnapshot<T extends object | null>(value: T) {
+  return value
+    ? JSON.stringify(
+        Object.keys(value as object)
+          .sort()
+          .reduce<Record<string, unknown>>((acc, key) => {
+            acc[key] = (value as Record<string, unknown>)[key]
+            return acc
+          }, {}),
+      )
+    : ''
+}
 
 function vehicleLabel(v: Vehicle) {
   const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
   return `${v.registrationNo ?? v.sku ?? '—'} — ${parts.join(' ')}`
+}
+
+function getVehicleLabel(r: DsaRow) {
+  if (r.inventoryManagement) {
+    const parts = [
+      clean(r.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(r.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(r.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean)
+    return parts.join(' ') || r.carModelLegacy || '—'
+  }
+  return r.carModelLegacy || '—'
+}
+
+const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+function buildDsaExportFileName(rows: DsaRow[], filters: DsaFilters) {
+  const today = new Date().toISOString().slice(0, 10)
+  const hasFilters = Object.values(filters).some(v => v && v !== 'All')
+  const parts = ['dsa']
+  if (hasFilters) parts.push('filtered')
+  if (!hasFilters) parts.push(`${rows.length}-rows`)
+  parts.push(today)
+  return `${parts.map(slugify).filter(Boolean).join('-')}.csv`
+}
+
+function exportDsaCsv(rows: DsaRow[], filters: DsaFilters) {
+  const headers = [
+    'DSA Main ID',
+    'Linked Inventory ID',
+    'Linked Agent ID',
+    'Linked Customer ID',
+    'Linked Variant ID',
+    'Entry Date',
+    'Agent Name',
+    'Agent Mobile',
+    'Agent Email',
+    'Bank Name',
+    'Customer Name',
+    'Vehicle Model',
+    'Registration No',
+    'Loan Amount',
+    'Payout %',
+    'Payout Amount',
+    'Payment Status',
+    'Amount Paid',
+    'Remark',
+  ]
+
+  const lines = [headers.map(csvValue).join(',')]
+  for (const row of rows) {
+    lines.push([
+      row.dsaMainId,
+      row.inventoryId,
+      row.fkPartnerId,
+      row.customerId,
+      row.fkVariantId,
+      fmtDate(row.dsaEntryDate),
+      row.dsaAgentName,
+      row.dsaAgentMobileNo,
+      row.dsaAgentEmail,
+      row.dsaBankName,
+      row.customerNameLegacy,
+      getVehicleLabel(row),
+      row.carRegistrationNo,
+      row.loanAmount,
+      row.percentageOfPayout,
+      row.payoutAmount,
+      row.paymentStatus,
+      row.amountPaid,
+      row.remark,
+    ].map(csvValue).join(','))
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildDsaExportFileName(rows, filters)
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 function emptyForm(): DsaFormInput {
@@ -65,10 +200,29 @@ function emptyForm(): DsaFormInput {
   }
 }
 
+function emptyFilters(): DsaFilters {
+  return {
+    search: '',
+    registrationNo: '',
+    customerName: '',
+    agentName: '',
+    bankName: '',
+    paymentStatus: 'All',
+    fromDate: '',
+    toDate: '',
+  }
+}
+
 export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; vehicles: Vehicle[] }) {
   const [data, setData] = useState(initialData)
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<DsaFilters>(emptyFilters())
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
+  const [viewRow, setViewRow] = useState<DsaRow | null>(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
+  const [savedAgentSnapshot, setSavedAgentSnapshot] = useState('')
+  const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [form, setForm] = useState<DsaFormInput>(emptyForm())
   const [selectedAgent, setSelectedAgent] = useState<PartnerOption | null>(null)
   const [vehicleQuery, setVehicleQuery] = useState('')
@@ -78,13 +232,48 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
+  const [isExporting, startExportTransition] = useTransition()
+  const [exportError, setExportError] = useState('')
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!modal) return false
+    return (
+      JSON.stringify(form) !== savedFormSnapshot ||
+      optionSnapshot(selectedAgent) !== savedAgentSnapshot ||
+      optionSnapshot(selectedVehicle) !== savedVehicleSnapshot
+    )
+  }, [
+    form,
+    modal,
+    savedAgentSnapshot,
+    savedFormSnapshot,
+    savedVehicleSnapshot,
+    selectedAgent,
+    selectedVehicle,
+  ])
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase()
+    const q = filters.search.toLowerCase()
     return data.filter(r => {
-      return !q || (r.carRegistrationNo ?? '').toLowerCase().includes(q) || (r.customerNameLegacy ?? '').toLowerCase().includes(q) || (r.dsaAgentName ?? '').toLowerCase().includes(q)
+      const reg = clean(r.carRegistrationNo)
+      const cust = clean(r.customerNameLegacy)
+      const agent = clean(r.dsaAgentName)
+      const bank = clean(r.dsaBankName)
+      const entryDate = fmtDate(r.dsaEntryDate)
+
+      if (q && !reg.toLowerCase().includes(q) && !cust.toLowerCase().includes(q) && !agent.toLowerCase().includes(q)) return false
+
+      if (filters.registrationNo && !reg.toLowerCase().includes(filters.registrationNo.toLowerCase())) return false
+      if (filters.customerName && !cust.toLowerCase().includes(filters.customerName.toLowerCase())) return false
+      if (filters.agentName && !agent.toLowerCase().includes(filters.agentName.toLowerCase())) return false
+      if (filters.bankName && !bank.toLowerCase().includes(filters.bankName.toLowerCase())) return false
+      if (filters.paymentStatus !== 'All' && (r.paymentStatus ?? '') !== filters.paymentStatus) return false
+      if (filters.fromDate && (!entryDate || entryDate < filters.fromDate)) return false
+      if (filters.toDate && (!entryDate || entryDate > filters.toDate)) return false
+
+      return true
     })
-  }, [data, search])
+  }, [data, filters])
 
   const vehicleMatches = useMemo(() => {
     const q = vehicleQuery.toLowerCase()
@@ -103,17 +292,54 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
 
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
 
+  const closeForm = () => {
+    setModal(null)
+    setDiscardOpen(false)
+    setError('')
+  }
+
+  const requestCloseForm = () => {
+    if (isPending) return
+    if (hasUnsavedChanges) {
+      setDiscardOpen(true)
+      return
+    }
+    closeForm()
+  }
+
+  const findVehicleByRegistration = () => {
+    const reg = form.carRegistrationNo.trim()
+    if (!reg) {
+      setVehicleLookupMessage('Enter a registration number first.')
+      return
+    }
+
+    const match = vehicles.find(v => normalizeRegistrationNo(v.registrationNo) === normalizeRegistrationNo(reg))
+    if (!match) {
+      setVehicleLookupMessage('No stock vehicle matched that registration number. You can still continue manually.')
+      return
+    }
+
+    selectVehicle(match)
+    setVehicleLookupMessage(`Linked stock vehicle ${match.registrationNo ?? match.sku ?? `#${match.inventoryId}`}.`)
+  }
+
   const openAdd = () => {
-    setForm(emptyForm())
+    const empty = emptyForm()
+    setForm(empty)
     setSelectedAgent(null)
     resetVehicle()
     setEditId(null)
     setError('')
+    setSavedFormSnapshot(JSON.stringify(empty))
+    setSavedAgentSnapshot(optionSnapshot(null))
+    setSavedVehicleSnapshot(optionSnapshot(null))
+    setVehicleLookupMessage('')
     setModal('add')
   }
 
   const openEdit = (r: DsaRow) => {
-    setForm({
+    const editForm = {
       partnerId: r.fkPartnerId,
       dsaAgentName: r.dsaAgentName ?? '', dsaAgentMobileNo: r.dsaAgentMobileNo ?? '', dsaAgentEmail: r.dsaAgentEmail ?? '',
       dsaBankName: r.dsaBankName ?? '',
@@ -121,19 +347,26 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
       inventoryId: r.inventoryId,
       customerId: r.customerId, customerNameLegacy: r.customerNameLegacy ?? '',
       carModelLegacy: clean(r.carModelLegacy), carRegistrationNo: r.carRegistrationNo ?? '',
-      fkVariantId: null,
+      fkVariantId: r.fkVariantId,
       loanAmount: r.loanAmount ? Number(r.loanAmount) : null,
       percentageOfPayout: r.percentageOfPayout ? Number(r.percentageOfPayout) : null,
       payoutAmount: r.payoutAmount ? Number(r.payoutAmount) : null,
       paymentStatus: r.paymentStatus ?? 'Pending',
       amountPaid: r.amountPaid ? Number(r.amountPaid) : null,
       remark: r.remark ?? '',
-    })
-    setSelectedAgent(r.partnerMaster)
-    setSelectedVehicle(vehicles.find(v => v.inventoryId === r.inventoryId) ?? null)
+    }
+    setForm(editForm)
+    const agent = r.partnerMaster
+    const veh = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    setSelectedAgent(agent)
+    setSelectedVehicle(veh)
     setVehicleQuery('')
     setEditId(r.dsaMainId)
     setError('')
+    setSavedFormSnapshot(JSON.stringify(editForm))
+    setSavedAgentSnapshot(optionSnapshot(agent))
+    setSavedVehicleSnapshot(optionSnapshot(veh))
+    setVehicleLookupMessage('')
     setModal('edit')
   }
 
@@ -164,6 +397,8 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
   }
 
   const f = <K extends keyof DsaFormInput>(k: K, v: DsaFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+  const setFilter = <K extends keyof DsaFilters>(k: K, v: DsaFilters[K]) => setFilters(prev => ({ ...prev, [k]: v }))
+  const resetFilters = () => setFilters(emptyFilters())
 
   const save = () => {
     setError('')
@@ -173,7 +408,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
         setError(result.error ?? 'Something went wrong.')
         return
       }
-      setModal(null)
+      closeForm()
       window.location.reload()
     })
   }
@@ -191,22 +426,69 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
     })
   }
 
+  const exportRows = () => {
+    setExportError('')
+    startExportTransition(async () => {
+      try {
+        exportDsaCsv(filtered, filters)
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : 'Could not export DSA payout records.')
+      }
+    })
+  }
+
   return (
     <div>
       <PageHeader
         title="DSA Management"
         subtitle={`${filtered.length} referral payouts`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add DSA Payout</Btn>}
+        action={
+          <div className="flex items-center gap-2">
+            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || filtered.length === 0}>
+              <Download className="w-3.5 h-3.5" />
+              {isExporting ? 'Exporting...' : `${Object.values(filters).some(v => v && v !== 'All') ? 'Export Filtered' : 'Export All'} (${filtered.length})`}
+            </Btn>
+            <Btn size="sm" onClick={openAdd}>
+              <Plus className="w-3.5 h-3.5" />Add DSA Payout
+            </Btn>
+          </div>
+        }
       />
 
-      <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer, agent..." /></div>
+      <div className="mb-4 space-y-4">
+        <SearchBar value={filters.search} onChange={value => setFilter('search', value)} placeholder="Reg no, customer, agent..." />
+
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
+            <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
+            <Input label="Agent Name" value={filters.agentName} onChange={e => setFilter('agentName', e.target.value)} />
+            <Input label="Bank Name" value={filters.bankName} onChange={e => setFilter('bankName', e.target.value)} />
+            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
+              <option>All</option>
+              {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
+            <Input label="From Entry Date" type="date" value={filters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
+            <Input label="To Entry Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <Btn variant="outline" onClick={resetFilters}>Reset Filters</Btn>
+          </div>
+        </div>
+      </div>
+
+      {exportError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <Table headers={['Reg No', 'Vehicle', 'Customer', 'Agent', 'Bank', 'Loan Amount', 'Payout', 'Paid', 'Status', 'Actions']} empty={filtered.length === 0}>
         {filtered.map(r => (
           <tr key={r.dsaMainId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.carRegistrationNo ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-700">{clean(r.carModelLegacy) || '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-700">{r.customerNameLegacy ?? '—'}</td>
+            <td className="px-4 py-3 text-sm text-gray-700">{getVehicleLabel(r)}</td>
+            <td className="px-4 py-3">
+              <div className="font-medium text-gray-900">{r.customerNameLegacy ?? '—'}</div>
+              {r.customer?.custMobile && <div className="text-xs text-gray-500 font-mono">{r.customer.custMobile}</div>}
+            </td>
             <td className="px-4 py-3 text-sm text-gray-700">{r.dsaAgentName ?? '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{r.dsaBankName ?? '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.loanAmount)}</td>
@@ -215,6 +497,9 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
             <td className="px-4 py-3">{r.paymentStatus ? <Badge label={r.paymentStatus} /> : '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
+                <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-blue-900 hover:bg-gray-100 rounded transition" title="View Details">
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setDeleteId(r.dsaMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
@@ -223,10 +508,100 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
         ))}
       </Table>
 
-      <Modal title={editId ? 'Edit DSA Payout' : 'Add DSA Payout'} open={!!modal} onClose={() => setModal(null)} width="max-w-3xl">
+      {/* View Modal */}
+      <Modal title={`View DSA Payout — ${viewRow?.carRegistrationNo ?? ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
+        {viewRow && (
+          <div className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
+                <div className="mt-1 font-mono text-sm font-semibold text-gray-900">{viewRow.carRegistrationNo ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Vehicle</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{getVehicleLabel(viewRow)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customerNameLegacy ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">DSA Agent</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.dsaAgentName ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.dsaAgentMobileNo ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.dsaAgentEmail ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Name</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.dsaBankName ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.dsaEntryDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Loan Amount</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.loanAmount)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout % of Loan</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.percentageOfPayout ? `${viewRow.percentageOfPayout}%` : '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout Amount</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Amount Paid</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.amountPaid)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payment Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.paymentStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Remark</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 whitespace-pre-wrap">{viewRow.remark ?? '—'}</div>
+              </div>
+            </div>
+
+            {/* Audit Log Details */}
+            <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
+              <div>
+                Created By: <span className="font-medium text-gray-500">{viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? 'System'}</span>
+                {viewRow.createdDate && <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.createdDate)}</span></>}
+              </div>
+              {viewRow.updatedDate && (
+                <div>
+                  Last Updated By: <span className="font-medium text-gray-500">{viewRow.updatedByUser?.displayName ?? viewRow.updatedByUser?.userName ?? 'System'}</span>
+                  <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.updatedDate)}</span></>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal title={editId ? 'Edit DSA Payout' : 'Add DSA Payout'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle *</label>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
               <div className="border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
                 <div className="flex items-center justify-between">
@@ -269,6 +644,19 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
           </div>
 
           <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1 col-span-2">
+              <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <div className="flex items-center gap-2">
+                <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
+                  Find by Registration
+                </Btn>
+                {vehicleLookupMessage && <span className="text-xs text-gray-500">{vehicleLookupMessage}</span>}
+              </div>
+            </div>
+            <Input label="Vehicle Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
             <Input label="Agent Mobile" value={form.dsaAgentMobileNo} onChange={e => f('dsaAgentMobileNo', e.target.value)} />
             <Input label="Agent Email" value={form.dsaAgentEmail} onChange={e => f('dsaAgentEmail', e.target.value)} />
             <Input label="Bank Name" value={form.dsaBankName} onChange={e => f('dsaBankName', e.target.value)} placeholder="HDFC Bank, SBI..." />
@@ -286,7 +674,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn variant="outline" onClick={requestCloseForm}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save DSA Payout'}</Btn>
           </div>
         </div>
@@ -294,6 +682,15 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this DSA record? This cannot be undone." />
+
+      <ConfirmDialog
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={closeForm}
+        title="Discard changes?"
+        confirmLabel="Discard"
+        message="You have unsaved changes in this DSA form. Discard them and close?"
+      />
     </div>
   )
 }

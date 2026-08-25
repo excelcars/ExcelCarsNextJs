@@ -19,6 +19,9 @@ export async function quickCreatePartner(input: QuickPartnerInput): Promise<Quic
   if (!input.name.trim()) {
     return { success: false, error: 'Name is required.' }
   }
+  if (!input.mobile.trim() && !input.email.trim()) {
+    return { success: false, error: 'Enter mobile or email.' }
+  }
 
   try {
     const partner = await prisma.partnerMaster.create({

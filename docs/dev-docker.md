@@ -18,8 +18,9 @@ This guide is the default local setup for ExcelCars: the web app runs natively o
 ## Files used
 
 - Compose file: [docker-compose.yml](../docker-compose.yml)
-- Base env: [.env](../.env)
-- Local override env: `.env.local` (not committed — points `DATABASE_URL`/`REDIS_*` at `localhost`)
+- Local app / Prisma env: [.env](../.env)
+- Optional personal override env: `.env.local` (not committed)
+- Docker-only service env: [.env.docker](../.env.docker)
 
 ## First-time setup
 
@@ -44,13 +45,26 @@ This starts PostgreSQL, Redis, and Adminer; waits for PostgreSQL and Redis; gene
 Start PostgreSQL, Redis, and Adminer without starting the web app:
 
 ```bash
-docker compose up -d db redis adminer
+npm run infra:up
 ```
 
-Stop PostgreSQL, Redis, and Adminer:
+Stop and remove the local Docker containers (data volumes are retained):
 
 ```bash
-docker compose stop db redis adminer
+npm run infra:down
+```
+
+Check supporting container status:
+
+```bash
+npm run infra:ps
+```
+
+Manually regenerate Prisma Client or sync the local schema only when needed:
+
+```bash
+npm run db:generate
+npm run db:push
 ```
 
 Adminer is available at `http://localhost:8080`. Sign in with server `db`, username `excelcars`, database `excelcars`, and the password from `POSTGRES_PASSWORD` in `docker-compose.yml`.
@@ -73,6 +87,35 @@ Check running containers:
 docker compose ps
 ```
 
+## Prisma migration workflow
+
+Use Prisma migrations as the default workflow for schema changes.
+
+Create and apply a new migration locally:
+
+```bash
+npm run db:migrate:dev -- --name your_change_name
+```
+
+Examples:
+
+```bash
+npm run db:migrate:dev -- --name add_customer_notes
+npm run db:migrate:dev -- --name create_message_template_table
+```
+
+Check migration state:
+
+```bash
+npm run db:migrate:status
+```
+
+Important:
+
+- use `migrate dev` on local development only
+- do not use `migrate dev` on staging or production
+- use `db push` only for local prototyping or exceptional/manual recovery
+
 ## Validation
 
 Health check:
@@ -89,9 +132,10 @@ Expected result:
 
 ## Local environment strategy
 
-- `.env` holds shared, safe local defaults
-- `.env.local` overrides `DATABASE_URL` and `REDIS_*` to point at `localhost` so the locally-running web app reaches the Dockerized database and Redis
-- `.env.local` is gitignored and should never be committed
+- `.env` is the source of truth for host-local commands like `npx prisma db push` and `npm run dev`
+- `.env` should use `localhost` for `DATABASE_URL` and `REDIS_*`
+- `.env.local` is optional for personal overrides and is gitignored
+- `.env.docker` is only for app processes that run inside Docker and therefore need `db` / `redis` hostnames
 
 ## Database notes
 
@@ -101,6 +145,12 @@ From the host machine (web app, Prisma CLI, migrations):
 postgresql://excelcars:excelcars@localhost:5432/excelcars
 ```
 
+Inside Docker app containers:
+
+```text
+postgresql://excelcars:excelcars@db:5432/excelcars
+```
+
 ## Recommended startup path
 
 1. Start Docker Desktop.
@@ -108,6 +158,23 @@ postgresql://excelcars:excelcars@localhost:5432/excelcars
 3. `npm run dev`
 4. open `http://localhost:3000`
 5. verify `http://localhost:3000/api/health`
+
+## Schema change flow
+
+When you add a table or update columns:
+
+1. Edit [schema.prisma](../prisma/schema.prisma)
+2. Create a local migration:
+
+```bash
+npm run db:migrate:dev -- --name your_change_name
+```
+
+3. Test locally
+4. Commit:
+   - `prisma/schema.prisma`
+   - `prisma/migrations/...`
+5. Apply the committed migration to staging and production with deploy commands
 
 ## When to use this mode
 
@@ -120,3 +187,33 @@ The web app also ships as a Docker image (see [Dockerfile](../Dockerfile)) for a
 ```bash
 docker build --target builder -t excelcars-build-check .
 ```
+
+## Manual database operations
+
+These are exceptional/manual operations, not the default schema workflow:
+
+Push schema directly to staging:
+
+```bash
+npm run db:push:staging
+```
+
+Copy local schema and data to staging:
+
+```bash
+npm run db:copy-data:staging -- --force
+```
+
+Push schema directly to production:
+
+```bash
+npm run db:push:production -- --force --confirm-production
+```
+
+Copy local schema and data to production:
+
+```bash
+npm run db:copy-data:production -- --force --confirm-production
+```
+
+Use these only when you intentionally want direct push/restore behavior outside the normal migration process.

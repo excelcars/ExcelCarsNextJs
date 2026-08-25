@@ -31,6 +31,7 @@ export function PartnerPicker({
   const [newMobile, setNewMobile] = useState('')
   const [newEmail, setNewEmail] = useState('')
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function PartnerPicker({
   }
 
   const createPartner = async () => {
+    setCreateError('')
     setCreating(true)
     const result = await quickCreatePartner({ partnerType, name: newName, mobile: newMobile, email: newEmail })
     setCreating(false)
@@ -57,7 +59,10 @@ export function PartnerPicker({
       selectPartner({ partnerId: result.partnerId, name: newName, mobile: newMobile || null, email: newEmail || null })
       setShowCreate(false)
       setNewName(''); setNewMobile(''); setNewEmail('')
+      setCreateError('')
+      return
     }
+    setCreateError(result.error ?? 'Could not create partner.')
   }
 
   if (value) {
@@ -112,9 +117,11 @@ export function PartnerPicker({
           <Input label="Name *" value={newName} onChange={e => setNewName(e.target.value)} />
           <Input label="Mobile" value={newMobile} onChange={e => setNewMobile(e.target.value)} />
           <Input label="Email" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
+          <div className="text-xs text-gray-500">Enter at least one: mobile or email.</div>
+          {createError && <div className="text-xs text-red-600">{createError}</div>}
           <div className="flex gap-2 justify-end">
-            <Btn variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancel</Btn>
-            <Btn size="sm" onClick={createPartner} disabled={creating || !newName.trim()}>{creating ? 'Creating...' : 'Add'}</Btn>
+            <Btn variant="outline" size="sm" onClick={() => { setShowCreate(false); setCreateError('') }}>Cancel</Btn>
+            <Btn size="sm" onClick={createPartner} disabled={creating || !newName.trim() || (!newMobile.trim() && !newEmail.trim())}>{creating ? 'Creating...' : 'Add'}</Btn>
           </div>
         </div>
       )}

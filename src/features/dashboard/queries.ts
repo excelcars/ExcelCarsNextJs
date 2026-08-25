@@ -30,8 +30,8 @@ export async function getDashboardStats() {
     prisma.inquiry.count(),
     prisma.inquiry.count({ where: { dateOfInquiry: { gte: startOfToday() } } }),
     prisma.inquiry.count({ where: { classification: 'Hot', status: { not: 'Closed' } } }),
-    prisma.followupInquiry.count({ where: { followupStatus: 'FollowUp' } }),
-    prisma.followupInquiry.count({ where: { followupStatus: 'FollowUp', followupDate: { lt: new Date() } } }),
+    prisma.inquiry.count({ where: { status: 'FollowUp' } }),
+    prisma.inquiry.count({ where: { status: 'FollowUp', followUpDate: { lt: startOfToday() } } }),
     prisma.loanManagement.count({ where: { paymentStatus: { not: 'Fully Paid' } } }),
     prisma.insuranceMain.count({ where: { policyStatus: 'Received' } }),
     prisma.rtoAgent.count({ where: { OR: [{ paymentStatus: 'Pending' }, { transferStatus: 'Pending' }] } }),
@@ -64,23 +64,19 @@ export async function getLeadSourceBreakdown() {
 }
 
 export async function getPendingFollowups(limit = 8) {
-  const rows = await prisma.followupInquiry.findMany({
-    where: { followupStatus: 'FollowUp' },
-    orderBy: { followupDate: 'asc' },
+  const rows = await prisma.inquiry.findMany({
+    where: { status: 'FollowUp' },
+    orderBy: [{ followUpDate: 'asc' }, { inquiryId: 'asc' }],
     take: limit,
-    include: {
-      inquiry: {
-        include: { customer: true },
-      },
-    },
+    include: { customer: true },
   })
 
   return rows.map((f) => ({
-    id: f.pkFollowupId,
-    customerName: f.inquiry?.customer?.custName ?? f.inquiry?.customerNameLegacy ?? 'Unknown',
-    mobile: f.inquiry?.mobileno ?? f.inquiry?.customer?.custMobile ?? '—',
-    followupDate: f.followupDate,
-    classification: f.followupClassification,
-    status: f.followupStatus,
+    id: f.inquiryId,
+    customerName: f.customer?.custName ?? f.customerNameLegacy ?? 'Unknown',
+    mobile: f.mobileno ?? f.customer?.custMobile ?? '—',
+    followupDate: f.followUpDate,
+    classification: f.classification,
+    status: f.status,
   }))
 }

@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { Plus, Pencil, Trash2, X, Car, IndianRupee } from 'lucide-react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
@@ -15,6 +15,7 @@ interface CustomerOption { custId: number; custName: string; custMobile: string 
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
 interface Vehicle {
   inventoryId: number
+  fkVariantId: number | null
   registrationNo: string | null
   sku: string | null
   year: number | null
@@ -28,6 +29,9 @@ interface Vehicle {
 interface RtoRow {
   rtoAgentMainId: number
   inventoryId: number | null
+  agentNameLegacy: string | null
+  agentMobileNoLegacy: string | null
+  agentEmailIdLegacy: string | null
   customerId: number | null
   customerNameLegacy: string | null
   customerMobLegacy: string | null
@@ -47,13 +51,19 @@ interface RtoRow {
   transferStatus: string | null
   followupDate: Date | string | null
   remark: string | null
+  fkVariantId: number | null
   fkPartnerId: number | null
   customer: CustomerOption | null
   partnerMaster: PartnerOption | null
+  createdByUser: { userName: string | null; displayName: string | null } | null
+  updatedByUser: { userName: string | null; displayName: string | null } | null
+  createdDt: Date | string | null
+  updatedDt: Date | string | null
 }
 
 interface PaymentHistoryEntry {
   rtoPaymentId: number
+  paymentDate: string | null
   createdDt: string | null
   amountPaid: string | null
   paymentStatus: string | null
@@ -66,10 +76,139 @@ interface FollowupHistoryEntry {
   remark: string | null
 }
 
+interface RtoFilters {
+  search: string
+  registrationNo: string
+  customerName: string
+  customerMobile: string
+  customerEmail: string
+  agentName: string
+  agentMobile: string
+  agentEmail: string
+  carType: string
+  carYear: string
+  make: string
+  model: string
+  variant: string
+  paymentStatus: string
+  rcStatus: string
+  transferStatus: string
+  fromDate: string
+  toDate: string
+}
+
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
+const fmtDateTime = (d: Date | string | null) => d ? new Date(d).toLocaleString('en-IN') : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+
+function csvValue(value: string | number | boolean | null | undefined) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function optionSnapshot<T extends object | null>(value: T) {
+  return value
+    ? JSON.stringify(
+        Object.keys(value as object)
+          .sort()
+          .reduce<Record<string, unknown>>((acc, key) => {
+            acc[key] = (value as Record<string, unknown>)[key]
+            return acc
+          }, {}),
+      )
+    : ''
+}
+
+const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+function buildRtoExportFileName(rows: RtoRow[], filters: RtoFilters) {
+  const today = new Date().toISOString().slice(0, 10)
+  const hasFilters = Object.values(filters).some(v => v && v !== 'All')
+  const parts = ['rto']
+  if (hasFilters) parts.push('filtered')
+  if (!hasFilters) parts.push(`${rows.length}-rows`)
+  parts.push(today)
+  return `${parts.map(slugify).filter(Boolean).join('-')}.csv`
+}
+
+function exportRtoCsv(rows: RtoRow[], filters: RtoFilters) {
+  const headers = [
+    'RTO ID',
+    'Linked Inventory ID',
+    'Linked Customer ID',
+    'Linked Agent ID',
+    'Linked Variant ID',
+    'Entry Date',
+    'Customer Name',
+    'Customer Mobile',
+    'Customer Email',
+    'Agent Name',
+    'Agent Mobile',
+    'Agent Email',
+    'Registration No',
+    'Car Type',
+    'Make',
+    'Model',
+    'Variant',
+    'Car Year',
+    'Transfer Charges',
+    'Total Amount Paid',
+    'Payment Status',
+    'Payment Date',
+    'RC Status',
+    'Transfer Status',
+    'Follow-up Date',
+    'Remark',
+  ]
+
+  const lines = [headers.map(csvValue).join(',')]
+  for (const row of rows) {
+    lines.push([
+      row.rtoAgentMainId,
+      row.inventoryId,
+      row.customer?.custId ?? row.customerId,
+      row.fkPartnerId,
+      row.fkVariantId,
+      fmtDate(row.dateOfEntry),
+      row.customer?.custName ?? row.customerNameLegacy,
+      row.customer?.custMobile ?? row.customerMobLegacy,
+      row.customer?.custEmail ?? row.customerEmailLegacy,
+      row.partnerMaster?.name ?? row.agentNameLegacy,
+      row.partnerMaster?.mobile ?? row.agentMobileNoLegacy,
+      row.partnerMaster?.email ?? row.agentEmailIdLegacy,
+      row.carRegistrationNo,
+      row.carType,
+      row.carMakeLegacy,
+      row.carModelLegacy,
+      row.carVariantLegacy,
+      row.carYear,
+      row.transferCharges,
+      row.amtPaid,
+      row.paymentStatus,
+      fmtDate(row.paymentDate),
+      row.rcStatus,
+      row.transferStatus,
+      fmtDate(row.followupDate),
+      row.remark,
+    ].map(csvValue).join(','))
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildRtoExportFileName(rows, filters)
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 function vehicleLabel(v: Vehicle) {
   const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
@@ -78,8 +217,9 @@ function vehicleLabel(v: Vehicle) {
 
 function emptyForm(): RtoFormInput {
   return {
-    partnerId: null, customerId: null, customerNameLegacy: '', customerMobLegacy: '', customerEmailLegacy: '',
-    inventoryId: null, registrationNo: '', carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null,
+    partnerId: null, agentNameLegacy: '', agentMobileNoLegacy: '', agentEmailIdLegacy: '',
+    customerId: null, customerNameLegacy: '', customerMobLegacy: '', customerEmailLegacy: '',
+    inventoryId: null, variantId: null, registrationNo: '', carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null,
     dateOfEntry: new Date().toISOString().slice(0, 10),
     transferCharges: null,
     paymentStatus: 'Pending', paymentDate: '', rcStatus: 'Pending', transferStatus: 'Pending',
@@ -91,10 +231,63 @@ function emptyPayment(): LogRtoPaymentInput {
   return { amountPaid: null, paymentStatus: 'Pending', rcStatus: 'Pending', transferStatus: 'Pending', nextFollowUpDate: '', remark: '' }
 }
 
-export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; vehicles: Vehicle[] }) {
+function emptyFilters(): RtoFilters {
+  return {
+    search: '',
+    registrationNo: '',
+    customerName: '',
+    customerMobile: '',
+    customerEmail: '',
+    agentName: '',
+    agentMobile: '',
+    agentEmail: '',
+    carType: 'All',
+    carYear: '',
+    make: '',
+    model: '',
+    variant: '',
+    paymentStatus: 'All',
+    rcStatus: 'All',
+    transferStatus: 'All',
+    fromDate: '',
+    toDate: '',
+  }
+}
+
+export function RtoClient({
+  initialData,
+  vehicles,
+  initialSearch = '',
+  initialRegistrationNo = '',
+}: {
+  initialData: RtoRow[]
+  vehicles: Vehicle[]
+  initialSearch?: string
+  initialRegistrationNo?: string
+}) {
   const [data, setData] = useState(initialData)
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<RtoFilters>(() => ({
+    ...emptyFilters(),
+    search: initialSearch,
+    registrationNo: initialRegistrationNo,
+  }))
+
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      search: initialSearch,
+      registrationNo: initialRegistrationNo,
+    }))
+  }, [initialSearch, initialRegistrationNo])
+
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
+  const [viewRow, setViewRow] = useState<RtoRow | null>(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
+  const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
+  const [savedAgentSnapshot, setSavedAgentSnapshot] = useState('')
+  const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [form, setForm] = useState<RtoFormInput>(emptyForm())
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<PartnerOption | null>(null)
@@ -111,14 +304,75 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
   const [payments, setPayments] = useState<PaymentHistoryEntry[]>([])
   const [followups, setFollowups] = useState<FollowupHistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [exportError, setExportError] = useState('')
+  const [isExporting, startExportTransition] = useTransition()
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!modal) return false
+    return (
+      JSON.stringify(form) !== savedFormSnapshot ||
+      optionSnapshot(selectedCustomer) !== savedCustomerSnapshot ||
+      optionSnapshot(selectedAgent) !== savedAgentSnapshot ||
+      optionSnapshot(selectedVehicle) !== savedVehicleSnapshot
+    )
+  }, [
+    form,
+    modal,
+    savedAgentSnapshot,
+    savedCustomerSnapshot,
+    savedFormSnapshot,
+    savedVehicleSnapshot,
+    selectedAgent,
+    selectedCustomer,
+    selectedVehicle,
+  ])
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase()
+    const q = filters.search.toLowerCase()
     return data.filter(r => {
-      const name = r.customer?.custName ?? r.customerNameLegacy ?? ''
-      return !q || (r.carRegistrationNo ?? '').toLowerCase().includes(q) || name.toLowerCase().includes(q) || (r.partnerMaster?.name ?? '').toLowerCase().includes(q)
+      const customerName = clean(r.customer?.custName ?? r.customerNameLegacy)
+      const customerMobile = clean(r.customer?.custMobile ?? r.customerMobLegacy)
+      const customerEmail = clean(r.customer?.custEmail ?? r.customerEmailLegacy)
+      const agentName = clean(r.partnerMaster?.name ?? r.agentNameLegacy)
+      const agentMobile = clean(r.partnerMaster?.mobile ?? r.agentMobileNoLegacy)
+      const agentEmail = clean(r.partnerMaster?.email ?? r.agentEmailIdLegacy)
+      const registrationNo = clean(r.carRegistrationNo)
+      const make = clean(r.carMakeLegacy)
+      const model = clean(r.carModelLegacy)
+      const variant = clean(r.carVariantLegacy)
+      const entryDate = fmtDate(r.dateOfEntry)
+
+      if (
+        q &&
+        !registrationNo.toLowerCase().includes(q) &&
+        !customerName.toLowerCase().includes(q) &&
+        !agentName.toLowerCase().includes(q) &&
+        !make.toLowerCase().includes(q) &&
+        !model.toLowerCase().includes(q) &&
+        !variant.toLowerCase().includes(q)
+      ) return false
+
+      if (filters.registrationNo && !registrationNo.toLowerCase().includes(filters.registrationNo.toLowerCase())) return false
+      if (filters.customerName && !customerName.toLowerCase().includes(filters.customerName.toLowerCase())) return false
+      if (filters.customerMobile && !customerMobile.toLowerCase().includes(filters.customerMobile.toLowerCase())) return false
+      if (filters.customerEmail && !customerEmail.toLowerCase().includes(filters.customerEmail.toLowerCase())) return false
+      if (filters.agentName && !agentName.toLowerCase().includes(filters.agentName.toLowerCase())) return false
+      if (filters.agentMobile && !agentMobile.toLowerCase().includes(filters.agentMobile.toLowerCase())) return false
+      if (filters.agentEmail && !agentEmail.toLowerCase().includes(filters.agentEmail.toLowerCase())) return false
+      if (filters.carType !== 'All' && (r.carType ?? '') !== filters.carType) return false
+      if (filters.carYear && String(r.carYear ?? '') !== filters.carYear.trim()) return false
+      if (filters.make && !make.toLowerCase().includes(filters.make.toLowerCase())) return false
+      if (filters.model && !model.toLowerCase().includes(filters.model.toLowerCase())) return false
+      if (filters.variant && !variant.toLowerCase().includes(filters.variant.toLowerCase())) return false
+      if (filters.paymentStatus !== 'All' && (r.paymentStatus ?? '') !== filters.paymentStatus) return false
+      if (filters.rcStatus !== 'All' && (r.rcStatus ?? '') !== filters.rcStatus) return false
+      if (filters.transferStatus !== 'All' && (r.transferStatus ?? '') !== filters.transferStatus) return false
+      if (filters.fromDate && (!entryDate || entryDate < filters.fromDate)) return false
+      if (filters.toDate && (!entryDate || entryDate > filters.toDate)) return false
+
+      return true
     })
-  }, [data, search])
+  }, [data, filters])
 
   const vehicleMatches = useMemo(() => {
     const q = vehicleQuery.toLowerCase()
@@ -128,22 +382,64 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
 
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
 
+  const closeForm = () => {
+    setModal(null)
+    setDiscardOpen(false)
+    setError('')
+  }
+
+  const requestCloseForm = () => {
+    if (isPending) return
+    if (hasUnsavedChanges) {
+      setDiscardOpen(true)
+      return
+    }
+    closeForm()
+  }
+
+  const findVehicleByRegistration = () => {
+    const reg = form.registrationNo.trim()
+    if (!reg) {
+      setVehicleLookupMessage('Enter a registration number first.')
+      return
+    }
+
+    const match = vehicles.find(v => normalizeRegistrationNo(v.registrationNo) === normalizeRegistrationNo(reg))
+    if (!match) {
+      setVehicleLookupMessage('No stock vehicle matched that registration number. You can still continue manually.')
+      return
+    }
+
+    selectVehicle(match)
+    setVehicleLookupMessage(`Linked stock vehicle ${match.registrationNo ?? match.sku ?? `#${match.inventoryId}`}.`)
+  }
+
   const openAdd = () => {
-    setForm(emptyForm())
+    const empty = emptyForm()
+    setForm(empty)
     setSelectedCustomer(null)
     setSelectedAgent(null)
     resetVehicle()
     setEditId(null)
     setError('')
+    setSavedFormSnapshot(JSON.stringify(empty))
+    setSavedCustomerSnapshot(optionSnapshot(null))
+    setSavedAgentSnapshot(optionSnapshot(null))
+    setSavedVehicleSnapshot(optionSnapshot(null))
+    setVehicleLookupMessage('')
     setModal('add')
   }
 
   const openEdit = (r: RtoRow) => {
-    setForm({
+    const editForm = {
       partnerId: r.fkPartnerId,
+      agentNameLegacy: r.partnerMaster?.name ?? r.agentNameLegacy ?? '',
+      agentMobileNoLegacy: r.partnerMaster?.mobile ?? r.agentMobileNoLegacy ?? '',
+      agentEmailIdLegacy: r.partnerMaster?.email ?? r.agentEmailIdLegacy ?? '',
       customerId: r.customerId,
       customerNameLegacy: r.customerNameLegacy ?? '', customerMobLegacy: r.customerMobLegacy ?? '', customerEmailLegacy: r.customerEmailLegacy ?? '',
       inventoryId: r.inventoryId,
+      variantId: r.fkVariantId,
       registrationNo: r.carRegistrationNo ?? '',
       carType: r.carType ?? 'PreOwned',
       carMakeLegacy: clean(r.carMakeLegacy), carModelLegacy: clean(r.carModelLegacy), carVariantLegacy: clean(r.carVariantLegacy), carYear: r.carYear,
@@ -155,13 +451,22 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
       transferStatus: r.transferStatus ?? 'Pending',
       followupDate: fmtDate(r.followupDate),
       remark: r.remark ?? '',
-    })
-    setSelectedCustomer(r.customer)
-    setSelectedAgent(r.partnerMaster)
-    setSelectedVehicle(vehicles.find(v => v.inventoryId === r.inventoryId) ?? null)
+    }
+    setForm(editForm)
+    const cust = r.customer
+    const partner = r.partnerMaster
+    const veh = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    setSelectedCustomer(cust)
+    setSelectedAgent(partner)
+    setSelectedVehicle(veh)
     setVehicleQuery('')
     setEditId(r.rtoAgentMainId)
     setError('')
+    setSavedFormSnapshot(JSON.stringify(editForm))
+    setSavedCustomerSnapshot(optionSnapshot(cust))
+    setSavedAgentSnapshot(optionSnapshot(partner))
+    setSavedVehicleSnapshot(optionSnapshot(veh))
+    setVehicleLookupMessage('')
     setModal('edit')
   }
 
@@ -172,6 +477,7 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
     setForm(f => ({
       ...f,
       inventoryId: v.inventoryId,
+      variantId: v.fkVariantId,
       carMakeLegacy: clean(v.carVariantMaster?.carMakeMaster?.make),
       carModelLegacy: clean(v.carVariantMaster?.carModelMaster?.model),
       carVariantLegacy: clean(v.carVariantMaster?.variant),
@@ -193,10 +499,18 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
 
   const onAgentChange = (p: PartnerOption | null) => {
     setSelectedAgent(p)
-    setForm(f => ({ ...f, partnerId: p?.partnerId ?? null }))
+    setForm(f => ({
+      ...f,
+      partnerId: p?.partnerId ?? null,
+      agentNameLegacy: p?.name ?? f.agentNameLegacy,
+      agentMobileNoLegacy: p?.mobile ?? f.agentMobileNoLegacy,
+      agentEmailIdLegacy: p?.email ?? f.agentEmailIdLegacy,
+    }))
   }
 
   const f = <K extends keyof RtoFormInput>(k: K, v: RtoFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+  const setFilter = <K extends keyof RtoFilters>(k: K, v: RtoFilters[K]) => setFilters(prev => ({ ...prev, [k]: v }))
+  const resetFilters = () => setFilters(emptyFilters())
 
   const save = () => {
     setError('')
@@ -206,7 +520,7 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
         setError(result.error ?? 'Something went wrong.')
         return
       }
-      setModal(null)
+      closeForm()
       window.location.reload()
     })
   }
@@ -257,15 +571,78 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
     })
   }
 
+  const exportRows = () => {
+    setExportError('')
+    startExportTransition(async () => {
+      try {
+        exportRtoCsv(filtered, filters)
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : 'Could not export RTO records.')
+      }
+    })
+  }
+
   return (
     <div>
       <PageHeader
         title="RTO Management"
         subtitle={`${filtered.length} transfer jobs`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add RTO Job</Btn>}
+        action={
+          <div className="flex items-center gap-2">
+            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || filtered.length === 0}>
+              <Download className="w-3.5 h-3.5" />
+              {isExporting ? 'Exporting...' : `${Object.values(filters).some(v => v && v !== 'All') ? 'Export Filtered' : 'Export All'} (${filtered.length})`}
+            </Btn>
+            <Btn size="sm" onClick={openAdd}>
+              <Plus className="w-3.5 h-3.5" />Add RTO Job
+            </Btn>
+          </div>
+        }
       />
 
-      <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer, agent..." /></div>
+      <div className="mb-4 space-y-4">
+        <SearchBar value={filters.search} onChange={value => setFilter('search', value)} placeholder="Reg no, customer, agent, make..." />
+
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
+            <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
+            <Input label="Customer Mobile" value={filters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
+            <Input label="Customer Email" value={filters.customerEmail} onChange={e => setFilter('customerEmail', e.target.value)} />
+            <Input label="Agent Name" value={filters.agentName} onChange={e => setFilter('agentName', e.target.value)} />
+            <Input label="Agent Mobile" value={filters.agentMobile} onChange={e => setFilter('agentMobile', e.target.value)} />
+            <Input label="Agent Email" value={filters.agentEmail} onChange={e => setFilter('agentEmail', e.target.value)} />
+            <Select label="Car Type" value={filters.carType} onChange={e => setFilter('carType', e.target.value)}>
+              <option>All</option>
+              {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
+            </Select>
+            <Input label="Year" value={filters.carYear} onChange={e => setFilter('carYear', e.target.value)} />
+            <Input label="Make" value={filters.make} onChange={e => setFilter('make', e.target.value)} />
+            <Input label="Model" value={filters.model} onChange={e => setFilter('model', e.target.value)} />
+            <Input label="Variant" value={filters.variant} onChange={e => setFilter('variant', e.target.value)} />
+            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
+              <option>All</option>
+              {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
+            <Select label="RC Status" value={filters.rcStatus} onChange={e => setFilter('rcStatus', e.target.value)}>
+              <option>All</option>
+              {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
+            <Select label="Transfer Status" value={filters.transferStatus} onChange={e => setFilter('transferStatus', e.target.value)}>
+              <option>All</option>
+              {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
+            <Input label="From Entry Date" type="date" value={filters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
+            <Input label="To Entry Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <Btn variant="outline" onClick={resetFilters}>Reset Filters</Btn>
+          </div>
+        </div>
+      </div>
+
+      {exportError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <Table headers={['Reg No', 'Customer', 'Agent', 'Charges', 'Paid', 'Payment', 'RC', 'Transfer', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
         {filtered.map(r => (
@@ -284,16 +661,135 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
             <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
-                <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-blue-900 hover:bg-gray-100 rounded transition" title="View Details">
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment">
+                  <IndianRupee className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </td>
           </tr>
         ))}
       </Table>
 
-      <Modal title={editId ? 'Edit RTO Job' : 'Add RTO Job'} open={!!modal} onClose={() => setModal(null)} width="max-w-3xl">
+      {/* View Modal */}
+      <Modal title={`View RTO Job — ${viewRow?.carRegistrationNo ?? ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
+        {viewRow && (
+          <div className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
+                <div className="mt-1 font-mono text-sm font-semibold text-gray-900">{viewRow.carRegistrationNo ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Vehicle</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">
+                  {[clean(viewRow.carMakeLegacy), clean(viewRow.carModelLegacy), clean(viewRow.carVariantLegacy)].filter(Boolean).join(' ') || '—'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Car Type / Year</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">
+                  {viewRow.carType ?? '—'}{viewRow.carYear ? ` / ${viewRow.carYear}` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customer?.custMobile ?? viewRow.customerMobLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.customer?.custEmail ?? viewRow.customerEmailLegacy ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">RTO Agent</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.partnerMaster?.name ?? viewRow.agentNameLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.partnerMaster?.mobile ?? viewRow.agentMobileNoLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.partnerMaster?.email ?? viewRow.agentEmailIdLegacy ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.dateOfEntry) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Transfer Charges</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.transferCharges)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Amount Paid</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.amtPaid)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payment Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.paymentStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">RC Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.rcStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Transfer Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.transferStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Follow-up Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Remark</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 whitespace-pre-wrap">{viewRow.remark ?? '—'}</div>
+              </div>
+            </div>
+
+            {/* Audit Log Details */}
+            <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
+              <div>
+                Created By: <span className="font-medium text-gray-500">{viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? 'System'}</span>
+                {viewRow.createdDt && <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.createdDt)}</span></>}
+              </div>
+              {viewRow.updatedDt && (
+                <div>
+                  Last Updated By: <span className="font-medium text-gray-500">{viewRow.updatedByUser?.displayName ?? viewRow.updatedByUser?.userName ?? 'System'}</span>
+                  <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.updatedDt)}</span></>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Add / Edit Form Modal */}
+      <Modal title={editId ? 'Edit RTO Job' : 'Add RTO Job'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -313,7 +809,7 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
                 <div className="flex items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null })) }} className="text-gray-400 hover:text-red-600">
+                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, variantId: null })) }} className="text-gray-400 hover:text-red-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -349,7 +845,16 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
             <Input label="Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
             <Input label="Variant" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} />
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
-            <Input label="Registration No" value={form.registrationNo} onChange={e => f('registrationNo', e.target.value)} />
+            
+            <div className="space-y-1">
+              <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <div className="flex items-center gap-2">
+                <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
+                  Find by Registration
+                </Btn>
+                {vehicleLookupMessage && <span className="text-xs text-gray-500">{vehicleLookupMessage}</span>}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -372,26 +877,30 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn variant="outline" onClick={requestCloseForm}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save RTO Job'}</Btn>
           </div>
         </div>
       </Modal>
 
+      {/* Log Payment Modal */}
       <Modal title={`Log Payment${payRow ? ` — ${payRow.carRegistrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
         {payRow && (
           <div className="space-y-4">
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
-                <div className="text-xs text-gray-400">Loading...</div>
+                <div className="flex items-center text-xs text-gray-400 py-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-900 mr-2" />
+                  Loading history...
+                </div>
               ) : payments.length === 0 ? (
                 <div className="text-xs text-gray-400">No payments logged yet.</div>
               ) : (
                 <div className="space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                   {payments.map(p => (
                     <div key={p.rtoPaymentId} className="text-xs text-gray-600 flex gap-2 flex-wrap">
-                      <span className="text-gray-400 whitespace-nowrap">{fmtDate(p.createdDt)}</span>
+                      <span className="text-gray-400 whitespace-nowrap">{fmtDate(p.paymentDate ?? p.createdDt)}</span>
                       <span className="font-medium">{fmtMoney(p.amountPaid)}</span>
                       {p.paymentStatus && <Badge label={p.paymentStatus} />}
                       {p.rcStatus && <Badge label={p.rcStatus} />}
@@ -436,6 +945,15 @@ export function RtoClient({ initialData, vehicles }: { initialData: RtoRow[]; ve
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this RTO record? This cannot be undone." />
+
+      <ConfirmDialog
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={closeForm}
+        title="Discard changes?"
+        confirmLabel="Discard"
+        message="You have unsaved changes in this RTO form. Discard them and close?"
+      />
     </div>
   )
 }

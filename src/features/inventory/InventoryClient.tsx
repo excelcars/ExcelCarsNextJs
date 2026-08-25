@@ -1,4 +1,6 @@
+/* eslint-disable @next/next/no-img-element */
 'use client'
+
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -506,7 +508,6 @@ export function InventoryClient({
   const [recipientType, setRecipientType] = useState<'dealer' | 'customer'>('customer')
   const [dealerQuery, setDealerQuery] = useState('')
   const [dealerOpen, setDealerOpen] = useState(false)
-  const [selectedDealer, setSelectedDealer] = useState<Dealer | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
   const [emailSelectedDealer, setEmailSelectedDealer] = useState<Dealer | null>(null)
   const [emailSelectedCustomer, setEmailSelectedCustomer] = useState<CustomerOption | null>(null)
