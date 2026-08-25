@@ -4,13 +4,29 @@ export const PAYMENT_STATUSES = ['Pending', 'Paid'] as const
 export const CAR_TYPES = ['New', 'PreOwned'] as const
 
 export async function listLoans() {
-  return prisma.loanManagement.findMany({
+  const rows = await prisma.loanManagement.findMany({
     include: {
       customer: true,
       partnerMaster: true,
     },
     orderBy: { loanManagementId: 'desc' },
   })
+
+  const userIds = Array.from(new Set(rows.flatMap(row => [row.createdBy, row.updatedBy]).filter((id): id is number => typeof id === 'number')))
+  const users = userIds.length
+    ? await prisma.userTable.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, userName: true, displayName: true },
+      })
+    : []
+
+  const userMap = new Map(users.map(user => [user.userId, user]))
+
+  return rows.map(row => ({
+    ...row,
+    createdByUser: row.createdBy ? userMap.get(row.createdBy) ?? null : null,
+    updatedByUser: row.updatedBy ? userMap.get(row.updatedBy) ?? null : null,
+  }))
 }
 
 export async function getPaymentHistory(loanManagementId: number) {
@@ -39,6 +55,7 @@ export async function getVehicles() {
   return prisma.inventoryManagement.findMany({
     select: {
       inventoryId: true,
+      fkVariantId: true,
       registrationNo: true,
       sku: true,
       year: true,

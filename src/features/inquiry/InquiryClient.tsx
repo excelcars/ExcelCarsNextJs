@@ -6,7 +6,7 @@ import { Plus, Pencil, Trash2, Phone, ChevronLeft, ChevronRight, Mail, Download,
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
-import { createInquiry, updateInquiry, deleteInquiry, sendInquiryEmail, sendInquiryInventoryEmail, getInquiryDetail, type InquiryFormInput } from './actions'
+import { createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmail, getInquiryDetail, type InquiryFormInput } from './actions'
 
 const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car Not In Stock', 'Not connected', 'Already Bought Car', 'Visited', 'Fresh Lead', 'Sold Car']
 

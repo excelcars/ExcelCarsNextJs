@@ -8,11 +8,15 @@ import { auth } from '../../../auth'
 export interface LoanFormInput {
   partnerId: number | null
   bankName: string
+  bankPersonName: string
+  bankPersonMobileNo: string
+  bankPersonEmailId: string
   customerId: number | null
   customerNameLegacy: string
   customerMobileLegacy: string
   customerEmailLegacy: string
   inventoryId: number | null
+  fkVariantId: number | null
   registrationNo: string
   carType: string
   carMake: string
@@ -55,6 +59,9 @@ function buildData(input: LoanFormInput) {
   return {
     entryDate: toDate(input.entryDate),
     bankName: input.bankName || null,
+    bankPersonName: input.bankPersonName || null,
+    bankPersonMobileNo: input.bankPersonMobileNo || null,
+    bankPersonEmailId: input.bankPersonEmailId || null,
     customerNameLegacy: input.customerNameLegacy || null,
     customerMobileLegacy: input.customerMobileLegacy || null,
     customerEmailLegacy: input.customerEmailLegacy || null,
@@ -96,6 +103,7 @@ export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
         partnerMaster: { connect: { partnerId: input.partnerId } },
         ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
         ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
+        ...(input.fkVariantId ? { carVariantMaster: { connect: { pkVariantId: input.fkVariantId } } } : {}),
         totalAmountReceived: 0,
         createdDate: new Date(),
         updatedDate: new Date(),
@@ -135,6 +143,7 @@ export async function updateLoan(id: number, input: LoanFormInput): Promise<Acti
         fkPartnerId: input.partnerId,
         customerId: input.customerId,
         inventoryId: input.inventoryId,
+        fkVariantId: input.fkVariantId,
         updatedDate: new Date(),
         ...(userId ? { updatedBy: userId } : {}),
       },

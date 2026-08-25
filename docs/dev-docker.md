@@ -45,13 +45,26 @@ This starts PostgreSQL, Redis, and Adminer; waits for PostgreSQL and Redis; gene
 Start PostgreSQL, Redis, and Adminer without starting the web app:
 
 ```bash
-docker compose up -d db redis adminer
+npm run infra:up
 ```
 
-Stop PostgreSQL, Redis, and Adminer:
+Stop and remove the local Docker containers (data volumes are retained):
 
 ```bash
-docker compose stop db redis adminer
+npm run infra:down
+```
+
+Check supporting container status:
+
+```bash
+npm run infra:ps
+```
+
+Manually regenerate Prisma Client or sync the local schema only when needed:
+
+```bash
+npm run db:generate
+npm run db:push
 ```
 
 Adminer is available at `http://localhost:8080`. Sign in with server `db`, username `excelcars`, database `excelcars`, and the password from `POSTGRES_PASSWORD` in `docker-compose.yml`.

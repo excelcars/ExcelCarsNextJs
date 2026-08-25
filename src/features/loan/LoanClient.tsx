@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
-import { Plus, Pencil, Trash2, X, Car, IndianRupee } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
@@ -13,8 +13,10 @@ import { PAYMENT_STATUSES, CAR_TYPES } from './queries'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
+interface UserOption { userId: number; userName: string | null; displayName: string | null }
 interface Vehicle {
   inventoryId: number
+  fkVariantId: number | null
   registrationNo: string | null
   sku: string | null
   year: number | null
@@ -29,10 +31,14 @@ interface LoanRow {
   loanManagementId: number
   inventoryId: number | null
   bankName: string | null
+  bankPersonName: string | null
+  bankPersonMobileNo: string | null
+  bankPersonEmailId: string | null
   customerId: number | null
   customerNameLegacy: string | null
   customerMobileLegacy: string | null
   customerEmailLegacy: string | null
+  fkVariantId: number | null
   carType: string | null
   carMake: string | null
   carModel: string | null
@@ -48,9 +54,15 @@ interface LoanRow {
   paymentDate: Date | string | null
   followupDate: Date | string | null
   remarks: string | null
+  createdDate: Date | string | null
+  createdBy: number | null
+  updatedDate: Date | string | null
+  updatedBy: number | null
   fkPartnerId: number | null
   customer: CustomerOption | null
   partnerMaster: PartnerOption | null
+  createdByUser?: UserOption | null
+  updatedByUser?: UserOption | null
 }
 
 interface PaymentHistoryEntry {
@@ -65,10 +77,126 @@ interface FollowupHistoryEntry {
   remark: string | null
 }
 
+interface LoanFilters {
+  search: string
+  registrationNo: string
+  customerName: string
+  customerMobile: string
+  bankName: string
+  bankPersonName: string
+  paymentStatus: string
+  fromDate: string
+  toDate: string
+}
+
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
+const fmtDateTime = (value: Date | string | null | undefined) => {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString('en-IN', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+function csvValue(value: string | number | boolean | null | undefined) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function buildLoanExportFileName(rows: LoanRow[], search: string) {
+  const today = new Date().toISOString().slice(0, 10)
+  const parts = ['loan']
+  if (search.trim()) parts.push('filtered')
+  if (parts.length === 1) parts.push(`${rows.length}-rows`)
+  parts.push(today)
+  return `${parts.map(slugify).filter(Boolean).join('-')}.csv`
+}
+
+function exportLoanCsv(rows: LoanRow[], search: string) {
+  const headers = [
+    'Loan ID',
+    'Linked Inventory ID',
+    'Linked Customer ID',
+    'Linked Bank Contact ID',
+    'Entry Date',
+    'Bank Name',
+    'Bank Person Name',
+    'Bank Person Mobile No',
+    'Bank Person Email ID',
+    'Customer Name',
+    'Customer Mobile',
+    'Customer Email',
+    'Registration No',
+    'Car Type',
+    'Make',
+    'Model',
+    'Variant',
+    'Car Year',
+    'Loan Amount',
+    'Payout Percentage',
+    'Payout Amount',
+    'Total Amount Received',
+    'Payment Status',
+    'Payment Date',
+    'Follow-up Date',
+    'Remarks',
+  ]
+
+  const lines = [headers.map(csvValue).join(',')]
+  for (const row of rows) {
+    lines.push([
+      row.loanManagementId,
+      row.inventoryId,
+      row.customer?.custId ?? row.customerId,
+      row.fkPartnerId,
+      fmtDate(row.entryDate),
+      row.bankName,
+      row.bankPersonName,
+      row.bankPersonMobileNo,
+      row.bankPersonEmailId,
+      row.customer?.custName ?? row.customerNameLegacy,
+      row.customer?.custMobile ?? row.customerMobileLegacy,
+      row.customer?.custEmail ?? row.customerEmailLegacy,
+      row.registrationNo,
+      row.carType,
+      row.carMake,
+      row.carModel,
+      row.carVariant,
+      row.carYear,
+      row.loanAmount,
+      row.percentagePayoutAmount,
+      row.payoutAmount,
+      row.totalAmountReceived,
+      row.paymentStatus,
+      fmtDate(row.paymentDate),
+      fmtDate(row.followupDate),
+      row.remarks,
+    ].map(csvValue).join(','))
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildLoanExportFileName(rows, search)
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 function vehicleLabel(v: Vehicle) {
   const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
@@ -77,8 +205,8 @@ function vehicleLabel(v: Vehicle) {
 
 function emptyForm(): LoanFormInput {
   return {
-    partnerId: null, bankName: '', customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
-    inventoryId: null, registrationNo: '', carType: 'PreOwned', carMake: '', carModel: '', carVariant: '', carYear: null,
+    partnerId: null, bankName: '', bankPersonName: '', bankPersonMobileNo: '', bankPersonEmailId: '', customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
+    inventoryId: null, fkVariantId: null, registrationNo: '', carType: 'PreOwned', carMake: '', carModel: '', carVariant: '', carYear: null,
     entryDate: new Date().toISOString().slice(0, 10),
     loanAmount: null, percentagePayoutAmount: null, payoutAmount: null,
     paymentStatus: 'Pending', paymentDate: '', followupDate: '', remarks: '',
@@ -89,40 +217,126 @@ function emptyPayment(): LogLoanPaymentInput {
   return { amountPaid: null, paymentStatus: 'Pending', nextFollowUpDate: '', remark: '' }
 }
 
-export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; vehicles: Vehicle[] }) {
+function emptyFilters(): LoanFilters {
+  return {
+    search: '',
+    registrationNo: '',
+    customerName: '',
+    customerMobile: '',
+    bankName: '',
+    bankPersonName: '',
+    paymentStatus: 'All',
+    fromDate: '',
+    toDate: '',
+  }
+}
+
+function optionSnapshot<T extends object | null>(value: T) {
+  return value
+    ? JSON.stringify(
+        Object.keys(value as object)
+          .sort()
+          .reduce<Record<string, unknown>>((acc, key) => {
+            acc[key] = (value as Record<string, unknown>)[key]
+            return acc
+          }, {}),
+      )
+    : ''
+}
+
+export function LoanClient({
+  initialData,
+  vehicles,
+  initialSearch = '',
+}: {
+  initialData: LoanRow[]
+  vehicles: Vehicle[]
+  initialSearch?: string
+}) {
   const [data, setData] = useState(initialData)
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState<LoanFilters>(() => ({
+    ...emptyFilters(),
+    search: initialSearch,
+  }))
+
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      search: initialSearch,
+    }))
+  }, [initialSearch])
+
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
+  const [viewRow, setViewRow] = useState<LoanRow | null>(null)
   const [form, setForm] = useState<LoanFormInput>(emptyForm())
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
+  const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
   const [selectedBankContact, setSelectedBankContact] = useState<PartnerOption | null>(null)
+  const [savedBankContactSnapshot, setSavedBankContactSnapshot] = useState('')
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [vehicleOpen, setVehicleOpen] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
+  const [exportError, setExportError] = useState('')
+  const [isExporting, startExportTransition] = useTransition()
 
   const [payRow, setPayRow] = useState<LoanRow | null>(null)
   const [payForm, setPayForm] = useState<LogLoanPaymentInput>(emptyPayment())
   const [payments, setPayments] = useState<PaymentHistoryEntry[]>([])
   const [followups, setFollowups] = useState<FollowupHistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const historyRequestRef = useRef(0)
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase()
+    const q = filters.search.toLowerCase()
     return data.filter(r => {
       const name = r.customer?.custName ?? r.customerNameLegacy ?? ''
-      return !q || (r.registrationNo ?? '').toLowerCase().includes(q) || name.toLowerCase().includes(q) || (r.bankName ?? '').toLowerCase().includes(q)
+      if (q && !(r.registrationNo ?? '').toLowerCase().includes(q) && !name.toLowerCase().includes(q) && !(r.bankName ?? '').toLowerCase().includes(q)) return false
+      if (filters.registrationNo && !clean(r.registrationNo).toLowerCase().includes(filters.registrationNo.toLowerCase())) return false
+      if (filters.customerName && !name.toLowerCase().includes(filters.customerName.toLowerCase())) return false
+      if (filters.customerMobile && !clean(r.customer?.custMobile ?? r.customerMobileLegacy).toLowerCase().includes(filters.customerMobile.toLowerCase())) return false
+      if (filters.bankName && !clean(r.bankName).toLowerCase().includes(filters.bankName.toLowerCase())) return false
+      if (filters.bankPersonName && !clean(r.bankPersonName ?? r.partnerMaster?.name).toLowerCase().includes(filters.bankPersonName.toLowerCase())) return false
+      if (filters.paymentStatus !== 'All' && (r.paymentStatus ?? '') !== filters.paymentStatus) return false
+      const entry = fmtDate(r.entryDate)
+      if (filters.fromDate && (!entry || entry < filters.fromDate)) return false
+      if (filters.toDate && (!entry || entry > filters.toDate)) return false
+      return true
     })
-  }, [data, search])
+  }, [data, filters])
 
   const vehicleMatches = useMemo(() => {
     const q = vehicleQuery.toLowerCase()
     if (!q) return vehicles.slice(0, 20)
     return vehicles.filter(v => vehicleLabel(v).toLowerCase().includes(q)).slice(0, 20)
   }, [vehicles, vehicleQuery])
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!modal) return false
+    return (
+      JSON.stringify(form) !== savedFormSnapshot ||
+      optionSnapshot(selectedCustomer) !== savedCustomerSnapshot ||
+      optionSnapshot(selectedBankContact) !== savedBankContactSnapshot ||
+      optionSnapshot(selectedVehicle) !== savedVehicleSnapshot
+    )
+  }, [
+    form,
+    modal,
+    savedBankContactSnapshot,
+    savedCustomerSnapshot,
+    savedFormSnapshot,
+    savedVehicleSnapshot,
+    selectedBankContact,
+    selectedCustomer,
+    selectedVehicle,
+  ])
 
   useEffect(() => {
     const pct = form.percentagePayoutAmount
@@ -136,22 +350,32 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
 
   const openAdd = () => {
-    setForm(emptyForm())
+    const nextForm = emptyForm()
+    setForm(nextForm)
+    setSavedFormSnapshot(JSON.stringify(nextForm))
     setSelectedCustomer(null)
+    setSavedCustomerSnapshot('')
     setSelectedBankContact(null)
+    setSavedBankContactSnapshot('')
     resetVehicle()
+    setSavedVehicleSnapshot('')
     setEditId(null)
+    setVehicleLookupMessage('')
     setError('')
     setModal('add')
   }
 
   const openEdit = (r: LoanRow) => {
-    setForm({
+    const nextForm: LoanFormInput = {
       partnerId: r.fkPartnerId,
       bankName: r.bankName ?? '',
+      bankPersonName: r.bankPersonName ?? '',
+      bankPersonMobileNo: r.bankPersonMobileNo ?? '',
+      bankPersonEmailId: r.bankPersonEmailId ?? '',
       customerId: r.customerId,
       customerNameLegacy: r.customerNameLegacy ?? '', customerMobileLegacy: r.customerMobileLegacy ?? '', customerEmailLegacy: r.customerEmailLegacy ?? '',
       inventoryId: r.inventoryId,
+      fkVariantId: r.fkVariantId,
       registrationNo: r.registrationNo ?? '',
       carType: r.carType ?? 'PreOwned',
       carMake: clean(r.carMake), carModel: clean(r.carModel), carVariant: clean(r.carVariant), carYear: r.carYear,
@@ -162,23 +386,38 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
       paymentStatus: r.paymentStatus ?? 'Pending',
       paymentDate: fmtDate(r.paymentDate), followupDate: fmtDate(r.followupDate),
       remarks: r.remarks ?? '',
-    })
-    setSelectedCustomer(r.customer)
-    setSelectedBankContact(r.partnerMaster)
-    setSelectedVehicle(vehicles.find(v => v.inventoryId === r.inventoryId) ?? null)
+    }
+    const nextCustomer = r.customer
+    const nextBankContact = r.partnerMaster
+    const nextVehicle = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    setForm(nextForm)
+    setSavedFormSnapshot(JSON.stringify(nextForm))
+    setSelectedCustomer(nextCustomer)
+    setSavedCustomerSnapshot(optionSnapshot(nextCustomer))
+    setSelectedBankContact(nextBankContact)
+    setSavedBankContactSnapshot(optionSnapshot(nextBankContact))
+    setSelectedVehicle(nextVehicle)
+    setSavedVehicleSnapshot(optionSnapshot(nextVehicle))
     setVehicleQuery('')
     setEditId(r.loanManagementId)
+    setVehicleLookupMessage('')
     setError('')
     setModal('edit')
+  }
+
+  const openView = (r: LoanRow) => {
+    setViewRow(r)
   }
 
   const selectVehicle = (v: Vehicle) => {
     setSelectedVehicle(v)
     setVehicleOpen(false)
     setVehicleQuery('')
+    setVehicleLookupMessage(`Linked stock vehicle ${v.registrationNo ?? v.sku ?? `#${v.inventoryId}`}.`)
     setForm(f => ({
       ...f,
       inventoryId: v.inventoryId,
+      fkVariantId: v.fkVariantId,
       carMake: clean(v.carVariantMaster?.carMakeMaster?.make),
       carModel: clean(v.carVariantMaster?.carModelMaster?.model),
       carVariant: clean(v.carVariantMaster?.variant),
@@ -200,10 +439,47 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
 
   const onBankContactChange = (p: PartnerOption | null) => {
     setSelectedBankContact(p)
-    setForm(f => ({ ...f, partnerId: p?.partnerId ?? null }))
+    setForm(f => ({
+      ...f,
+      partnerId: p?.partnerId ?? null,
+      bankPersonName: p?.name ?? f.bankPersonName,
+      bankPersonMobileNo: p?.mobile ?? f.bankPersonMobileNo,
+      bankPersonEmailId: p?.email ?? f.bankPersonEmailId,
+    }))
+  }
+
+  const findVehicleByRegistration = () => {
+    const registrationNo = form.registrationNo.trim()
+    if (!registrationNo) {
+      setVehicleLookupMessage('Enter a registration number first.')
+      return
+    }
+
+    const match = vehicles.find(v => normalizeRegistrationNo(v.registrationNo) === normalizeRegistrationNo(registrationNo))
+    if (!match) {
+      setVehicleLookupMessage('No stock vehicle matched that registration number. You can still continue manually.')
+      return
+    }
+
+    selectVehicle(match)
   }
 
   const f = <K extends keyof LoanFormInput>(k: K, v: LoanFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const closeForm = () => {
+    setModal(null)
+    setDiscardOpen(false)
+    setError('')
+  }
+
+  const requestCloseForm = () => {
+    if (isPending) return
+    if (hasUnsavedChanges) {
+      setDiscardOpen(true)
+      return
+    }
+    closeForm()
+  }
 
   const save = () => {
     setError('')
@@ -213,7 +489,11 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
         setError(result.error ?? 'Something went wrong.')
         return
       }
-      setModal(null)
+      setSavedFormSnapshot(JSON.stringify(form))
+      setSavedCustomerSnapshot(optionSnapshot(selectedCustomer))
+      setSavedBankContactSnapshot(optionSnapshot(selectedBankContact))
+      setSavedVehicleSnapshot(optionSnapshot(selectedVehicle))
+      closeForm()
       window.location.reload()
     })
   }
@@ -232,15 +512,27 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
   }
 
   const openPay = async (r: LoanRow) => {
+    const requestId = ++historyRequestRef.current
     setPayRow(r)
     setPayForm({ ...emptyPayment(), paymentStatus: r.paymentStatus ?? 'Pending' })
     setError('')
-    setPayments([]); setFollowups([])
+    setPayments([])
+    setFollowups([])
     setHistoryLoading(true)
-    const res = await fetch(`/api/loan/history?loanManagementId=${r.loanManagementId}`)
-    const hist = await res.json()
-    setPayments(hist.payments); setFollowups(hist.followups)
-    setHistoryLoading(false)
+    try {
+      const res = await fetch(`/api/loan/history?loanManagementId=${r.loanManagementId}`)
+      const hist = await res.json().catch(() => ({ payments: [], followups: [] }))
+      if (historyRequestRef.current !== requestId) return
+      setPayments(Array.isArray(hist.payments) ? hist.payments : [])
+      setFollowups(Array.isArray(hist.followups) ? hist.followups : [])
+    } catch {
+      if (historyRequestRef.current !== requestId) return
+      setPayments([])
+      setFollowups([])
+      setError('Could not load payment history.')
+    } finally {
+      if (historyRequestRef.current === requestId) setHistoryLoading(false)
+    }
   }
 
   const pf = <K extends keyof LogLoanPaymentInput>(k: K, v: LogLoanPaymentInput[K]) => setPayForm(prev => ({ ...prev, [k]: v }))
@@ -259,15 +551,58 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
     })
   }
 
+  const exportRows = () => {
+    setExportError('')
+    startExportTransition(async () => {
+      try {
+        exportLoanCsv(filtered, filters.search)
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : 'Could not export loan records.')
+      }
+    })
+  }
+
+  const setFilter = <K extends keyof LoanFilters>(key: K, value: LoanFilters[K]) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
   return (
     <div>
       <PageHeader
         title="Loan Management"
         subtitle={`${filtered.length} referral loans`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Loan</Btn>}
+        action={
+          <div className="flex items-center gap-2">
+            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || filtered.length === 0}>
+              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${Object.values(filters).some(v => v && v !== 'All') ? 'Export Filtered' : 'Export All'} (${filtered.length})`}
+            </Btn>
+            <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Loan</Btn>
+          </div>
+        }
       />
 
-      <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer, bank..." /></div>
+      <div className="mb-4 space-y-4">
+        <SearchBar value={filters.search} onChange={value => setFilter('search', value)} placeholder="Reg no, customer, bank..." />
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
+            <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
+            <Input label="Customer Mobile" value={filters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
+            <Input label="Bank Name" value={filters.bankName} onChange={e => setFilter('bankName', e.target.value)} />
+            <Input label="Bank Person Name" value={filters.bankPersonName} onChange={e => setFilter('bankPersonName', e.target.value)} />
+            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
+              <option value="All">All</option>
+              {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
+            <Input label="From Date" type="date" value={filters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
+            <Input label="To Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Btn variant="outline" size="sm" onClick={() => setFilters(emptyFilters())}>Reset Filters</Btn>
+          </div>
+        </div>
+      </div>
+      {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <Table headers={['Reg No', 'Customer', 'Bank', 'Loan Amount', 'Payout', 'Received', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
         {filtered.map(r => (
@@ -288,6 +623,7 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
             <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
+                <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
                 <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
                 <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setDeleteId(r.loanManagementId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -297,7 +633,7 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
         ))}
       </Table>
 
-      <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={() => setModal(null)} width="max-w-3xl">
+      <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Input label="Bank Name" value={form.bankName} onChange={e => f('bankName', e.target.value)} placeholder="HDFC Bank, SBI..." />
@@ -305,6 +641,12 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
               <label className="text-xs font-medium text-gray-600 mb-1 block">Bank Contact Person *</label>
               <PartnerPicker partnerType="Bank" label="Bank Contact" value={selectedBankContact} onChange={onBankContactChange} />
             </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Bank Person Name" value={form.bankPersonName} onChange={e => f('bankPersonName', e.target.value)} />
+            <Input label="Bank Person Mobile No" value={form.bankPersonMobileNo} onChange={e => f('bankPersonMobileNo', e.target.value)} />
+            <Input label="Bank Person Email ID" value={form.bankPersonEmailId} onChange={e => f('bankPersonEmailId', e.target.value)} />
           </div>
 
           <div>
@@ -319,7 +661,7 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
                 <div className="flex items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null })) }} className="text-gray-400 hover:text-red-600">
+                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -355,7 +697,15 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
             <Input label="Model" value={form.carModel} onChange={e => f('carModel', e.target.value)} />
             <Input label="Variant" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} />
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
-            <Input label="Registration No" value={form.registrationNo} onChange={e => f('registrationNo', e.target.value)} />
+            <div className="space-y-1">
+              <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <div className="flex items-center gap-2">
+                <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
+                  Find by Registration
+                </Btn>
+                {vehicleLookupMessage && <span className="text-xs text-gray-500">{vehicleLookupMessage}</span>}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -374,10 +724,129 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn variant="outline" onClick={requestCloseForm} disabled={isPending}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Loan'}</Btn>
           </div>
         </div>
+      </Modal>
+
+      <Modal title={`View Loan${viewRow ? ` — ${viewRow.registrationNo ?? ''}` : ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
+        {viewRow && (
+          <div className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
+                <div className="mt-1 font-mono text-sm font-semibold text-gray-900">{viewRow.registrationNo ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customer?.custMobile ?? viewRow.customerMobileLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.customer?.custEmail ?? viewRow.customerEmailLegacy ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Name</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.bankName ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Person</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.bankPersonName ?? viewRow.partnerMaster?.name ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Person Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.bankPersonMobileNo ?? viewRow.partnerMaster?.mobile ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Person Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.bankPersonEmailId ?? viewRow.partnerMaster?.email ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Car Type</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.carType ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Vehicle</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{[clean(viewRow.carMake), clean(viewRow.carModel), clean(viewRow.carVariant)].filter(Boolean).join(' ') || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Car Year</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.carYear ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.entryDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Loan Amount</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.loanAmount)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout %</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.percentagePayoutAmount ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout Amount</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Total Amount Received</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.totalAmountReceived)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payment Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.paymentStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payment Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.paymentDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Follow-up Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Remarks</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 whitespace-pre-wrap">{viewRow.remarks ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Created</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDateTime(viewRow.createdDate)}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  By {viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? (viewRow.createdBy ? `User #${viewRow.createdBy}` : '—')}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Last Updated</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDateTime(viewRow.updatedDate)}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  By {viewRow.updatedByUser?.displayName ?? viewRow.updatedByUser?.userName ?? (viewRow.updatedBy ? `User #${viewRow.updatedBy}` : '—')}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal title={`Log Payment${payRow ? ` — ${payRow.registrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
@@ -386,7 +855,10 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
-                <div className="text-xs text-gray-400">Loading...</div>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading payment history...</span>
+                </div>
               ) : payments.length === 0 ? (
                 <div className="text-xs text-gray-400">No payments logged yet.</div>
               ) : (
@@ -430,6 +902,12 @@ export function LoanClient({ initialData, vehicles }: { initialData: LoanRow[]; 
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this loan record? This cannot be undone." />
+      <ConfirmDialog
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={closeForm}
+        message="You have unsaved changes in this loan form. Discard them and close?"
+      />
     </div>
   )
 }

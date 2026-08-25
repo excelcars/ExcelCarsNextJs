@@ -4,6 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev-local.mjs",
+    "dev:staging": "node scripts/dev-staging.mjs",
+    "infra:up": "docker compose up -d db redis adminer",
+    "infra:down": "docker compose down",
+    "infra:ps": "docker compose ps",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

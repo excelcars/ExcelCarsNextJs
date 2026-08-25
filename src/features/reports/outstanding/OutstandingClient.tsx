@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Download } from 'lucide-react'
 import { Badge, Btn, Table, PageHeader, SearchBar } from '@/components/ui'
 import type { OutstandingRow } from './queries'
@@ -67,7 +68,24 @@ export function OutstandingClient({ initialData }: { initialData: OutstandingRow
         {filtered.map(r => (
           <tr key={r.key} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3"><Badge label={r.type} /></td>
-            <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">{r.registrationNo ?? '—'}</td>
+            <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">
+              {r.registrationNo ? (
+                <Link
+                  href={
+                    r.type === 'RTO'
+                      ? `/rto?registrationNo=${encodeURIComponent(r.registrationNo)}`
+                      : r.type === 'Insurance'
+                      ? `/insurance?search=${encodeURIComponent(r.registrationNo)}`
+                      : `/loan?search=${encodeURIComponent(r.registrationNo)}`
+                  }
+                  className="hover:underline text-blue-800"
+                >
+                  {r.registrationNo}
+                </Link>
+              ) : (
+                '—'
+              )}
+            </td>
             <td className="px-4 py-3 text-sm text-gray-700">{r.customerName ?? '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.payoutAmount)}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.amountReceived)}</td>

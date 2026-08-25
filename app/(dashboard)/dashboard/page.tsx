@@ -12,6 +12,10 @@ function formatDate(d: Date | null) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function isoDate(value: Date) {
+  return value.toISOString().slice(0, 10)
+}
+
 export default async function DashboardPage() {
   const session = await auth()
   const [stats, leadSources, followups] = await Promise.all([
@@ -22,6 +26,12 @@ export default async function DashboardPage() {
 
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
   const firstName = (session?.user?.name || 'there').split(' ')[0]
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const yesterday = new Date(todayStart)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const pendingFollowupHref = '/followup?status=FollowUp'
+  const overdueFollowupHref = `/followup?status=FollowUp&followUpDateTo=${isoDate(yesterday)}`
 
   return (
     <div className="space-y-6">
@@ -33,7 +43,7 @@ export default async function DashboardPage() {
         </div>
         {stats.overdueFollowups > 0 && (
           <a
-            href="/followup"
+            href={overdueFollowupHref}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-medium hover:bg-red-100 transition"
           >
             <AlertCircle className="w-4 h-4" />
@@ -51,7 +61,9 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Pending Follow-ups" value={stats.pendingFollowups} sub={`${stats.overdueFollowups} overdue`} color="#F59E0B" icon={<Clock className="w-5 h-5" />} />
+        <a href={pendingFollowupHref} className="block">
+          <StatCard label="Pending Follow-ups" value={stats.pendingFollowups} sub={`${stats.overdueFollowups} overdue`} color="#F59E0B" icon={<Clock className="w-5 h-5" />} />
+        </a>
         <StatCard label="Active Loans" value={stats.activeLoans} sub="financed vehicles" color={N} icon={<FileText className="w-5 h-5" />} />
         <StatCard label="Active Insurance" value={stats.activeInsurance} sub="policies received" color={N} icon={<Shield className="w-5 h-5" />} />
         <StatCard label="Pending RTO" value={stats.pendingRTO} sub="cases" color={R} icon={<FileText className="w-5 h-5" />} />
@@ -70,7 +82,7 @@ export default async function DashboardPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-800">Pending Follow-ups</h2>
-          <a href="/followup" className="text-xs font-medium hover:underline" style={{ color: R }}>View All →</a>
+          <a href={pendingFollowupHref} className="text-xs font-medium hover:underline" style={{ color: R }}>View All →</a>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

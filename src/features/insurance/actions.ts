@@ -7,11 +7,15 @@ import { auth } from '../../../auth'
 
 export interface InsuranceFormInput {
   agentPartnerId: number | null
+  agentNameLegacy: string
+  agentMobileNoLegacy: string
+  agentEmailIdLegacy: string
   customerId: number | null
   customerNameLegacy: string
   customerMobileLegacy: string
   customerEmailLegacy: string
   inventoryId: number | null
+  fkVariantId: number | null
   carType: string
   carMakeLegacy: string
   carModelLegacy: string
@@ -59,6 +63,9 @@ function buildData(input: InsuranceFormInput) {
     entryDate: toDate(input.entryDate),
     renewalDate: toDate(input.renewalDate),
     expiryDate: toDate(input.expiryDate),
+    agentNameLegacy: input.agentNameLegacy || null,
+    agentMobileNoLegacy: input.agentMobileNoLegacy || null,
+    agentEmailIdLegacy: input.agentEmailIdLegacy || null,
     customerNameLegacy: input.customerNameLegacy || null,
     customerMobileLegacy: input.customerMobileLegacy || null,
     customerEmailLegacy: input.customerEmailLegacy || null,
@@ -101,6 +108,7 @@ export async function createInsurance(input: InsuranceFormInput): Promise<Action
         partnerMaster: { connect: { partnerId: input.agentPartnerId } },
         ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
         ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
+        ...(input.fkVariantId ? { carVariantMaster: { connect: { pkVariantId: input.fkVariantId } } } : {}),
         totalAmountReceived: 0,
         createdDate: new Date(),
         updatedDate: new Date(),
@@ -140,6 +148,7 @@ export async function updateInsurance(id: number, input: InsuranceFormInput): Pr
         fkPartnerId: input.agentPartnerId,
         customerId: input.customerId,
         inventoryId: input.inventoryId,
+        fkVariantId: input.fkVariantId,
         updatedDate: new Date(),
         ...(userId ? { updatedBy: userId } : {}),
       },

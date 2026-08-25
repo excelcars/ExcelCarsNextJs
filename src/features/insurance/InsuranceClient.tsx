@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
-import { Plus, Pencil, Trash2, X, Car, IndianRupee } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { Plus, Pencil, Trash2, X, Car, IndianRupee, Eye, Download, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
@@ -15,6 +16,7 @@ interface CustomerOption { custId: number; custName: string; custMobile: string 
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
 interface Vehicle {
   inventoryId: number
+  fkVariantId: number | null
   registrationNo: string | null
   sku: string | null
   year: number | null
@@ -28,11 +30,15 @@ interface Vehicle {
 interface InsuranceRow {
   insuranceMainId: number
   inventoryId: number | null
+  agentNameLegacy: string | null
+  agentMobileNoLegacy: string | null
+  agentEmailIdLegacy: string | null
   customerId: number | null
   customerNameLegacy: string | null
   customerMobileLegacy: string | null
   customerEmailLegacy: string | null
   carType: string | null
+  fkVariantId: number | null
   carMakeLegacy: string | null
   carModelLegacy: string | null
   carVariantLegacy: string | null
@@ -73,6 +79,104 @@ const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+function csvValue(value: string | number | boolean | null | undefined) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function buildInsuranceExportFileName(rows: InsuranceRow[], search: string) {
+  const today = new Date().toISOString().slice(0, 10)
+  const parts = ['insurance']
+  if (search.trim()) parts.push('filtered')
+  if (parts.length === 1) parts.push(`${rows.length}-rows`)
+  parts.push(today)
+  return `${parts.map(slugify).filter(Boolean).join('-')}.csv`
+}
+
+function exportInsuranceCsv(rows: InsuranceRow[], search: string) {
+  const headers = [
+    'Insurance ID',
+    'Linked Inventory ID',
+    'Linked Customer ID',
+    'Linked Agent ID',
+    'Linked Variant ID',
+    'Entry Date',
+    'Renewal Date',
+    'Expiry Date',
+    'Customer Name',
+    'Customer Mobile',
+    'Customer Email',
+    'Agent Name',
+    'Agent Mobile',
+    'Agent Email',
+    'Registration No',
+    'Car Type',
+    'Make',
+    'Model',
+    'Variant',
+    'Car Year',
+    'Insurance Premium',
+    'OD Premium',
+    'Payout Percentage OD Premium',
+    'Payout Amount',
+    'Total Amount Received',
+    'Payout Payment Status',
+    'Policy Status',
+    'Follow-up Date',
+    'Remark',
+  ]
+
+  const lines = [headers.map(csvValue).join(',')]
+  for (const row of rows) {
+    lines.push([
+      row.insuranceMainId,
+      row.inventoryId,
+      row.customer?.custId ?? row.customerId,
+      row.fkPartnerId,
+      row.fkVariantId,
+      fmtDate(row.entryDate),
+      fmtDate(row.renewalDate),
+      fmtDate(row.expiryDate),
+      row.customer?.custName ?? row.customerNameLegacy,
+      row.customer?.custMobile ?? row.customerMobileLegacy,
+      row.customer?.custEmail ?? row.customerEmailLegacy,
+      row.partnerMaster?.name ?? row.agentNameLegacy,
+      row.partnerMaster?.mobile ?? row.agentMobileNoLegacy,
+      row.partnerMaster?.email ?? row.agentEmailIdLegacy,
+      row.carRegistrationNo,
+      row.carType,
+      row.carMakeLegacy,
+      row.carModelLegacy,
+      row.carVariantLegacy,
+      row.carYear,
+      row.insurancePremium,
+      row.oDPremium,
+      row.payoutPercentageOdPremium,
+      row.payoutAmount,
+      row.totalAmountReceived,
+      row.payoutPaymentStatus,
+      row.policyStatus,
+      fmtDate(row.followupDate),
+      row.remark,
+    ].map(csvValue).join(','))
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildInsuranceExportFileName(rows, search)
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 function vehicleLabel(v: Vehicle) {
   const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
@@ -81,8 +185,9 @@ function vehicleLabel(v: Vehicle) {
 
 function emptyForm(): InsuranceFormInput {
   return {
-    agentPartnerId: null, customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
-    inventoryId: null, carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '',
+    agentPartnerId: null, agentNameLegacy: '', agentMobileNoLegacy: '', agentEmailIdLegacy: '',
+    customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
+    inventoryId: null, fkVariantId: null, carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '',
     entryDate: new Date().toISOString().slice(0, 10),
     insurancePremium: null, oDPremium: null, payoutPercentageOdPremium: null, payoutAmount: null,
     payoutPaymentStatus: 'Pending', policyStatus: 'Pending',
@@ -94,40 +199,116 @@ function emptyPayment(): LogPaymentInput {
   return { amountReceived: null, payoutPaymentStatus: 'Pending', policyStatus: 'Pending', nextFollowUpDate: '', remark: '' }
 }
 
-export function InsuranceClient({ initialData, vehicles }: { initialData: InsuranceRow[]; vehicles: Vehicle[] }) {
+function optionSnapshot<T extends object | null>(value: T) {
+  return value
+    ? JSON.stringify(
+        Object.keys(value as object)
+          .sort()
+          .reduce<Record<string, unknown>>((acc, key) => {
+            acc[key] = (value as Record<string, unknown>)[key]
+            return acc
+          }, {}),
+      )
+    : ''
+}
+
+export function InsuranceClient({
+  initialData,
+  vehicles,
+  total,
+  page,
+  pageCount,
+  pageSize,
+  initialSearch,
+  initialFromDate,
+  initialToDate,
+}: {
+  initialData: InsuranceRow[]
+  vehicles: Vehicle[]
+  total: number
+  page: number
+  pageCount: number
+  pageSize: number
+  initialSearch: string
+  initialFromDate: string
+  initialToDate: string
+}) {
+  const router = useRouter()
   const [data, setData] = useState(initialData)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialSearch)
+  const [fromDate, setFromDate] = useState(initialFromDate)
+  const [toDate, setToDate] = useState(initialToDate)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
+  const [viewRow, setViewRow] = useState<InsuranceRow | null>(null)
   const [form, setForm] = useState<InsuranceFormInput>(emptyForm())
+  const [formTotalAmountReceived, setFormTotalAmountReceived] = useState<string | null>(null)
+  const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
+  const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<PartnerOption | null>(null)
+  const [savedAgentSnapshot, setSavedAgentSnapshot] = useState('')
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [vehicleOpen, setVehicleOpen] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
+  const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
+  const [isRoutePending, startRouteTransition] = useTransition()
+  const [exportError, setExportError] = useState('')
+  const [isExporting, startExportTransition] = useTransition()
 
   const [payRow, setPayRow] = useState<InsuranceRow | null>(null)
   const [payForm, setPayForm] = useState<LogPaymentInput>(emptyPayment())
   const [payments, setPayments] = useState<PaymentHistoryEntry[]>([])
   const [followups, setFollowups] = useState<FollowupHistoryEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const historyRequestRef = useRef(0)
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase()
-    return data.filter(r => {
-      const name = r.customer?.custName ?? r.customerNameLegacy ?? ''
-      return !q || (r.carRegistrationNo ?? '').toLowerCase().includes(q) || name.toLowerCase().includes(q) || (r.partnerMaster?.name ?? '').toLowerCase().includes(q)
-    })
-  }, [data, search])
+  useEffect(() => {
+    setData(initialData)
+  }, [initialData])
+
+  useEffect(() => {
+    setSearch(initialSearch)
+  }, [initialSearch])
+
+  useEffect(() => {
+    setFromDate(initialFromDate)
+  }, [initialFromDate])
+
+  useEffect(() => {
+    setToDate(initialToDate)
+  }, [initialToDate])
 
   const vehicleMatches = useMemo(() => {
     const q = vehicleQuery.toLowerCase()
     if (!q) return vehicles.slice(0, 20)
     return vehicles.filter(v => vehicleLabel(v).toLowerCase().includes(q)).slice(0, 20)
   }, [vehicles, vehicleQuery])
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (!modal) return false
+    return (
+      JSON.stringify(form) !== savedFormSnapshot ||
+      optionSnapshot(selectedCustomer) !== savedCustomerSnapshot ||
+      optionSnapshot(selectedAgent) !== savedAgentSnapshot ||
+      optionSnapshot(selectedVehicle) !== savedVehicleSnapshot
+    )
+  }, [
+    form,
+    modal,
+    savedAgentSnapshot,
+    savedCustomerSnapshot,
+    savedFormSnapshot,
+    savedVehicleSnapshot,
+    selectedAgent,
+    selectedCustomer,
+    selectedVehicle,
+  ])
 
   useEffect(() => {
     const pct = form.payoutPercentageOdPremium
@@ -141,21 +322,32 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
 
   const openAdd = () => {
-    setForm(emptyForm())
+    const nextForm = emptyForm()
+    setForm(nextForm)
+    setSavedFormSnapshot(JSON.stringify(nextForm))
     setSelectedCustomer(null)
+    setSavedCustomerSnapshot('')
     setSelectedAgent(null)
+    setSavedAgentSnapshot('')
     resetVehicle()
+    setSavedVehicleSnapshot('')
+    setVehicleLookupMessage('')
+    setFormTotalAmountReceived(null)
     setEditId(null)
     setError('')
     setModal('add')
   }
 
   const openEdit = (r: InsuranceRow) => {
-    setForm({
+    const nextForm: InsuranceFormInput = {
       agentPartnerId: r.fkPartnerId,
+      agentNameLegacy: r.agentNameLegacy ?? r.partnerMaster?.name ?? '',
+      agentMobileNoLegacy: r.agentMobileNoLegacy ?? r.partnerMaster?.mobile ?? '',
+      agentEmailIdLegacy: r.agentEmailIdLegacy ?? r.partnerMaster?.email ?? '',
       customerId: r.customerId,
       customerNameLegacy: r.customerNameLegacy ?? '', customerMobileLegacy: r.customerMobileLegacy ?? '', customerEmailLegacy: r.customerEmailLegacy ?? '',
       inventoryId: r.inventoryId,
+      fkVariantId: r.fkVariantId,
       carType: r.carType ?? 'PreOwned',
       carMakeLegacy: clean(r.carMakeLegacy), carModelLegacy: clean(r.carModelLegacy), carVariantLegacy: clean(r.carVariantLegacy),
       carYear: r.carYear, carRegistrationNo: r.carRegistrationNo ?? '',
@@ -168,29 +360,61 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
       policyStatus: r.policyStatus ?? 'Pending',
       renewalDate: fmtDate(r.renewalDate), expiryDate: fmtDate(r.expiryDate), followupDate: fmtDate(r.followupDate),
       remark: r.remark ?? '',
-    })
-    setSelectedCustomer(r.customer)
-    setSelectedAgent(r.partnerMaster)
-    setSelectedVehicle(vehicles.find(v => v.inventoryId === r.inventoryId) ?? null)
+    }
+    const nextCustomer = r.customer
+    const nextAgent = r.partnerMaster
+    const nextVehicle = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    setForm(nextForm)
+    setSavedFormSnapshot(JSON.stringify(nextForm))
+    setSelectedCustomer(nextCustomer)
+    setSavedCustomerSnapshot(optionSnapshot(nextCustomer))
+    setSelectedAgent(nextAgent)
+    setSavedAgentSnapshot(optionSnapshot(nextAgent))
+    setSelectedVehicle(nextVehicle)
+    setSavedVehicleSnapshot(optionSnapshot(nextVehicle))
     setVehicleQuery('')
+    setVehicleLookupMessage('')
+    setFormTotalAmountReceived(r.totalAmountReceived)
     setEditId(r.insuranceMainId)
     setError('')
     setModal('edit')
+  }
+
+  const openView = (r: InsuranceRow) => {
+    setViewRow(r)
   }
 
   const selectVehicle = (v: Vehicle) => {
     setSelectedVehicle(v)
     setVehicleOpen(false)
     setVehicleQuery('')
+    setVehicleLookupMessage(`Linked stock vehicle ${v.registrationNo ?? v.sku ?? `#${v.inventoryId}`}.`)
     setForm(f => ({
       ...f,
       inventoryId: v.inventoryId,
+      fkVariantId: v.fkVariantId,
       carMakeLegacy: clean(v.carVariantMaster?.carMakeMaster?.make),
       carModelLegacy: clean(v.carVariantMaster?.carModelMaster?.model),
       carVariantLegacy: clean(v.carVariantMaster?.variant),
       carYear: v.year,
       carRegistrationNo: v.registrationNo ?? f.carRegistrationNo,
     }))
+  }
+
+  const findVehicleByRegistration = () => {
+    const registrationNo = form.carRegistrationNo.trim()
+    if (!registrationNo) {
+      setVehicleLookupMessage('Enter a registration number first.')
+      return
+    }
+
+    const match = vehicles.find(v => normalizeRegistrationNo(v.registrationNo) === normalizeRegistrationNo(registrationNo))
+    if (!match) {
+      setVehicleLookupMessage('No stock vehicle matched that registration number. You can still continue manually.')
+      return
+    }
+
+    selectVehicle(match)
   }
 
   const onCustomerChange = (c: CustomerOption | null) => {
@@ -206,10 +430,31 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
 
   const onAgentChange = (p: PartnerOption | null) => {
     setSelectedAgent(p)
-    setForm(f => ({ ...f, agentPartnerId: p?.partnerId ?? null }))
+    setForm(f => ({
+      ...f,
+      agentPartnerId: p?.partnerId ?? null,
+      agentNameLegacy: p?.name ?? f.agentNameLegacy,
+      agentMobileNoLegacy: p?.mobile ?? f.agentMobileNoLegacy,
+      agentEmailIdLegacy: p?.email ?? f.agentEmailIdLegacy,
+    }))
   }
 
   const f = <K extends keyof InsuranceFormInput>(k: K, v: InsuranceFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const closeForm = () => {
+    setModal(null)
+    setDiscardOpen(false)
+    setError('')
+  }
+
+  const requestCloseForm = () => {
+    if (isPending) return
+    if (hasUnsavedChanges) {
+      setDiscardOpen(true)
+      return
+    }
+    closeForm()
+  }
 
   const save = () => {
     setError('')
@@ -219,7 +464,11 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
         setError(result.error ?? 'Something went wrong.')
         return
       }
-      setModal(null)
+      setSavedFormSnapshot(JSON.stringify(form))
+      setSavedCustomerSnapshot(optionSnapshot(selectedCustomer))
+      setSavedAgentSnapshot(optionSnapshot(selectedAgent))
+      setSavedVehicleSnapshot(optionSnapshot(selectedVehicle))
+      closeForm()
       window.location.reload()
     })
   }
@@ -238,15 +487,30 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
   }
 
   const openPay = async (r: InsuranceRow) => {
+    const requestId = ++historyRequestRef.current
     setPayRow(r)
     setPayForm({ ...emptyPayment(), payoutPaymentStatus: r.payoutPaymentStatus ?? 'Pending', policyStatus: r.policyStatus ?? 'Pending' })
     setError('')
-    setPayments([]); setFollowups([])
+    setPayments([])
+    setFollowups([])
     setHistoryLoading(true)
-    const res = await fetch(`/api/insurance/history?insuranceMainId=${r.insuranceMainId}`)
-    const hist = await res.json()
-    setPayments(hist.payments); setFollowups(hist.followups)
-    setHistoryLoading(false)
+    try {
+      const res = await fetch(`/api/insurance/history?insuranceMainId=${r.insuranceMainId}`)
+      const hist = await res.json().catch(() => ({ payments: [], followups: [] }))
+      if (historyRequestRef.current !== requestId) return
+      if (!res.ok) {
+        throw new Error('Could not load insurance payment history.')
+      }
+      setPayments(Array.isArray(hist.payments) ? hist.payments : [])
+      setFollowups(Array.isArray(hist.followups) ? hist.followups : [])
+    } catch {
+      if (historyRequestRef.current !== requestId) return
+      setPayments([])
+      setFollowups([])
+      setError('Could not load insurance payment history.')
+    } finally {
+      if (historyRequestRef.current === requestId) setHistoryLoading(false)
+    }
   }
 
   const pf = <K extends keyof LogPaymentInput>(k: K, v: LogPaymentInput[K]) => setPayForm(prev => ({ ...prev, [k]: v }))
@@ -265,25 +529,112 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
     })
   }
 
+  const exportRows = () => {
+    setExportError('')
+    startExportTransition(async () => {
+      try {
+        const params = new URLSearchParams()
+        if (search.trim()) params.set('search', search.trim())
+        if (fromDate) params.set('fromDate', fromDate)
+        if (toDate) params.set('toDate', toDate)
+        const res = await fetch(`/api/insurance/export${params.toString() ? `?${params.toString()}` : ''}`)
+        const payload = await res.json().catch(() => null)
+        if (!res.ok || !Array.isArray(payload)) {
+          throw new Error(payload?.error ?? 'Could not export insurance records.')
+        }
+        exportInsuranceCsv(payload as InsuranceRow[], search)
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : 'Could not export insurance records.')
+      }
+    })
+  }
+
+  const pushQuery = (params: Record<string, string>) => {
+    const q = new URLSearchParams({
+      search: initialSearch,
+      fromDate: initialFromDate,
+      toDate: initialToDate,
+      page: String(page),
+      ...params,
+    })
+    for (const [k, v] of [...q.entries()]) {
+      if (!v) q.delete(k)
+    }
+    startRouteTransition(() => {
+      router.push(`/insurance${q.toString() ? `?${q.toString()}` : ''}`)
+    })
+  }
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      if (search !== initialSearch) {
+        pushQuery({ search, page: '1' })
+      }
+    }, 350)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSearch, search])
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      if (fromDate !== initialFromDate || toDate !== initialToDate) {
+        pushQuery({ search, fromDate, toDate, page: '1' })
+      }
+    }, 250)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromDate, initialFromDate, initialToDate, search, toDate])
+
+  const resetFilters = () => {
+    setSearch('')
+    setFromDate('')
+    setToDate('')
+    pushQuery({ search: '', fromDate: '', toDate: '', page: '1' })
+  }
+
   return (
     <div>
       <PageHeader
         title="Insurance Management"
-        subtitle={`${filtered.length} referral policies`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Insurance</Btn>}
+        subtitle={`${total} referral policies`}
+        action={
+          <div className="flex items-center gap-2">
+            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || total === 0}>
+              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() ? 'Export Filtered' : 'Export All'} (${total})`}
+            </Btn>
+            <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Insurance</Btn>
+          </div>
+        }
       />
 
-      <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer, agent..." /></div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer, agent..." disabled={isRoutePending} />
+          <Input label="From Date" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={isRoutePending} />
+          <Input label="To Date" type="date" value={toDate} onChange={e => setToDate(e.target.value)} disabled={isRoutePending} />
+          <Btn variant="outline" size="sm" onClick={resetFilters} disabled={isRoutePending || (!search && !fromDate && !toDate)}>
+            Reset Filters
+          </Btn>
+        </div>
+        <div className="text-xs text-gray-500">
+          Page {page} of {pageCount} · {pageSize} per page
+        </div>
+      </div>
+      {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <Table headers={['Reg No', 'Customer', 'Agent', 'Premium / OD', 'Payout', 'Received', 'Payout Status', 'Policy Status', 'Renewal / Expiry', 'Actions']} empty={filtered.length === 0}>
-        {filtered.map(r => (
+      <div className={isRoutePending ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+      <Table headers={['Reg No', 'Customer', 'Agent', 'Premium / OD', 'Payout', 'Received', 'Payout Status', 'Policy Status', 'Renewal / Expiry', 'Actions']} empty={data.length === 0}>
+        {data.map(r => (
           <tr key={r.insuranceMainId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.carRegistrationNo ?? '—'}</td>
             <td className="px-4 py-3">
               <div className="font-medium text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
               <div className="text-xs text-gray-500 font-mono">{r.customerMobileLegacy ?? ''}</div>
             </td>
-            <td className="px-4 py-3 text-sm text-gray-700">{r.partnerMaster?.name ?? '—'}</td>
+            <td className="px-4 py-3">
+              <div className="text-sm text-gray-700">{r.partnerMaster?.name ?? r.agentNameLegacy ?? '—'}</div>
+              <div className="text-xs text-gray-500">{r.partnerMaster?.mobile ?? r.agentMobileNoLegacy ?? ''}</div>
+            </td>
             <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.insurancePremium)} / {fmtMoney(r.oDPremium)}</td>
             <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.payoutAmount)}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.totalAmountReceived)}</td>
@@ -293,6 +644,7 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
                 <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
+                <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
                 <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setDeleteId(r.insuranceMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
@@ -300,8 +652,33 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
           </tr>
         ))}
       </Table>
+      </div>
 
-      <Modal title={editId ? 'Edit Insurance' : 'Add Insurance'} open={!!modal} onClose={() => setModal(null)} width="max-w-3xl">
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-sm text-gray-500">
+          Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1}-{(page - 1) * pageSize + data.length} of {total}
+        </div>
+        <div className="flex items-center gap-2">
+          <Btn
+            variant="outline"
+            size="sm"
+            onClick={() => pushQuery({ search, page: String(page - 1) })}
+            disabled={page <= 1 || isRoutePending}
+          >
+            Previous
+          </Btn>
+          <Btn
+            variant="outline"
+            size="sm"
+            onClick={() => pushQuery({ search, page: String(page + 1) })}
+            disabled={page >= pageCount || isRoutePending}
+          >
+            Next
+          </Btn>
+        </div>
+      </div>
+
+      <Modal title={editId ? 'Edit Insurance' : 'Add Insurance'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -314,6 +691,12 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
             </div>
           </div>
 
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Agent Name" value={form.agentNameLegacy} onChange={e => f('agentNameLegacy', e.target.value)} />
+            <Input label="Agent Mobile" value={form.agentMobileNoLegacy} onChange={e => f('agentMobileNoLegacy', e.target.value)} />
+            <Input label="Agent Email" value={form.agentEmailIdLegacy} onChange={e => f('agentEmailIdLegacy', e.target.value)} />
+          </div>
+
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
@@ -321,7 +704,7 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
                 <div className="flex items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null })) }} className="text-gray-400 hover:text-red-600">
+                <button type="button" onClick={() => { setSelectedVehicle(null); setVehicleLookupMessage(''); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -357,7 +740,15 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
             <Input label="Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
             <Input label="Variant" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} />
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
-            <Input label="Registration No" value={form.carRegistrationNo} onChange={e => f('carRegistrationNo', e.target.value)} />
+            <div className="space-y-1">
+              <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <div className="flex items-center gap-2">
+                <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
+                  Find by Registration
+                </Btn>
+                {vehicleLookupMessage && <span className="text-xs text-gray-500">{vehicleLookupMessage}</span>}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -366,6 +757,7 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
             <Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} />
             <Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
+            <Input label="Total Amount Received" value={formTotalAmountReceived != null ? `₹${Number(formTotalAmountReceived).toLocaleString('en-IN')}` : '₹0'} readOnly className="bg-gray-50" />
             <Select label="Payout Status" value={form.payoutPaymentStatus} onChange={e => f('payoutPaymentStatus', e.target.value)}>
               {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
@@ -381,10 +773,116 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+            <Btn variant="outline" onClick={requestCloseForm} disabled={isPending}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Insurance'}</Btn>
           </div>
         </div>
+      </Modal>
+
+      <Modal title={`View Insurance${viewRow ? ` — ${viewRow.carRegistrationNo ?? ''}` : ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
+        {viewRow && (
+          <div className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
+                <div className="mt-1 font-mono text-sm font-semibold text-gray-900">{viewRow.carRegistrationNo ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Vehicle</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{[clean(viewRow.carMakeLegacy), clean(viewRow.carModelLegacy), clean(viewRow.carVariantLegacy)].filter(Boolean).join(' ') || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Car Type / Year</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.carType ?? '—'}{viewRow.carYear ? ` / ${viewRow.carYear}` : ''}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.customer?.custMobile ?? viewRow.customerMobileLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.customer?.custEmail ?? viewRow.customerEmailLegacy ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.partnerMaster?.name ?? viewRow.agentNameLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent Mobile</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.partnerMaster?.mobile ?? viewRow.agentMobileNoLegacy ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Agent Email</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.partnerMaster?.email ?? viewRow.agentEmailIdLegacy ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.entryDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Renewal Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.renewalDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Expiry Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.expiryDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Insurance Premium</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.insurancePremium)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">OD Premium</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.oDPremium)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout % of OD</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.payoutPercentageOdPremium ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout Amount</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Total Amount Received</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtMoney(viewRow.totalAmountReceived)}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Follow-up Date</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.payoutPaymentStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Policy Status</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{viewRow.policyStatus ?? '—'}</div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Remark</div>
+                <div className="mt-1 text-sm font-medium text-gray-900 whitespace-pre-wrap">{viewRow.remark ?? '—'}</div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal title={`Log Payment${payRow ? ` — ${payRow.carRegistrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
@@ -393,7 +891,10 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
-                <div className="text-xs text-gray-400">Loading...</div>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading payment history...</span>
+                </div>
               ) : payments.length === 0 ? (
                 <div className="text-xs text-gray-400">No payments logged yet.</div>
               ) : (
@@ -440,7 +941,20 @@ export function InsuranceClient({ initialData, vehicles }: { initialData: Insura
       </Modal>
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
-        message="Delete this insurance record? This cannot be undone." />
+        message="Delete this insurance record? This cannot be undone."
+        confirmLabel={isPending ? 'Deleting...' : 'Delete'}
+        confirmDisabled={isPending}
+        cancelDisabled={isPending}
+        closeOnConfirm={false}
+      />
+      <ConfirmDialog
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        onConfirm={closeForm}
+        title="Discard changes?"
+        confirmLabel="Discard"
+        message="You have unsaved changes in this insurance form. Discard them and close?"
+      />
     </div>
   )
 }

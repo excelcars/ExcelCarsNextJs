@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Eye } from 'lucide-react'
 import { Badge, Btn, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
 
@@ -94,7 +95,14 @@ export function TrackingClient({ initialData }: { initialData: StockRow[] }) {
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-gray-800 mb-2">Insurance</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-800">Insurance</h4>
+                {details.insurance && detailRow?.registrationNo && (
+                  <Link href={`/insurance?search=${encodeURIComponent(detailRow.registrationNo)}`} className="text-xs text-blue-800 hover:underline">
+                    Edit Insurance &rarr;
+                  </Link>
+                )}
+              </div>
               {details.insurance ? (
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                   <div>Agent: {details.insurance.partnerMaster?.name ?? '—'}</div>
@@ -106,7 +114,14 @@ export function TrackingClient({ initialData }: { initialData: StockRow[] }) {
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-gray-800 mb-2">RTO</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-800">RTO</h4>
+                {details.rto && detailRow?.registrationNo && (
+                  <Link href={`/rto?registrationNo=${encodeURIComponent(detailRow.registrationNo)}`} className="text-xs text-blue-800 hover:underline">
+                    Edit RTO Job &rarr;
+                  </Link>
+                )}
+              </div>
               {details.rto ? (
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                   <div>Agent: {details.rto.partnerMaster?.name ?? '—'}</div>
@@ -118,7 +133,14 @@ export function TrackingClient({ initialData }: { initialData: StockRow[] }) {
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-gray-800 mb-2">Loan</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-800">Loan</h4>
+                {details.loan && detailRow?.registrationNo && (
+                  <Link href={`/loan?search=${encodeURIComponent(detailRow.registrationNo)}`} className="text-xs text-blue-800 hover:underline">
+                    Edit Loan &rarr;
+                  </Link>
+                )}
+              </div>
               {details.loan ? (
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                   <div>Bank: {details.loan.bankName ?? details.loan.partnerMaster?.name ?? '—'}</div>

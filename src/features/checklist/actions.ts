@@ -33,6 +33,10 @@ export interface ActionResult {
   error?: string
 }
 
+function normalizeRegistration(value: string | null | undefined) {
+  return (value ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase()
+}
+
 async function currentUserId(): Promise<number | null> {
   const session = await auth()
   const id = session?.user?.id
@@ -58,10 +62,52 @@ function validDocs(docs: DocRow[]) {
   return docs.filter(d => d.documentName.trim())
 }
 
-export async function createChecklist(input: ChecklistFormInput): Promise<ActionResult> {
+async function validateChecklistInventory(input: ChecklistFormInput, currentDocumentId?: number): Promise<string | null> {
   if (!input.inventoryId) {
-    return { success: false, error: 'Select a vehicle.' }
+    return 'Select a vehicle.'
   }
+
+  const inventory = await prisma.inventoryManagement.findUnique({
+    where: { inventoryId: input.inventoryId },
+    select: {
+      inventoryId: true,
+      registrationNo: true,
+      status: true,
+    },
+  })
+
+  if (!inventory) {
+    return 'This vehicle no longer exists.'
+  }
+
+  if ((inventory.status ?? '').trim() !== 'Sold') {
+    return 'Checklist can only be created for sold vehicles.'
+  }
+
+  if (normalizeRegistration(input.registrationNo) !== normalizeRegistration(inventory.registrationNo)) {
+    return 'Selected vehicle does not match the registration number.'
+  }
+
+  const duplicate = await prisma.checkListDocMain.findFirst({
+    where: {
+      inventoryId: input.inventoryId,
+      ...(currentDocumentId ? { documentId: { not: currentDocumentId } } : {}),
+    },
+    select: { documentId: true },
+  })
+
+  if (duplicate) {
+    return 'A checklist already exists for this vehicle.'
+  }
+
+  return null
+}
+
+export async function createChecklist(input: ChecklistFormInput): Promise<ActionResult> {
+  const validationError = await validateChecklistInventory(input)
+  if (validationError) return { success: false, error: validationError }
+  const inventoryId = input.inventoryId as number
+
   const docs = validDocs(input.docs)
   if (docs.length === 0) {
     return { success: false, error: 'Add at least one document.' }
@@ -73,7 +119,7 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
     await prisma.checkListDocMain.create({
       data: {
         ...buildMainData(input),
-        inventoryManagement: { connect: { inventoryId: input.inventoryId } },
+        inventoryManagement: { connect: { inventoryId } },
         ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
         createdDate: new Date(),
         updatedDate: new Date(),
@@ -100,9 +146,9 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
 }
 
 export async function updateChecklist(id: number, input: ChecklistFormInput): Promise<ActionResult> {
-  if (!input.inventoryId) {
-    return { success: false, error: 'Select a vehicle.' }
-  }
+  const validationError = await validateChecklistInventory(input, id)
+  if (validationError) return { success: false, error: validationError }
+
   const docs = validDocs(input.docs)
   if (docs.length === 0) {
     return { success: false, error: 'Add at least one document.' }

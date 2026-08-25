@@ -7,11 +7,15 @@ import { auth } from '../../../auth'
 
 export interface RtoFormInput {
   partnerId: number | null
+  agentNameLegacy: string
+  agentMobileNoLegacy: string
+  agentEmailIdLegacy: string
   customerId: number | null
   customerNameLegacy: string
   customerMobLegacy: string
   customerEmailLegacy: string
   inventoryId: number | null
+  variantId: number | null
   registrationNo: string
   carType: string
   carMakeLegacy: string
@@ -52,9 +56,26 @@ function toDate(v: string): Date | null {
   return v ? new Date(v) : null
 }
 
+async function getLatestRtoPaymentDate(rtoAgentMainId: number): Promise<Date | null> {
+  const latestPayment = await prisma.rtoPaymentDetails.findFirst({
+    where: { fkRtoAgentMainId: rtoAgentMainId },
+    orderBy: [
+      { paymentDate: 'desc' },
+      { createdDt: 'desc' },
+      { rtoPaymentId: 'desc' },
+    ],
+    select: { paymentDate: true, createdDt: true },
+  })
+
+  return latestPayment?.paymentDate ?? latestPayment?.createdDt ?? null
+}
+
 function buildData(input: RtoFormInput) {
   return {
     dateOfEntry: toDate(input.dateOfEntry),
+    agentNameLegacy: input.agentNameLegacy || null,
+    agentMobileNoLegacy: input.agentMobileNoLegacy || null,
+    agentEmailIdLegacy: input.agentEmailIdLegacy || null,
     customerNameLegacy: input.customerNameLegacy || null,
     customerMobLegacy: input.customerMobLegacy || null,
     customerEmailLegacy: input.customerEmailLegacy || null,
@@ -96,6 +117,7 @@ export async function createRto(input: RtoFormInput): Promise<ActionResult> {
         partnerMaster: { connect: { partnerId: input.partnerId } },
         ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
         ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
+        ...(input.variantId ? { carVariantMaster: { connect: { pkVariantId: input.variantId } } } : {}),
         amtPaid: 0,
         createdDt: new Date(),
         updatedDt: new Date(),
@@ -128,13 +150,17 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
       if (dup) return { success: false, error: 'An RTO record already exists for this registration number.' }
     }
 
+    const latestPaymentDate = await getLatestRtoPaymentDate(id)
+
     await prisma.rtoAgent.update({
       where: { rtoAgentMainId: id },
       data: {
         ...buildData(input),
+        paymentDate: latestPaymentDate ?? toDate(input.paymentDate),
         fkPartnerId: input.partnerId,
         customerId: input.customerId,
         inventoryId: input.inventoryId,
+        fkVariantId: input.variantId,
         updatedDt: new Date(),
         ...(userId ? { updatedBy: userId } : {}),
       },
@@ -205,6 +231,8 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
       _sum: { amountPaid: true },
     })
 
+    const latestPaymentDate = await getLatestRtoPaymentDate(rtoAgentMainId)
+
     // logs all three statuses on the main record — the legacy "Pay" flow only
     // updated payment/RC status and left transfer_status stale, which we treat
     // as an oversight rather than intended behavior
@@ -213,6 +241,7 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
       data: {
         amtPaid: sum._sum.amountPaid ?? 0,
         paymentStatus: input.paymentStatus,
+        paymentDate: latestPaymentDate,
         rcStatus: input.rcStatus,
         transferStatus: input.transferStatus,
         followupDate: input.nextFollowUpDate ? new Date(input.nextFollowUpDate) : null,
