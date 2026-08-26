@@ -6,7 +6,7 @@ import { Plus, Pencil, Trash2, Phone, ChevronLeft, ChevronRight, Mail, Download,
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
-import { createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmail, getInquiryDetail, type InquiryFormInput } from './actions'
+import { createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car Not In Stock', 'Not connected', 'Already Bought Car', 'Visited', 'Fresh Lead', 'Sold Car']
@@ -38,19 +38,22 @@ interface InquiryRow {
   createdByUser?: UserOption | null
   updatedByUser?: UserOption | null
   customer: CustomerOption | null
-  inquiryCarDetails: {
-    fkVariantId: number | null
-    makeLegacy?: string | null
-    modelLegacy?: string | null
-    variantLegacy?: string | null
-    subVariant?: string | null
-    year: number | null
-    carVariantMaster: {
-      variant: string | null
-      carMakeMaster: { pkMakeId: number; make: string | null } | null
-      carModelMaster: { pkModelId: number; model: string | null } | null
-    } | null
-  }[]
+  inquiryCarDetails: InquiryCarDetailRow[]
+}
+
+interface InquiryCarDetailRow {
+  inquiryCarDetailsId?: number | null
+  fkVariantId: number | null
+  makeLegacy?: string | null
+  modelLegacy?: string | null
+  variantLegacy?: string | null
+  subVariant?: string | null
+  year: number | null
+  carVariantMaster: {
+    variant: string | null
+    carMakeMaster: { pkMakeId: number; make: string | null } | null
+    carModelMaster: { pkModelId: number; model: string | null } | null
+  } | null
 }
 
 interface PreviousInquiryMatch {
@@ -114,30 +117,23 @@ function inquiryVehicleLabel(car: InquiryRow['inquiryCarDetails'][0] | undefined
   return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}`.trim()
 }
 
-function validateInquiryWorkflow(input: InquiryFormInput) {
-  const status = input.status.trim()
-  const subStatus = input.subStatus.trim().toLowerCase()
-  const inquiryDate = input.dateOfInquiry.trim()
-  const followUpDate = input.followUpDate.trim()
-  const visitedDate = input.visitedDateOfCustomer.trim()
+function summarizeInquiryVehicles(cars: InquiryCarDetailRow[] | undefined | null) {
+  if (!cars || cars.length === 0) return '—'
+  const labels = cars.map(car => inquiryVehicleLabel(car)).filter(label => label !== '—')
+  if (labels.length === 0) return '—'
+  if (labels.length === 1) return labels[0]
+  return `${labels[0]} +${labels.length - 1} more`
+}
 
-  if (status === 'FollowUp' && !followUpDate) {
-    return 'Follow-up date is required when status is FollowUp.'
+function buildInquiryVehicleExportFields(cars: InquiryCarDetailRow[] | undefined | null) {
+  const normalizedCars = cars ?? []
+  return {
+    makes: normalizedCars.map(car => clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy)).filter(Boolean).join(' | '),
+    models: normalizedCars.map(car => clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy)).filter(Boolean).join(' | '),
+    variants: normalizedCars.map(car => clean(car.carVariantMaster?.variant) || clean(car.variantLegacy)).filter(Boolean).join(' | '),
+    subVariants: normalizedCars.map(car => clean(car.subVariant)).filter(Boolean).join(' | '),
+    years: normalizedCars.map(car => (car.year != null ? String(car.year) : '')).filter(Boolean).join(' | '),
   }
-
-  if (subStatus === 'visited' && !visitedDate) {
-    return 'Visited date is required when sub-status is Visited.'
-  }
-
-  if (inquiryDate && followUpDate && followUpDate < inquiryDate) {
-    return 'Follow-up date cannot be before inquiry date.'
-  }
-
-  if (inquiryDate && visitedDate && visitedDate < inquiryDate) {
-    return 'Visited date cannot be before inquiry date.'
-  }
-
-  return ''
 }
 
 function csvValue(value: string | number | boolean | null | undefined) {
@@ -188,10 +184,7 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
 
   const lines = [headers.map(csvValue).join(',')]
   for (const row of rows) {
-    const car = row.inquiryCarDetails[0]
-    const make = clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy)
-    const model = clean(car?.carVariantMaster?.carModelMaster?.model) || clean(car?.modelLegacy)
-    const variant = clean(car?.carVariantMaster?.variant) || clean(car?.variantLegacy)
+    const vehicleExport = buildInquiryVehicleExportFields(row.inquiryCarDetails)
     const line = [
       row.inquiryId,
       row.inquiryNo,
@@ -201,11 +194,11 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
       row.customer?.custName ?? row.customerNameLegacy,
       row.mobileno,
       row.email,
-      make,
-      model,
-      variant,
-      clean(car?.subVariant),
-      car?.year ?? null,
+      vehicleExport.makes,
+      vehicleExport.models,
+      vehicleExport.variants,
+      vehicleExport.subVariants,
+      vehicleExport.years,
       row.budgetOfCustomer,
       row.classification,
       row.status,
@@ -226,13 +219,24 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
   URL.revokeObjectURL(url)
 }
 
+function emptyInquiryCar(): InquiryCarInput {
+  return {
+    inquiryCarDetailsId: null,
+    selectedMakeId: null,
+    selectedModelId: null,
+    fkVariantId: null,
+    subVariant: '',
+    carYear: null,
+  }
+}
+
 function emptyForm(): InquiryFormInput {
   return {
     inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '',
     customerId: null, customerNameLegacy: '', mobileno: '', email: '',
     budgetOfCustomer: null, visitedDateOfCustomer: '',
     classification: 'Warm', status: 'FollowUp', subStatus: '',
-    followUpDate: '', remark: '', fkVariantId: null, subVariant: '', carYear: null,
+    followUpDate: '', remark: '', inquiryCars: [emptyInquiryCar()],
   }
 }
 
@@ -285,40 +289,73 @@ export function InquiryClient({
   const [emailInquiryRow, setEmailInquiryRow] = useState<InquiryRow | null>(null)
   const [emailInventoryMatches, setEmailInventoryMatches] = useState<InventoryMatch[]>([])
   const [emailInventoryLoading, setEmailInventoryLoading] = useState(false)
-  const [selectedEmailInventoryId, setSelectedEmailInventoryId] = useState<number | null>(null)
+  const [selectedEmailInventoryIds, setSelectedEmailInventoryIds] = useState<number[]>([])
+  const [emailInventorySearch, setEmailInventorySearch] = useState('')
   const [emailModalError, setEmailModalError] = useState('')
   const emailInventoryRequestRef = useRef(0)
 
+  const loadInventoryMatches = async (cars: Array<{
+    fkVariantId?: number | null
+    selectedMakeId?: number | null
+    selectedModelId?: number | null
+    carYear?: number | null
+    carVariantMaster?: {
+      carMakeMaster: { pkMakeId: number; make: string | null } | null
+      carModelMaster: { pkModelId: number; model: string | null } | null
+    } | null
+  }>) => {
+    const requests = cars
+      .map(car => {
+        const variantId = car.fkVariantId ?? null
+        const makeId = car.selectedMakeId ?? car.carVariantMaster?.carMakeMaster?.pkMakeId ?? null
+        const modelId = car.selectedModelId ?? car.carVariantMaster?.carModelMaster?.pkModelId ?? null
+        const year = car.carYear ?? null
+
+        if (!variantId && !modelId && !makeId) return null
+
+        const params = new URLSearchParams()
+        if (makeId) params.set('makeId', String(makeId))
+        if (modelId) params.set('modelId', String(modelId))
+        if (variantId) params.set('variantId', String(variantId))
+        if (year) params.set('year', String(year))
+        return params
+      })
+      .filter((params): params is URLSearchParams => params !== null)
+
+    if (requests.length === 0) return []
+
+    const results = await Promise.all(requests.map(async params => {
+      const res = await fetch(`/api/inquiry/inventory-match?${params.toString()}`)
+      const payload = await res.json().catch(() => null)
+      if (!res.ok || !Array.isArray(payload)) {
+        throw new Error(payload?.error ?? 'Could not load matching inventory.')
+      }
+      return payload as InventoryMatch[]
+    }))
+
+    const deduped = new Map<number, InventoryMatch>()
+    for (const group of results) {
+      for (const match of group) {
+        deduped.set(match.inventoryId, match)
+      }
+    }
+    return [...deduped.values()]
+  }
+
   const loadInventoryMatchesForInquiry = async (row: InquiryRow) => {
-    const car = row.inquiryCarDetails[0]
-    const variantId = car?.fkVariantId
-    const makeId = car?.carVariantMaster?.carMakeMaster?.pkMakeId
-    const modelId = car?.carVariantMaster?.carModelMaster?.pkModelId
-    const year = car?.year
-
-    if (!variantId && !modelId && !makeId) {
-      return []
-    }
-
-    const params = new URLSearchParams()
-    if (makeId) params.set('makeId', String(makeId))
-    if (modelId) params.set('modelId', String(modelId))
-    if (variantId) params.set('variantId', String(variantId))
-    if (year) params.set('year', String(year))
-
-    const res = await fetch(`/api/inquiry/inventory-match?${params.toString()}`)
-    const payload = await res.json().catch(() => null)
-    if (!res.ok || !Array.isArray(payload)) {
-      throw new Error(payload?.error ?? 'Could not load matching inventory.')
-    }
-    return payload as InventoryMatch[]
+    return loadInventoryMatches(row.inquiryCarDetails.map(car => ({
+      fkVariantId: car.fkVariantId,
+      carYear: car.year,
+      carVariantMaster: car.carVariantMaster,
+    })))
   }
 
   const openEmailModal = (row: InquiryRow) => {
     const requestId = ++emailInventoryRequestRef.current
     setEmailFeedback(null)
     setEmailModalError('')
-    setSelectedEmailInventoryId(null)
+    setSelectedEmailInventoryIds([])
+    setEmailInventorySearch('')
     setEmailInventoryMatches([])
     setEmailInquiryRow(row)
     setEmailInventoryLoading(true)
@@ -327,7 +364,6 @@ export function InquiryClient({
       .then(matches => {
         if (emailInventoryRequestRef.current !== requestId) return
         setEmailInventoryMatches(matches)
-        setSelectedEmailInventoryId(matches[0]?.inventoryId ?? null)
       })
       .catch(err => {
         if (emailInventoryRequestRef.current !== requestId) return
@@ -339,14 +375,14 @@ export function InquiryClient({
   }
 
   const handleSendInventoryEmail = () => {
-    if (!emailInquiryRow || !selectedEmailInventoryId) return
+    if (!emailInquiryRow || selectedEmailInventoryIds.length === 0) return
     setEmailingId(emailInquiryRow.inquiryId)
     setEmailFeedback(null)
     setEmailModalError('')
     startEmailTransition(async () => {
-      const result = await sendInquiryInventoryEmail(emailInquiryRow.inquiryId, selectedEmailInventoryId)
+      const result = await sendInquiryInventoryEmails(emailInquiryRow.inquiryId, selectedEmailInventoryIds)
       setEmailFeedback(result.success
-        ? { ok: true, message: 'Email sent successfully.' }
+        ? { ok: true, message: result.message ?? 'Email sent successfully.' }
         : { ok: false, message: result.error ?? 'Something went wrong sending this email.' })
       if (result.success) {
         setEmailInquiryRow(null)
@@ -359,6 +395,14 @@ export function InquiryClient({
 
   const handleSendEmail = (row: InquiryRow) => {
     openEmailModal(row)
+  }
+
+  const toggleEmailInventorySelection = (inventoryId: number) => {
+    setSelectedEmailInventoryIds(prev => (
+      prev.includes(inventoryId)
+        ? prev.filter(id => id !== inventoryId)
+        : [...prev, inventoryId]
+    ))
   }
 
   const openView = (row: { inquiryId: number }) => {
@@ -398,10 +442,6 @@ export function InquiryClient({
     }
   }
 
-  const [selectedMakeId, setSelectedMakeId] = useState<number | null>(null)
-  const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
-  const [models, setModels] = useState<CarModelMaster[]>([])
-  const [variants, setVariants] = useState<CarVariantMaster[]>([])
   const [filterModels, setFilterModels] = useState<CarModelMaster[]>([])
   const [filterVariants, setFilterVariants] = useState<CarVariantMaster[]>([])
   const [previousInquiries, setPreviousInquiries] = useState<PreviousInquiryMatch[]>([])
@@ -579,7 +619,7 @@ export function InquiryClient({
 
     if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
 
-    if (!selectedMakeId && !selectedModelId && !form.fkVariantId) {
+    if (!form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId)) {
       setInventoryMatches([])
       setInventoryMatchError('')
       setInventoryMatchLoading(false)
@@ -591,20 +631,9 @@ export function InquiryClient({
       setInventoryMatchLoading(true)
       setInventoryMatchError('')
       try {
-        const params = new URLSearchParams()
-        if (selectedMakeId) params.set('makeId', String(selectedMakeId))
-        if (selectedModelId) params.set('modelId', String(selectedModelId))
-        if (form.fkVariantId) params.set('variantId', String(form.fkVariantId))
-        if (form.carYear) params.set('year', String(form.carYear))
-        const res = await fetch(`/api/inquiry/inventory-match?${params.toString()}`)
-        const payload = await res.json()
+        const matches = await loadInventoryMatches(form.inquiryCars)
         if (inventoryMatchRequestRef.current !== requestId) return
-        if (!res.ok) {
-          setInventoryMatches([])
-          setInventoryMatchError(payload.error ?? 'Could not load matching inventory.')
-          return
-        }
-        setInventoryMatches(Array.isArray(payload) ? payload : [])
+        setInventoryMatches(matches)
       } catch {
         if (inventoryMatchRequestRef.current !== requestId) return
         setInventoryMatches([])
@@ -617,9 +646,7 @@ export function InquiryClient({
     return () => {
       if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
     }
-  }, [form.carYear, form.fkVariantId, modal, selectedMakeId, selectedModelId])
-
-  const resetCascade = () => { setSelectedMakeId(null); setSelectedModelId(null); setModels([]); setVariants([]) }
+  }, [form.inquiryCars, modal])
 
   const customerSnapshot = (customer: CustomerOption | null) => JSON.stringify(customer ? {
     custId: customer.custId,
@@ -660,10 +687,25 @@ export function InquiryClient({
     setPreviousInquiryError('')
     setInventoryMatches([])
     setInventoryMatchError('')
-    resetCascade()
     setDiscardOpen(false)
     setError('')
     setModal('add')
+
+    getNextInquiryNumber()
+      .then(inquiryNo => {
+        setForm(current => ({ ...current, inquiryNo }))
+        setSavedFormSnapshot(currentSnapshot => {
+          const parsed = JSON.parse(currentSnapshot) as InquiryFormInput
+          return JSON.stringify({ ...parsed, inquiryNo })
+        })
+      })
+      .catch(() => {
+        setForm(current => ({ ...current, inquiryNo: 'Inquiry/1' }))
+        setSavedFormSnapshot(currentSnapshot => {
+          const parsed = JSON.parse(currentSnapshot) as InquiryFormInput
+          return JSON.stringify({ ...parsed, inquiryNo: 'Inquiry/1' })
+        })
+      })
   }
 
   const openEdit = async (r: { inquiryId: number }) => {
@@ -677,8 +719,7 @@ export function InquiryClient({
     setInventoryMatchError('')
     setDiscardOpen(false)
     setError('')
-    resetCascade()
-
+    setErrors({})
     try {
       const detail = await getInquiryDetail(r.inquiryId)
       if (editRequestRef.current !== requestId) return
@@ -688,7 +729,14 @@ export function InquiryClient({
         return
       }
 
-      const car = detail.inquiryCarDetails[0]
+      const inquiryCars = detail.inquiryCarDetails.length > 0 ? detail.inquiryCarDetails.map(car => ({
+        inquiryCarDetailsId: car.inquiryCarDetailsId ?? null,
+        selectedMakeId: car.carVariantMaster?.carMakeMaster?.pkMakeId ?? null,
+        selectedModelId: car.carVariantMaster?.carModelMaster?.pkModelId ?? null,
+        fkVariantId: car.fkVariantId ?? null,
+        subVariant: car.subVariant ?? '',
+        carYear: car.year ?? null,
+      })) : [emptyInquiryCar()]
       const nextForm = {
         inquiryNo: detail.inquiryNo ?? '',
         dateOfInquiry: fmtDate(detail.dateOfInquiry),
@@ -704,31 +752,12 @@ export function InquiryClient({
         subStatus: detail.subStatus ?? '',
         followUpDate: fmtDate(detail.followUpDate),
         remark: detail.remark ?? '',
-        fkVariantId: car?.fkVariantId ?? null,
-        subVariant: car?.subVariant ?? '',
-        carYear: car?.year ?? null,
+        inquiryCars,
       }
       setForm(nextForm)
       setSavedFormSnapshot(JSON.stringify(nextForm))
       setSelectedCustomer(detail.customer)
       setSavedCustomerSnapshot(customerSnapshot(detail.customer))
-
-      const makeId = car?.carVariantMaster?.carMakeMaster?.pkMakeId ?? null
-      const modelId = car?.carVariantMaster?.carModelMaster?.pkModelId ?? null
-      setSelectedMakeId(makeId)
-      setSelectedModelId(modelId)
-      setModels([])
-      setVariants([])
-      if (makeId) {
-        const res = await fetch(`/api/catalog/models?makeId=${makeId}`)
-        if (editRequestRef.current !== requestId) return
-        setModels(await res.json())
-      }
-      if (modelId) {
-        const res = await fetch(`/api/catalog/variants?modelId=${modelId}`)
-        if (editRequestRef.current !== requestId) return
-        setVariants(await res.json())
-      }
     } catch {
       if (editRequestRef.current !== requestId) return
       setError('Could not load inquiry details.')
@@ -736,24 +765,6 @@ export function InquiryClient({
     } finally {
       if (editRequestRef.current === requestId) setEditLoading(false)
     }
-  }
-
-  const onMakeChange = async (makeId: number) => {
-    setSelectedMakeId(makeId || null)
-    setSelectedModelId(null)
-    setVariants([])
-    setForm(f => ({ ...f, fkVariantId: null }))
-    if (!makeId) { setModels([]); return }
-    const res = await fetch(`/api/catalog/models?makeId=${makeId}`)
-    setModels(await res.json())
-  }
-
-  const onModelChange = async (modelId: number) => {
-    setSelectedModelId(modelId || null)
-    setForm(f => ({ ...f, fkVariantId: null }))
-    if (!modelId) { setVariants([]); return }
-    const res = await fetch(`/api/catalog/variants?modelId=${modelId}`)
-    setVariants(await res.json())
   }
 
   const onCustomerChange = (c: CustomerOption | null) => {
@@ -768,7 +779,6 @@ export function InquiryClient({
   }
 
   const f = <K extends keyof InquiryFormInput>(k: K, v: InquiryFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
-
   const save = () => {
     setError('')
     const newErrors: Record<string, boolean> = {}
@@ -788,8 +798,9 @@ export function InquiryClient({
     if (form.budgetOfCustomer !== null && form.budgetOfCustomer <= 0) {
       newErrors.budgetOfCustomer = true
     }
-    if (form.carYear !== null && !isValidYear(form.carYear)) {
-      newErrors.carYear = true
+    const invalidCarIndex = form.inquiryCars.findIndex(car => car.carYear !== null && !isValidYear(car.carYear))
+    if (invalidCarIndex >= 0) {
+      newErrors[`carYear-${invalidCarIndex}`] = true
     }
 
     // Workflow validations
@@ -1002,7 +1013,6 @@ export function InquiryClient({
         >
           <Table headers={['#', 'Date', 'Customer', 'Source', 'Contact', 'Car of Interest', 'Budget', 'Classification', 'Status', 'Sub-status', 'Follow-up', 'Visited', 'Remark', 'Actions']} empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
             {initialData.map((r, index) => {
-              const car = r.inquiryCarDetails[0]
               const name = r.customer?.custName ?? r.customerNameLegacy ?? '—'
               return (
                 <tr key={r.inquiryId} className="hover:bg-gray-50 transition">
@@ -1019,7 +1029,7 @@ export function InquiryClient({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
-                    {inquiryVehicleLabel(car)}
+                    {summarizeInquiryVehicles(r.inquiryCarDetails)}
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.budgetOfCustomer)}</td>
                   <td className="px-4 py-3">{r.classification ? <Badge label={r.classification} /> : '—'}</td>
@@ -1110,20 +1120,24 @@ export function InquiryClient({
 
               <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Car Requirement</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  {(() => {
-                    const car = viewInquiry.inquiryCarDetails[0]
-                    return (
-                      <>
-                        <div><span className="font-medium text-gray-900">Make:</span> {clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Model:</span> {clean(car?.carVariantMaster?.carModelMaster?.model) || clean(car?.modelLegacy) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Variant:</span> {clean(car?.carVariantMaster?.variant) || clean(car?.variantLegacy) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Sub Variant:</span> {clean(car?.subVariant) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Year:</span> {car?.year ?? '—'}</div>
-                      </>
-                    )
-                  })()}
-                </div>
+                {viewInquiry.inquiryCarDetails.length === 0 ? (
+                  <div className="mt-3 text-sm text-gray-700">No vehicle requirement captured.</div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {viewInquiry.inquiryCarDetails.map((car, index) => (
+                      <div key={car.inquiryCarDetailsId ?? `view-car-${index}`} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Vehicle {index + 1}</div>
+                        <div className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
+                          <div><span className="font-medium text-gray-900">Make:</span> {clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy) || '—'}</div>
+                          <div><span className="font-medium text-gray-900">Model:</span> {clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy) || '—'}</div>
+                          <div><span className="font-medium text-gray-900">Variant:</span> {clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || '—'}</div>
+                          <div><span className="font-medium text-gray-900">Sub Variant:</span> {clean(car.subVariant) || '—'}</div>
+                          <div><span className="font-medium text-gray-900">Year:</span> {car.year ?? '—'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
@@ -1180,7 +1194,7 @@ export function InquiryClient({
             <Input label="Name" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} error={errors.customer} />
             <Input label="Mobile" value={form.mobileno} onChange={e => f('mobileno', e.target.value)} disabled={!!selectedCustomer} error={errors.mobileno} />
             <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} disabled={!!selectedCustomer} error={errors.email} />
-            <Input label="Inquiry No" value={form.inquiryNo} onChange={e => f('inquiryNo', e.target.value)} />
+            <Input label="Inquiry No" value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
             <Input label="Inquiry Date" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
             <div>
               <Input label="Source" list="inquiry-source-suggestions" value={form.website} onChange={e => f('website', e.target.value)} placeholder="Type or pick a source" error={errors.website} />
@@ -1188,23 +1202,6 @@ export function InquiryClient({
                 {sourceSuggestions.map(source => <option key={source} value={source} />)}
               </datalist>
             </div>
-            <div className="col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              One inquiry tracks one vehicle requirement. If the customer starts considering a different vehicle, create a new inquiry for that vehicle interest.
-            </div>
-            <Select label="Make" value={selectedMakeId ?? ''} onChange={e => onMakeChange(Number(e.target.value))}>
-              <option value="">Select Make</option>
-              {makes.map(m => <option key={m.pkMakeId} value={m.pkMakeId}>{m.make}</option>)}
-            </Select>
-            <Select label="Model" value={selectedModelId ?? ''} onChange={e => onModelChange(Number(e.target.value))} disabled={!selectedMakeId}>
-              <option value="">Select Model</option>
-              {models.map(m => <option key={m.pkModelId} value={m.pkModelId}>{m.model}</option>)}
-            </Select>
-            <Select label="Variant" value={form.fkVariantId ?? ''} onChange={e => f('fkVariantId', Number(e.target.value) || null)} disabled={!selectedModelId}>
-              <option value="">Select Variant</option>
-              {variants.map(v => <option key={v.pkVariantId} value={v.pkVariantId}>{v.variant}</option>)}
-            </Select>
-            <Input label="Sub Variant" value={form.subVariant} onChange={e => f('subVariant', e.target.value)} placeholder="Optional detailed trim / package" />
-            <Input label="Car Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
             <Input label="Budget (₹)" type="number" value={form.budgetOfCustomer ?? ''} onChange={e => f('budgetOfCustomer', e.target.value ? +e.target.value : null)} error={errors.budgetOfCustomer} />
             <Input label="Visited Date" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} />
             <Select label="Classification" value={form.classification} onChange={e => f('classification', e.target.value)}>
@@ -1243,9 +1240,8 @@ export function InquiryClient({
               <div className="mt-1 text-xs text-amber-800">Please review before saving. This is only a warning — you can still continue if this is a genuine new inquiry.</div>
               <div className="mt-3 space-y-3">
                 {previousInquiries.map(match => {
-                  const car = match.inquiryCarDetails[0]
                   const matchName = match.customer?.custName ?? match.customerNameLegacy ?? '—'
-                  const matchVehicle = inquiryVehicleLabel(car)
+                  const matchVehicle = summarizeInquiryVehicles(match.inquiryCarDetails)
 
                   return (
                     <div key={match.inquiryId} className="rounded-md border border-amber-100 bg-white px-3 py-3 text-xs text-gray-700">
@@ -1268,10 +1264,10 @@ export function InquiryClient({
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{inventoryMatchError}</div>
           ) : null}
 
-          {(selectedMakeId || selectedModelId || form.fkVariantId) ? (
+          {form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId) ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
               <div className="text-sm font-semibold text-blue-900">Matching Inventory</div>
-              <div className="mt-1 text-xs text-blue-800">Based on the selected car details, here is matching stock currently in the system.</div>
+              <div className="mt-1 text-xs text-blue-800">Based on all selected vehicle rows, here is matching stock currently in the system.</div>
               {inventoryMatchLoading ? (
                 <div className="mt-3 text-sm text-blue-800">Checking matching inventory...</div>
               ) : inventoryMatches.length === 0 ? (
@@ -1319,7 +1315,8 @@ export function InquiryClient({
         emailInventoryRequestRef.current += 1
         setEmailInquiryRow(null)
         setEmailInventoryMatches([])
-        setSelectedEmailInventoryId(null)
+        setSelectedEmailInventoryIds([])
+        setEmailInventorySearch('')
         setEmailModalError('')
       }}>
         {emailInquiryRow ? (
@@ -1345,22 +1342,50 @@ export function InquiryClient({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="text-sm font-medium text-gray-800">Choose which vehicle to send</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-gray-800">Choose which vehicles to send</div>
+                  <div className="min-w-56">
+                    <SearchBar value={emailInventorySearch} onChange={setEmailInventorySearch} placeholder="Search inventory, reg, make..." />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  {emailInventoryMatches.map(match => {
+                  {emailInventoryMatches.filter(match => {
+                    const vehicle = [
+                      clean(match.carVariantMaster?.carMakeMaster?.make),
+                      clean(match.carVariantMaster?.carModelMaster?.model),
+                      clean(match.carVariantMaster?.variant),
+                    ].filter(Boolean).join(' ')
+                    const haystack = [
+                      match.inventoryNumber ?? '',
+                      match.registrationNo ?? '',
+                      vehicle,
+                      match.status ?? '',
+                    ].join(' ').toLowerCase()
+                    return !emailInventorySearch.trim() || haystack.includes(emailInventorySearch.trim().toLowerCase())
+                  }).map(match => {
                     const vehicle = [
                       clean(match.carVariantMaster?.carMakeMaster?.make),
                       clean(match.carVariantMaster?.carModelMaster?.model),
                       clean(match.carVariantMaster?.variant),
                     ].filter(Boolean).join(' ') || '—'
-                    const isSelected = selectedEmailInventoryId === match.inventoryId
+                    const isSelected = selectedEmailInventoryIds.includes(match.inventoryId)
                     return (
                       <button
                         key={match.inventoryId}
                         type="button"
-                        onClick={() => setSelectedEmailInventoryId(match.inventoryId)}
+                        onClick={() => toggleEmailInventorySelection(match.inventoryId)}
                         className={`w-full rounded-lg border px-4 py-3 text-left transition ${isSelected ? 'border-[#1B2A6B] bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
                       >
+                        <div className="mb-2 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleEmailInventorySelection(match.inventoryId)}
+                            onClick={event => event.stopPropagation()}
+                            className="h-4 w-4 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
+                          />
+                          <span className="text-xs font-medium text-gray-600">Select this vehicle</span>
+                        </div>
                         <div className="grid gap-2 md:grid-cols-3">
                           <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
                           <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
@@ -1373,6 +1398,24 @@ export function InquiryClient({
                     )
                   })}
                 </div>
+                {emailInventoryMatches.length > 0 && emailInventoryMatches.filter(match => {
+                  const vehicle = [
+                    clean(match.carVariantMaster?.carMakeMaster?.make),
+                    clean(match.carVariantMaster?.carModelMaster?.model),
+                    clean(match.carVariantMaster?.variant),
+                  ].filter(Boolean).join(' ')
+                  const haystack = [
+                    match.inventoryNumber ?? '',
+                    match.registrationNo ?? '',
+                    vehicle,
+                    match.status ?? '',
+                  ].join(' ').toLowerCase()
+                  return !emailInventorySearch.trim() || haystack.includes(emailInventorySearch.trim().toLowerCase())
+                }).length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
+                    No vehicles match the current popup search.
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -1382,11 +1425,12 @@ export function InquiryClient({
                 emailInventoryRequestRef.current += 1
                 setEmailInquiryRow(null)
                 setEmailInventoryMatches([])
-                setSelectedEmailInventoryId(null)
+                setSelectedEmailInventoryIds([])
+                setEmailInventorySearch('')
                 setEmailModalError('')
               }}>Cancel</Btn>
-              <Btn onClick={handleSendInventoryEmail} disabled={isEmailPending || !selectedEmailInventoryId || emailInventoryLoading}>
-                {isEmailPending ? 'Sending...' : 'Send Email'}
+              <Btn onClick={handleSendInventoryEmail} disabled={isEmailPending || selectedEmailInventoryIds.length === 0 || emailInventoryLoading}>
+                {isEmailPending ? 'Sending...' : `Send Email${selectedEmailInventoryIds.length > 0 ? ` (${selectedEmailInventoryIds.length})` : ''}`}
               </Btn>
             </div>
           </div>

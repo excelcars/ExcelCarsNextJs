@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
           ? { carVariantMaster: { fkModelId: modelId } }
           : { carVariantMaster: { fkMakeId: makeId } }),
       ...(year ? { year } : {}),
+      status: { equals: 'In Stock', mode: 'insensitive' },
     },
     include: {
       customer: { select: { custId: true, custName: true, custMobile: true, custEmail: true } },
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: { inventoryId: 'desc' },
-    take: 12,
+    take: 100,
   })
 
   return NextResponse.json(rows.map(row => ({

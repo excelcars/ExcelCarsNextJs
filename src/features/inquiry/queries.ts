@@ -152,7 +152,6 @@ function inquiryListSelect() {
       },
     },
     inquiryCarDetails: {
-      take: 1,
       orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
       select: {
         fkVariantId: true,

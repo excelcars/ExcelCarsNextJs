@@ -357,7 +357,7 @@ model IndianStatesMaster {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Inquiry {
   inquiryId             Int                 @id(map: "idx_16506_pk_inquiry") @default(autoincrement()) @map("inquiry_id")
-  inquiryNo             String?             @map("inquiry_no")
+  inquiryNo             String?             @unique(map: "idx_16506_uq_inquiry_inquiry_no") @map("inquiry_no")
   dateOfInquiry         DateTime?           @map("date_of_inquiry") @db.Timestamptz(6)
   website               String?
   customerId            Int?                @map("customer_id")

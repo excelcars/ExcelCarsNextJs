@@ -27,7 +27,6 @@ export async function GET(req: NextRequest) {
         include: {
           carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } },
         },
-        take: 1,
         orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
       },
     },
