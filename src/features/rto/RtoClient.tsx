@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
@@ -14,6 +14,9 @@ import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
+interface CarMakeMaster { pkMakeId: number; make: string | null }
+interface CarModelMaster { pkModelId: number; model: string | null }
+interface CarVariantMaster { pkVariantId: number; variant: string | null }
 interface Vehicle {
   inventoryId: number
   fkVariantId: number | null
@@ -216,6 +219,74 @@ function vehicleLabel(v: Vehicle) {
   return `${v.registrationNo ?? v.sku ?? '—'} — ${parts.join(' ')}`
 }
 
+function CatalogTextPicker({
+  label,
+  placeholder,
+  value,
+  onChange,
+  options,
+  error,
+}: {
+  label: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+  options: string[]
+  error?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [open])
+
+  const matches = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return options.slice(0, 15)
+    return options.filter(option => option.toLowerCase().includes(q)).slice(0, 15)
+  }, [options, value])
+
+  return (
+    <div ref={pickerRef} className="relative">
+      <Input
+        label={label}
+        placeholder={placeholder}
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        error={error}
+      />
+      {open && (
+        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+          {matches.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
+          ) : matches.map(option => (
+            <button
+              key={option}
+              type="button"
+              onMouseDown={event => {
+                event.preventDefault()
+                onChange(option)
+                setOpen(false)
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-800 hover:bg-gray-50 border-b border-gray-50 last:border-0"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function emptyForm(): RtoFormInput {
   return {
     partnerId: null, agentNameLegacy: '', agentMobileNoLegacy: '', agentEmailIdLegacy: '',
@@ -223,6 +294,7 @@ function emptyForm(): RtoFormInput {
     inventoryId: null, variantId: null, registrationNo: '', carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null,
     dateOfEntry: new Date().toISOString().slice(0, 10),
     transferCharges: null,
+    amountPaid: null,
     paymentStatus: 'Pending', paymentDate: '', rcStatus: 'Pending', transferStatus: 'Pending',
     followupDate: '', remark: '',
   }
@@ -258,11 +330,13 @@ function emptyFilters(): RtoFilters {
 export function RtoClient({
   initialData,
   vehicles,
+  makes,
   initialSearch = '',
   initialRegistrationNo = '',
 }: {
   initialData: RtoRow[]
   vehicles: Vehicle[]
+  makes: CarMakeMaster[]
   initialSearch?: string
   initialRegistrationNo?: string
 }) {
@@ -284,7 +358,6 @@ export function RtoClient({
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [viewRow, setViewRow] = useState<RtoRow | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
-  const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
   const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
   const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
   const [savedAgentSnapshot, setSavedAgentSnapshot] = useState('')
@@ -292,8 +365,13 @@ export function RtoClient({
   const [form, setForm] = useState<RtoFormInput>(emptyForm())
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<PartnerOption | null>(null)
+  const [selectedMakeId, setSelectedMakeId] = useState<number | null>(null)
+  const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
+  const [models, setModels] = useState<CarModelMaster[]>([])
+  const [variants, setVariants] = useState<CarVariantMaster[]>([])
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [vehicleOpen, setVehicleOpen] = useState(false)
+  const vehiclePickerRef = useRef<HTMLDivElement>(null)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
@@ -308,6 +386,16 @@ export function RtoClient({
   const [historyLoading, setHistoryLoading] = useState(false)
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
+
+  useEffect(() => {
+    if (!vehicleOpen) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!vehiclePickerRef.current?.contains(event.target as Node)) setVehicleOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [vehicleOpen])
 
   const hasUnsavedChanges = useMemo(() => {
     if (!modal) return false
@@ -382,6 +470,116 @@ export function RtoClient({
     return vehicles.filter(v => vehicleLabel(v).toLowerCase().includes(q)).slice(0, 20)
   }, [vehicles, vehicleQuery])
 
+  const matchedMake = useMemo(() => {
+    const make = form.carMakeLegacy.trim().toLowerCase()
+    if (!make) return null
+    return makes.find(option => clean(option.make).toLowerCase() === make) ?? null
+  }, [form.carMakeLegacy, makes])
+
+  const matchedModel = useMemo(() => {
+    const model = form.carModelLegacy.trim().toLowerCase()
+    if (!model) return null
+    return models.find(option => clean(option.model).toLowerCase() === model) ?? null
+  }, [form.carModelLegacy, models])
+
+  const matchedVariant = useMemo(() => {
+    const variant = form.carVariantLegacy.trim().toLowerCase()
+    if (!variant) return null
+    return variants.find(option => clean(option.variant).toLowerCase() === variant) ?? null
+  }, [form.carVariantLegacy, variants])
+
+  const makeOptions = useMemo(
+    () => makes.map(option => clean(option.make)).filter(Boolean),
+    [makes],
+  )
+
+  const modelOptions = useMemo(
+    () => models.map(option => clean(option.model)).filter(Boolean),
+    [models],
+  )
+
+  const variantOptions = useMemo(
+    () => variants.map(option => clean(option.variant)).filter(Boolean),
+    [variants],
+  )
+
+  const registrationOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const options: string[] = []
+    for (const vehicle of vehicles) {
+      const registration = clean(vehicle.registrationNo)
+      const normalized = normalizeRegistrationNo(registration)
+      if (!registration || !normalized || seen.has(normalized)) continue
+      seen.add(normalized)
+      options.push(registration)
+    }
+    return options
+  }, [vehicles])
+
+  useEffect(() => {
+    const nextMakeId = matchedMake?.pkMakeId ?? null
+    if (selectedMakeId === nextMakeId) return
+    setSelectedMakeId(nextMakeId)
+  }, [matchedMake, selectedMakeId])
+
+  useEffect(() => {
+    let ignore = false
+
+    if (!selectedMakeId) {
+      setModels([])
+      setSelectedModelId(null)
+      setVariants([])
+      setForm(prev => (prev.variantId === null ? prev : { ...prev, variantId: null }))
+      return
+    }
+
+    ;(async () => {
+      const res = await fetch(`/api/catalog/models?makeId=${selectedMakeId}`)
+      const payload = await res.json()
+      if (ignore) return
+      const nextModels: CarModelMaster[] = Array.isArray(payload) ? payload : []
+      setModels(nextModels)
+
+      const currentModel = form.carModelLegacy.trim().toLowerCase()
+      const exactModel = nextModels.find(option => clean(option.model).toLowerCase() === currentModel) ?? null
+      setSelectedModelId(exactModel?.pkModelId ?? null)
+
+      if (!exactModel) {
+        setVariants([])
+        setForm(prev => (prev.variantId === null ? prev : { ...prev, variantId: null }))
+      }
+    })()
+
+    return () => { ignore = true }
+  }, [form.carModelLegacy, selectedMakeId])
+
+  useEffect(() => {
+    let ignore = false
+
+    if (!selectedModelId) {
+      setVariants([])
+      setForm(prev => (prev.variantId === null ? prev : { ...prev, variantId: null }))
+      return
+    }
+
+    ;(async () => {
+      const res = await fetch(`/api/catalog/variants?modelId=${selectedModelId}`)
+      const payload = await res.json()
+      if (ignore) return
+      const nextVariants: CarVariantMaster[] = Array.isArray(payload) ? payload : []
+      setVariants(nextVariants)
+
+      const currentVariant = form.carVariantLegacy.trim().toLowerCase()
+      const exactVariant = nextVariants.find(option => clean(option.variant).toLowerCase() === currentVariant) ?? null
+      setForm(prev => {
+        const nextVariantId = exactVariant?.pkVariantId ?? null
+        return prev.variantId === nextVariantId ? prev : { ...prev, variantId: nextVariantId }
+      })
+    })()
+
+    return () => { ignore = true }
+  }, [form.carVariantLegacy, selectedModelId])
+
   const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
 
   const closeForm = () => {
@@ -400,28 +598,15 @@ export function RtoClient({
     closeForm()
   }
 
-  const findVehicleByRegistration = () => {
-    const reg = form.registrationNo.trim()
-    if (!reg) {
-      setVehicleLookupMessage('Enter a registration number first.')
-      return
-    }
-
-    const match = vehicles.find(v => normalizeRegistrationNo(v.registrationNo) === normalizeRegistrationNo(reg))
-    if (!match) {
-      setVehicleLookupMessage('No stock vehicle matched that registration number. You can still continue manually.')
-      return
-    }
-
-    selectVehicle(match)
-    setVehicleLookupMessage(`Linked stock vehicle ${match.registrationNo ?? match.sku ?? `#${match.inventoryId}`}.`)
-  }
-
   const openAdd = () => {
     const empty = emptyForm()
     setForm(empty)
     setSelectedCustomer(null)
     setSelectedAgent(null)
+    setSelectedMakeId(null)
+    setSelectedModelId(null)
+    setModels([])
+    setVariants([])
     resetVehicle()
     setEditId(null)
     setError('')
@@ -429,7 +614,6 @@ export function RtoClient({
     setSavedCustomerSnapshot(optionSnapshot(null))
     setSavedAgentSnapshot(optionSnapshot(null))
     setSavedVehicleSnapshot(optionSnapshot(null))
-    setVehicleLookupMessage('')
     setModal('add')
   }
 
@@ -448,6 +632,7 @@ export function RtoClient({
       carMakeLegacy: clean(r.carMakeLegacy), carModelLegacy: clean(r.carModelLegacy), carVariantLegacy: clean(r.carVariantLegacy), carYear: r.carYear,
       dateOfEntry: fmtDate(r.dateOfEntry),
       transferCharges: r.transferCharges ? Number(r.transferCharges) : null,
+      amountPaid: r.amtPaid ? Number(r.amtPaid) : null,
       paymentStatus: r.paymentStatus ?? 'Pending',
       paymentDate: fmtDate(r.paymentDate),
       rcStatus: r.rcStatus ?? 'Pending',
@@ -462,6 +647,10 @@ export function RtoClient({
     setSelectedCustomer(cust)
     setSelectedAgent(partner)
     setSelectedVehicle(veh)
+    setSelectedMakeId(null)
+    setSelectedModelId(null)
+    setModels([])
+    setVariants([])
     setVehicleQuery('')
     setEditId(r.rtoAgentMainId)
     setError('')
@@ -469,7 +658,6 @@ export function RtoClient({
     setSavedCustomerSnapshot(optionSnapshot(cust))
     setSavedAgentSnapshot(optionSnapshot(partner))
     setSavedVehicleSnapshot(optionSnapshot(veh))
-    setVehicleLookupMessage('')
     setModal('edit')
   }
 
@@ -511,6 +699,24 @@ export function RtoClient({
     }))
   }
 
+  const onRegistrationChange = (value: string) => {
+    const normalized = normalizeRegistrationNo(value)
+    const match = normalized
+      ? vehicles.find(vehicle => normalizeRegistrationNo(vehicle.registrationNo) === normalized) ?? null
+      : null
+
+    if (match) {
+      setForm(prev => ({ ...prev, registrationNo: value }))
+      selectVehicle(match)
+      return
+    }
+
+    setForm(prev => ({ ...prev, registrationNo: value, inventoryId: null, variantId: null }))
+    if (selectedVehicle && normalizeRegistrationNo(selectedVehicle.registrationNo) !== normalized) {
+      setSelectedVehicle(null)
+    }
+  }
+
   const f = <K extends keyof RtoFormInput>(k: K, v: RtoFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
   const setFilter = <K extends keyof RtoFilters>(k: K, v: RtoFilters[K]) => setFilters(prev => ({ ...prev, [k]: v }))
   const resetFilters = () => setFilters(emptyFilters())
@@ -518,6 +724,8 @@ export function RtoClient({
   const save = () => {
     setError('')
     const newErrors: Record<string, boolean> = {}
+    const amountPaid = form.amountPaid ?? 0
+    const hasInitialPayment = !editId && amountPaid > 0
 
     if (!form.inventoryId && !form.registrationNo?.trim()) {
       newErrors.inventoryId = true
@@ -531,6 +739,28 @@ export function RtoClient({
     }
     if (form.transferCharges !== null && form.transferCharges < 0) {
       newErrors.transferCharges = true
+    }
+    if (form.amountPaid !== null && form.amountPaid < 0) {
+      newErrors.amountPaid = true
+    }
+    if (hasInitialPayment) {
+      if (form.transferCharges === null) {
+        newErrors.transferCharges = true
+      } else if (amountPaid > form.transferCharges) {
+        newErrors.amountPaid = true
+      }
+      if (!form.paymentDate?.trim()) {
+        newErrors.paymentDate = true
+      }
+      if (!form.paymentStatus) {
+        newErrors.paymentStatus = true
+      }
+      if (!form.rcStatus) {
+        newErrors.rcStatus = true
+      }
+      if (!form.transferStatus) {
+        newErrors.transferStatus = true
+      }
     }
     if (form.carYear !== null && !isValidYear(form.carYear)) {
       newErrors.carYear = true
@@ -578,6 +808,29 @@ export function RtoClient({
     })
   }
 
+  const loadHistory = async (rtoAgentMainId: number) => {
+    setPayments([])
+    setFollowups([])
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/rto/history?rtoAgentMainId=${rtoAgentMainId}`)
+      const hist = await res.json()
+      if (!res.ok) throw new Error(hist.error ?? 'Could not load RTO history.')
+      setPayments(hist.payments ?? [])
+      setFollowups(hist.followups ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load RTO history.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const openView = async (r: RtoRow) => {
+    setViewRow(r)
+    setError('')
+    await loadHistory(r.rtoAgentMainId)
+  }
+
   const openPay = async (r: RtoRow) => {
     setPayRow(r)
     setPayForm({
@@ -588,12 +841,7 @@ export function RtoClient({
     })
     setError('')
     setErrors({})
-    setPayments([]); setFollowups([])
-    setHistoryLoading(true)
-    const res = await fetch(`/api/rto/history?rtoAgentMainId=${r.rtoAgentMainId}`)
-    const hist = await res.json()
-    setPayments(hist.payments); setFollowups(hist.followups)
-    setHistoryLoading(false)
+    await loadHistory(r.rtoAgentMainId)
   }
 
   const pf = <K extends keyof LogRtoPaymentInput>(k: K, v: LogRtoPaymentInput[K]) => setPayForm(prev => ({ ...prev, [k]: v }))
@@ -672,29 +920,20 @@ export function RtoClient({
       />
 
       <div className="mb-4 space-y-4">
-        <SearchBar value={filters.search} onChange={value => setFilter('search', value)} placeholder="Reg no, customer, agent, make..." />
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-gray-700">Search RTO Records</label>
+          <SearchBar
+            value={filters.search}
+            onChange={value => setFilter('search', value)}
+            placeholder="Search by Registration No, Customer Name, Agent Name, Make, Model or Variant"
+          />
+          <p className="text-xs text-gray-500">
+            Searchable fields: Registration No, Customer Name, Agent Name, Make, Model and Variant.
+          </p>
+        </div>
 
         <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
-            <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
-            <Input label="Customer Mobile" value={filters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
-            <Input label="Customer Email" value={filters.customerEmail} onChange={e => setFilter('customerEmail', e.target.value)} />
-            <Input label="Agent Name" value={filters.agentName} onChange={e => setFilter('agentName', e.target.value)} />
-            <Input label="Agent Mobile" value={filters.agentMobile} onChange={e => setFilter('agentMobile', e.target.value)} />
-            <Input label="Agent Email" value={filters.agentEmail} onChange={e => setFilter('agentEmail', e.target.value)} />
-            <Select label="Car Type" value={filters.carType} onChange={e => setFilter('carType', e.target.value)}>
-              <option>All</option>
-              {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
-            </Select>
-            <Input label="Year" value={filters.carYear} onChange={e => setFilter('carYear', e.target.value)} />
-            <Input label="Make" value={filters.make} onChange={e => setFilter('make', e.target.value)} />
-            <Input label="Model" value={filters.model} onChange={e => setFilter('model', e.target.value)} />
-            <Input label="Variant" value={filters.variant} onChange={e => setFilter('variant', e.target.value)} />
-            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
-              <option>All</option>
-              {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
-            </Select>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <Select label="RC Status" value={filters.rcStatus} onChange={e => setFilter('rcStatus', e.target.value)}>
               <option>All</option>
               {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -703,13 +942,42 @@ export function RtoClient({
               <option>All</option>
               {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
+            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
+              <option>All</option>
+              {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
             <Input label="From Entry Date" type="date" value={filters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
             <Input label="To Entry Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
+            <div className="flex items-end gap-2">
+              <Btn variant="outline" onClick={resetFilters}>Reset Filters</Btn>
+              <Btn variant="outline" onClick={() => setShowMoreFilters(value => !value)}>
+                {showMoreFilters ? 'Hide Filters' : 'Load More Filter'}
+              </Btn>
+            </div>
           </div>
 
-          <div className="mt-4 flex justify-end">
-            <Btn variant="outline" onClick={resetFilters}>Reset Filters</Btn>
-          </div>
+          {showMoreFilters && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
+                <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
+                <Input label="Customer Mobile" value={filters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
+                <Input label="Customer Email" value={filters.customerEmail} onChange={e => setFilter('customerEmail', e.target.value)} />
+                <Input label="Agent Name" value={filters.agentName} onChange={e => setFilter('agentName', e.target.value)} />
+                <Input label="Agent Mobile" value={filters.agentMobile} onChange={e => setFilter('agentMobile', e.target.value)} />
+                <Input label="Agent Email" value={filters.agentEmail} onChange={e => setFilter('agentEmail', e.target.value)} />
+                <Select label="Car Type" value={filters.carType} onChange={e => setFilter('carType', e.target.value)}>
+                  <option>All</option>
+                  {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
+                </Select>
+                <Input label="Year" value={filters.carYear} onChange={e => setFilter('carYear', e.target.value)} />
+                <Input label="Make" value={filters.make} onChange={e => setFilter('make', e.target.value)} />
+                <Input label="Model" value={filters.model} onChange={e => setFilter('model', e.target.value)} />
+                <Input label="Variant" value={filters.variant} onChange={e => setFilter('variant', e.target.value)} />
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -732,7 +1000,7 @@ export function RtoClient({
             <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
-                <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-blue-900 hover:bg-gray-100 rounded transition" title="View Details">
+                <button onClick={() => void openView(r)} className="p-1.5 text-gray-400 hover:text-blue-900 hover:bg-gray-100 rounded transition" title="View Details">
                   <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment">
@@ -838,6 +1106,48 @@ export function RtoClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <div>
+                <div className="text-sm font-semibold text-gray-800">Payment History</div>
+                {historyLoading ? (
+                  <div className="mt-2 text-xs text-gray-400">Loading payment history...</div>
+                ) : payments.length === 0 ? (
+                  <div className="mt-2 text-xs text-gray-400">No payments logged.</div>
+                ) : (
+                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    {payments.map(payment => (
+                      <div key={payment.rtoPaymentId} className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                        <span className="whitespace-nowrap text-gray-400">{fmtDate(payment.paymentDate ?? payment.createdDt) || '—'}</span>
+                        <span className="font-medium text-gray-800">{fmtMoney(payment.amountPaid)}</span>
+                        {payment.paymentStatus && <Badge label={payment.paymentStatus} />}
+                        {payment.rcStatus && <Badge label={`RC: ${payment.rcStatus}`} />}
+                        {payment.transferStatus && <Badge label={`Transfer: ${payment.transferStatus}`} />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="text-sm font-semibold text-gray-800">Follow-up & Remark History</div>
+                {historyLoading ? (
+                  <div className="mt-2 text-xs text-gray-400">Loading follow-up history...</div>
+                ) : followups.length === 0 ? (
+                  <div className="mt-2 text-xs text-gray-400">No follow-up history.</div>
+                ) : (
+                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    {followups.map(followup => (
+                      <div key={followup.rtoFollowupId} className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-800">{fmtDate(followup.followupDate) || '—'}</span>
+                        <span className="mx-1 text-gray-400">—</span>
+                        <span className="whitespace-pre-wrap">{followup.remark || 'No remark'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Audit Log Details */}
             <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
               <div>
@@ -861,8 +1171,8 @@ export function RtoClient({
 
       {/* Add / Edit Form Modal */}
       <Modal title={editId ? 'Edit RTO Job' : 'Add RTO Job'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">RTO Agent *</label>
               <PartnerPicker partnerType="RTO Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.partnerId} />
@@ -885,12 +1195,15 @@ export function RtoClient({
                 </button>
               </div>
             ) : (
-              <div className="relative">
+              <div ref={vehiclePickerRef} className="relative">
                 <Input
                   placeholder="Search our stock by reg no, make, model..."
                   value={vehicleQuery}
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}
+                  onBlur={() => window.setTimeout(() => {
+                    if (!vehiclePickerRef.current?.contains(document.activeElement)) setVehicleOpen(false)
+                  }, 120)}
                   error={errors.inventoryId}
                 />
                 {vehicleOpen && (
@@ -909,42 +1222,73 @@ export function RtoClient({
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>
-            <Input label="Make" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} />
-            <Input label="Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
-            <Input label="Variant" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} />
+            <CatalogTextPicker
+              label="Make"
+              placeholder="Search make..."
+              value={form.carMakeLegacy}
+              onChange={value => f('carMakeLegacy', value)}
+              options={makeOptions}
+            />
+            <CatalogTextPicker
+              label="Model"
+              placeholder="Search model..."
+              value={form.carModelLegacy}
+              onChange={value => f('carModelLegacy', value)}
+              options={modelOptions}
+            />
+            <CatalogTextPicker
+              label="Variant"
+              placeholder="Search variant..."
+              value={form.carVariantLegacy}
+              onChange={value => f('carVariantLegacy', value)}
+              options={variantOptions}
+            />
+            <CatalogTextPicker
+              label="Registration No"
+              placeholder="Search registration..."
+              value={form.registrationNo}
+              onChange={onRegistrationChange}
+              options={registrationOptions}
+              error={errors.registrationNo}
+            />
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
-            
-            <div className="space-y-1">
-              <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.registrationNo} />
-              <div className="flex items-center gap-2">
-                <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
-                  Find by Registration
-                </Btn>
-                {vehicleLookupMessage && <span className="text-xs text-gray-500">{vehicleLookupMessage}</span>}
-              </div>
-            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <Input label="Entry Date" type="date" value={form.dateOfEntry} onChange={e => f('dateOfEntry', e.target.value)} />
             <Input label="Transfer Charges (₹)" type="number" value={form.transferCharges ?? ''} onChange={e => f('transferCharges', e.target.value ? +e.target.value : null)} error={errors.transferCharges} />
-            <Select label="Payment Status" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
+            {!editId ? (
+              <Input
+                label="Amount Paid (₹)"
+                type="number"
+                value={form.amountPaid ?? ''}
+                onChange={e => f('amountPaid', e.target.value ? +e.target.value : null)}
+                error={errors.amountPaid}
+              />
+            ) : <div />}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <Select label={!editId ? 'Initial Payment Status' : 'Payment Status'} value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)} error={errors.paymentStatus}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Payment Date" type="date" value={form.paymentDate} onChange={e => f('paymentDate', e.target.value)} />
-            <Select label="RC Status" value={form.rcStatus} onChange={e => f('rcStatus', e.target.value)}>
+            <Input label={!editId ? 'Initial Payment Date' : 'Payment Date'} type="date" value={form.paymentDate} onChange={e => f('paymentDate', e.target.value)} error={errors.paymentDate} />
+            <Select label="RC Status" value={form.rcStatus} onChange={e => f('rcStatus', e.target.value)} error={errors.rcStatus}>
               {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Select label="Transfer Status" value={form.transferStatus} onChange={e => f('transferStatus', e.target.value)}>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Select label="Transfer Status" value={form.transferStatus} onChange={e => f('transferStatus', e.target.value)} error={errors.transferStatus}>
               {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
             <Input label="Follow-up Date" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
           </div>
-          <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} />
+          <Textarea label="Remark" rows={5} value={form.remark} onChange={e => f('remark', e.target.value)} />
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

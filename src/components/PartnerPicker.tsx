@@ -35,6 +35,19 @@ export function PartnerPicker({
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
   const useRefRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open && !showCreate) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+        setShowCreate(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [open, showCreate])
 
   useEffect(() => {
     if (!open) return
@@ -82,12 +95,15 @@ export function PartnerPicker({
   }
 
   return (
-    <div className="relative">
+    <div ref={pickerRef} className="relative">
       <Input
         placeholder={`Search ${label.toLowerCase()} by name or mobile...`}
         value={query}
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => {
+          if (!pickerRef.current?.contains(document.activeElement)) setOpen(false)
+        }, 120)}
         error={error}
       />
       {open && (

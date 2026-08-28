@@ -34,6 +34,19 @@ export function CustomerPicker({
   const [createError, setCreateError] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestIdRef = useRef(0)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open && !showCreate) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+        setShowCreate(false)
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [open, showCreate])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -109,7 +122,7 @@ export function CustomerPicker({
   }
 
   return (
-    <div className="relative">
+    <div ref={pickerRef} className="relative">
       <Input
         placeholder="Search customer by name or mobile..."
         value={query}
@@ -120,6 +133,9 @@ export function CustomerPicker({
           setError('')
         }}
         onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => {
+          if (!pickerRef.current?.contains(document.activeElement)) setOpen(false)
+        }, 120)}
         error={pickerError}
       />
       {open && query.trim().length >= 2 && (
