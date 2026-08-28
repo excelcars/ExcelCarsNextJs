@@ -11,6 +11,7 @@ The current page supports:
 
 - viewing account information
 - viewing linked employee/personal information
+- editing safe personal information fields
 - changing the authenticated user's password
 - current-password verification
 - new-password policy validation
@@ -18,7 +19,7 @@ The current page supports:
 - success and failure messages
 - signing out the current session after a successful password change
 
-Profile details are currently read-only. Role, username, status, permissions, and other account-administration fields remain managed through User Access by authorized administrators.
+Personal information can be edited by the authenticated user. Role, username, status, permissions, email, and other account-administration fields remain managed through User Access by authorized administrators.
 
 ## 2. Source Evidence
 
@@ -71,7 +72,27 @@ Personal fields are read from the related Prisma model `AddEmployee`, mapped to 
 
 If no employee record is linked, missing personal values display as `—`. The password hash is never selected for the profile display query.
 
-## 5. Page Layout
+## 5. Personal Information Editing
+
+The Personal information card is read-only by default and exposes an `Edit` action. The user-editable fields are:
+
+- `empFirstName`
+- `empLastName`
+- `empGender`
+- `empMobileNo`
+- `empPhoneNo`
+- `empAddress`
+- `empCity`
+- `empStateLegacy`
+- `empPincode`
+
+First name and last name are required. Mobile and phone values are optional, but when supplied they must contain 10 digits. Pincode is optional, but when supplied it must contain 6 digits. Gender accepts `M`, `F`, or blank. Blank optional values are stored as null.
+
+The update runs through the authenticated server action `updateMyProfile`. If the user has an existing `AddEmployee` record, it is updated. If `UserTable.empId` is null, an employee record is created and linked to the current user. The action also refreshes `UserTable.displayName` from the submitted first and last names and updates audit timestamps/user fields. The employee and user updates execute in one Prisma transaction.
+
+Email is displayed but is not editable because it is duplicated between `UserTable.emailId` and `AddEmployee.empEmailId` and would require a separate verification and synchronization flow.
+
+## 6. Page Layout
 
 The page uses the application's existing custom Tailwind/Lucide visual system:
 
@@ -83,7 +104,7 @@ The page uses the application's existing custom Tailwind/Lucide visual system:
 
 The password fields have independent eye controls to show or hide the current password, new password, and confirmation value. The controls include accessible labels.
 
-## 6. Change Password Behavior
+## 7. Change Password Behavior
 
 The password action is `changeMyPassword` in `src/features/profile/actions.ts` and runs as a server action.
 
@@ -103,7 +124,7 @@ The action:
 
 The current password is never logged, returned, or stored in plaintext.
 
-## 7. Password Policy And Messages
+## 8. Password Policy And Messages
 
 The currently implemented policy requires the new password to:
 
@@ -117,22 +138,22 @@ The server returns user-safe messages for missing fields, mismatched confirmatio
 
 The client displays the result in an accessible alert region. While the action is pending, password inputs are disabled and the submit button shows `Updating...`.
 
-## 8. Session Handling
+## 9. Session Handling
 
 The application currently uses NextAuth JWT sessions. After a successful password update, the client calls `signOut({ callbackUrl: '/login' })`, requiring the user to authenticate again with the new password.
 
 This implementation signs out the current browser session. It does not yet invalidate JWTs issued to other devices or browsers. Global session invalidation would require a password-version or password-changed timestamp check in the JWT/session authentication flow.
 
-## 9. Deliberate Non-Scope
+## 10. Deliberate Non-Scope
 
 The current profile page does not allow users to:
 
 - change username
 - change role or permissions
 - change account status
-- edit personal information
 - upload an avatar
 - manage active sessions on other devices
 - view or edit the password hash
+- edit email without verification
 
 These features require separate authorization, validation, or session-design decisions.
