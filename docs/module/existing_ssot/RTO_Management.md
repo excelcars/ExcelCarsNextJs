@@ -109,6 +109,14 @@ All autocomplete is jQuery UI and backend prefix matching (`StartsWith`).
 - **Customer:** queries `Customers.Cust_Name.StartsWith(term)`; returns ID/name/address/mobile/email/DOB/anniversary. The page uses ID/name/mobile/email; invalid selection resets ID to `0` and clears name/contact fields. The lookup model converts nullable DOB and anniversary values with `Convert.ToDateTime`, which is an additional null-data risk even though those fields are not displayed.
 - **Make/model/variant:** queries `Car_Make_Master`, `Car_Model_Master`, and `Car_Variant_Master`, trims and deduplicates values. There is no dependent make→model→variant filtering.
 
+The vehicle-master behavior is split between lookup and transaction saves:
+
+- The RTO form only consumes the three master tables through the generic autocomplete endpoints. Its save method writes the entered text to `RTO_Agent.Car_Make`, `RTO_Agent.Car_Model`, and `RTO_Agent.Car_Variant`; it does not create or update rows in `Car_Make_Master`, `Car_Model_Master`, or `Car_Variant_Master`.
+- The Inventory create/update flow performs an insert-if-not-found operation for the make, then the model under that make, then the variant under that make/model. It writes created/updated audit fields and saves each master entity before continuing with the inventory save. Therefore a manually typed new vehicle value in Inventory can become a master value when the inventory record is saved.
+- The Inquiry create/update flow performs the same make→model→variant master insert-if-not-found sequence for each inquiry-car detail. It checks model uniqueness by make and variant uniqueness by make plus model. Therefore inquiry save can also add new master values.
+- In these create flows, the code path can still construct a master entity when the corresponding text is blank if client-side validation is bypassed; the server-side master-upsert code itself does not provide a complete required-value guard.
+- No standalone vehicle-master CRUD screen was found under the legacy Configuration views; the master is maintained as a side effect of Inventory and Inquiry saves and is reused by RTO, Insurance, Loan, Follow-up, and other vehicle-entry screens.
+
 ## 7. Search And Listing
 
 `Search_RTO` calls `Search_RTO_Agent_Management()` and returns the same view with posted values and results. Empty results set a record-not-found warning. Exceptions are logged and produce a generic error. `Search_RTO_By_Registration_No` creates a new model, sets only registration number, and runs the same query; dashboard/report registration links use this drill-in.
