@@ -2,6 +2,8 @@ import { listTodayFollowups, getUsersForFilter } from '@/features/reports/today/
 import { TodayClient } from '@/features/reports/today/TodayClient'
 import { auth } from '../../../../auth'
 import { prisma } from '@/lib/db/prisma'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 function today() {
   return new Date().toISOString().slice(0, 10)
@@ -12,6 +14,7 @@ export default async function TodayReportPage({
 }: {
   searchParams: Promise<{ fromDate?: string; toDate?: string; userId?: string }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/reports/today'))) redirect('/dashboard')
   const sp = await searchParams
   const fromDate = sp.fromDate || today()
   const toDate = sp.toDate || today()

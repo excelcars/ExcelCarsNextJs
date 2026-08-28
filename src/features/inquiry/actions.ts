@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { sendEmail } from '@/lib/email/sendMail'
 import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
@@ -74,9 +75,7 @@ async function createTrackedVehicleEmailLink({
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/inquiry')
 }
 
 function toDate(v: string): Date | null {
@@ -258,6 +257,8 @@ async function sendInquiryCarEmail(inquiryId: number): Promise<ActionResult> {
 }
 
 export async function sendInquiryEmail(inquiryId: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   return sendInquiryCarEmail(inquiryId)
 }
 
@@ -383,6 +384,8 @@ async function findMatchingInventoryIdsForInquiryCars(resolvedCarDetails: Awaite
 }
 
 export async function getInquiryDetail(inquiryId: number) {
+  const userId = await currentUserId()
+  if (!userId) return null
   const detail = await prisma.inquiry.findUnique({
     where: { inquiryId },
     include: {
@@ -421,6 +424,8 @@ export async function getInquiryDetail(inquiryId: number) {
 }
 
 export async function sendInquiryInventoryEmail(inquiryId: number, inventoryId: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const session = await auth()
   return sendMatchedInventoryEmailToInquiryRecipient({
     inquiryId,
@@ -430,6 +435,8 @@ export async function sendInquiryInventoryEmail(inquiryId: number, inventoryId: 
 }
 
 export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds: number[]): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const session = await auth()
   const uniqueInventoryIds = [...new Set(inventoryIds.filter(id => Number.isFinite(id) && id > 0))]
   if (uniqueInventoryIds.length === 0) {
@@ -477,6 +484,8 @@ function nextInquiryNumberFromLatest(latestInquiryNo: string | null | undefined)
 }
 
 export async function getNextInquiryNumber(): Promise<string> {
+  const userId = await currentUserId()
+  if (!userId) return 'Inquiry/1'
   const latest = await prisma.inquiry.findFirst({
     orderBy: { inquiryId: 'desc' },
     select: { inquiryNo: true },
@@ -505,6 +514,7 @@ export async function createInquiry(input: InquiryFormInput): Promise<ActionResu
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -581,6 +591,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput): Promis
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -628,6 +639,8 @@ export async function updateInquiry(id: number, input: InquiryFormInput): Promis
 }
 
 export async function deleteInquiry(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
     await prisma.inquiry.delete({ where: { inquiryId: id } })

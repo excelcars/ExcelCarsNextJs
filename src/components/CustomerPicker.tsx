@@ -16,10 +16,12 @@ export function CustomerPicker({
   value,
   onChange,
   error: pickerError,
+  allowCreate = true,
 }: {
   value: CustomerOption | null
   onChange: (customer: CustomerOption | null) => void
   error?: boolean
+  allowCreate?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CustomerOption[]>([])
@@ -141,22 +143,22 @@ export function CustomerPicker({
               <div className="text-xs text-gray-500">{c.custMobile ?? '—'}</div>
             </button>
           ))}
-          <button
+          {allowCreate && <button
             type="button"
             onClick={() => { setShowCreate(true); setOpen(false) }}
             className="w-full text-left px-3 py-2 text-sm text-[#1B2A6B] font-medium hover:bg-gray-50 flex items-center gap-1.5"
           >
             <UserPlus className="w-3.5 h-3.5" /> Create new customer
-          </button>
+          </button>}
         </div>
       )}
 
       {showCreate && (
         <div className="mt-2 border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
-          <Input label="Name *" value={newName} onChange={e => setNewName(e.target.value)} />
-          <Input label="Mobile" value={newMobile} onChange={e => setNewMobile(e.target.value)} />
-          <Input label="Email" value={newEmail} onChange={e => setNewEmail(e.target.value)} />
-          <div className="text-xs text-gray-500">Enter at least one: mobile or email.</div>
+          <Input label="Name *" value={newName} maxLength={150} onChange={e => setNewName(e.target.value)} />
+          <Input label="Mobile" value={newMobile} inputMode="numeric" maxLength={10} onChange={e => setNewMobile(e.target.value.replace(/\D/g, ''))} />
+          <Input label="Email" type="email" value={newEmail} maxLength={254} onChange={e => setNewEmail(e.target.value)} />
+          <div className="text-xs text-gray-500">Enter a 10-digit mobile number or a valid email address.</div>
           {createError && <div className="text-xs text-red-600">{createError}</div>}
           <div className="flex gap-2 justify-end">
             <Btn variant="outline" size="sm" onClick={() => { setShowCreate(false); setCreateError('') }}>Cancel</Btn>

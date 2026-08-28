@@ -1,5 +1,7 @@
 import { listInsurance, getVehicles } from '@/features/insurance/queries'
 import { InsuranceClient } from '@/features/insurance/InsuranceClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function InsurancePage({
   searchParams,
@@ -11,6 +13,7 @@ export default async function InsurancePage({
     toDate?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/insurance'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const page = Math.max(1, Number(sp.page) || 1)

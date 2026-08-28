@@ -1,6 +1,8 @@
 import { getMakes, getModelsByMake, getVariantsByModel } from '@/features/inventory/queries'
 import { getUsersForFollowupFilter, listFollowupQueue } from '@/features/followup/queries'
 import { FollowupClient } from '@/features/followup/FollowupClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function FollowupPage({
   searchParams,
@@ -25,6 +27,7 @@ export default async function FollowupPage({
     visitedDateTo?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/followup'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const classification = sp.classification ?? 'All'

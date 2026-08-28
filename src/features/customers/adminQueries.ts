@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
+import { CUSTOMER_TYPES } from './validation'
 
-export const CUSTOMER_TYPES = ['Contact', 'Customer'] as const
+export { CUSTOMER_TYPES }
 export const PAGE_SIZE = 25
 
 export interface ListCustomersParams {

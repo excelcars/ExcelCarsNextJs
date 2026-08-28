@@ -1,7 +1,10 @@
 import { listDsa, getVehicles } from '@/features/dsa/queries'
 import { DsaClient } from '@/features/dsa/DsaClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function DsaPage() {
+  if (!(await canCurrentUserAccessRoute('/dsa'))) redirect('/dashboard')
   const [rows, vehicles] = await Promise.all([listDsa(), getVehicles()])
 
   const data = rows.map((r) => ({

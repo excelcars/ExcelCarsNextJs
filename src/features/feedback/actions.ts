@@ -2,13 +2,16 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { getFeedbackDetail as queryFeedbackDetail, getVehicles as queryVehicles } from './queries'
 
 export interface FeedbackFormInput {
   customerId: number | null
   customerName: string
   customerMob: string
   customerEmail: string
+  customerDob: string
+  customerAnniversaryDt: string
   carMakeLegacy: string
   carModelLegacy: string
   carVariantLegacy: string
@@ -29,41 +32,85 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/config/feedback')
 }
 
-function buildData(input: FeedbackFormInput) {
+
+export async function getFeedbackForAction(feedbackId: number) {
+  if (!Number.isInteger(feedbackId) || feedbackId <= 0 || !(await currentUserId())) return null
+  return queryFeedbackDetail(feedbackId)
+}
+
+export async function searchFeedbackVehicles(query: string, customerId: number | null) {
+  if (!(await currentUserId())) return []
+  return queryVehicles({ query, customerId })
+}
+
+const ANSWERS = [
+  ['Satisfied', 'Neutral', 'Unsatisfied'],
+  ['Very Good', 'Good', 'Fair'],
+  ['Satisfied', 'Neutral', 'Unsatisfied'],
+  ['Definitely', 'Probably', 'Not Sure'],
+  ['Much Better', 'Somewhat Better', 'About the Same'],
+] as const
+
+function parseOptionalDate(value: string, label: string) {
+  if (!value.trim()) return { value: null as Date | null }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return { error: `${label} must be a valid date.` }
+  const date = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return { error: `${label} must be a valid date.` }
+  return { value: date }
+}
+
+function validate(input: FeedbackFormInput): { error?: string; customerDob?: Date | null; customerAnniversaryDt?: Date | null } {
+  if (!input.customerName.trim()) return { error: 'Customer name is required.' }
+  if (input.customerName.trim().length > 150) return { error: 'Name cannot exceed 150 characters.' }
+  if (!/^\d{10}$/.test(input.customerMob.trim())) return { error: 'Customer mobile must be exactly 10 digits.' }
+  if (!input.customerEmail.trim()) return { error: 'Customer email is required.' }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.customerEmail.trim())) return { error: 'Enter a valid email address.' }
+  if (input.carYear != null && (!Number.isInteger(input.carYear) || input.carYear < 1886 || input.carYear > new Date().getFullYear() + 1)) return { error: 'Enter a valid vehicle year.' }
+  const dates = [parseOptionalDate(input.customerDob, 'Date of birth'), parseOptionalDate(input.customerAnniversaryDt, 'Anniversary date')]
+  const dateError = dates.find(date => date.error)?.error
+  if (dateError) return { error: dateError }
+  if (dates[0].value && dates[0].value > new Date()) return { error: 'Date of birth cannot be in the future.' }
+  if (dates[1].value && dates[1].value > new Date()) return { error: 'Anniversary date cannot be in the future.' }
+  const answers = [input.answer_1, input.answer_2, input.answer_3, input.answer_4, input.answer_5]
+  if (answers.some((answer, index) => !ANSWERS[index].includes(answer as never))) return { error: 'Select a valid answer for every feedback question.' }
+  return { customerDob: dates[0].value, customerAnniversaryDt: dates[1].value }
+}
+
+function buildData(input: FeedbackFormInput, dates: { customerDob?: Date | null; customerAnniversaryDt?: Date | null }) {
   return {
-    customerName: input.customerName || null,
-    customerMob: input.customerMob || null,
-    customerEmail: input.customerEmail || null,
-    carMakeLegacy: input.carMakeLegacy || null,
-    carModelLegacy: input.carModelLegacy || null,
-    carVariantLegacy: input.carVariantLegacy || null,
+    customerName: input.customerName.trim() || null,
+    customerMob: input.customerMob.trim() || null,
+    customerEmail: input.customerEmail.trim().toLowerCase() || null,
+    customerDob: dates.customerDob ?? null,
+    customerAnniversaryDt: dates.customerAnniversaryDt ?? null,
+    carMakeLegacy: input.carMakeLegacy.trim() || null,
+    carModelLegacy: input.carModelLegacy.trim() || null,
+    carVariantLegacy: input.carVariantLegacy.trim() || null,
     carYear: input.carYear,
-    carRegistrationNo: input.carRegistrationNo || null,
+    carRegistrationNo: input.carRegistrationNo.trim() || null,
     answer_1: input.answer_1 || null,
     answer_2: input.answer_2 || null,
     answer_3: input.answer_3 || null,
     answer_4: input.answer_4 || null,
     answer_5: input.answer_5 || null,
-    comments: input.comments || null,
+    comments: input.comments.trim() || null,
   }
 }
 
 export async function createFeedback(input: FeedbackFormInput): Promise<ActionResult> {
-  if (!input.customerId && !input.customerName.trim()) {
-    return { success: false, error: 'Link a customer or enter a name.' }
-  }
+  const validation = validate(input)
+  if (validation.error) return { success: false, error: validation.error }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.customerFeedback.create({
       data: {
-        ...buildData(input),
+        ...buildData(input, validation),
         ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
         ...(input.fkVariantId ? { carVariantMaster: { connect: { pkVariantId: input.fkVariantId } } } : {}),
         createdDate: new Date(),
@@ -80,17 +127,17 @@ export async function createFeedback(input: FeedbackFormInput): Promise<ActionRe
 }
 
 export async function updateFeedback(id: number, input: FeedbackFormInput): Promise<ActionResult> {
-  if (!input.customerId && !input.customerName.trim()) {
-    return { success: false, error: 'Link a customer or enter a name.' }
-  }
+  const validation = validate(input)
+  if (validation.error) return { success: false, error: validation.error }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.customerFeedback.update({
       where: { feedbackId: id },
       data: {
-        ...buildData(input),
+        ...buildData(input, validation),
         customerId: input.customerId,
         fkVariantId: input.fkVariantId,
         updatedDate: new Date(),
@@ -106,6 +153,8 @@ export async function updateFeedback(id: number, input: FeedbackFormInput): Prom
 }
 
 export async function deleteFeedback(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.customerFeedback.delete({ where: { feedbackId: id } })
   } catch {

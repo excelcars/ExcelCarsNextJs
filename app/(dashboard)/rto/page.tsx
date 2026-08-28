@@ -1,5 +1,7 @@
 import { listRtoAgents, getVehicles } from '@/features/rto/queries'
 import { RtoClient } from '@/features/rto/RtoClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function RtoPage({
   searchParams,
@@ -9,6 +11,7 @@ export default async function RtoPage({
     registrationNo?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/rto'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const registrationNo = sp.registrationNo ?? ''

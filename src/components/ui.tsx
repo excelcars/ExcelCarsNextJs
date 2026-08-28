@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, type ReactNode, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, Loader2 } from 'lucide-react'
 
 export const R = '#C8102E'
 export const N = '#1B2A6B'
@@ -274,6 +274,26 @@ export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: strin
           {t}
         </button>
       ))}
+    </div>
+  )
+}
+
+export function LoadingOverlay({
+  show,
+  label = 'Loading...',
+  subtle = false,
+}: {
+  show: boolean
+  label?: string
+  subtle?: boolean
+}) {
+  if (!show) return null
+  return (
+    <div className={`absolute inset-0 z-20 flex items-center justify-center rounded-xl ${subtle ? 'bg-white/65 backdrop-blur-[1px]' : 'bg-white/80 backdrop-blur-[2px]'}`}>
+      <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm">
+        <Loader2 className="h-4 w-4 animate-spin text-[#1B2A6B]" />
+        {label}
+      </div>
     </div>
   )
 }

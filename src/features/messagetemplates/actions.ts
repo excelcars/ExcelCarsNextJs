@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { sendEmail } from '@/lib/email/sendMail'
 
 export interface TemplateFormInput {
@@ -17,9 +17,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/config/sms-email')
 }
 
 export async function createTemplate(input: TemplateFormInput): Promise<ActionResult> {
@@ -28,6 +26,7 @@ export async function createTemplate(input: TemplateFormInput): Promise<ActionRe
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.messageTemplate.create({
@@ -54,6 +53,7 @@ export async function updateTemplate(id: number, input: TemplateFormInput): Prom
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.messageTemplate.update({
@@ -78,6 +78,8 @@ export async function sendTemplateEmail(templateId: number, toEmail: string): Pr
   if (!toEmail.trim()) {
     return { success: false, error: 'Enter a recipient email address.' }
   }
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   const template = await prisma.messageTemplate.findUnique({ where: { typeId: templateId } })
   if (!template) return { success: false, error: 'Template not found.' }
@@ -96,6 +98,8 @@ export async function sendTemplateEmail(templateId: number, toEmail: string): Pr
 }
 
 export async function deleteTemplate(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.messageTemplate.delete({ where: { typeId: id } })
   } catch {

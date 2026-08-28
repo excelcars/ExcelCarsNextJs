@@ -1,11 +1,16 @@
 import { listCustomersPaged } from '@/features/customers/adminQueries'
 import { CustomersClient } from '@/features/customers/CustomersClient'
+import { canCurrentUserAccessFunction, canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { CUSTOMER_WRITE_FUNCTION } from '@/lib/access/accessCatalog'
+import { redirect } from 'next/navigation'
 
 export default async function CustomersPage({
   searchParams,
 }: {
   searchParams: Promise<{ search?: string; type?: string; page?: string }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/config/customers'))) redirect('/dashboard')
+  const canWrite = await canCurrentUserAccessFunction(CUSTOMER_WRITE_FUNCTION)
   const sp = await searchParams
   const search = sp.search ?? ''
   const type = sp.type ?? 'All'
@@ -21,6 +26,7 @@ export default async function CustomersPage({
       pageCount={pageCount}
       search={search}
       type={type}
+      canWrite={canWrite}
     />
   )
 }
