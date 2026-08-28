@@ -1,7 +1,10 @@
 import { listTrackingStock } from '@/features/reports/tracking/queries'
 import { TrackingClient } from '@/features/reports/tracking/TrackingClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function TrackingReportPage() {
+  if (!(await canCurrentUserAccessRoute('/reports/tracking'))) redirect('/dashboard')
   const rows = await listTrackingStock()
 
   const data = rows.map((r) => ({

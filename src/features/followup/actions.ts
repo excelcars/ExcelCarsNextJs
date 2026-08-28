@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface LogFollowupInput {
   status: string
@@ -18,9 +18,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/followup')
 }
 
 function toDate(value: string | null | undefined) {
@@ -38,6 +36,7 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
   const selectedFollowupDate = toDate(input.nextFollowUpDate)
 

@@ -1,7 +1,10 @@
 import { listStock } from '@/features/reports/stock/queries'
 import { StockReportClient } from '@/features/reports/stock/StockReportClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function StockReportPage() {
+  if (!(await canCurrentUserAccessRoute('/reports/stock'))) redirect('/dashboard')
   const rows = await listStock({ search: '', status: 'All' })
 
   const data = rows.map((r) => ({

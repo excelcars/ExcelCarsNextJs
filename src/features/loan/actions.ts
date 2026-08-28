@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface LoanFormInput {
   partnerId: number | null
@@ -46,9 +46,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/loan')
 }
 
 function toDate(v: string): Date | null {
@@ -90,6 +88,7 @@ export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     if (input.registrationNo.trim()) {
@@ -127,6 +126,7 @@ export async function updateLoan(id: number, input: LoanFormInput): Promise<Acti
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     if (input.registrationNo.trim()) {
@@ -157,6 +157,8 @@ export async function updateLoan(id: number, input: LoanFormInput): Promise<Acti
 }
 
 export async function deleteLoan(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.loanPaymentDetails.deleteMany({ where: { fkLoanManagementId: id } })
     await prisma.loanFollowupDetails.deleteMany({ where: { fkLoanManagementId: id } })
@@ -175,6 +177,7 @@ export async function logLoanPayment(loanManagementId: number, input: LogLoanPay
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
 
   try {

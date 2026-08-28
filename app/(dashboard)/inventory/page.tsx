@@ -1,6 +1,8 @@
 import { listInventory, getMakes, getDealers } from '@/features/inventory/queries'
 import { InventoryClient } from '@/features/inventory/InventoryClient'
 import { isEmailConfigured } from '@/lib/email/sendMail'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function InventoryPage({
   searchParams,
@@ -38,6 +40,7 @@ export default async function InventoryPage({
     pageSize?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/inventory'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const status = sp.status ?? 'All'

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface RtoFormInput {
   partnerId: number | null
@@ -48,9 +48,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/rto')
 }
 
 function toDate(v: string): Date | null {
@@ -136,6 +134,7 @@ export async function createRto(input: RtoFormInput): Promise<ActionResult> {
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
   const hasInitialPayment = (input.amountPaid ?? 0) > 0
   const hasInitialFollowup = !!input.followupDate.trim()
@@ -236,6 +235,7 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     if (input.registrationNo.trim()) {
@@ -269,6 +269,8 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
 }
 
 export async function deleteRto(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.rtoPaymentDetails.deleteMany({ where: { fkRtoAgentMainId: id } })
     await prisma.rtoFollowupDetails.deleteMany({ where: { fkRtoAgentMainId: id } })
@@ -287,6 +289,7 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
 
   try {

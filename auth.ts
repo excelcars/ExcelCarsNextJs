@@ -6,6 +6,20 @@ import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  events: {
+    async signOut(message) {
+      if (!('token' in message)) return
+      const userId = Number(message.token?.sub)
+      if (!Number.isInteger(userId) || userId <= 0) return
+
+      await prisma.userTable.update({
+        where: { userId },
+        data: { lastLogoutTime: new Date() },
+      }).catch(() => {
+        // Sign-out should still complete even if the audit timestamp update fails.
+      })
+    },
+  },
   providers: [
     Credentials({
       credentials: {

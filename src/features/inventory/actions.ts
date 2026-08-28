@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { sendEmail } from '@/lib/email/sendMail'
 import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
@@ -44,9 +45,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/inventory')
 }
 
 function hasVehicleIdentity(input: InventoryFormInput) {
@@ -140,6 +139,7 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     const created = await prisma.inventoryManagement.create({
@@ -177,6 +177,7 @@ export async function updateInventory(id: number, input: InventoryFormInput): Pr
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     const updated = await prisma.inventoryManagement.update({
@@ -197,6 +198,8 @@ export async function updateInventory(id: number, input: InventoryFormInput): Pr
 }
 
 export async function deleteInventory(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.inventoryManagement.delete({ where: { inventoryId: id } })
   } catch (err) {
@@ -219,6 +222,8 @@ export interface SyncInventoryInquiryInput {
 }
 
 export async function sendInventoryEmail(inventoryId: number, input: SendInventoryEmailInput): Promise<ActionResult> {
+  const authorizedUserId = await currentUserId()
+  if (!authorizedUserId) return { success: false, error: 'Not authorized.' }
   const session = await auth()
 
   const vehicle = await prisma.inventoryManagement.findUnique({
@@ -311,6 +316,7 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
 
 export async function syncInventoryToInquiry(inventoryId: number, input: SyncInventoryInquiryInput): Promise<ActionResult> {
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     const inventory = await prisma.inventoryManagement.findUnique({

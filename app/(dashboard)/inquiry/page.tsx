@@ -1,11 +1,14 @@
 import { listInquiries, getInquirySourceSuggestions, getMakes } from '@/features/inquiry/queries'
 import { InquiryClient } from '@/features/inquiry/InquiryClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function InquiryPage({
   searchParams,
 }: {
   searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; subStatus?: string; followUpDate?: string; visitedDate?: string; makeId?: string; modelId?: string; variantId?: string; view?: string; edit?: string; page?: string }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/inquiry'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const status = sp.status ?? 'All'

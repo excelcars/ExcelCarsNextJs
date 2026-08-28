@@ -1,5 +1,7 @@
 import { OUTSTANDING_TYPES, listOutstanding } from '@/features/reports/outstanding/queries'
 import { OutstandingClient } from '@/features/reports/outstanding/OutstandingClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function OutstandingReportPage({
   searchParams,
@@ -13,6 +15,7 @@ export default async function OutstandingReportPage({
     pageSize?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/reports/outstanding'))) redirect('/dashboard')
   const sp = await searchParams
   const customerName = sp.customerName ?? ''
   const customerMobile = sp.customerMobile ?? ''

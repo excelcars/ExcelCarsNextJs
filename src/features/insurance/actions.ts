@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface InsuranceFormInput {
   agentPartnerId: number | null
@@ -49,9 +49,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/insurance')
 }
 
 function toDate(v: string): Date | null {
@@ -95,6 +93,7 @@ export async function createInsurance(input: InsuranceFormInput): Promise<Action
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     if (input.carRegistrationNo.trim()) {
@@ -132,6 +131,7 @@ export async function updateInsurance(id: number, input: InsuranceFormInput): Pr
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     if (input.carRegistrationNo.trim()) {
@@ -162,6 +162,8 @@ export async function updateInsurance(id: number, input: InsuranceFormInput): Pr
 }
 
 export async function deleteInsurance(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.insurancePaymentDetails.deleteMany({ where: { fkInsuranceMainId: id } })
     await prisma.insuranceFollowupDetails.deleteMany({ where: { fkInsuranceMainId: id } })
@@ -180,6 +182,7 @@ export async function logInsurancePayment(insuranceMainId: number, input: LogPay
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
 
   try {

@@ -1,5 +1,7 @@
 import { listLoans, getVehicles } from '@/features/loan/queries'
 import { LoanClient } from '@/features/loan/LoanClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function LoanPage({
   searchParams,
@@ -8,6 +10,7 @@ export default async function LoanPage({
     search?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/loan'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
 

@@ -174,6 +174,7 @@ const navItems: NavItem[] = [
     label: 'Configuration', icon: <Package className="w-4 h-4" />,
     children: [
       { label: 'User Access', href: '/config/user-access' },
+      { label: 'Role Access', href: '/config/role-access' },
       { label: 'Dealers', href: '/config/dealers' },
       { label: 'Customers', href: '/config/customers' },
       { label: 'Agents', href: '/config/agents' },
@@ -194,18 +195,38 @@ const navItems: NavItem[] = [
   },
 ]
 
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({ children, accessibleRoutes = [] }: { children: ReactNode; accessibleRoutes?: string[] }) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ Operations: true, Configuration: false, Reports: false })
+  const accessibleRouteSet = new Set(accessibleRoutes)
+
+  const visibleNavItems = navItems
+    .map(item => {
+      if (item.label !== 'Configuration' || !item.children) return item
+      return {
+        ...item,
+        children: item.children.filter(child => accessibleRouteSet.has(child.href)),
+      }
+    })
+    .map(item => {
+      if (item.label === 'Operations' || item.label === 'Reports') {
+        return {
+          ...item,
+          children: item.children?.filter(child => accessibleRouteSet.has(child.href)),
+        }
+      }
+      return item
+    })
+    .filter(item => item.href || !item.children || item.children.length > 0)
 
   const toggle = (label: string) => setExpanded(p => ({ ...p, [label]: !p[label] }))
 
   const isActive = (item: NavItem) => {
-    if (item.href) return item.href === pathname
-    return item.children?.some(c => c.href === pathname)
+    if (item.href) return item.href === pathname || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
+    return item.children?.some(c => pathname === c.href || pathname.startsWith(`${c.href}/`))
   }
 
   const displayName = session?.user?.name || 'User'
@@ -222,7 +243,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-2">
-        {navItems.map(item => (
+        {visibleNavItems.map(item => (
           <div key={item.label} className="mb-0.5">
             {item.href ? (
               <Link
@@ -255,9 +276,9 @@ export function Layout({ children }: { children: ReactNode }) {
                         key={child.href}
                         href={child.href}
                         onClick={() => setMobileSidebarOpen(false)}
-                        className={`block text-left px-3 py-2 rounded-lg text-sm transition-all ${pathname === child.href ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+                        className={`block text-left px-3 py-2 rounded-lg text-sm transition-all ${pathname === child.href || pathname.startsWith(`${child.href}/`) ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
                       >
-                        {pathname === child.href && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}
+                        {(pathname === child.href || pathname.startsWith(`${child.href}/`)) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}
                         {child.label}
                         <NavigationLoadingIndicator />
                       </Link>
