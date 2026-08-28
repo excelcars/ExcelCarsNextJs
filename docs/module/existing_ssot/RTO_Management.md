@@ -7,6 +7,8 @@
 **Legacy project:** `C:\KhizarShaikh\Project\ExcelCars` (ASP.NET MVC / Entity Framework)  
 **Database aggregate:** `RTO_Agent` with `RTO_Payment_Details`, `RTO_Followup_Details`, and `Customer`  
 
+Detailed agent-specific behavior is documented in [RTO_Agent.md](RTO_Agent.md).
+
 This document describes the existing system. It is not a proposed redesign. Known implementation drift and defects are recorded as behavior.
 
 ## 1. Purpose And Scope
@@ -83,7 +85,7 @@ The Razor page is titled **RTO Agent Management** and uses one POST form, `Frm_R
 | Remark | `Remark` | text | optional |
 | From Date / To Date | `FromDate`, `ToDate` | date search filters | `#` |
 
-Hidden fields carry `Inventory_ID`, `RTO_Agent_Main_ID`, and `Customer_ID`. New model defaults are `Date_of_Entry = DateTime.Now`, `FollowUp_Date = DateTime.Now`, and `Next_Payment_Date = DateTime.Now`; `Payment_Date` has no constructor default.
+Hidden fields carry `Inventory_ID`, `RTO_Agent_Main_ID`, and `Customer_ID`. The customer autocomplete uses the hidden customer ID for client-side form state, but the server re-matches the customer by exact name plus mobile during save. New model defaults are `Date_of_Entry = DateTime.Now`, `FollowUp_Date = DateTime.Now`, and `Next_Payment_Date = DateTime.Now`; `Payment_Date` has no constructor default.
 
 ## 5. Client Interactions And Validation
 
@@ -104,6 +106,7 @@ All autocomplete is jQuery UI and backend prefix matching (`StartsWith`).
 
 - **Agent:** queries `RTO_Agent.Agent_Name`; returns ID/name/mobile/email from prior RTO rows. Selection fills all agent fields; invalid selection clears them.
 - **Customer:** queries `Customers.Cust_Name`; returns ID/name/address/mobile/email/DOB/anniversary. The page uses ID/name/mobile/email; invalid selection resets ID to `0` and clears name/contact fields.
+- **Customer:** queries `Customers.Cust_Name.StartsWith(term)`; returns ID/name/address/mobile/email/DOB/anniversary. The page uses ID/name/mobile/email; invalid selection resets ID to `0` and clears name/contact fields. The lookup model converts nullable DOB and anniversary values with `Convert.ToDateTime`, which is an additional null-data risk even though those fields are not displayed.
 - **Make/model/variant:** queries `Car_Make_Master`, `Car_Model_Master`, and `Car_Variant_Master`, trims and deduplicates values. There is no dependent make→model→variant filtering.
 
 ## 7. Search And Listing
@@ -236,6 +239,7 @@ The UI offers `Partially Paid`, which is a visible UI/schema mismatch if these c
 
 - Duplicate registration is blocked except for the current record during edit; comparison is exact and unnormalized.
 - Main save customer matching is exact name plus mobile and can rewrite existing customer email.
+- The hidden customer ID is not the server-side customer identity key during save; exact customer name plus mobile determines the customer row.
 - Main save and partial save recompute cumulative paid amount from child rows.
 - Partial payments append child history; main-save update overwrites the first initial payment child.
 - Follow-up history appends unless main-save date+remark exactly match an existing row.
@@ -252,6 +256,7 @@ The UI offers `Partially Paid`, which is a visible UI/schema mismatch if these c
 ## 14. Cross-Module Integrations
 
 - Dashboard registration links call `Search_RTO_By_Registration_No`.
+- Agent-specific ownership, autocomplete, manual-entry, and communication behavior is detailed in [RTO_Agent.md](RTO_Agent.md).
 - Menu visibility uses `AppFunctionList`.
 - Customer lookup is shared with inventory logic.
 - Car suggestions use shared car master tables.
@@ -274,6 +279,8 @@ The inventory edit screen shows an RTO link when an inventory ID is present and 
 ### 14.3 Shared communication functionality
 
 The shared SMS/email recipient model includes `RTO Agent` as a receiver type. Its RTO lookups search `RTO_Agent` by agent name, mobile, or email prefix/contains depending on the interaction, and its contact search can return distinct RTO agent name/mobile/email combinations. The RTO screen itself has no direct SMS/email button or endpoint; this is a related global capability.
+
+The Configuration → Notification Management Agent tab is documented in [RTO_Agent.md](RTO_Agent.md): its combined RTO/Insurance/Loan agent search and its surviving non-dispatch SMS behavior are not part of the RTO page itself.
 
 ## 15. Rewrite Invariants And Test Checklist
 
