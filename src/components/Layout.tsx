@@ -37,6 +37,8 @@ const navItems: NavItem[] = [
       { label: 'User Access', href: '/config/user-access' },
       { label: 'Dealers', href: '/config/dealers' },
       { label: 'Customers', href: '/config/customers' },
+      { label: 'Agents', href: '/config/agents' },
+      { label: 'Vehicle Masters', href: '/config/catalog' },
       { label: 'Feedback', href: '/config/feedback' },
       { label: 'SMS / Email', href: '/config/sms-email' },
     ],
