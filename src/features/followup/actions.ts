@@ -23,6 +23,12 @@ async function currentUserId(): Promise<number | null> {
   return id ? Number(id) : null
 }
 
+function toDate(value: string | null | undefined) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 export async function logFollowup(inquiryId: number, input: LogFollowupInput): Promise<ActionResult> {
   if (!input.status) {
     return { success: false, error: 'Status is required.' }
@@ -33,12 +39,13 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
 
   const userId = await currentUserId()
   const now = new Date()
+  const selectedFollowupDate = toDate(input.nextFollowUpDate)
 
   try {
     await prisma.followupInquiry.create({
       data: {
         fkInquiryId: inquiryId,
-        followupDate: now,
+        followupDate: input.status === 'FollowUp' ? selectedFollowupDate : null,
         followupStatus: input.status,
         followupSubStatus: input.subStatus || null,
         followupClassification: input.classification || null,
@@ -56,7 +63,7 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
         subStatus: input.subStatus || null,
         classification: input.classification || null,
         remark: input.comments || null,
-        followUpDate: input.status === 'FollowUp' ? new Date(input.nextFollowUpDate) : null,
+        followUpDate: input.status === 'FollowUp' ? selectedFollowupDate : null,
         updatedDt: now,
         ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
       },

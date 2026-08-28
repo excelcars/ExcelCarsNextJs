@@ -19,3 +19,5 @@ dist
 !.env.preview.example
 !.env.production.example
 !.env.staging.example
+
+tsconfig.tsbuildinfo

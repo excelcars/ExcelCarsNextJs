@@ -1,21 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
+import { Prisma } from '@prisma/client'
 import { auth } from '../../../../auth'
+
+function normalizeMobile(value: string | null | undefined) {
+  const digits = (value ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.length > 10 ? digits.slice(-10) : digits
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const mobile = req.nextUrl.searchParams.get('mobile')?.trim() ?? ''
+  const customerId = Number(req.nextUrl.searchParams.get('customerId'))
   const excludeInquiryId = Number(req.nextUrl.searchParams.get('excludeInquiryId'))
+  const normalizedMobile = normalizeMobile(mobile)
 
-  if (!mobile) return NextResponse.json([])
+  if (!normalizedMobile && !customerId) return NextResponse.json([])
+
+  const whereClauses: Prisma.Sql[] = []
+  if (normalizedMobile) {
+    whereClauses.push(
+      Prisma.sql`RIGHT(regexp_replace(COALESCE(mobileno, ''), '\D', '', 'g'), 10) = ${normalizedMobile}`,
+    )
+  }
+  if (customerId) {
+    whereClauses.push(Prisma.sql`customer_id = ${customerId}`)
+  }
+
+  const rawMatches = await prisma.$queryRaw<Array<{ inquiry_id: number }>>(Prisma.sql`
+    SELECT inquiry_id
+    FROM inquiry
+    WHERE (${Prisma.join(whereClauses, ' OR ')})
+      ${excludeInquiryId ? Prisma.sql`AND inquiry_id <> ${excludeInquiryId}` : Prisma.empty}
+    ORDER BY inquiry_id DESC
+    LIMIT 20
+  `)
+
+  if (rawMatches.length === 0) return NextResponse.json([])
 
   const rows = await prisma.inquiry.findMany({
-    where: {
-      mobileno: { equals: mobile, mode: 'insensitive' },
-      ...(excludeInquiryId ? { inquiryId: { not: excludeInquiryId } } : {}),
-    },
+    where: { inquiryId: { in: rawMatches.map(row => row.inquiry_id) } },
     include: {
       customer: { select: { custId: true, custName: true, custMobile: true, custEmail: true } },
       inquiryCarDetails: {
@@ -26,8 +53,27 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: { inquiryId: 'desc' },
-    take: 10,
   })
 
-  return NextResponse.json(rows)
+  const enrichedRows = rows.map(row => {
+    const matchReasons: string[] = []
+    const rowMobile = normalizeMobile(row.customer?.custMobile ?? row.mobileno)
+
+    if (normalizedMobile && rowMobile === normalizedMobile) {
+      matchReasons.push('Same mobile')
+    }
+    if (customerId && row.customer?.custId === customerId) {
+      matchReasons.push('Same linked customer')
+    }
+    if ((row.status ?? '').trim().toLowerCase() !== 'closed') {
+      matchReasons.push('Open inquiry')
+    }
+
+    return {
+      ...row,
+      matchReasons,
+    }
+  })
+
+  return NextResponse.json(enrichedRows)
 }

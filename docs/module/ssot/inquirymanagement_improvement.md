@@ -379,10 +379,12 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - show send confirmation before dispatch where needed
 
 ### Step 7 - Add persistent inquiry-to-inventory links
+- legacy `.NET` system did not persist durable inquiry-to-inventory links; inventory search and customer email were transient workflow actions only
 - add `inquiryInventoryLinks` table/model
 - store relation states like `matched`, `emailed`, `shortlisted`, `visited`, `booked`, `rejected`
 - persist manual popup sends as `emailed`
 - decide whether auto-matched inventory should persist immediately as `matched`
+- treat this as a deliberate Next.js improvement beyond parity, not a legacy restoration item
 
 ### Step 8 - Record email and inventory history in inquiry detail
 - show linked inventory history in inquiry detail
