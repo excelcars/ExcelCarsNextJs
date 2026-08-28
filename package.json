@@ -11,6 +11,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "build": "prisma generate && next build",
+    "dev:only": "next dev",
     "start": "next start",
     "lint": "eslint .",
     "test:vehicle-email-links": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts",

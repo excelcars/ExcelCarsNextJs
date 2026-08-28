@@ -60,9 +60,13 @@ function followupListSelect() {
       },
     },
     inquiryCarDetails: {
-      take: 1,
-      orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
+      orderBy: [{ inquiryCarDetailsId: 'asc' }],
       select: {
+        inquiryCarDetailsId: true,
+        makeLegacy: true,
+        modelLegacy: true,
+        variantLegacy: true,
+        subVariant: true,
         year: true,
         carVariantMaster: {
           select: {
@@ -239,11 +243,11 @@ export async function listFollowupsForExport(filters: Omit<FollowupFilters, 'pag
   })
 }
 
-export async function getRecentFollowups(inquiryId: number, limit = 5) {
+export async function getRecentFollowups(inquiryId: number, limit?: number) {
   return prisma.followupInquiry.findMany({
     where: { fkInquiryId: inquiryId },
     orderBy: { createdDt: 'desc' },
-    take: limit,
+    ...(typeof limit === 'number' ? { take: limit } : {}),
   })
 }
 

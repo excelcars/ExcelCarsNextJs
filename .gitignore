@@ -12,3 +12,12 @@ dist
 .env.staging.local
 .vercel
 /db
+
+*.env.*
+!.env.example
+!.env.development.example
+!.env.preview.example
+!.env.production.example
+!.env.staging.example
+
+tsconfig.tsbuildinfo

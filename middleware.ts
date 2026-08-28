@@ -6,7 +6,13 @@ const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname === "/login";
+  const pathname = req.nextUrl.pathname;
+  const isLoginPage = pathname === "/login";
+  const isPublicVehiclePage = pathname.startsWith("/vehicle/");
+
+  if (isPublicVehiclePage) {
+    return NextResponse.next();
+  }
 
   if (!isLoggedIn && !isLoginPage) {
     const loginUrl = new URL("/login", req.nextUrl.origin);
@@ -22,5 +28,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|logo-excel-car.png).*)"],
+  matcher: ["/((?!api|vehicle/|_next/static|_next/image|favicon.ico|logo-excel-car.png).*)"],
 };
