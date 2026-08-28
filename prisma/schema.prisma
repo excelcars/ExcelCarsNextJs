@@ -357,7 +357,7 @@ model IndianStatesMaster {
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Inquiry {
   inquiryId             Int                 @id(map: "idx_16506_pk_inquiry") @default(autoincrement()) @map("inquiry_id")
-  inquiryNo             String?             @unique(map: "idx_16506_uq_inquiry_inquiry_no") @map("inquiry_no")
+  inquiryNo             String?             @map("inquiry_no")
   dateOfInquiry         DateTime?           @map("date_of_inquiry") @db.Timestamptz(6)
   website               String?
   customerId            Int?                @map("customer_id")
@@ -376,6 +376,7 @@ model Inquiry {
   updatedDt             DateTime?           @map("updated_dt") @db.Timestamptz(6)
   updatedBy             Int?                @map("updated_by")
   followupInquiry       FollowupInquiry[]
+  inquiryInventoryLinks InquiryInventoryLink[]
   createdByUser         UserTable?          @relation("inquiry_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_created_by_user")
   customer              Customer?           @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_customer_id")
   updatedByUser         UserTable?          @relation("inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_updated_by_user")
@@ -383,6 +384,27 @@ model Inquiry {
 
   @@index([customerId], map: "idx_16506_ix_inquiry_customer_id")
   @@map("inquiry")
+}
+
+model InquiryInventoryLink {
+  inquiryInventoryLinkId Int                 @id(map: "idx_inquiry_inventory_links_pk") @default(autoincrement()) @map("inquiry_inventory_link_id")
+  inquiryId              Int                 @map("inquiry_id")
+  inventoryId            Int                 @map("inventory_id")
+  linkType               String              @map("link_type")
+  isActive               Boolean             @default(true) @map("is_active")
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy              Int?                @map("created_by")
+  updatedAt              DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy              Int?                @map("updated_by")
+  createdByUser          UserTable?          @relation("inquiry_inventory_links_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_links_created_by_user")
+  inquiry                Inquiry             @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_inventory_links_inquiry")
+  inventoryManagement    InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_links_inventory")
+  updatedByUser          UserTable?          @relation("inquiry_inventory_links_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_links_updated_by_user")
+
+  @@index([inquiryId], map: "idx_inquiry_inventory_links_inquiry_id")
+  @@index([inventoryId], map: "idx_inquiry_inventory_links_inventory_id")
+  @@index([inquiryId, inventoryId, linkType], map: "idx_inquiry_inventory_links_lookup")
+  @@map("inquiry_inventory_links")
 }
 
 model InquiryCarDetails {
@@ -537,6 +559,7 @@ model InventoryManagement {
   updatedByUser    UserTable?         @relation("inventory_management_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_updated_by_user")
   carVariantMaster CarVariantMaster?  @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
   inventoryPhotos  InventoryPhotos[]
+  inquiryInventoryLinks InquiryInventoryLink[]
   vehicleEmailLinks VehicleEmailLink[]
   loanManagement   LoanManagement[]
   rtoAgent         RtoAgent[]
@@ -876,6 +899,8 @@ model UserTable {
   updatedInquiries                  Inquiry[]                  @relation("inquiry_updated_byTouser_table")
   createdInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_created_byTouser_table")
   updatedInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_updated_byTouser_table")
+  createdInquiryInventoryLinks      InquiryInventoryLink[]     @relation("inquiry_inventory_links_created_byTouser_table")
+  updatedInquiryInventoryLinks      InquiryInventoryLink[]     @relation("inquiry_inventory_links_updated_byTouser_table")
   createdInsuranceFollowupDetailses InsuranceFollowupDetails[] @relation("insurance_followup_details_created_byTouser_table")
   updatedInsuranceFollowupDetailses InsuranceFollowupDetails[] @relation("insurance_followup_details_updated_byTouser_table")
   createdInsuranceMains             InsuranceMain[]            @relation("insurance_main_created_byTouser_table")

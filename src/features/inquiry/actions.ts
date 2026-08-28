@@ -41,6 +41,10 @@ export interface ActionResult {
   message?: string
 }
 
+export interface CreateInquiryOptions {
+  sendMatchingInventoryOnCreate?: boolean
+}
+
 async function createTrackedVehicleEmailLink({
   inventoryId,
   customerId,
@@ -83,13 +87,121 @@ function toDate(v: string): Date | null {
   return v ? new Date(v) : null
 }
 
+function normalizeMobile(value: string | null | undefined) {
+  const digits = (value ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.length > 10 ? digits.slice(-10) : digits
+}
+
+async function findCustomerByNormalizedMobile(mobile: string) {
+  const normalizedMobile = normalizeMobile(mobile)
+  if (!normalizedMobile) return null
+
+  const rows = await prisma.$queryRaw<Array<{ cust_id: number }>>(Prisma.sql`
+    SELECT cust_id
+    FROM customer
+    WHERE RIGHT(regexp_replace(COALESCE(cust_mobile, ''), '\D', '', 'g'), 10) = ${normalizedMobile}
+    ORDER BY cust_id DESC
+    LIMIT 1
+  `)
+
+  if (rows.length === 0) return null
+
+  return prisma.customer.findUnique({
+    where: { custId: rows[0].cust_id },
+    select: {
+      custId: true,
+      custName: true,
+      custMobile: true,
+      custEmail: true,
+    },
+  })
+}
+
 async function resolveInquiryContact(input: InquiryFormInput) {
   if (!input.customerId) {
+    const trimmedName = input.customerNameLegacy.trim()
+    const trimmedMobile = input.mobileno.trim()
+    const trimmedEmail = input.email.trim()
+    const userId = await currentUserId()
+
+    if (!trimmedName) {
+      return {
+        customerId: null,
+        customerNameLegacy: null,
+        mobileno: trimmedMobile || null,
+        email: trimmedEmail || null,
+        error: null,
+      }
+    }
+
+    const existingByMobile = trimmedMobile ? await findCustomerByNormalizedMobile(trimmedMobile) : null
+    if (existingByMobile) {
+      const normalizedExistingMobile = normalizeMobile(existingByMobile.custMobile)
+      const normalizedIncomingMobile = normalizeMobile(trimmedMobile)
+
+      if (
+        userId
+        && (
+          (!existingByMobile.custEmail && trimmedEmail)
+          || (!normalizedExistingMobile && normalizedIncomingMobile)
+        )
+      ) {
+        await prisma.customer.update({
+          where: { custId: existingByMobile.custId },
+          data: {
+            ...(trimmedEmail && !existingByMobile.custEmail ? { custEmail: trimmedEmail } : {}),
+            ...(normalizedIncomingMobile && !normalizedExistingMobile ? { custMobile: trimmedMobile } : {}),
+            updatedDt: new Date(),
+            updatedByUser: { connect: { userId } },
+          },
+        })
+      }
+
+      return {
+        customerId: existingByMobile.custId,
+        customerNameLegacy: existingByMobile.custName?.trim() || trimmedName || null,
+        mobileno: existingByMobile.custMobile?.trim() || trimmedMobile || null,
+        email: existingByMobile.custEmail?.trim() || trimmedEmail || null,
+        error: null,
+      }
+    }
+
+    if (!userId) {
+      return {
+        customerId: null,
+        customerNameLegacy: trimmedName || null,
+        mobileno: trimmedMobile || null,
+        email: trimmedEmail || null,
+        error: null,
+      }
+    }
+
+    const createdCustomer = await prisma.customer.create({
+      data: {
+        type: 'Customer',
+        custName: trimmedName,
+        custMobile: trimmedMobile || null,
+        custEmail: trimmedEmail || null,
+        comments: 'Auto-created from inquiry save',
+        createdDt: new Date(),
+        updatedDt: new Date(),
+        createdByUser: { connect: { userId } },
+        updatedByUser: { connect: { userId } },
+      },
+      select: {
+        custId: true,
+        custName: true,
+        custMobile: true,
+        custEmail: true,
+      },
+    })
+
     return {
-      customerId: null,
-      customerNameLegacy: input.customerNameLegacy.trim() || null,
-      mobileno: input.mobileno.trim() || null,
-      email: input.email.trim() || null,
+      customerId: createdCustomer.custId,
+      customerNameLegacy: createdCustomer.custName?.trim() || trimmedName || null,
+      mobileno: createdCustomer.custMobile?.trim() || trimmedMobile || null,
+      email: createdCustomer.custEmail?.trim() || trimmedEmail || null,
       error: null,
     }
   }
@@ -212,6 +324,100 @@ function validateInquiryWorkflow(input: InquiryFormInput): string | null {
   return null
 }
 
+function normalizeOptionalText(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+function normalizeOptionalDate(value: string | Date | null | undefined) {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 10)
+}
+
+function hasMeaningfulFollowupState(input: InquiryFormInput) {
+  return Boolean(
+    normalizeOptionalText(input.status)
+    || normalizeOptionalText(input.subStatus)
+    || normalizeOptionalText(input.classification)
+    || normalizeOptionalText(input.remark)
+    || normalizeOptionalDate(input.followUpDate),
+  )
+}
+
+function hasFollowupStateChanged(
+  previous: {
+    status: string | null
+    subStatus: string | null
+    classification: string | null
+    remark: string | null
+    followUpDate: Date | null
+  },
+  next: InquiryFormInput,
+) {
+  return normalizeOptionalText(previous.status) !== normalizeOptionalText(next.status)
+    || normalizeOptionalText(previous.subStatus) !== normalizeOptionalText(next.subStatus)
+    || normalizeOptionalText(previous.classification) !== normalizeOptionalText(next.classification)
+    || normalizeOptionalText(previous.remark) !== normalizeOptionalText(next.remark)
+    || normalizeOptionalDate(previous.followUpDate) !== normalizeOptionalDate(next.followUpDate)
+}
+
+async function appendInquiryFollowupHistory({
+  inquiryId,
+  input,
+  userId,
+  now,
+}: {
+  inquiryId: number
+  input: InquiryFormInput
+  userId: number | null
+  now: Date
+}) {
+  const selectedFollowupDate = toDate(input.followUpDate)
+  await prisma.followupInquiry.create({
+    data: {
+      fkInquiryId: inquiryId,
+      followupDate: selectedFollowupDate ?? now,
+      followupStatus: normalizeOptionalText(input.status),
+      followupSubStatus: normalizeOptionalText(input.subStatus),
+      followupClassification: normalizeOptionalText(input.classification),
+      comments: normalizeOptionalText(input.remark),
+      createdDt: now,
+      updatedDt: now,
+      ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+    },
+  })
+}
+
+async function createInquiryInventoryLinks({
+  inquiryId,
+  inventoryIds,
+  linkType,
+  userId,
+}: {
+  inquiryId: number
+  inventoryIds: number[]
+  linkType: string
+  userId: number | null
+}) {
+  const uniqueInventoryIds = [...new Set(inventoryIds.filter(id => Number.isFinite(id) && id > 0))]
+  if (uniqueInventoryIds.length === 0) return
+
+  const now = new Date()
+  await prisma.inquiryInventoryLink.createMany({
+    data: uniqueInventoryIds.map(inventoryId => ({
+      inquiryId,
+      inventoryId,
+      linkType,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+      ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+    })),
+  })
+}
+
 async function resolveInquiryCarDetails(input: InquiryFormInput) {
   const meaningfulCars = input.inquiryCars.filter(hasMeaningfulInquiryCar)
   return Promise.all(meaningfulCars.map(resolveInquiryCarDetail))
@@ -287,10 +493,12 @@ async function sendMatchedInventoryEmailToInquiryRecipient({
   inquiryId,
   inventoryId,
   signedBy,
+  userId,
 }: {
   inquiryId: number
   inventoryId: number
   signedBy: string
+  userId: number | null
 }): Promise<ActionResult> {
   const [recipient, inventory] = await Promise.all([
     getInquiryRecipient(inquiryId),
@@ -344,6 +552,13 @@ async function sendMatchedInventoryEmailToInquiryRecipient({
     await prisma.vehicleEmailLink.delete({ where: { vehicleEmailLinkId: trackedLink.vehicleEmailLinkId } }).catch(() => undefined)
     return result
   }
+
+  await createInquiryInventoryLinks({
+    inquiryId,
+    inventoryIds: [inventoryId],
+    linkType: 'emailed',
+    userId,
+  })
 
   return { success: true }
 }
@@ -409,6 +624,25 @@ export async function getInquiryDetail(inquiryId: number) {
           },
         },
       },
+      inquiryInventoryLinks: {
+        orderBy: [{ createdAt: 'desc' }, { inquiryInventoryLinkId: 'desc' }],
+        include: {
+          inventoryManagement: {
+            include: {
+              carVariantMaster: {
+                include: { carMakeMaster: true, carModelMaster: true },
+              },
+            },
+          },
+          createdByUser: {
+            select: {
+              userId: true,
+              userName: true,
+              displayName: true,
+            },
+          },
+        },
+      },
     },
   })
 
@@ -417,6 +651,14 @@ export async function getInquiryDetail(inquiryId: number) {
   return {
     ...detail,
     budgetOfCustomer: detail.budgetOfCustomer ? detail.budgetOfCustomer.toString() : null,
+    inquiryInventoryLinks: detail.inquiryInventoryLinks.map(link => ({
+      ...link,
+      inventoryManagement: {
+        ...link.inventoryManagement,
+        kmsDriven: link.inventoryManagement.kmsDriven ? link.inventoryManagement.kmsDriven.toString() : null,
+        price: link.inventoryManagement.price ? link.inventoryManagement.price.toString() : null,
+      },
+    })),
   }
 }
 
@@ -426,6 +668,7 @@ export async function sendInquiryInventoryEmail(inquiryId: number, inventoryId: 
     inquiryId,
     inventoryId,
     signedBy: session?.user?.name || 'Excel Cars Team',
+    userId: session?.user?.id ? Number(session.user.id) : null,
   })
 }
 
@@ -444,6 +687,7 @@ export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds
       inquiryId,
       inventoryId,
       signedBy: session?.user?.name || 'Excel Cars Team',
+      userId: session?.user?.id ? Number(session.user.id) : null,
     })
     if (result.success) {
       sentCount += 1
@@ -464,38 +708,36 @@ export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds
   }
 }
 
-function nextInquiryNumberFromLatest(latestInquiryNo: string | null | undefined) {
-  if (!latestInquiryNo) return 'Inquiry/1'
-
-  const parts = latestInquiryNo.split('/')
-  const lastPart = parts[parts.length - 1]
-  const parsed = Number(lastPart)
-  if (!Number.isFinite(parsed) || parsed < 1) return 'Inquiry/1'
-
-  const prefix = parts.slice(0, -1).join('/') || 'Inquiry'
-  return `${prefix}/${parsed + 1}`
-}
-
 export async function getNextInquiryNumber(): Promise<string> {
-  const latest = await prisma.inquiry.findFirst({
-    orderBy: { inquiryId: 'desc' },
-    select: { inquiryNo: true },
-  })
+  const rows = await prisma.$queryRaw<Array<{ max_inquiry_number: number | bigint | null }>>(Prisma.sql`
+    SELECT COALESCE(MAX((regexp_match(inquiry_no, '([0-9]+)$'))[1]::int), 0) AS max_inquiry_number
+    FROM inquiry
+    WHERE inquiry_no ~ '[0-9]+$'
+  `)
 
-  return nextInquiryNumberFromLatest(latest?.inquiryNo)
+  const rawMax = rows[0]?.max_inquiry_number
+  const maxInquiryNumber = typeof rawMax === 'bigint' ? Number(rawMax) : Number(rawMax ?? 0)
+  const safeMax = Number.isFinite(maxInquiryNumber) && maxInquiryNumber > 0 ? maxInquiryNumber : 0
+  return `Inquiry/${safeMax + 1}`
 }
 
 function isInquiryNumberConflict(err: unknown) {
   const targets = Array.isArray((err as { meta?: { target?: unknown } })?.meta?.target)
     ? ((err as { meta?: { target?: unknown[] } }).meta?.target ?? []).map(target => String(target))
     : []
+  const message = err instanceof Error ? err.message.toLowerCase() : ''
 
   return err instanceof Prisma.PrismaClientKnownRequestError
     && err.code === 'P2002'
-    && targets.some(target => target === 'inquiry_no' || target === 'inquiryNo' || target.includes('inquiry'))
+    && (
+      targets.some(target => target === 'inquiry_no' || target === 'inquiryNo' || target.includes('inquiry'))
+      || message.includes('inquiry_no')
+      || message.includes('idx_16506_uq_inquiry_inquiry_no')
+      || message.includes('unique constraint')
+    )
 }
 
-export async function createInquiry(input: InquiryFormInput): Promise<ActionResult> {
+export async function createInquiry(input: InquiryFormInput, options: CreateInquiryOptions = {}): Promise<ActionResult> {
   if (!input.customerId && !input.customerNameLegacy.trim() && !input.mobileno.trim()) {
     return { success: false, error: 'Link a customer or enter a name/mobile.' }
   }
@@ -516,13 +758,14 @@ export async function createInquiry(input: InquiryFormInput): Promise<ActionResu
   try {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const inquiryNo = await getNextInquiryNumber()
+      const now = new Date()
       try {
         const created = await prisma.inquiry.create({
           data: {
             ...buildInquiryData({ ...input, inquiryNo }, resolvedContact),
             ...(resolvedContact.customerId ? { customer: { connect: { custId: resolvedContact.customerId } } } : {}),
-            createdDt: new Date(),
-            updatedDt: new Date(),
+            createdDt: now,
+            updatedDt: now,
             ...(userId ? { createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } } } : {}),
             ...(resolvedCarDetails.length > 0
               ? {
@@ -534,8 +777,8 @@ export async function createInquiry(input: InquiryFormInput): Promise<ActionResu
                       variantLegacy: car.variantLegacy,
                       subVariant: car.subVariant,
                       year: car.year,
-                      createdDt: new Date(),
-                      updatedDt: new Date(),
+                      createdDt: now,
+                      updatedDt: now,
                       ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
                     })),
                   },
@@ -544,6 +787,14 @@ export async function createInquiry(input: InquiryFormInput): Promise<ActionResu
           },
         })
         newInquiryId = created.inquiryId
+        if (hasMeaningfulFollowupState(input)) {
+          await appendInquiryFollowupHistory({
+            inquiryId: created.inquiryId,
+            input,
+            userId,
+            now,
+          })
+        }
         break
       } catch (err) {
         if (isInquiryNumberConflict(err) && attempt < 4) {
@@ -556,19 +807,37 @@ export async function createInquiry(input: InquiryFormInput): Promise<ActionResu
     return { success: false, error: describeError(err) }
   }
 
-  if (newInquiryId && resolvedCarDetails.length > 0) {
+  let resultMessage: string | undefined
+
+  if (newInquiryId && resolvedCarDetails.length > 0 && options.sendMatchingInventoryOnCreate) {
     try {
       const matchedInventoryIds = await findMatchingInventoryIdsForInquiryCars(resolvedCarDetails)
       if (matchedInventoryIds.length > 0) {
-        await sendInquiryInventoryEmails(newInquiryId, matchedInventoryIds)
+        await createInquiryInventoryLinks({
+          inquiryId: newInquiryId,
+          inventoryIds: matchedInventoryIds,
+          linkType: 'matched',
+          userId,
+        })
+        const emailResult = await sendInquiryInventoryEmails(newInquiryId, matchedInventoryIds)
+        resultMessage = emailResult.success
+          ? (emailResult.message ?? 'Inquiry saved and matching inventory email sent.')
+          : 'Inquiry saved, but matching inventory email could not be sent.'
+      } else {
+        resultMessage = 'Inquiry saved. No matching inventory was available to send.'
       }
     } catch {
-      // swallow — saving the inquiry succeeded regardless of auto-email outcome
+      resultMessage = 'Inquiry saved, but matching inventory email could not be sent.'
     }
+  } else if (options.sendMatchingInventoryOnCreate) {
+    resultMessage = 'Inquiry saved. No vehicle rows were available for matching inventory send.'
   }
 
   revalidatePath('/inquiry')
-  return { success: true }
+  revalidatePath('/followup')
+  revalidatePath('/dashboard')
+  revalidatePath('/config/customers')
+  return { success: true, message: resultMessage }
 }
 
 export async function updateInquiry(id: number, input: InquiryFormInput): Promise<ActionResult> {
@@ -589,6 +858,24 @@ export async function updateInquiry(id: number, input: InquiryFormInput): Promis
 
   try {
     const now = new Date()
+    const existing = await prisma.inquiry.findUnique({
+      where: { inquiryId: id },
+      select: {
+        status: true,
+        subStatus: true,
+        classification: true,
+        remark: true,
+        followUpDate: true,
+      },
+    })
+
+    if (!existing) {
+      return { success: false, error: 'Inquiry not found.' }
+    }
+
+    const shouldAppendFollowup = hasMeaningfulFollowupState(input) && hasFollowupStateChanged(existing, input)
+    const selectedFollowupDate = toDate(input.followUpDate)
+
     await prisma.$transaction(async (tx) => {
       await tx.inquiry.update({
         where: { inquiryId: id },
@@ -618,12 +905,31 @@ export async function updateInquiry(id: number, input: InquiryFormInput): Promis
           })),
         })
       }
+
+      if (shouldAppendFollowup) {
+        await tx.followupInquiry.create({
+          data: {
+            fkInquiryId: id,
+            followupDate: selectedFollowupDate ?? now,
+            followupStatus: normalizeOptionalText(input.status),
+            followupSubStatus: normalizeOptionalText(input.subStatus),
+            followupClassification: normalizeOptionalText(input.classification),
+            comments: normalizeOptionalText(input.remark),
+            createdDt: now,
+            updatedDt: now,
+            ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+          },
+        })
+      }
     })
   } catch (err) {
     return { success: false, error: describeError(err) }
   }
 
   revalidatePath('/inquiry')
+  revalidatePath('/followup')
+  revalidatePath('/dashboard')
+  revalidatePath('/config/customers')
   return { success: true }
 }
 
@@ -640,10 +946,31 @@ export async function deleteInquiry(id: number): Promise<ActionResult> {
 }
 
 function describeError(err: unknown): string {
+  console.error('Inquiry action failed:', err)
+
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') {
+      const message = err.message.toLowerCase()
+      if (message.includes('inquiry_no') || message.includes('idx_16506_uq_inquiry_inquiry_no')) {
+        return 'Inquiry number conflict occurred. Please try saving again.'
+      }
+    }
     if (err.code === 'P2003') {
       return 'This inquiry has related records and cannot be deleted.'
     }
   }
+
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return process.env.NODE_ENV === 'development'
+      ? `Prisma validation error: ${err.message}`
+      : 'Something went wrong saving this record.'
+  }
+
+  if (err instanceof Error) {
+    return process.env.NODE_ENV === 'development'
+      ? err.message
+      : 'Something went wrong saving this record.'
+  }
+
   return 'Something went wrong saving this record.'
 }
