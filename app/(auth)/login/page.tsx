@@ -18,21 +18,25 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const result = await signIn('credentials', {
-      username,
-      password,
-      redirect: false,
-    })
+    try {
+      const result = await signIn('credentials', {
+        username,
+        password,
+        redirect: false,
+      })
 
-    setLoading(false)
+      if (result?.error) {
+        setError('Invalid username or password, or account is inactive.')
+        return
+      }
 
-    if (result?.error) {
-      setError('Invalid username or password, or account is inactive.')
-      return
+      router.push('/dashboard')
+      router.refresh()
+    } catch {
+      setError('Unable to sign in right now. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    router.push('/dashboard')
-    router.refresh()
   }
 
   return (
