@@ -9,8 +9,9 @@ export default auth((req) => {
   const pathname = req.nextUrl.pathname;
   const isLoginPage = pathname === "/login";
   const isPublicVehiclePage = pathname.startsWith("/vehicle/");
+  const isPublicFeedbackPage = pathname.startsWith("/feedback/");
 
-  if (isPublicVehiclePage) {
+  if (isPublicVehiclePage || isPublicFeedbackPage) {
     return NextResponse.next();
   }
 
@@ -28,5 +29,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api|vehicle/|_next/static|_next/image|favicon.ico|logo-excel-car.png).*)"],
+  matcher: ["/((?!api|vehicle/|feedback/|_next/static|_next/image|favicon.ico|logo-excel-car.png).*)"],
 };

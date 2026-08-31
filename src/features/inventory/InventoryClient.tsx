@@ -8,7 +8,7 @@ import { Plus, Pencil, Trash2, Eye, Mail, X, Images, Upload, Loader2, Download, 
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { INVENTORY_STATUSES } from './queries'
-import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, syncInventoryToInquiry, type InventoryFormInput } from './actions'
+import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, syncInventoryToInquiry, updateInventoryEmailRecipient, type InventoryFormInput } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CarMakeMaster { pkMakeId: number; make: string | null }
@@ -514,6 +514,9 @@ export function InventoryClient({
   const [emailSelectedDealer, setEmailSelectedDealer] = useState<Dealer | null>(null)
   const [emailSelectedCustomer, setEmailSelectedCustomer] = useState<CustomerOption | null>(null)
   const [emailRecipients, setEmailRecipients] = useState<EmailRecipient[]>([])
+  const [editingRecipientEmailKey, setEditingRecipientEmailKey] = useState<string | null>(null)
+  const [recipientEmailDraft, setRecipientEmailDraft] = useState('')
+  const [recipientEmailError, setRecipientEmailError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [emailSentMessage, setEmailSentMessage] = useState<string | null>(null)
   const [photoRow, setPhotoRow] = useState<InventoryRow | null>(null)
@@ -1136,6 +1139,9 @@ export function InventoryClient({
     setEmailSelectedDealer(null)
     setEmailSelectedCustomer(null)
     setEmailRecipients([])
+    setEditingRecipientEmailKey(null)
+    setRecipientEmailDraft('')
+    setRecipientEmailError('')
     setDealerQuery('')
     setEmailError('')
     setEmailSentMessage(null)
@@ -1147,6 +1153,38 @@ export function InventoryClient({
 
   const removeEmailRecipient = (key: string) => {
     setEmailRecipients(prev => prev.filter(item => item.key !== key))
+    if (editingRecipientEmailKey === key) {
+      setEditingRecipientEmailKey(null)
+      setRecipientEmailDraft('')
+      setRecipientEmailError('')
+    }
+  }
+
+  const saveRecipientEmail = (recipient: EmailRecipient) => {
+    const email = recipientEmailDraft.trim().toLowerCase()
+    if (!isValidEmail(email)) {
+      setRecipientEmailError('Enter a valid email address.')
+      return
+    }
+    setRecipientEmailError('')
+    startTransition(async () => {
+      const result = await updateInventoryEmailRecipient({
+        recipientType: recipient.recipientType,
+        recipientId: recipient.recipientId,
+        email,
+      })
+      if (!result.success) {
+        setRecipientEmailError(result.error ?? 'Could not update the email address.')
+        return
+      }
+      setEmailRecipients(prev => prev.map(item => item.key === recipient.key ? { ...item, email } : item))
+      setEmailRow(prev => prev?.customer?.custId === recipient.recipientId && recipient.recipientType === 'customer'
+        ? { ...prev, customer: { ...prev.customer, custEmail: email } }
+        : prev)
+      setEditingRecipientEmailKey(null)
+      setRecipientEmailDraft('')
+      setRecipientEmailError('')
+    })
   }
 
   const openInquirySync = (r: InventoryRow) => {
@@ -1887,14 +1925,46 @@ export function InventoryClient({
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Recipients</div>
                   <div className="space-y-2">
                     {emailRecipients.map(recipient => (
-                      <div key={recipient.key} className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                        <div>
-                          <div className="text-sm font-medium text-gray-800">{recipient.name}</div>
-                          <div className="text-xs text-gray-500">{recipient.meta}{recipient.email ? ` · ${recipient.email}` : ''}</div>
+                      <div key={recipient.key} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-800">{recipient.name}</div>
+                            <div className="text-xs text-gray-500">{recipient.meta}{recipient.email ? ` · ${recipient.email}` : ''}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingRecipientEmailKey(recipient.key)
+                                setRecipientEmailDraft(recipient.email ?? '')
+                                setRecipientEmailError('')
+                              }}
+                              className="text-xs font-medium text-[#1B2A6B] hover:underline"
+                            >
+                              {recipient.email ? 'Update email' : 'Add email'}
+                            </button>
+                            <button type="button" onClick={() => removeEmailRecipient(recipient.key)} className="text-gray-400 hover:text-red-600">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <button type="button" onClick={() => removeEmailRecipient(recipient.key)} className="text-gray-400 hover:text-red-600">
-                          <X className="w-4 h-4" />
-                        </button>
+                        {editingRecipientEmailKey === recipient.key ? (
+                          <div className="mt-3 flex flex-wrap items-start gap-2">
+                            <div className="min-w-52 flex-1">
+                              <input
+                                type="email"
+                                autoFocus
+                                value={recipientEmailDraft}
+                                onChange={event => { setRecipientEmailDraft(event.target.value); setRecipientEmailError('') }}
+                                placeholder="Email address"
+                                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B]"
+                              />
+                              {recipientEmailError ? <div className="mt-1 text-xs text-red-600">{recipientEmailError}</div> : null}
+                            </div>
+                            <Btn size="sm" onClick={() => saveRecipientEmail(recipient)} disabled={isPending}>Save email</Btn>
+                            <Btn size="sm" variant="outline" onClick={() => { setEditingRecipientEmailKey(null); setRecipientEmailDraft(''); setRecipientEmailError('') }} disabled={isPending}>Cancel</Btn>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -1903,6 +1973,33 @@ export function InventoryClient({
 
               {recipientType === 'customer' ? (
                 <div className="space-y-2">
+                  {emailRow.customer ? (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5">
+                      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[#1B2A6B]">Suggested linked customer</div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-gray-800">{emailRow.customer.custName}</div>
+                          <div className="truncate text-xs text-gray-500">
+                            {emailRow.customer.custMobile ?? '—'}{emailRow.customer.custEmail ? ` · ${emailRow.customer.custEmail}` : ''}
+                          </div>
+                        </div>
+                        <Btn
+                          size="sm"
+                          onClick={() => addEmailRecipient({
+                            key: `customer-${emailRow.customer!.custId}`,
+                            recipientType: 'customer',
+                            recipientId: emailRow.customer!.custId,
+                            name: emailRow.customer!.custName,
+                            email: emailRow.customer!.custEmail,
+                            meta: emailRow.customer!.custMobile ?? 'Customer',
+                          })}
+                          disabled={emailRecipients.some(recipient => recipient.key === `customer-${emailRow.customer!.custId}`)}
+                        >
+                          {emailRecipients.some(recipient => recipient.key === `customer-${emailRow.customer!.custId}`) ? 'Added' : 'Add'}
+                        </Btn>
+                      </div>
+                    </div>
+                  ) : null}
                   <CustomerPicker value={emailSelectedCustomer} onChange={customer => {
                     setEmailSelectedCustomer(customer)
                     if (!customer) return
@@ -1916,7 +2013,7 @@ export function InventoryClient({
                     })
                     setEmailSelectedCustomer(null)
                   }} />
-                  <div className="text-xs text-gray-400">Select a customer to add them to the send list.</div>
+                  <div className="text-xs text-gray-400">Select a customer to add them to the send list. The inventory&apos;s linked customer is suggested above when available.</div>
                 </div>
               ) : (
                 <div className="relative">

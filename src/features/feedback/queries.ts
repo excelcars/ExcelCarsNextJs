@@ -50,7 +50,7 @@ export async function listFeedback({ search = '', page = 1, pageSize = 25, sort 
     select: {
       feedbackId: true, customerName: true, customerMob: true, customerEmail: true,
       carMakeLegacy: true, carModelLegacy: true, carVariantLegacy: true, carRegistrationNo: true,
-      answer_1: true, answer_2: true, answer_4: true,
+      answer_1: true, answer_2: true, answer_4: true, submittedAt: true,
     },
     orderBy: listOrder(sort, dir),
     skip: (currentPage - 1) * safePageSize,

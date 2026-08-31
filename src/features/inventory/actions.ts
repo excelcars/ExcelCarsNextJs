@@ -217,8 +217,38 @@ export interface SendInventoryEmailInput {
   }>
 }
 
+export interface UpdateInventoryEmailRecipientInput {
+  recipientType: 'dealer' | 'customer'
+  recipientId: number
+  email: string
+}
+
 export interface SyncInventoryInquiryInput {
   inquiryId: number
+}
+
+export async function updateInventoryEmailRecipient(input: UpdateInventoryEmailRecipientInput): Promise<ActionResult> {
+  const authorizedUserId = await currentUserId()
+  if (!authorizedUserId) return { success: false, error: 'Not authorized.' }
+
+  const email = input.email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    return { success: false, error: 'Enter a valid email address.' }
+  }
+
+  try {
+    if (input.recipientType === 'customer') {
+      await prisma.customer.update({ where: { custId: input.recipientId }, data: { custEmail: email, updatedDt: new Date() } })
+      revalidatePath('/config/customers')
+    } else {
+      await prisma.dealerMaster.update({ where: { dealerId: input.recipientId }, data: { dealerEmail: email, updatedDate: new Date() } })
+      revalidatePath('/config/dealers')
+    }
+  } catch {
+    return { success: false, error: 'Could not update the recipient email address.' }
+  }
+
+  return { success: true, message: 'Email address updated.' }
 }
 
 export async function sendInventoryEmail(inventoryId: number, input: SendInventoryEmailInput): Promise<ActionResult> {
