@@ -20,11 +20,10 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isLoggedIn && isLoginPage) {
-    const dashboardUrl = new URL("/dashboard", req.nextUrl.origin);
-    return NextResponse.redirect(dashboardUrl);
-  }
-
+  // Always allow the login page. A browser can still carry a JWT that has
+  // been revoked server-side (for example after a password change); the
+  // server auth callback rejects it, while middleware can only see that a
+  // cookie exists. Redirecting login back to the dashboard would loop.
   return NextResponse.next();
 });
 

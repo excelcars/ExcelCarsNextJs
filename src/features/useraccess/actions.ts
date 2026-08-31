@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
 import { canManageUserAccessTarget, getUserAccessActor } from './permissions'
+import { ACCOUNT_FIELD_LIMITS, PASSWORD_POLICY_MESSAGE, passwordPolicyError, PROFILE_FIELD_LIMITS } from '@/lib/profileValidation'
 
 export interface UserAccessFormInput {
   empFirstName: string
@@ -33,7 +34,6 @@ const MOBILE_RE = /^\d{10}$/
 const PHONE_RE = /^\d{6,10}$/
 const PINCODE_RE = /^\d{6}$/
 const USERNAME_RE = /^[A-Za-z0-9._-]{4,50}$/
-const PASSWORD_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,100}$/
 const VALID_GENDERS = new Set(['M', 'F'])
 const USER_ACCESS_LOG = 'useraccess'
 
@@ -56,6 +56,21 @@ function normalizeForm(input: UserAccessFormInput): UserAccessFormInput {
 }
 
 function validateUserAccessInput(input: UserAccessFormInput, mode: 'create' | 'update'): string | null {
+  const lengthChecks: Array<[string, string, number]> = [
+    ['First name', input.empFirstName, PROFILE_FIELD_LIMITS.firstName],
+    ['Last name', input.empLastName, PROFILE_FIELD_LIMITS.lastName],
+    ['Mobile number', input.empMobileNo, PROFILE_FIELD_LIMITS.mobile],
+    ['Phone number', input.empPhoneNo, PROFILE_FIELD_LIMITS.phone],
+    ['Email', input.empEmailId, ACCOUNT_FIELD_LIMITS.email],
+    ['Address', input.empAddress, PROFILE_FIELD_LIMITS.address],
+    ['City', input.empCity, PROFILE_FIELD_LIMITS.city],
+    ['Pincode', input.empPincode, PROFILE_FIELD_LIMITS.pincode],
+    ['Username', input.userName, ACCOUNT_FIELD_LIMITS.username],
+    ['Password', input.password, PROFILE_FIELD_LIMITS.password],
+  ]
+  const tooLong = lengthChecks.find(([, value, limit]) => value.length > limit)
+  if (tooLong) return `${tooLong[0]} must be ${tooLong[2]} characters or fewer.`
+
   if (!input.empFirstName || !input.empLastName || !input.empMobileNo || !input.empEmailId) {
     return 'First name, last name, mobile, and email are required.'
   }
@@ -83,11 +98,11 @@ function validateUserAccessInput(input: UserAccessFormInput, mode: 'create' | 'u
   if (!USERNAME_RE.test(input.userName)) {
     return 'Username must be 4 to 50 characters and use only letters, numbers, dots, underscores, or hyphens.'
   }
-  if (mode === 'create' && !PASSWORD_RE.test(input.password.trim())) {
-    return 'Password must be 8 to 100 characters and include at least one letter and one number.'
+  if (mode === 'create' && passwordPolicyError(input.password.trim())) {
+    return PASSWORD_POLICY_MESSAGE
   }
-  if (mode === 'update' && input.password.trim() && !PASSWORD_RE.test(input.password.trim())) {
-    return 'New password must be 8 to 100 characters and include at least one letter and one number.'
+  if (mode === 'update' && input.password.trim() && passwordPolicyError(input.password.trim())) {
+    return PASSWORD_POLICY_MESSAGE
   }
   return null
 }
@@ -240,6 +255,9 @@ export async function updateUserAccount(userId: number, input: UserAccessFormInp
         updatedDate: now,
         updatedBy: me.userId,
         ...(passwordHash ? { passwordHash } : {}),
+        ...((existing.status === 'Active' && (normalized.status || 'Active') === 'Inactive') || passwordHash
+          ? { authVersion: { increment: 1 } }
+          : {}),
       },
     })
   } catch (error) {
@@ -270,6 +288,7 @@ export async function deactivateUserAccount(userId: number): Promise<ActionResul
       where: { userId },
       data: {
         status: 'Inactive',
+        authVersion: { increment: 1 },
         updatedDate: now,
         updatedBy: me.userId,
       },
