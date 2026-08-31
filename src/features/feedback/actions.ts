@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { getFeedbackDetail as queryFeedbackDetail, getVehicles as queryVehicles } from './queries'
+import { createHash, randomBytes } from 'crypto'
+import { sendEmail } from '@/lib/email/sendMail'
 
 export interface FeedbackFormInput {
   customerId: number | null
@@ -33,6 +35,24 @@ export interface ActionResult {
 
 async function currentUserId(): Promise<number | null> {
   return getAuthorizedUserIdForRoute('/config/feedback')
+}
+
+export async function sendFeedbackInvitation(customerId: number, inventoryId: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
+  const purchase = await prisma.inventoryManagement.findFirst({ where: { inventoryId, customerId }, include: { customer: true, carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } } })
+  if (!purchase?.customer?.custEmail) return { success: false, error: 'Select a customer purchase with an email address.' }
+  const customer = purchase.customer
+  const token = randomBytes(32).toString('hex'); const tokenHash = createHash('sha256').update(token).digest('hex'); const expiresAt = new Date(Date.now() + 7 * 86400000)
+  const invitation = await prisma.$transaction(async tx => {
+    await tx.feedbackInvitation.updateMany({ where: { customerId, inventoryId, submittedAt: null, invalidatedAt: null }, data: { invalidatedAt: new Date() } })
+    return tx.feedbackInvitation.create({ data: { customerId, inventoryId, recipientEmail: customer.custEmail!.trim(), tokenHash, expiresAt, createdBy: userId } })
+  })
+  const base = (process.env.PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
+  const vehicle = [purchase.carVariantMaster?.carMakeMaster?.make, purchase.carVariantMaster?.carModelMaster?.model, purchase.carVariantMaster?.variant, purchase.registrationNo].filter(Boolean).join(' · ')
+  const result = await sendEmail({ to: invitation.recipientEmail, subject: 'Tell us about your Excel Cars purchase', html: `<p>Dear ${customer.custName},</p><p>Thank you for choosing Excel Cars.</p><p><b>Purchase summary:</b> ${vehicle}</p><p><a href="${base}/feedback/${token}">Give Feedback</a></p><p>This one-time link expires in 7 days.</p>` })
+  if (!result.success) await prisma.feedbackInvitation.update({ where: { feedbackInvitationId: invitation.feedbackInvitationId }, data: { invalidatedAt: new Date() } })
+  return result
 }
 
 
@@ -132,6 +152,10 @@ export async function updateFeedback(id: number, input: FeedbackFormInput): Prom
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
+
+  const existing = await prisma.customerFeedback.findUnique({ where: { feedbackId: id }, select: { submittedAt: true } })
+  if (!existing) return { success: false, error: 'Feedback record was not found.' }
+  if (existing.submittedAt) return { success: false, error: 'Customer-submitted feedback is read-only and cannot be edited.' }
 
   try {
     await prisma.customerFeedback.update({

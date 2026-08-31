@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard, ChevronDown, ChevronRight, Menu, Bell, LogOut,
-  Package, BarChart3, Wrench
+  Package, BarChart3, Wrench, UserRound, LockKeyhole, ChevronUp
 } from 'lucide-react'
 
 interface NavItem {
@@ -39,6 +39,122 @@ function NavigationLoadingIndicator() {
   )
 }
 
+function ProfileMenu({
+  displayName,
+  roleName,
+  placement,
+  sidebarOpen = true,
+  onNavigate,
+}: {
+  displayName: string
+  roleName: string
+  placement: 'sidebar' | 'header'
+  sidebarOpen?: boolean
+  onNavigate?: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  const closeMenu = () => {
+    setOpen(false)
+    onNavigate?.()
+  }
+  const isSidebar = placement === 'sidebar'
+  const showSidebarDetails = !isSidebar || sidebarOpen
+
+  return (
+    <div ref={menuRef} className={`relative ${isSidebar ? 'w-full' : ''}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(value => !value)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={isSidebar
+          ? `w-full flex items-center gap-3 cursor-pointer ${showSidebarDetails ? 'px-2' : 'justify-center px-0'} py-2 rounded-lg text-left transition-all ${open ? 'bg-white/10' : 'hover:bg-white/10'}`
+          : 'flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition hover:bg-gray-100'
+        }
+      >
+        <div className={`${isSidebar ? 'w-8 h-8 bg-[#C8102E] text-sm' : 'w-7 h-7 bg-[#1B2A6B] text-xs'} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}>
+          {displayName.charAt(0)}
+        </div>
+        {isSidebar && showSidebarDetails ? (
+          <div className="flex-1 min-w-0">
+            <div className="text-white text-sm font-medium truncate">{displayName}</div>
+            <div className="text-white/50 text-xs truncate">{roleName}</div>
+          </div>
+        ) : (
+          <span className="text-sm font-medium text-gray-700 hidden sm:block">{displayName}</span>
+        )}
+        {isSidebar && showSidebarDetails && (open ? <ChevronUp className="w-4 h-4 text-white/60" /> : <ChevronDown className="w-4 h-4 text-white/60" />)}
+      </button>
+
+      {open && showSidebarDetails && (
+        <div
+          className={isSidebar
+            ? 'absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-50 overflow-hidden rounded-xl border border-white/10 bg-[#101a3d] shadow-2xl'
+            : 'absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl'
+          }
+          role="menu"
+        >
+          <div className={isSidebar ? 'border-b border-white/10 px-4 py-3' : 'border-b border-gray-200 px-4 py-3'}>
+            <div className={`truncate text-sm font-semibold ${isSidebar ? 'text-white' : 'text-gray-900'}`}>{displayName}</div>
+            <div className={`truncate text-xs ${isSidebar ? 'text-white/50' : 'text-gray-500'}`}>{roleName || 'Excel Cars user'}</div>
+          </div>
+          <div className="p-1.5">
+            <Link
+              href="/profile"
+              onClick={closeMenu}
+              role="menuitem"
+              className={`flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2.5 text-sm transition ${isSidebar ? 'text-white/75 hover:bg-white/10 hover:text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <UserRound className="h-4 w-4" />
+              Profile
+            </Link>
+            <Link
+              href="/profile#security"
+              onClick={closeMenu}
+              role="menuitem"
+              className={`flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2.5 text-sm transition ${isSidebar ? 'text-white/75 hover:bg-white/10 hover:text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <LockKeyhole className="h-4 w-4" />
+              Change Password
+            </Link>
+          </div>
+          <div className={`p-1.5 ${isSidebar ? 'border-t border-white/10' : 'border-t border-gray-200'}`}>
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              role="menuitem"
+              className={`w-full flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm transition ${isSidebar ? 'text-red-300 hover:bg-red-500/10 hover:text-red-200' : 'text-red-600 hover:bg-red-50'}`}
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" />, href: '/dashboard' },
   {
@@ -64,7 +180,7 @@ const navItems: NavItem[] = [
       { label: 'Agents', href: '/config/agents' },
       { label: 'Vehicle Masters', href: '/config/catalog' },
       { label: 'Feedback', href: '/config/feedback' },
-      { label: 'SMS / Email', href: '/config/sms-email' },
+      { label: 'Email Templates', href: '/config/sms-email' },
     ],
   },
   {
@@ -177,26 +293,7 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
 
       {/* User */}
       <div className="border-t border-white/10 p-3">
-        <div className="flex items-center gap-3 px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-[#C8102E] flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-            {displayName.charAt(0)}
-          </div>
-          {sidebarOpen && (
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-sm font-medium truncate">{displayName}</div>
-              <div className="text-white/50 text-xs truncate">{roleName}</div>
-            </div>
-          )}
-        </div>
-        {sidebarOpen && (
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="w-full mt-1 flex items-center gap-2 px-3 py-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg text-sm transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
-        )}
+        <ProfileMenu displayName={displayName} roleName={roleName} placement="sidebar" sidebarOpen={sidebarOpen} onNavigate={() => setMobileSidebarOpen(false)} />
       </div>
     </div>
   )
@@ -235,11 +332,8 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
           <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition">
             <Bell className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
-            <div className="w-7 h-7 rounded-full bg-[#1B2A6B] flex items-center justify-center text-white text-xs font-bold">
-              {displayName.charAt(0)}
-            </div>
-            <span className="text-sm font-medium text-gray-700 hidden sm:block">{displayName}</span>
+          <div className="pl-2 border-l border-gray-200">
+            <ProfileMenu displayName={displayName} roleName={roleName} placement="header" />
           </div>
         </header>
 

@@ -14,9 +14,7 @@ export interface ListUsersParams {
 }
 
 export async function listUsers({ search, status, roleId, stateId, page }: ListUsersParams) {
-  const where: Prisma.UserTableWhereInput = {
-    empId: { not: null },
-  }
+  const where: Prisma.UserTableWhereInput = {}
 
   if (status !== 'All') {
     where.status = status
@@ -35,6 +33,7 @@ export async function listUsers({ search, status, roleId, stateId, page }: ListU
     where.OR = [
       { userName: { contains: q, mode: 'insensitive' } },
       { emailId: { contains: q, mode: 'insensitive' } },
+      { displayName: { contains: q, mode: 'insensitive' } },
       { employee: { is: { empFirstName: { contains: q, mode: 'insensitive' } } } },
       { employee: { is: { empLastName: { contains: q, mode: 'insensitive' } } } },
       { employee: { is: { empEmailId: { contains: q, mode: 'insensitive' } } } },

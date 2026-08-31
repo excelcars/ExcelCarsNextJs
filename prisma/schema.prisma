@@ -216,6 +216,7 @@ model CustomerFeedback {
   createdBy             Int?              @map("created_by")
   updatedDate           DateTime?         @map("updated_date") @db.Timestamptz(6)
   updatedBy             Int?              @map("updated_by")
+  submittedAt           DateTime?         @map("submitted_at") @db.Timestamptz(6)
   fkVariantId           Int?              @map("fk_variant_id")
   createdByUser         UserTable?        @relation("customer_feedback_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_created_by_user")
   customer              Customer?         @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_customer_id")
@@ -751,10 +752,52 @@ model MessageTemplate {
   updatedDate     DateTime?         @map("updated_date") @db.Timestamptz(6)
   updatedBy       Int?              @map("updated_by")
   emailAttachment EmailAttachment[]
+  messageAttachmentUploads MessageAttachmentUpload[]
+  emailDeliveryLogs EmailDeliveryLog[]
   createdByUser   UserTable?        @relation("message_template_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_created_by_user")
   updatedByUser   UserTable?        @relation("message_template_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_updated_by_user")
 
   @@map("message_template")
+}
+
+model EmailDeliveryLog {
+  deliveryLogId   Int             @id @default(autoincrement()) @map("delivery_log_id")
+  templateId      Int             @map("template_id")
+  recipientEmail  String          @map("recipient_email")
+  status          String
+  errorMessage    String?         @map("error_message")
+  attachmentCount Int             @default(0) @map("attachment_count")
+  attemptedAt     DateTime        @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  attemptedBy     Int             @map("attempted_by")
+  retryCount      Int             @default(0) @map("retry_count")
+  nextRetryAt     DateTime?       @map("next_retry_at") @db.Timestamptz(6)
+  emailSubject    String          @map("email_subject")
+  emailHtml       String          @map("email_html")
+  attachmentJson  String?         @map("attachment_json")
+  messageTemplate MessageTemplate @relation(fields: [templateId], references: [typeId], onDelete: Cascade, onUpdate: NoAction, map: "fk_email_delivery_log_template")
+  attemptedByUser UserTable       @relation(fields: [attemptedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_email_delivery_log_user")
+
+  @@index([templateId, attemptedAt], map: "ix_email_delivery_log_template_attempted")
+  @@index([attemptedBy, attemptedAt], map: "ix_email_delivery_log_user_attempted")
+  @@map("email_delivery_log")
+}
+
+model MessageAttachmentUpload {
+  uploadId        String          @id @default(uuid()) @map("upload_id") @db.Uuid
+  templateId      Int             @map("template_id")
+  storedPath      String          @map("stored_path")
+  originalName    String          @map("original_name")
+  mimeType        String          @map("mime_type")
+  byteSize        Int             @map("byte_size")
+  scope           String
+  createdBy       Int             @map("created_by")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  messageTemplate MessageTemplate @relation(fields: [templateId], references: [typeId], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_attachment_upload_template")
+  createdByUser   UserTable       @relation(fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_attachment_upload_user")
+
+  @@index([templateId], map: "ix_message_attachment_upload_template")
+  @@index([createdBy, scope], map: "ix_message_attachment_upload_user_scope")
+  @@map("message_attachment_upload")
 }
 
 model PartnerMaster {
@@ -956,6 +999,8 @@ model UserTable {
   updatedInventoryManagements       InventoryManagement[]      @relation("inventory_management_updated_byTouser_table")
   createdMessageTemplates           MessageTemplate[]          @relation("message_template_created_byTouser_table")
   updatedMessageTemplates           MessageTemplate[]          @relation("message_template_updated_byTouser_table")
+  messageAttachmentUploads          MessageAttachmentUpload[]
+  emailDeliveryLogs                 EmailDeliveryLog[]
   createdRoleMasters                RoleMaster[]               @relation("role_master_created_byTouser_table")
   updatedRoleMasters                RoleMaster[]               @relation("role_master_updated_byTouser_table")
   createdRtoAgents                  RtoAgent[]                 @relation("rto_agent_created_byTouser_table")

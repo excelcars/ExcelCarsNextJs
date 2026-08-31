@@ -5,6 +5,7 @@ export interface SendEmailInput {
   subject: string
   html: string
   cc?: string
+  attachments?: Array<{ filename: string; path: string; contentType: string }>
 }
 
 export interface SendEmailResult {
@@ -55,7 +56,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       from: `${fromName} <${fromAddress}>`,
       to: input.to,
       subject: input.subject,
-      html: input.html,
+    html: input.html,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       ...(cc ? { cc } : {}),
     })
     return { success: true }
