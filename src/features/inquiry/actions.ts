@@ -5,6 +5,8 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
+import { validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { sendEmail } from '@/lib/email/sendMail'
 import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
@@ -42,18 +44,25 @@ export interface ActionResult {
   message?: string
 }
 
+export interface AssignInquiryInput {
+  inquiryId: number
+  assignedToUserId: number | null
+}
+
 export interface CreateInquiryOptions {
   sendMatchingInventoryOnCreate?: boolean
 }
 
 async function createTrackedVehicleEmailLink({
   inventoryId,
+  inquiryId,
   customerId,
   recipientEmail,
   recipientName,
   slug,
 }: {
   inventoryId: number
+  inquiryId?: number | null
   customerId: number | null
   recipientEmail: string
   recipientName: string
@@ -72,14 +81,22 @@ async function createTrackedVehicleEmailLink({
     },
   })
 
+  if (inquiryId) {
+    await prisma.$executeRaw`
+      UPDATE "vehicle_email_links"
+      SET "inquiry_id" = ${inquiryId}
+      WHERE "vehicle_email_link_id" = ${row.vehicleEmailLinkId}
+    `
+  }
+
   return {
     vehicleEmailLinkId: row.vehicleEmailLinkId,
     url: buildTrackedVehicleUrl(slug, rawToken),
   }
 }
 
-async function currentUserId(): Promise<number | null> {
-  return getAuthorizedUserIdForRoute('/inquiry')
+async function currentUserId(route = '/inquiry'): Promise<number | null> {
+  return getAuthorizedUserIdForRoute(route)
 }
 
 function toDate(v: string): Date | null {
@@ -297,32 +314,6 @@ function buildInquiryData(input: InquiryFormInput, resolvedContact: Awaited<Retu
   }
 }
 
-function validateInquiryWorkflow(input: InquiryFormInput): string | null {
-  const status = input.status.trim()
-  const subStatus = input.subStatus.trim().toLowerCase()
-  const inquiryDate = input.dateOfInquiry.trim()
-  const followUpDate = input.followUpDate.trim()
-  const visitedDate = input.visitedDateOfCustomer.trim()
-
-  if (status === 'FollowUp' && !followUpDate) {
-    return 'Follow-up date is required when status is FollowUp.'
-  }
-
-  if (subStatus === 'visited' && !visitedDate) {
-    return 'Visited date is required when sub-status is Visited.'
-  }
-
-  if (inquiryDate && followUpDate && followUpDate < inquiryDate) {
-    return 'Follow-up date cannot be before inquiry date.'
-  }
-
-  if (inquiryDate && visitedDate && visitedDate < inquiryDate) {
-    return 'Visited date cannot be before inquiry date.'
-  }
-
-  return null
-}
-
 function normalizeOptionalText(value: string | null | undefined) {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
@@ -414,6 +405,153 @@ async function createInquiryInventoryLinks({
       updatedAt: now,
       ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
     })),
+  })
+}
+
+async function getInquiryTrackedVehicleEmailHistory(inquiryId: number) {
+  const links = await prisma.$queryRaw<Array<{
+    vehicle_email_link_id: number
+    inventory_id: number
+    recipient_email: string
+    recipient_name: string | null
+    email_sent_at: Date | null
+    created_at: Date
+    expires_at: Date | null
+    first_requested_at: Date | null
+    first_human_view_at: Date | null
+    last_requested_at: Date | null
+    request_count: number | null
+    human_view_count: number | null
+    is_active: boolean
+  }>>(Prisma.sql`
+    SELECT
+      "vehicle_email_link_id",
+      "inventory_id",
+      "recipient_email",
+      "recipient_name",
+      "email_sent_at",
+      "created_at",
+      "expires_at",
+      "first_requested_at",
+      "first_human_view_at",
+      "last_requested_at",
+      "request_count",
+      "human_view_count",
+      "is_active"
+    FROM "vehicle_email_links"
+    WHERE "inquiry_id" = ${inquiryId}
+    ORDER BY "email_sent_at" DESC NULLS LAST, "vehicle_email_link_id" DESC
+  `)
+
+  if (links.length === 0) return []
+
+  const vehicleEmailLinkIds = links.map(link => link.vehicle_email_link_id)
+  const inventoryIds = [...new Set(links.map(link => link.inventory_id).filter(id => Number.isFinite(id) && id > 0))]
+
+  const [inventories, visits, interactions] = await Promise.all([
+    prisma.inventoryManagement.findMany({
+      where: { inventoryId: { in: inventoryIds } },
+      include: {
+        carVariantMaster: {
+          include: { carMakeMaster: true, carModelMaster: true },
+        },
+      },
+    }),
+    prisma.vehicleEmailLinkVisit.findMany({
+      where: { vehicleEmailLinkId: { in: vehicleEmailLinkIds } },
+      orderBy: [{ visitedAt: 'desc' }, { vehicleEmailLinkVisitId: 'desc' }],
+      select: {
+        vehicleEmailLinkVisitId: true,
+        vehicleEmailLinkId: true,
+        visitedAt: true,
+        visitKind: true,
+      },
+    }),
+    prisma.vehicleEmailLinkInteraction.findMany({
+      where: { vehicleEmailLinkId: { in: vehicleEmailLinkIds } },
+      orderBy: [{ interactionAt: 'desc' }, { vehicleEmailLinkInteractionId: 'desc' }],
+      select: {
+        vehicleEmailLinkInteractionId: true,
+        vehicleEmailLinkId: true,
+        interactionAt: true,
+        interactionType: true,
+        interactionLabel: true,
+      },
+    }),
+  ])
+
+  const inventoryById = new Map(inventories.map(inventory => [inventory.inventoryId, inventory]))
+  const visitsByLinkId = new Map<number, typeof visits>()
+  const interactionsByLinkId = new Map<number, typeof interactions>()
+
+  for (const visit of visits) {
+    const group = visitsByLinkId.get(visit.vehicleEmailLinkId) ?? []
+    group.push(visit)
+    visitsByLinkId.set(visit.vehicleEmailLinkId, group)
+  }
+
+  for (const interaction of interactions) {
+    const group = interactionsByLinkId.get(interaction.vehicleEmailLinkId) ?? []
+    group.push(interaction)
+    interactionsByLinkId.set(interaction.vehicleEmailLinkId, group)
+  }
+
+  return links.map(link => {
+    const inventory = inventoryById.get(link.inventory_id)
+    return {
+      vehicleEmailLinkId: link.vehicle_email_link_id,
+      recipientEmail: link.recipient_email,
+      recipientName: link.recipient_name,
+      emailSentAt: link.email_sent_at,
+      createdAt: link.created_at,
+      expiresAt: link.expires_at,
+      firstRequestedAt: link.first_requested_at,
+      firstHumanViewAt: link.first_human_view_at,
+      lastRequestedAt: link.last_requested_at,
+      requestCount: link.request_count ?? 0,
+      humanViewCount: link.human_view_count ?? 0,
+      isActive: link.is_active,
+      inventoryManagement: inventory ? {
+        ...inventory,
+        kmsDriven: inventory.kmsDriven ? inventory.kmsDriven.toString() : null,
+        price: inventory.price ? inventory.price.toString() : null,
+      } : {
+        inventoryId: link.inventory_id,
+        inventoryNumber: null,
+        makeLegacy: null,
+        modelLegacy: null,
+        variantLegacy: null,
+        colour: null,
+        sku: null,
+        year: null,
+        month: null,
+        fuelType: null,
+        noOfOwners: null,
+        tax: null,
+        isCarRegistered: null,
+        registrationNo: null,
+        kmsDriven: null,
+        insuranceType: null,
+        price: null,
+        otherRemarks: null,
+        status: null,
+        ownedType: null,
+        ownedBy: null,
+        mobileNoOwnedBy: null,
+        emailIdOwnedBy: null,
+        customerId: null,
+        customerName: null,
+        internalComments: null,
+        createdDate: null,
+        createdBy: null,
+        updatedDate: null,
+        updatedBy: null,
+        fkVariantId: null,
+        carVariantMaster: null,
+      },
+      visits: visitsByLinkId.get(link.vehicle_email_link_id) ?? [],
+      interactions: interactionsByLinkId.get(link.vehicle_email_link_id) ?? [],
+    }
   })
 }
 
@@ -526,6 +664,7 @@ async function sendMatchedInventoryEmailToInquiryRecipient({
 
   const trackedLink = await createTrackedVehicleEmailLink({
     inventoryId,
+    inquiryId,
     customerId: recipient.inquiry.customerId,
     recipientEmail: recipient.toEmail,
     recipientName: recipient.toName,
@@ -598,13 +737,22 @@ async function findMatchingInventoryIdsForInquiryCars(resolvedCarDetails: Awaite
   return [...matchIds]
 }
 
-export async function getInquiryDetail(inquiryId: number) {
-  const userId = await currentUserId()
+export async function getInquiryDetail(inquiryId: number, options: { route?: string } = {}) {
+  const route = options.route ?? '/inquiry'
+  const userId = await currentUserId(route)
   if (!userId) return null
+  if (!(await canAccessInquiryByOwnership(inquiryId, route))) return null
   const detail = await prisma.inquiry.findUnique({
     where: { inquiryId },
     include: {
       customer: true,
+      assignedToUser: {
+        select: {
+          userId: true,
+          userName: true,
+          displayName: true,
+        },
+      },
       createdByUser: {
         select: {
           userId: true,
@@ -624,6 +772,18 @@ export async function getInquiryDetail(inquiryId: number) {
         include: {
           carVariantMaster: {
             include: { carMakeMaster: true, carModelMaster: true },
+          },
+        },
+      },
+      followupInquiry: {
+        orderBy: [{ createdDt: 'desc' }, { pkFollowupId: 'desc' }],
+        include: {
+          createdByUser: {
+            select: {
+              userId: true,
+              userName: true,
+              displayName: true,
+            },
           },
         },
       },
@@ -651,6 +811,8 @@ export async function getInquiryDetail(inquiryId: number) {
 
   if (!detail) return null
 
+  const vehicleEmailLinks = await getInquiryTrackedVehicleEmailHistory(inquiryId)
+
   return {
     ...detail,
     budgetOfCustomer: detail.budgetOfCustomer ? detail.budgetOfCustomer.toString() : null,
@@ -662,11 +824,12 @@ export async function getInquiryDetail(inquiryId: number) {
         price: link.inventoryManagement.price ? link.inventoryManagement.price.toString() : null,
       },
     })),
+    vehicleEmailLinks,
   }
 }
 
 export async function sendInquiryInventoryEmail(inquiryId: number, inventoryId: number): Promise<ActionResult> {
-  const userId = await currentUserId()
+  const userId = await currentUserId('/inquiry')
   if (!userId) return { success: false, error: 'Not authorized.' }
   const session = await auth()
   return sendMatchedInventoryEmailToInquiryRecipient({
@@ -747,15 +910,12 @@ function isInquiryNumberConflict(err: unknown) {
 }
 
 export async function createInquiry(input: InquiryFormInput, options: CreateInquiryOptions = {}): Promise<ActionResult> {
-  if (!input.customerId && !input.customerNameLegacy.trim() && !input.mobileno.trim()) {
-    return { success: false, error: 'Link a customer or enter a name/mobile.' }
-  }
-  const workflowError = validateInquiryWorkflow(input)
-  if (workflowError) {
-    return { success: false, error: workflowError }
+  const validation = validateInquiryFormInput(input)
+  if (validation.error) {
+    return { success: false, error: validation.error }
   }
 
-  const userId = await currentUserId()
+  const userId = await currentUserId('/inquiry')
   if (!userId) return { success: false, error: 'Not authorized.' }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
@@ -850,17 +1010,18 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
   return { success: true, message: resultMessage }
 }
 
-export async function updateInquiry(id: number, input: InquiryFormInput): Promise<ActionResult> {
-  if (!input.customerId && !input.customerNameLegacy.trim() && !input.mobileno.trim()) {
-    return { success: false, error: 'Link a customer or enter a name/mobile.' }
-  }
-  const workflowError = validateInquiryWorkflow(input)
-  if (workflowError) {
-    return { success: false, error: workflowError }
+export async function updateInquiry(id: number, input: InquiryFormInput, options: { route?: string } = {}): Promise<ActionResult> {
+  const validation = validateInquiryFormInput(input)
+  if (validation.error) {
+    return { success: false, error: validation.error }
   }
 
-  const userId = await currentUserId()
+  const route = options.route ?? '/inquiry'
+  const userId = await currentUserId(route)
   if (!userId) return { success: false, error: 'Not authorized.' }
+  if (!(await canAccessInquiryByOwnership(id, route))) {
+    return { success: false, error: 'You can only update your own inquiries.' }
+  }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -944,9 +1105,59 @@ export async function updateInquiry(id: number, input: InquiryFormInput): Promis
   return { success: true }
 }
 
-export async function deleteInquiry(id: number): Promise<ActionResult> {
-  const userId = await currentUserId()
+export async function assignInquiry(input: AssignInquiryInput): Promise<ActionResult> {
+  const userId = await currentUserId('/inquiry')
   if (!userId) return { success: false, error: 'Not authorized.' }
+  if (!(await canAccessInquiryByOwnership(input.inquiryId, '/inquiry'))) {
+    return { success: false, error: 'You can only assign inquiries you own.' }
+  }
+
+  const assignedToUserId = input.assignedToUserId && input.assignedToUserId > 0 ? input.assignedToUserId : null
+
+  if (assignedToUserId) {
+    const assignee = await prisma.userTable.findUnique({
+      where: { userId: assignedToUserId },
+      select: {
+        userId: true,
+        roleName: true,
+        status: true,
+      },
+    })
+
+    if (!assignee || assignee.status !== 'Active' || assignee.roleName !== 'InquiryAssistant') {
+      return { success: false, error: 'Select a valid active InquiryAssistant to assign this inquiry.' }
+    }
+  }
+
+  try {
+    await prisma.inquiry.update({
+      where: { inquiryId: input.inquiryId },
+      data: {
+        assignedToUser: assignedToUserId
+          ? { connect: { userId: assignedToUserId } }
+          : { disconnect: true },
+        updatedDt: new Date(),
+        ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
+      },
+    })
+  } catch (err) {
+    return { success: false, error: describeError(err) }
+  }
+
+  revalidatePath('/inquiry')
+  revalidatePath('/followup')
+  revalidatePath('/dashboard')
+  revalidatePath('/reports/today')
+  return { success: true, message: assignedToUserId ? 'Inquiry assigned successfully.' : 'Inquiry assignment cleared.' }
+}
+
+export async function deleteInquiry(id: number): Promise<ActionResult> {
+  const route = '/inquiry'
+  const userId = await currentUserId(route)
+  if (!userId) return { success: false, error: 'Not authorized.' }
+  if (!(await canAccessInquiryByOwnership(id, route))) {
+    return { success: false, error: 'You can only delete inquiries you own.' }
+  }
   try {
     await prisma.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
     await prisma.inquiry.delete({ where: { inquiryId: id } })

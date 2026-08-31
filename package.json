@@ -10,6 +10,7 @@
     "infra:ps": "docker compose ps",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:ensure-inquiry-no-unique": "node scripts/ensure-inquiry-number-unique.mjs",
     "build": "prisma generate && next build",
     "dev:only": "next dev",
     "start": "next start",

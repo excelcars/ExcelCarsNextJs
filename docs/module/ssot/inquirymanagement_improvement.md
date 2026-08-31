@@ -1,5 +1,5 @@
 # SSOT - Inquiry Management Improvements
-## Status: Proposed improvements for current Next.js module
+## Status: Mixed completion tracker for current Next.js module, reviewed on 2026-08-28
 
 **Module:** `inquiry`  
 **Project:** `ExcelCarsNextJs`  
@@ -7,7 +7,7 @@
 **Legacy reference:** `D:\projects\ExcelCarsNextJs\docs\module\existing_ssot\inquirymanagement.md`
 
 ## 1. Purpose
-This document defines the recommended improvement scope for the current Next.js Inquiry Management module.
+This document defines the improvement scope for the current Next.js Inquiry Management module and tracks what is already done vs still pending.
 
 It exists to:
 - close important behavior gaps between legacy `.NET Admin/InquiryManagement` and the current Next.js module
@@ -15,8 +15,39 @@ It exists to:
 - identify which improvements are required for parity, data quality, and maintainability
 - provide an ordered direction for future implementation work
 
-## 2. Improvement Themes
-The current module is functional, but it is intentionally simplified compared with legacy behavior. The main improvement themes are:
+## 2. Current Completion Snapshot
+Done:
+- multi-vehicle inquiry support in UI and persistence
+- follow-up history append behavior through `followupInquiry`
+- duplicate warning using normalized mobile, linked customer, and open inquiry overlap
+- customer auto-create / auto-link policy during inquiry save
+- explicit `Save Only` vs `Save & Send Matching`
+- persistent inquiry-to-inventory links with currently used states `matched` and `emailed`
+- inquiry detail now shows follow-up timeline and linked inventory history
+- public vehicle email links work without dashboard login
+- inquiry listing layout moved closer to legacy grouped columns
+- inquiry export moved closer to legacy row format
+- DB-level unique protection for `inquiry_no`
+
+Partial:
+- inventory matching workspace is present but not yet rich enough for operator decisions
+- inquiry detail now shows tracked inventory email history, but generic email outcomes and broader workflow states are still incomplete
+- source handling has suggestions and preferred defaults, but not strict controlled taxonomy
+- docs are now being updated to current truth, but final closure still needs a last full pass after remaining work
+
+Pending:
+- full email outcome history in inquiry detail
+- richer inventory shortlist / rejection / conversion states
+- lifecycle semantics review
+- audit/event logging
+- follow-up-first quick workspace
+- reporting outputs
+- final email media strategy
+- automated tests
+- final legacy closure pass
+
+## 3. Improvement Themes
+The current module is functional, but several structural improvements still remain. The main themes are:
 
 - restore missing business capabilities where they are still required
 - improve data modeling so inquiry workflow is durable and auditable
@@ -24,91 +55,86 @@ The current module is functional, but it is intentionally simplified compared wi
 - normalize inquiry-to-vehicle and inquiry-to-customer relationships
 - make the module easier to report on, extend, and test
 
-## 3. Required Product Gaps To Address
+## 4. Required Product Gaps To Address
 
-### 3.1 Multi-vehicle inquiry support
+### 4.1 Multi-vehicle inquiry support
 Current state:
-- one inquiry is normalized to one active `inquiryCarDetails` row
+- done in current Next.js code
+- one inquiry now supports multiple `inquiryCarDetails` rows
 
 Legacy behavior:
 - one inquiry could hold multiple vehicle-interest rows
 
 Recommended improvement:
-- restore first-class support for multiple vehicle-interest rows per inquiry
-- allow add/edit/delete/reorder of multiple desired vehicle rows in the inquiry form
-- preserve one-to-many `inquiry -> inquiryCarDetails` behavior in both UI and save logic
+- keep this behavior stable
+- improve only if row-level diff or reorder persistence is later needed
 
 Why this matters:
 - this is one of the biggest behavioral differences from the old system
 - it reflects how sales teams capture a single customer’s interest across several vehicles
 - it improves future inventory matching and customer follow-up relevance
 
-### 3.2 Durable follow-up history
+### 4.2 Durable follow-up history
 Current state:
-- follow-up data is stored only on the main inquiry row
-- no separate follow-up history table is written by the current inquiry module
+- partially complete
+- current inquiry saves do append `followupInquiry`
+- current inquiry row still also carries the latest summary state
 
 Legacy behavior:
 - `Followup_Inquiry` rows were appended when follow-up date existed
 
 Recommended improvement:
-- introduce a dedicated inquiry follow-up history model and service flow
-- record each meaningful follow-up event separately instead of overwriting one current value
-- distinguish:
-  - current follow-up state on inquiry
-  - historical follow-up events
+- keep current append behavior
+- ensure reporting and follow-up screens consistently use history where appropriate
 
 Why this matters:
 - sales follow-up is historical, not just point-in-time
 - reporting, accountability, and auditability depend on event history
 - it reduces data loss on repeated edits
 
-### 3.3 Customer upsert and contact normalization
+### 4.3 Customer upsert and contact normalization
 Current state:
-- inquiry links an existing customer or stores free-text contact values
-- the module does not create/update customer master data
+- done, but should stay documented clearly
+- inquiry can link existing customer
+- inquiry can auto-link by normalized mobile
+- inquiry can auto-create customer when name exists and no match is found
 
 Legacy behavior:
 - inquiry save upserted customer by name + mobile
 
 Recommended improvement:
-- define an explicit customer resolution policy for inquiry save
-- choose one of:
-  - strict linking only
-  - controlled auto-create customer
-  - controlled create-or-link review workflow
-- if auto-create is allowed, use stronger identity rules than legacy
+- keep the current controlled auto-create / auto-link policy unless business changes
+- document exact identity rules and preserve inquiry-time snapshot behavior
 
 Why this matters:
 - current free-text fallback can fragment customer data
 - legacy upsert was convenient but weakly keyed
 - a modern policy should preserve usability without multiplying duplicates
 
-### 3.4 Persistent inquiry-to-inventory association
+### 4.4 Persistent inquiry-to-inventory association
 Current state:
-- inventory match is read-only lookup
-- no durable inquiry-to-inventory link is stored
+- partially complete
+- durable inquiry-to-inventory links now exist
+- current durable states effectively used are `matched` and `emailed`
 
 Legacy behavior:
 - no normalized persisted link existed, but the workflow combined inquiry and inventory closely
 
 Recommended improvement:
-- add a durable relation for inventory vehicles associated with an inquiry
-- support relation states such as:
-  - matched
-  - emailed
-  - shortlisted
-  - visited
-  - booked
-  - rejected
+- extend current relation usage to additional business states such as:
+- `shortlisted`
+- `visited`
+- `booked`
+- `rejected`
 
 Why this matters:
 - once a vehicle is actually shown or sent to a customer, that business event should be queryable
 - this improves follow-up quality and sales conversion reporting
 
-### 3.5 Explicit source and lead-channel governance
+### 4.5 Explicit source and lead-channel governance
 Current state:
-- source is free text with suggestions
+- partial
+- source is suggestion-driven using preferred defaults plus distinct saved values
 
 Recommended improvement:
 - define a controlled source taxonomy
@@ -120,18 +146,17 @@ Recommended improvement:
 Why this matters:
 - reporting on lead quality and lead channel performance needs normalized source data
 
-## 4. Required Data Model Improvements
+## 5. Required Data Model Improvements
 
-### 4.1 Preserve one-to-many inquiry car details
+### 5.1 Preserve one-to-many inquiry car details
 Recommended rule:
 - `inquiryCarDetails` must be treated as a true child collection, not collapsed to one row
 
 Required changes:
-- save full collection from UI
-- update by child identity rather than delete-all-or-keep-one logic
-- support soft delete or explicit removal semantics if needed
+- done for multi-row collection support
+- still pending if we want row-identity diff updates instead of replace-all semantics
 
-### 4.2 Introduce inquiry follow-up history table
+### 5.2 Introduce inquiry follow-up history table
 Recommended minimum table:
 - `inquiryFollowups`
 
@@ -150,9 +175,10 @@ Minimum fields:
 - `updatedBy`
 
 Recommended rule:
-- each save that changes follow-up workflow meaningfully should append a history event
+- current equivalent behavior is already happening through `followupInquiry`
+- no new table is needed unless naming or schema redesign is explicitly required
 
-### 4.3 Introduce inquiry-inventory relation table
+### 5.3 Introduce inquiry-inventory relation table
 Recommended minimum table:
 - `inquiryInventoryLinks`
 
@@ -175,7 +201,11 @@ Suggested `linkType` values:
 - `booked`
 - `rejected`
 
-### 4.4 Strengthen customer identity handling
+Current state:
+- table exists and is in use
+- broader lifecycle states are still pending
+
+### 5.4 Strengthen customer identity handling
 Recommended improvements:
 - normalize mobile numbers before duplicate checks
 - optionally store inquiry-time snapshot fields even when linked customer exists
@@ -183,7 +213,7 @@ Recommended improvements:
   - canonical linked customer data
   - inquiry-time captured contact snapshot
 
-### 4.5 Add audit/event logging
+### 5.5 Add audit/event logging
 Recommended minimum event coverage:
 - inquiry created
 - inquiry updated
@@ -197,11 +227,13 @@ Recommended minimum event coverage:
 Why this matters:
 - current module has useful workflow but weak business traceability
 
-## 5. Required Workflow Improvements
+## 6. Required Workflow Improvements
 
-### 5.1 Separate save from side effects
+### 6.1 Separate save from side effects
 Current state:
-- inquiry create performs a best-effort first-save email side effect
+- mostly addressed
+- current main UX exposes explicit save actions
+- legacy-style silent side effects are no longer the only save path
 
 Recommended improvement:
 - make email behavior explicit and configurable
@@ -212,9 +244,10 @@ Recommended options:
 - `save and send inquiry car email`
 - `save and send selected inventory vehicles`
 
-### 5.2 Better duplicate inquiry handling
+### 6.2 Better duplicate inquiry handling
 Current state:
-- duplicate check is informational based on exact mobile match
+- mostly addressed
+- duplicate check is informational and now uses normalized mobile, linked customer, and open inquiry overlap
 
 Recommended improvement:
 - upgrade duplicate detection to include:
@@ -226,7 +259,7 @@ Recommended improvement:
   - open existing inquiry
   - merge into existing inquiry
 
-### 5.3 Better lifecycle semantics
+### 6.3 Better lifecycle semantics
 Current state:
 - statuses are only `FollowUp` and `Closed`
 - classification is separate but loosely governed
@@ -243,7 +276,7 @@ Suggested approach:
 - closed reasons via sub-status
 - optional sales-stage tracking if business needs it
 
-### 5.4 Inquiry detail view should show full history
+### 6.4 Inquiry detail view should show full history
 Recommended improvement:
 - inquiry detail should show:
   - current inquiry summary
@@ -253,34 +286,37 @@ Recommended improvement:
   - email history
   - creator/updater audit info
 
-## 6. UI/UX Improvements
+Current state:
+- everything above is present except full email history / outcome timeline
 
-### 6.1 Multi-row vehicle interest editor
+## 7. UI/UX Improvements
+
+### 7.1 Multi-row vehicle interest editor
 Add:
 - repeatable car-interest rows
 - row-level make/model/variant selectors
 - row-level year and sub-variant
 - row removal and add-another actions
 
-### 6.2 Stronger inventory match panel
+### 7.2 Stronger inventory match panel
 Improve match panel to show:
 - why each vehicle matched
 - vehicle availability state
 - whether already emailed for this inquiry
 - whether already linked/shortlisted
 
-### 6.3 Follow-up-first workspace
+### 7.3 Follow-up-first workspace
 Recommended improvement:
 - surface today’s and overdue follow-ups more prominently
 - allow quick next-action updates without reopening full edit modal
 
-### 6.4 Better error and confirmation behavior
+### 7.4 Better error and confirmation behavior
 Add explicit confirmations for:
 - deleting inquiry
 - sending customer emails
 - overwriting customer/contact values from linked customer
 
-## 7. Reporting Improvements
+## 8. Reporting Improvements
 Recommended reporting additions:
 - inquiries by source
 - inquiries by classification
@@ -294,20 +330,24 @@ Why this matters:
 - current filters are useful operationally
 - durable reporting requires normalized relations and history
 
-## 8. Email Improvements
+## 9. Email Improvements
 
-### 8.1 Make inquiry email flows explicit
+### 9.1 Make inquiry email flows explicit
 Recommended improvements:
 - distinguish inquiry-interest email from concrete inventory email
 - show send preview before dispatch
 - record send result against inquiry timeline
 
-### 8.2 Multi-vehicle inventory email support
+### 9.2 Multi-vehicle inventory email support
 Recommended improvement:
 - support sending more than one selected inventory vehicle in one inquiry email workflow
 - optionally persist each linked vehicle as `emailed`
 
-### 8.3 Attachments and media strategy
+Current state:
+- done for selected inventory vehicles
+- still pending if grouped one-message multi-vehicle email becomes required
+
+### 9.3 Attachments and media strategy
 Recommended improvement:
 - decide whether inquiry-driven inventory emails should include:
   - tracked links only
@@ -315,7 +355,7 @@ Recommended improvement:
   - downloadable brochure/PDF
 - avoid unbounded attachment behavior
 
-## 9. Prioritized Implementation Order
+## 10. Prioritized Implementation Order
 
 ### Phase 1 - parity and data safety
 - restore multi-vehicle inquiry support
@@ -333,76 +373,69 @@ Recommended improvement:
 - add richer reports and dashboards
 - improve follow-up-first operational workflow
 
-## 9A. Execution TODO
+## 10A. Execution TODO
 Use this as the one-by-one delivery checklist for completing Inquiry Management.
 
 ### Step 1 - Apply inquiry number database protection
-- apply `D:\projects\ExcelCarsNextJs\prisma\add_inquiry_number_unique.sql`
-- confirm duplicate inquiry number creation is blocked at DB level
+- status: done
+- DB-level duplicate inquiry number protection is now applied and verified
 - keep current retry logic in application layer
 
 ### Step 2 - Restore complete multi-vehicle inquiry UX
-- reintroduce visible multi-row vehicle editor in inquiry form
-- support add, edit, remove, and clear row behavior cleanly
-- keep one inquiry mapped to multiple `inquiryCarDetails`
-- update detail/list rendering so all vehicle rows are easy to review
+- status: done
+- visible multi-row vehicle editor exists
+- one inquiry maps to multiple `inquiryCarDetails`
+- detail/list/export now handle multi-row inquiry data materially better
 
 ### Step 3 - Add durable follow-up history
-- add `inquiryFollowups` table/model
-- append follow-up history on meaningful workflow changes
-- preserve current inquiry summary fields while also storing history events
-- show latest follow-up state separately from historical follow-up timeline
+- status: done using existing `followupInquiry` table
+- append behavior exists on meaningful workflow changes
+- current inquiry summary fields are preserved
+- inquiry detail shows historical follow-up timeline
 
 ### Step 4 - Normalize duplicate inquiry detection
-- normalize mobile values before duplicate checks
-- include linked customer id in duplicate detection
-- include recent open inquiry overlap rules
-- offer user actions:
-- continue as new inquiry
-- open existing inquiry
-- merge into existing inquiry if approved for scope
+- status: mostly done
+- normalized mobile, linked customer id, and open inquiry overlap are checked
+- `View` existing inquiry is available
+- merge flow is still pending
 
 ### Step 5 - Define customer resolution policy
-- finalize whether inquiry save is:
-- strict link only
-- controlled auto-create customer
-- controlled create-or-link workflow
-- if create/update is allowed, preserve inquiry-time snapshot values separately from customer master data
-- document exact matching rules for customer identity
+- status: done for current implementation
+- current policy is controlled auto-link / auto-create by normalized mobile and name presence
+- snapshot vs canonical behavior remains documented, but can still be refined later if business asks
 
 ### Step 6 - Make save vs send behavior explicit
-- remove silent auto-email as the only first-save behavior
-- support clear actions such as:
-- save only
-- save and send inquiry email
-- save and send selected inventory vehicles
-- show send confirmation before dispatch where needed
+- status: mostly done
+- explicit `Save Only` and `Save & Send Matching` are implemented
+- separate explicit inquiry-interest email flow is still less prominent than inventory-send flow
 
 ### Step 7 - Add persistent inquiry-to-inventory links
 - legacy `.NET` system did not persist durable inquiry-to-inventory links; inventory search and customer email were transient workflow actions only
-- add `inquiryInventoryLinks` table/model
-- store relation states like `matched`, `emailed`, `shortlisted`, `visited`, `booked`, `rejected`
-- persist manual popup sends as `emailed`
-- decide whether auto-matched inventory should persist immediately as `matched`
+- status: partial
+- table/model exists and is in use
+- `matched` and `emailed` are persisted
+- richer lifecycle states are still pending
 - treat this as a deliberate Next.js improvement beyond parity, not a legacy restoration item
 
 ### Step 8 - Record email and inventory history in inquiry detail
-- show linked inventory history in inquiry detail
-- show email send history and outcomes
-- show which vehicles were matched, sent, shortlisted, rejected, or converted
+- status: partial
+- linked inventory history is shown
+- tracked inventory email history is now shown in inquiry detail
+- generic inquiry-email history and broader outcome coverage are still pending
 
 ### Step 9 - Improve inventory matching workspace
-- show why each inventory row matched
-- show availability state
-- show already-emailed state for the current inquiry
-- show already-linked or shortlisted state
+- status: partial
+- basic match results and availability are visible
+- richer operator state and explanation are still pending
 
 ### Step 10 - Improve inquiry lifecycle semantics
+- status: pending
 - review current `status`, `subStatus`, and `classification`
 - define final lifecycle model for `Open`, `FollowUp`, `Closed` if adopted
 - map sub-status and follow-up actions consistently
 
 ### Step 11 - Add audit and event logging
+- status: pending
 - log inquiry created
 - log inquiry updated
 - log inquiry deleted
@@ -412,16 +445,18 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - log email sent
 
 ### Step 12 - Normalize source / lead channel governance
-- replace weak free-text source handling with controlled taxonomy
-- support canonical source and optional sub-source / campaign fields
-- prevent duplicate spellings such as `CarDekho`, `cardekho`, `Car Dekho`
+- status: partial
+- preferred defaults and live suggestions exist
+- strict canonical taxonomy is still pending
 
 ### Step 13 - Build follow-up-first workspace improvements
+- status: pending
 - surface today’s follow-ups
 - surface overdue follow-ups
 - allow quick next-action updates without opening full edit each time
 
 ### Step 14 - Add reporting outputs
+- status: pending
 - inquiries by source
 - inquiries by classification
 - inquiries by assigned user
@@ -431,11 +466,13 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - emailed vehicle engagement by inquiry
 
 ### Step 15 - Decide email media strategy
+- status: pending
 - decide tracked links vs inline images vs brochure/PDF
 - document limits and default behavior
 - avoid oversized or unbounded email attachments
 
 ### Step 16 - Add automated coverage
+- status: pending
 - test multi-vehicle create/update/remove
 - test follow-up history append behavior
 - test duplicate handling with normalized mobile/customer
@@ -445,10 +482,12 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - test inquiry detail history rendering
 
 ### Step 17 - Update SSOT during each completed slice
+- status: in progress
 - update `D:\projects\ExcelCarsNextJs\docs\module\ssot\inquirymanagement.md` whenever current behavior changes
 - keep this improvement document marked against actual completion state
 
 ### Step 18 - Final legacy business-logic verification
+- status: pending
 - re-read `D:\projects\ExcelCars\ExcelCars\Controllers\AdminController.cs`
 - re-read `D:\projects\ExcelCars\ExcelCars\Views\Admin\InquiryManagement.cshtml`
 - re-read `D:\projects\ExcelCars\ApModel\Model\Inquiry\Inquiry.cs`
@@ -459,7 +498,7 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - intentionally excluded and documented
 - only close Inquiry Management implementation after this final verification pass
 
-## 10. Non-goals For The First Improvement Pass
+## 11. Non-goals For The First Improvement Pass
 - full CRM assignment engine
 - automated lead scoring
 - omnichannel communication hub
@@ -467,7 +506,7 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 
 These may be valuable later, but they should not block the structural improvements above.
 
-## 11. Tests Required For Improvement Work
+## 12. Tests Required For Improvement Work
 - inquiry can save multiple vehicle-interest rows correctly
 - update can add, edit, and remove child vehicle-interest rows safely
 - follow-up history appends new events without losing prior records
@@ -479,7 +518,7 @@ These may be valuable later, but they should not block the structural improvemen
 - explicit save-and-send flow sends intended email and records outcome
 - detail view accurately renders inquiry timeline and related vehicles
 
-## 12. SSOT Rule
+## 13. SSOT Rule
 Any implementation work that changes current inquiry behavior should follow this priority:
 - preserve or improve business truth
 - make inquiry relations durable

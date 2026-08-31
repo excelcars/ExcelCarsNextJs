@@ -2,20 +2,31 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Download, Loader2, Eye } from 'lucide-react'
-import { Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Download, Loader2, Eye, UserPlus } from 'lucide-react'
+import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
+import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
-import { createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
-import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
-
-const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car Not In Stock', 'Not connected', 'Already Bought Car', 'Visited', 'Fresh Lead', 'Sold Car']
+import { assignInquiry, createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
+import { isValidYear } from '@/lib/validation'
+import { isFollowupStatus, isVisitedSubStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
 interface CarVariantMaster { pkVariantId: number; variant: string | null }
-interface UserOption { userId: number; userName: string | null; displayName: string | null }
+interface UserOption {
+  userId: number
+  userName: string | null
+  displayName: string | null
+  employee?: {
+    empId: number
+    empFirstName: string | null
+    empLastName: string | null
+    empMobileNo: string | null
+    empEmailId: string | null
+  } | null
+}
 
 interface InquiryRow {
   inquiryId: number
@@ -33,13 +44,28 @@ interface InquiryRow {
   subStatus: string | null
   followUpDate: Date | string | null
   remark: string | null
+  assignedTo?: number | null
   createdDt?: Date | string | null
   updatedDt?: Date | string | null
+  assignedToUser?: UserOption | null
   createdByUser?: UserOption | null
   updatedByUser?: UserOption | null
   customer: CustomerOption | null
   inquiryCarDetails: InquiryCarDetailRow[]
+  followupInquiry?: FollowupHistoryEntry[]
   inquiryInventoryLinks?: InquiryInventoryLinkRow[]
+  vehicleEmailLinks?: VehicleEmailLinkRow[]
+}
+
+interface FollowupHistoryEntry {
+  pkFollowupId: number
+  followupDate: Date | string | null
+  followupStatus: string | null
+  followupSubStatus: string | null
+  followupClassification: string | null
+  comments: string | null
+  createdDt: Date | string | null
+  createdByUser?: UserOption | null
 }
 
 interface InquiryCarDetailRow {
@@ -109,6 +135,48 @@ interface InquiryInventoryLinkRow {
   }
 }
 
+interface VehicleEmailLinkRow {
+  vehicleEmailLinkId: number
+  recipientEmail: string
+  recipientName: string | null
+  emailSentAt: Date | string | null
+  createdAt?: Date | string | null
+  firstRequestedAt: Date | string | null
+  firstHumanViewAt: Date | string | null
+  lastRequestedAt: Date | string | null
+  requestCount: number
+  humanViewCount: number
+  isActive: boolean
+  inventoryManagement: {
+    inventoryId: number
+    inventoryNumber: string | null
+    makeLegacy?: string | null
+    modelLegacy?: string | null
+    variantLegacy?: string | null
+    registrationNo: string | null
+    year: number | null
+    kmsDriven: string | number | null
+    price: string | number | null
+    status: string | null
+    carVariantMaster: {
+      variant: string | null
+      carMakeMaster: { pkMakeId?: number; make: string | null } | null
+      carModelMaster: { pkModelId?: number; model: string | null } | null
+    } | null
+  }
+  visits: Array<{
+    vehicleEmailLinkVisitId: number
+    visitedAt: Date | string
+    visitKind: string
+  }>
+  interactions: Array<{
+    vehicleEmailLinkInteractionId: number
+    interactionAt: Date | string
+    interactionType: string
+    interactionLabel: string | null
+  }>
+}
+
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
 const fmtDateTime = (d: Date | string | null | undefined) => {
   if (!d) return ''
@@ -126,6 +194,19 @@ const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleStri
 // some legacy catalog rows carry placeholder text ("null", "na") instead of a real SQL NULL
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
+
+function userOptionLabel(user: UserOption | null | undefined) {
+  if (!user) return '—'
+  const employeeName = `${user.employee?.empFirstName ?? ''} ${user.employee?.empLastName ?? ''}`.trim()
+  const userName = user.userName?.trim()
+  const name = user.displayName?.trim() || employeeName
+
+  if (userName && name && userName.toLowerCase() !== name.toLowerCase()) {
+    return `${userName} · ${name}`
+  }
+
+  return userName || name || `User #${user.userId}`
+}
 
 function inquiryVehicleLabel(car: InquiryRow['inquiryCarDetails'][0] | undefined | null) {
   if (!car) return '—'
@@ -146,6 +227,212 @@ function summarizeInquiryVehicles(cars: InquiryCarDetailRow[] | undefined | null
   if (labels.length === 0) return '—'
   if (labels.length === 1) return labels[0]
   return `${labels[0]} +${labels.length - 1} more`
+}
+
+function summarizeVehicleEmailEngagement(link: VehicleEmailLinkRow) {
+  let callClicks = 0
+  let whatsappClicks = 0
+  let emailClicks = 0
+
+  for (const interaction of link.interactions) {
+    if (interaction.interactionType === 'call_click') callClicks += 1
+    if (interaction.interactionType === 'whatsapp_click') whatsappClicks += 1
+    if (interaction.interactionType === 'email_click') emailClicks += 1
+  }
+
+  return { callClicks, whatsappClicks, emailClicks }
+}
+
+function buildVehicleHistoryRows(
+  inquiryInventoryLinks: InquiryInventoryLinkRow[] | undefined,
+  vehicleEmailLinks: VehicleEmailLinkRow[] | undefined,
+) {
+  const rows = new Map<number, {
+    inventoryId: number
+    inventoryNumber: string | null
+    registrationNo: string | null
+    vehicle: string
+    year: number | null
+    status: string | null
+    price: string | number | null
+    matchedAt: Date | string | null
+    emailedAt: Date | string | null
+    emailCount: number
+    humanViewCount: number
+    requestCount: number
+    callClicks: number
+    whatsappClicks: number
+    emailClicks: number
+  }>()
+
+  for (const link of inquiryInventoryLinks ?? []) {
+    const inventoryId = link.inventoryManagement.inventoryId
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(link.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean).join(' ') || '—'
+
+    const existing = rows.get(inventoryId)
+    const next = existing ?? {
+      inventoryId,
+      inventoryNumber: link.inventoryManagement.inventoryNumber,
+      registrationNo: link.inventoryManagement.registrationNo,
+      vehicle,
+      year: link.inventoryManagement.year,
+      status: link.inventoryManagement.status,
+      price: link.inventoryManagement.price,
+      matchedAt: null,
+      emailedAt: null,
+      emailCount: 0,
+      humanViewCount: 0,
+      requestCount: 0,
+      callClicks: 0,
+      whatsappClicks: 0,
+      emailClicks: 0,
+    }
+
+    if (link.linkType.toLowerCase() === 'matched' && !next.matchedAt) {
+      next.matchedAt = link.createdAt
+    }
+    if (link.linkType.toLowerCase() === 'emailed' && !next.emailedAt) {
+      next.emailedAt = link.createdAt
+    }
+
+    rows.set(inventoryId, next)
+  }
+
+  for (const link of vehicleEmailLinks ?? []) {
+    const inventoryId = link.inventoryManagement.inventoryId
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(link.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean).join(' ') || '—'
+    const engagement = summarizeVehicleEmailEngagement(link)
+
+    const existing = rows.get(inventoryId)
+    const next = existing ?? {
+      inventoryId,
+      inventoryNumber: link.inventoryManagement.inventoryNumber,
+      registrationNo: link.inventoryManagement.registrationNo,
+      vehicle,
+      year: link.inventoryManagement.year,
+      status: link.inventoryManagement.status,
+      price: link.inventoryManagement.price,
+      matchedAt: null,
+      emailedAt: null,
+      emailCount: 0,
+      humanViewCount: 0,
+      requestCount: 0,
+      callClicks: 0,
+      whatsappClicks: 0,
+      emailClicks: 0,
+    }
+
+    if (!next.emailedAt) {
+      next.emailedAt = link.emailSentAt ?? link.createdAt ?? null
+    }
+
+    next.emailCount += 1
+    next.humanViewCount += link.humanViewCount
+    next.requestCount += link.requestCount
+    next.callClicks += engagement.callClicks
+    next.whatsappClicks += engagement.whatsappClicks
+    next.emailClicks += engagement.emailClicks
+
+    rows.set(inventoryId, next)
+  }
+
+  return [...rows.values()].sort((a, b) => {
+    const aTime = a.emailedAt ? new Date(a.emailedAt).getTime() : a.matchedAt ? new Date(a.matchedAt).getTime() : 0
+    const bTime = b.emailedAt ? new Date(b.emailedAt).getTime() : b.matchedAt ? new Date(b.matchedAt).getTime() : 0
+    return bTime - aTime
+  })
+}
+
+function buildInquiryActivityItems(inquiry: InquiryRow) {
+  const items: Array<{
+    key: string
+    at: Date | string | null
+    title: string
+    detail: string
+    tone: 'danger' | 'info' | 'neutral' | 'success'
+  }> = []
+
+  if (inquiry.followUpDate && inquiry.status === 'FollowUp') {
+    const today = new Date(new Date().toDateString())
+    const followUpDate = new Date(inquiry.followUpDate)
+    const diffDays = Math.floor((today.getTime() - new Date(followUpDate.toDateString()).getTime()) / (1000 * 60 * 60 * 24))
+    const overdue = diffDays > 0
+    items.push({
+      key: `current-followup-${inquiry.inquiryId}`,
+      at: inquiry.followUpDate,
+      title: overdue ? 'Follow-up call due' : 'Follow-up scheduled',
+      detail: overdue
+        ? `Current follow-up is overdue by ${diffDays} day${diffDays === 1 ? '' : 's'}`
+        : `Current follow-up is scheduled for ${fmtDate(inquiry.followUpDate)}`,
+      tone: overdue ? 'danger' : 'info',
+    })
+  }
+
+  for (const followup of inquiry.followupInquiry ?? []) {
+    items.push({
+      key: `followup-${followup.pkFollowupId}`,
+      at: followup.createdDt ?? followup.followupDate,
+      title: `Status set to ${followup.followupStatus ?? '—'}`,
+      detail: [
+        followup.followupSubStatus ? `Sub-status: ${followup.followupSubStatus}` : '',
+        followup.followupClassification ? `Class: ${followup.followupClassification}` : '',
+        followup.comments?.trim() ? followup.comments.trim() : '',
+        followup.createdByUser ? `By ${userOptionLabel(followup.createdByUser)}` : '',
+      ].filter(Boolean).join(' · ') || 'Follow-up logged',
+      tone: followup.followupStatus === 'Closed' ? 'success' : 'info',
+    })
+  }
+
+  for (const link of inquiry.vehicleEmailLinks ?? []) {
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make) || clean(link.inventoryManagement.makeLegacy),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model) || clean(link.inventoryManagement.modelLegacy),
+      clean(link.inventoryManagement.carVariantMaster?.variant) || clean(link.inventoryManagement.variantLegacy),
+    ].filter(Boolean).join(' ') || (link.inventoryManagement.inventoryNumber ?? `Inventory #${link.inventoryManagement.inventoryId}`)
+    const engagement = summarizeVehicleEmailEngagement(link)
+
+    items.push({
+      key: `email-${link.vehicleEmailLinkId}`,
+      at: link.emailSentAt ?? link.createdAt ?? null,
+      title: `Vehicle email sent`,
+      detail: [
+        vehicle,
+        link.recipientEmail,
+        link.humanViewCount > 0 || link.requestCount > 0 ? `Opened ${link.humanViewCount}/${link.requestCount}` : '',
+        engagement.callClicks || engagement.whatsappClicks || engagement.emailClicks
+          ? `Clicks C${engagement.callClicks} W${engagement.whatsappClicks} E${engagement.emailClicks}`
+          : '',
+      ].filter(Boolean).join(' · '),
+      tone: 'success',
+    })
+  }
+
+  if (inquiry.createdDt) {
+    items.push({
+      key: `created-${inquiry.inquiryId}`,
+      at: inquiry.createdDt,
+      title: `Inquiry created from ${inquiry.website ?? 'unknown source'}`,
+      detail: [
+        inquiry.createdByUser ? userOptionLabel(inquiry.createdByUser) : '',
+        inquiry.customer?.custId || inquiry.customerId ? `Linked to customer #${inquiry.customer?.custId ?? inquiry.customerId}` : '',
+      ].filter(Boolean).join(' · ') || 'Inquiry created',
+      tone: 'neutral',
+    })
+  }
+
+  return items.sort((a, b) => {
+    const aTime = a.at ? new Date(a.at).getTime() : 0
+    const bTime = b.at ? new Date(b.at).getTime() : 0
+    return bTime - aTime
+  })
 }
 
 function csvValue(value: string | number | boolean | null | undefined) {
@@ -259,11 +546,13 @@ function emptyForm(): InquiryFormInput {
 }
 
 export function InquiryClient({
-  initialData, makes, sourceSuggestions, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceSuggestions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
   sourceSuggestions: string[]
+  subStatusSuggestions: string[]
+  inquiryAssistants: UserOption[]
   total: number
   page: number
   pageCount: number
@@ -302,11 +591,17 @@ export function InquiryClient({
   const [isEmailPending, startEmailTransition] = useTransition()
   const [viewInquiryId, setViewInquiryId] = useState<number | null>(null)
   const [viewInquiry, setViewInquiry] = useState<InquiryRow | null>(null)
+  const [viewTab, setViewTab] = useState<'overview' | 'requirement' | 'activity' | 'record'>('overview')
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState('')
+  const [assignInquiryRow, setAssignInquiryRow] = useState<InquiryRow | null>(null)
+  const [assignUserId, setAssignUserId] = useState('')
+  const [assignError, setAssignError] = useState('')
+  const [isAssignPending, startAssignTransition] = useTransition()
   const [editLoading, setEditLoading] = useState(false)
   const [emailInquiryRow, setEmailInquiryRow] = useState<InquiryRow | null>(null)
   const [emailInventoryMatches, setEmailInventoryMatches] = useState<InventoryMatch[]>([])
+  const [emailHistoryByInventoryId, setEmailHistoryByInventoryId] = useState<Record<number, { emailed: boolean; emailedAt: string | null }>>({})
   const [emailInventoryLoading, setEmailInventoryLoading] = useState(false)
   const [selectedEmailInventoryIds, setSelectedEmailInventoryIds] = useState<number[]>([])
   const [emailInventorySearch, setEmailInventorySearch] = useState('')
@@ -376,13 +671,27 @@ export function InquiryClient({
     setSelectedEmailInventoryIds([])
     setEmailInventorySearch('')
     setEmailInventoryMatches([])
+    setEmailHistoryByInventoryId({})
     setEmailInquiryRow(row)
     setEmailInventoryLoading(true)
 
-    loadInventoryMatchesForInquiry(row)
-      .then(matches => {
+    Promise.all([
+      loadInventoryMatchesForInquiry(row),
+      getInquiryDetail(row.inquiryId),
+    ])
+      .then(([matches, detail]) => {
         if (emailInventoryRequestRef.current !== requestId) return
         setEmailInventoryMatches(matches)
+        const history: Record<number, { emailed: boolean; emailedAt: string | null }> = {}
+        for (const link of detail?.vehicleEmailLinks ?? []) {
+          const inventoryId = link.inventoryManagement.inventoryId
+          const current = history[inventoryId]
+          const sentAt = fmtDateTime(link.emailSentAt ?? link.createdAt ?? null) || null
+          if (!current || (!current.emailedAt && sentAt)) {
+            history[inventoryId] = { emailed: true, emailedAt: sentAt }
+          }
+        }
+        setEmailHistoryByInventoryId(history)
       })
       .catch(err => {
         if (emailInventoryRequestRef.current !== requestId) return
@@ -428,6 +737,7 @@ export function InquiryClient({
     const requestId = ++viewRequestRef.current
     setViewInquiryId(row.inquiryId)
     setViewInquiry(null)
+    setViewTab('overview')
     setViewError('')
     setViewLoading(true)
 
@@ -452,6 +762,7 @@ export function InquiryClient({
   const closeView = () => {
     setViewInquiryId(null)
     setViewInquiry(null)
+    setViewTab('overview')
     setViewError('')
     setViewLoading(false)
     if (searchParams.has('view')) {
@@ -478,10 +789,10 @@ export function InquiryClient({
   const [inventoryMatchError, setInventoryMatchError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
-  const isFollowUpStatus = form.status.trim() === 'FollowUp'
-  const isVisitedSubStatus = form.subStatus.trim().toLowerCase() === 'visited'
-  const isMissingFollowUpDate = isFollowUpStatus && !form.followUpDate.trim()
-  const isMissingVisitedDate = isVisitedSubStatus && !form.visitedDateOfCustomer.trim()
+  const followUpSelected = isFollowupStatus(form.status)
+  const visitedSelected = isVisitedSubStatus(form.subStatus)
+  const isMissingFollowUpDate = followUpSelected && !form.followUpDate.trim()
+  const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
   const activeFilterCount = [
     search.trim() ? 1 : 0,
     status !== 'All' ? 1 : 0,
@@ -516,6 +827,24 @@ export function InquiryClient({
     setCarEditorVariants([])
     setEditingCarIndex(null)
     setCarEditorError('')
+  }
+
+  const openAssign = (row: InquiryRow) => {
+    setAssignInquiryRow(row)
+    setAssignUserId(row.assignedTo ? String(row.assignedTo) : '')
+    setAssignError('')
+    setSaveFeedback(null)
+  }
+
+  const forceCloseAssign = () => {
+    setAssignInquiryRow(null)
+    setAssignUserId('')
+    setAssignError('')
+  }
+
+  const closeAssign = () => {
+    if (isAssignPending) return
+    forceCloseAssign()
   }
 
   const loadModelsForMake = async (selectedMakeId: number) => {
@@ -736,11 +1065,11 @@ export function InquiryClient({
   }, [searchInput])
 
   useEffect(() => {
-    if (modal && isVisitedSubStatus && !form.visitedDateOfCustomer) {
+    if (modal && visitedSelected && !form.visitedDateOfCustomer) {
       f('visitedDateOfCustomer', new Date().toISOString().slice(0, 10))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisitedSubStatus, modal])
+  }, [modal, visitedSelected])
 
   useEffect(() => {
     if (!modal) {
@@ -981,63 +1310,10 @@ export function InquiryClient({
   const f = <K extends keyof InquiryFormInput>(k: K, v: InquiryFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
   const save = (mode: 'save-only' | 'save-and-send-matching' = 'save-only') => {
     setError('')
-    const newErrors: Record<string, boolean> = {}
-
-    if (!form.customerId && !form.customerNameLegacy?.trim()) {
-      newErrors.customer = true
-    }
-    if (!form.mobileno?.trim() || !isValidPhone(form.mobileno)) {
-      newErrors.mobileno = true
-    }
-    if (form.email && !isValidEmail(form.email)) {
-      newErrors.email = true
-    }
-    if (!form.website?.trim()) {
-      newErrors.website = true
-    }
-    if (form.budgetOfCustomer !== null && form.budgetOfCustomer <= 0) {
-      newErrors.budgetOfCustomer = true
-    }
-    const invalidCarIndex = form.inquiryCars.findIndex(car => car.carYear !== null && !isValidYear(car.carYear))
-    if (invalidCarIndex >= 0) {
-      newErrors[`carYear-${invalidCarIndex}`] = true
-    }
-
-    // Workflow validations
-    const status = form.status.trim()
-    const subStatus = form.subStatus.trim().toLowerCase()
-    const inquiryDate = form.dateOfInquiry.trim()
-    const followUpDate = form.followUpDate.trim()
-    const visitedDate = form.visitedDateOfCustomer.trim()
-
-    if (status === 'FollowUp' && !followUpDate) {
-      newErrors.followUpDate = true
-    }
-    if (subStatus === 'visited' && !visitedDate) {
-      newErrors.visitedDateOfCustomer = true
-    }
-    if (inquiryDate && followUpDate && followUpDate < inquiryDate) {
-      newErrors.followUpDate = true
-      newErrors.dateOfInquiry = true
-    }
-    if (inquiryDate && visitedDate && visitedDate < inquiryDate) {
-      newErrors.visitedDateOfCustomer = true
-      newErrors.dateOfInquiry = true
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      if (newErrors.followUpDate && status === 'FollowUp' && !followUpDate) {
-        setError('Follow-up date is required when status is FollowUp.')
-      } else if (newErrors.visitedDateOfCustomer && subStatus === 'visited' && !visitedDate) {
-        setError('Visited date is required when sub-status is Visited.')
-      } else if (newErrors.followUpDate && newErrors.dateOfInquiry && inquiryDate && followUpDate && followUpDate < inquiryDate) {
-        setError('Follow-up date cannot be before inquiry date.')
-      } else if (newErrors.visitedDateOfCustomer && newErrors.dateOfInquiry && inquiryDate && visitedDate && visitedDate < inquiryDate) {
-        setError('Visited date cannot be before inquiry date.')
-      } else {
-        setError('Please fix the highlighted inquiry fields before saving.')
-      }
-      setErrors(newErrors)
+    const validation = validateInquiryFormInput(form)
+    if (validation.error) {
+      setError(validation.error)
+      setErrors(validation.fieldErrors)
       return
     }
     setErrors({})
@@ -1064,6 +1340,24 @@ export function InquiryClient({
       const result = await deleteInquiry(deleteId)
       if (!result.success) setError(result.error ?? 'Could not delete this record.')
       setDeleteId(null)
+      router.refresh()
+    })
+  }
+
+  const saveAssignment = () => {
+    if (!assignInquiryRow) return
+    setAssignError('')
+    startAssignTransition(async () => {
+      const result = await assignInquiry({
+        inquiryId: assignInquiryRow.inquiryId,
+        assignedToUserId: assignUserId ? Number(assignUserId) : null,
+      })
+      if (!result.success) {
+        setAssignError(result.error ?? 'Could not update inquiry assignment.')
+        return
+      }
+      setSaveFeedback({ ok: true, message: result.message ?? 'Inquiry assignment updated.' })
+      forceCloseAssign()
       router.refresh()
     })
   }
@@ -1130,7 +1424,7 @@ export function InquiryClient({
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">Search</label>
-            <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, inquiry no..." disabled={isRoutePending} />
+            <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, source, vehicle..." disabled={isRoutePending} />
           </div>
           <Select label="Source" value={source} onChange={e => pushQuery({ source: e.target.value })} disabled={isRoutePending}>
           <option value="All">All Sources</option>
@@ -1138,7 +1432,7 @@ export function InquiryClient({
           </Select>
           <Select label="Sub-status" value={subStatus} onChange={e => pushQuery({ subStatus: e.target.value })} disabled={isRoutePending}>
           <option value="All">All Sub-statuses</option>
-          {SUB_STATUS_SUGGESTIONS.map(item => <option key={item} value={item}>{item}</option>)}
+          {subStatusSuggestions.map(item => <option key={item} value={item}>{item}</option>)}
           </Select>
           <Select label="Make" value={makeId} onChange={e => pushQuery({ makeId: e.target.value, modelId: '', variantId: '' })} disabled={isRoutePending}>
           <option value="">All Makes</option>
@@ -1277,6 +1571,7 @@ export function InquiryClient({
                     <div className="space-y-1 text-sm text-gray-700">
                       <div>Budget: {fmtMoney(r.budgetOfCustomer)}</div>
                       <div>Class: {r.classification ?? '—'}</div>
+                      <div>Assigned To: {userOptionLabel(r.assignedToUser)}</div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.visitedDateOfCustomer) || '—'}</td>
@@ -1298,6 +1593,9 @@ export function InquiryClient({
                         <Eye className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => openAssign(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Assign Inquiry">
+                        <UserPlus className="w-3.5 h-3.5" />
+                      </button>
                       <button onClick={() => setDeleteId(r.inquiryId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </td>
@@ -1330,7 +1628,7 @@ export function InquiryClient({
         </div>
       )}
 
-      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} onClose={closeView}>
+      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} width="max-w-6xl" onClose={closeView}>
         <div className="space-y-4">
           {viewLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
@@ -1340,115 +1638,13 @@ export function InquiryClient({
           ) : viewError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{viewError}</div>
           ) : viewInquiry ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Linked Customer:</span> {viewInquiry.customer?.custName ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Linked Customer ID:</span> {viewInquiry.customer?.custId ?? viewInquiry.customerId ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Name:</span> {viewInquiry.customer?.custName ?? viewInquiry.customerNameLegacy ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Mobile:</span> {viewInquiry.customer?.custMobile ?? viewInquiry.mobileno ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Email:</span> {viewInquiry.customer?.custEmail ?? viewInquiry.email ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Source:</span> {viewInquiry.website ?? '—'}</div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inquiry</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Inquiry ID:</span> {viewInquiry.inquiryId}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry No:</span> {viewInquiry.inquiryNo ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(viewInquiry.dateOfInquiry) || '—'}</div>
-                    <div><span className="font-medium text-gray-900">Classification:</span> {viewInquiry.classification ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Status:</span> {viewInquiry.status ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Sub-status:</span> {viewInquiry.subStatus ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Budget:</span> {fmtMoney(viewInquiry.budgetOfCustomer)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Car Requirement</div>
-                {viewInquiry.inquiryCarDetails.length === 0 ? (
-                  <div className="mt-3 text-sm text-gray-700">No vehicle requirement captured.</div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {viewInquiry.inquiryCarDetails.map((car, index) => (
-                      <div key={car.inquiryCarDetailsId ?? `view-car-${index}`} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Vehicle {index + 1}</div>
-                        <div className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                          <div><span className="font-medium text-gray-900">Make:</span> {clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Model:</span> {clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Variant:</span> {clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Sub Variant:</span> {clean(car.subVariant) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Year:</span> {car.year ?? '—'}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow-up</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  <div><span className="font-medium text-gray-900">Follow-up Date:</span> {fmtDate(viewInquiry.followUpDate) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Visited Date:</span> {fmtDate(viewInquiry.visitedDateOfCustomer) || '—'}</div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Linked Inventory History</div>
-                {!viewInquiry.inquiryInventoryLinks || viewInquiry.inquiryInventoryLinks.length === 0 ? (
-                  <div className="mt-3 text-sm text-gray-700">No linked inventory history recorded yet.</div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {viewInquiry.inquiryInventoryLinks.map(link => {
-                      const vehicle = [
-                        clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
-                        clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
-                        clean(link.inventoryManagement.carVariantMaster?.variant),
-                      ].filter(Boolean).join(' ') || '—'
-
-                      return (
-                        <div key={link.inquiryInventoryLinkId} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
-                          <div className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                            <div><span className="font-medium text-gray-900">Link Type:</span> {link.linkType}</div>
-                            <div><span className="font-medium text-gray-900">Recorded At:</span> {fmtDateTime(link.createdAt) || '—'}</div>
-                            <div><span className="font-medium text-gray-900">Inventory:</span> {link.inventoryManagement.inventoryNumber ?? `#${link.inventoryManagement.inventoryId}`}</div>
-                            <div><span className="font-medium text-gray-900">Registration:</span> {link.inventoryManagement.registrationNo ?? '—'}</div>
-                            <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{link.inventoryManagement.year ? ` · ${link.inventoryManagement.year}` : ''}</div>
-                            <div><span className="font-medium text-gray-900">Status / Price:</span> {link.inventoryManagement.status ?? '—'} / {fmtMoney(link.inventoryManagement.price)}</div>
-                            <div><span className="font-medium text-gray-900">Recorded By:</span> {link.createdByUser?.displayName ?? link.createdByUser?.userName ?? '—'}</div>
-                            <div><span className="font-medium text-gray-900">Active:</span> {link.isActive ? 'Yes' : 'No'}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Remarks</div>
-                <div className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{viewInquiry.remark?.trim() ? viewInquiry.remark : '—'}</div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Audit</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  <div><span className="font-medium text-gray-900">Created At:</span> {fmtDateTime(viewInquiry.createdDt) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Created By:</span> {viewInquiry.createdByUser?.displayName ?? viewInquiry.createdByUser?.userName ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Updated At:</span> {fmtDateTime(viewInquiry.updatedDt) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Updated By:</span> {viewInquiry.updatedByUser?.displayName ?? viewInquiry.updatedByUser?.userName ?? '—'}</div>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Btn variant="outline" onClick={closeView}>Close</Btn>
-              </div>
-            </>
+            <InquiryDetailView
+              inquiry={viewInquiry}
+              onClose={closeView}
+              onEdit={() => { closeView(); openEdit(viewInquiry) }}
+              onLogFollowup={() => { closeView(); openEdit(viewInquiry) }}
+              onOpenMatch={() => openEmailModal(viewInquiry)}
+            />
           ) : null}
         </div>
       </Modal>
@@ -1609,7 +1805,7 @@ export function InquiryClient({
             <div>
               <Input label="Sub Status" list="sub-status-suggestions" value={form.subStatus} onChange={e => f('subStatus', e.target.value)} />
               <datalist id="sub-status-suggestions">
-                {SUB_STATUS_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+                {subStatusSuggestions.map(s => <option key={s} value={s} />)}
               </datalist>
             </div>
             <Input label="FollowUp Date" type="date" value={form.followUpDate} onChange={e => f('followUpDate', e.target.value)} error={errors.followUpDate} />
@@ -1618,7 +1814,7 @@ export function InquiryClient({
 
           {(isMissingFollowUpDate || isMissingVisitedDate) ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {isMissingFollowUpDate ? <div>FollowUp status needs a follow-up date.</div> : null}
+              {isMissingFollowUpDate ? <div>Follow status needs a follow-up date.</div> : null}
               {isMissingVisitedDate ? <div>Visited sub-status needs a visited date.</div> : null}
             </div>
           ) : null}
@@ -1729,11 +1925,49 @@ export function InquiryClient({
         )}
       </Modal>
 
-      <Modal title={`Send Matching Inventory${emailInquiryRow ? ` — ${emailInquiryRow.inquiryNo ?? `Inquiry #${emailInquiryRow.inquiryId}`}` : ''}`} open={!!emailInquiryRow} onClose={() => {
+      <Modal title={assignInquiryRow ? `Assign Inquiry — ${assignInquiryRow.inquiryNo ?? `Inquiry #${assignInquiryRow.inquiryId}`}` : 'Assign Inquiry'} open={!!assignInquiryRow} onClose={closeAssign}>
+        {assignInquiryRow ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <div><span className="font-medium text-gray-900">Customer:</span> {assignInquiryRow.customer?.custName ?? assignInquiryRow.customerNameLegacy ?? '—'}</div>
+              <div><span className="font-medium text-gray-900">Current Assignee:</span> {userOptionLabel(assignInquiryRow.assignedToUser)}</div>
+            </div>
+
+            <Select label="Assign To" value={assignUserId} onChange={e => setAssignUserId(e.target.value)} disabled={isAssignPending}>
+              <option value="">Unassigned</option>
+              {inquiryAssistants.map(user => (
+                <option key={user.userId} value={user.userId}>
+                  {userOptionLabel(user)}
+                </option>
+              ))}
+            </Select>
+
+            {inquiryAssistants.length === 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                No active InquiryAssistant users are available for assignment.
+              </div>
+            ) : null}
+
+            {assignError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{assignError}</div>
+            ) : null}
+
+            <div className="flex justify-end gap-3">
+              <Btn variant="outline" onClick={closeAssign} disabled={isAssignPending}>Cancel</Btn>
+              <Btn onClick={saveAssignment} disabled={isAssignPending}>
+                {isAssignPending ? 'Saving...' : 'Save Assignment'}
+              </Btn>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal title={`Send Matching Inventory${emailInquiryRow ? ` — ${emailInquiryRow.inquiryNo ?? `Inquiry #${emailInquiryRow.inquiryId}`}` : ''}`} open={!!emailInquiryRow} width="max-w-6xl" onClose={() => {
         if (isEmailPending) return
         emailInventoryRequestRef.current += 1
         setEmailInquiryRow(null)
         setEmailInventoryMatches([])
+        setEmailHistoryByInventoryId({})
         setSelectedEmailInventoryIds([])
         setEmailInventorySearch('')
         setEmailModalError('')
@@ -1767,8 +2001,8 @@ export function InquiryClient({
                     <SearchBar value={emailInventorySearch} onChange={setEmailInventorySearch} placeholder="Search inventory, reg, make..." />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {emailInventoryMatches.filter(match => {
+                {(() => {
+                  const filteredMatches = emailInventoryMatches.filter(match => {
                     const vehicle = [
                       clean(match.carVariantMaster?.carMakeMaster?.make),
                       clean(match.carVariantMaster?.carModelMaster?.model),
@@ -1781,43 +2015,83 @@ export function InquiryClient({
                       match.status ?? '',
                     ].join(' ').toLowerCase()
                     return !emailInventorySearch.trim() || haystack.includes(emailInventorySearch.trim().toLowerCase())
-                  }).map(match => {
-                    const vehicle = [
-                      clean(match.carVariantMaster?.carMakeMaster?.make),
-                      clean(match.carVariantMaster?.carModelMaster?.model),
-                      clean(match.carVariantMaster?.variant),
-                    ].filter(Boolean).join(' ') || '—'
-                    const isSelected = selectedEmailInventoryIds.includes(match.inventoryId)
+                  })
+
+                  if (emailInventoryMatches.length > 0 && filteredMatches.length === 0) {
                     return (
-                      <button
-                        key={match.inventoryId}
-                        type="button"
-                        onClick={() => toggleEmailInventorySelection(match.inventoryId)}
-                        className={`w-full rounded-lg border px-4 py-3 text-left transition ${isSelected ? 'border-[#1B2A6B] bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                      >
-                        <div className="mb-2 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleEmailInventorySelection(match.inventoryId)}
-                            onClick={event => event.stopPropagation()}
-                            className="h-4 w-4 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
-                          />
-                          <span className="text-xs font-medium text-gray-600">Select this vehicle</span>
-                        </div>
-                        <div className="grid gap-2 md:grid-cols-3">
-                          <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
-                          <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}` : ''}</div>
-                          <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
-                          <div><span className="font-medium text-gray-900">KM / Photos:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match._count.inventoryPhotos}</div>
-                        </div>
-                      </button>
+                      <div className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
+                        No vehicles match the current popup search.
+                      </div>
                     )
-                  })}
-                </div>
-                {emailInventoryMatches.length > 0 && emailInventoryMatches.filter(match => {
+                  }
+
+                  return (
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-[#1B2A6B] text-left text-xs font-semibold uppercase tracking-wide text-white">
+                          <tr>
+                            <th className="px-3 py-3 w-12">Select</th>
+                            <th className="px-3 py-3">Make / Model</th>
+                            <th className="px-3 py-3">Variant / Color</th>
+                            <th className="px-3 py-3">Year</th>
+                            <th className="px-3 py-3">Registration No</th>
+                            <th className="px-3 py-3">Kms Driven</th>
+                            <th className="px-3 py-3">Price / Status</th>
+                            <th className="px-3 py-3">Email</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredMatches.map(match => {
+                            const make = clean(match.carVariantMaster?.carMakeMaster?.make) || '—'
+                            const model = clean(match.carVariantMaster?.carModelMaster?.model) || '—'
+                            const variant = clean(match.carVariantMaster?.variant) || '—'
+                            const isSelected = selectedEmailInventoryIds.includes(match.inventoryId)
+                            const emailHistory = emailHistoryByInventoryId[match.inventoryId]
+
+                            return (
+                              <tr
+                                key={match.inventoryId}
+                                onClick={() => toggleEmailInventorySelection(match.inventoryId)}
+                                className={`cursor-pointer border-t border-gray-200 align-top transition ${isSelected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}
+                              >
+                                <td className="px-3 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleEmailInventorySelection(match.inventoryId)}
+                                    onClick={event => event.stopPropagation()}
+                                    className="h-4 w-4 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
+                                  />
+                                </td>
+                                <td className="px-3 py-3 text-gray-700">
+                                  <div className="font-medium text-gray-900">{make}</div>
+                                  <div>{model}</div>
+                                  <div className="text-xs text-gray-500">{match.inventoryNumber ?? `#${match.inventoryId}`}</div>
+                                </td>
+                                <td className="px-3 py-3 text-gray-700">
+                                  <div className="font-medium text-gray-900">{variant}</div>
+                                  <div>{'—'}</div>
+                                </td>
+                                <td className="px-3 py-3 text-gray-700">{match.year ?? '—'}</td>
+                                <td className="px-3 py-3 text-gray-700">{match.registrationNo ?? '—'}</td>
+                                <td className="px-3 py-3 text-gray-700">{match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'}</td>
+                                <td className="px-3 py-3 text-gray-700">
+                                  <div>{fmtMoney(match.price)}</div>
+                                  <div className="text-xs text-gray-500">{match.status ?? '—'}</div>
+                                </td>
+                                <td className="px-3 py-3 text-gray-700">
+                                  <div className="font-medium text-gray-900">{emailHistory?.emailed ? 'Yes' : 'No'}</div>
+                                  <div className="text-xs text-gray-500">{emailHistory?.emailedAt ?? '—'}</div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })()}
+                {false && emailInventoryMatches.length > 0 && emailInventoryMatches.filter(match => {
                   const vehicle = [
                     clean(match.carVariantMaster?.carMakeMaster?.make),
                     clean(match.carVariantMaster?.carModelMaster?.model),
@@ -1844,6 +2118,7 @@ export function InquiryClient({
                 emailInventoryRequestRef.current += 1
                 setEmailInquiryRow(null)
                 setEmailInventoryMatches([])
+                setEmailHistoryByInventoryId({})
                 setSelectedEmailInventoryIds([])
                 setEmailInventorySearch('')
                 setEmailModalError('')

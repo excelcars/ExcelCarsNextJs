@@ -2,6 +2,7 @@ import { getMakes, getModelsByMake, getVariantsByModel } from '@/features/invent
 import { getUsersForFollowupFilter, listFollowupQueue } from '@/features/followup/queries'
 import { FollowupClient } from '@/features/followup/FollowupClient'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 import { redirect } from 'next/navigation'
 
 export default async function FollowupPage({
@@ -46,6 +47,7 @@ export default async function FollowupPage({
   const followUpDateTo = sp.followUpDateTo ?? ''
   const visitedDateFrom = sp.visitedDateFrom ?? ''
   const visitedDateTo = sp.visitedDateTo ?? ''
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
 
   const parsedMakeId = Number(makeId)
   const parsedModelId = Number(modelId)
@@ -69,6 +71,7 @@ export default async function FollowupPage({
       followUpDateTo,
       visitedDateFrom,
       visitedDateTo,
+      restrictToUserId: ownershipScope.restrictToUserId,
     }),
     getMakes(),
     Number.isFinite(parsedMakeId) && parsedMakeId > 0 ? getModelsByMake(parsedMakeId) : Promise.resolve([]),
@@ -107,6 +110,8 @@ export default async function FollowupPage({
       followUpDateTo={followUpDateTo}
       visitedDateFrom={visitedDateFrom}
       visitedDateTo={visitedDateTo}
+      restricted={ownershipScope.restricted}
+      currentUserId={ownershipScope.userId ? String(ownershipScope.userId) : ''}
     />
   )
 }

@@ -6,9 +6,11 @@ import { Phone, PhoneCall, AlertTriangle, Eye, Pencil, ChevronLeft, ChevronRight
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, N } from '@/components/ui'
 import { logFollowup, type LogFollowupInput } from './actions'
 import { CustomerPicker } from '@/components/CustomerPicker'
+import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
 import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES } from '@/features/inquiry/queries'
 import { getInquiryDetail, updateInquiry, type InquiryCarInput, type InquiryFormInput } from '@/features/inquiry/actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
+import { isFollowupStatus, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 
 const CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 const STATUSES = ['FollowUp', 'Closed'] as const
@@ -32,6 +34,8 @@ interface FollowupRow {
   remark: string | null
   createdBy?: number | null
   createdByUser?: UserOption | null
+  followupInquiry?: HistoryEntry[]
+  vehicleEmailLinks?: VehicleEmailLinkRow[]
   customer: { custId?: number; custName: string; custMobile?: string | null; custEmail?: string | null } | null
   inquiryCarDetails: {
     inquiryCarDetailsId?: number
@@ -58,11 +62,59 @@ interface HistoryEntry {
   comments: string | null
 }
 
+interface VehicleEmailLinkRow {
+  vehicleEmailLinkId: number
+  recipientEmail: string
+  recipientName: string | null
+  emailSentAt: Date | string | null
+  firstRequestedAt: Date | string | null
+  firstHumanViewAt: Date | string | null
+  lastRequestedAt: Date | string | null
+  requestCount: number
+  humanViewCount: number
+  isActive: boolean
+  inventoryManagement: {
+    inventoryId: number
+    inventoryNumber: string | null
+    registrationNo: string | null
+    year: number | null
+    kmsDriven: string | number | null
+    price: string | number | null
+    status: string | null
+    carVariantMaster: {
+      variant: string | null
+      carMakeMaster: { make: string | null } | null
+      carModelMaster: { model: string | null } | null
+    } | null
+  }
+  visits: Array<{
+    vehicleEmailLinkVisitId: number
+    visitedAt: Date | string
+    visitKind: string
+  }>
+  interactions: Array<{
+    vehicleEmailLinkInteractionId: number
+    interactionAt: Date | string
+    interactionType: string
+    interactionLabel: string | null
+  }>
+}
+
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
 interface CarVariantMaster { pkVariantId: number; variant: string | null }
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
-interface UserOption { userId: number; userName: string | null; displayName: string | null }
+interface UserOption {
+  userId: number
+  userName: string | null
+  displayName: string | null
+  empId?: number | null
+  employee?: {
+    empId: number
+    empFirstName: string | null
+    empLastName: string | null
+  } | null
+}
 
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
@@ -81,6 +133,23 @@ const fmtDateTime = (d: Date | string | null | undefined) => {
 }
 const isOverdue = (d: Date | string | null) => d ? new Date(d) < new Date(new Date().toDateString()) : false
 const fmtMoney = (n: string | number | null | undefined) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+const followupUserLabel = (user: UserOption) => {
+  const employeeName = `${user.employee?.empFirstName ?? ''} ${user.employee?.empLastName ?? ''}`.trim()
+  const userName = user.userName?.trim()
+  const name = user.displayName?.trim() || employeeName
+  const employeeId = user.employee?.empId ?? user.empId
+  if (userName && name && userName.toLowerCase() !== name.toLowerCase()) {
+    return employeeId ? `${userName} · ${name} (${employeeId})` : `${userName} · ${name}`
+  }
+  if (userName) {
+    return employeeId ? `${userName} (${employeeId})` : userName
+  }
+  if (name) {
+    return employeeId ? `${name} (${employeeId})` : name
+  }
+  return `User #${user.userId}`
+}
+const auditUserLabel = (user?: UserOption | null, fallbackId?: number | null) => user?.displayName ?? user?.userName ?? (fallbackId ? String(fallbackId) : '')
 
 function getInquiryCarSummary(car: FollowupRow['inquiryCarDetails'][number] | null | undefined) {
   const make = clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy)
@@ -89,6 +158,198 @@ function getInquiryCarSummary(car: FollowupRow['inquiryCarDetails'][number] | nu
   const parts = [make, model, variant].filter(Boolean)
   if (!parts.length && !car?.year) return '—'
   return `${parts.join(' ') || '—'}${car?.year ? ` · ${car.year}` : ''}`
+}
+
+function getInquiryCarsSummary(cars: FollowupRow['inquiryCarDetails']) {
+  if (!cars.length) return '—'
+  const labels = cars.map(car => getInquiryCarSummary(car)).filter(label => label !== '—')
+  if (!labels.length) return '—'
+  if (labels.length === 1) return labels[0]
+  return `${labels[0]} +${labels.length - 1} more`
+}
+
+function toDateValue(d: Date | string | null | undefined) {
+  if (!d) return null
+  const value = new Date(d)
+  return Number.isNaN(value.getTime()) ? null : value
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+function daysFromToday(d: Date | string | null | undefined) {
+  const value = toDateValue(d)
+  if (!value) return null
+  const diff = startOfDay(new Date()).getTime() - startOfDay(value).getTime()
+  return Math.floor(diff / (1000 * 60 * 60 * 24))
+}
+
+function daysBetween(from: Date | string | null | undefined, to: Date | string | null | undefined) {
+  const fromValue = toDateValue(from)
+  const toValue = toDateValue(to)
+  if (!fromValue || !toValue) return null
+  const diff = startOfDay(toValue).getTime() - startOfDay(fromValue).getTime()
+  return Math.floor(diff / (1000 * 60 * 60 * 24))
+}
+
+function fmtLongDate(d: Date | string | null | undefined) {
+  const value = toDateValue(d)
+  if (!value) return '—'
+  return value.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function fmtMonthYear(d: Date | string | null | undefined) {
+  const value = toDateValue(d)
+  if (!value) return '—'
+  return value.toLocaleDateString('en-IN', {
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function summarizeVehicleEmailEngagement(link: VehicleEmailLinkRow) {
+  let callClicks = 0
+  let whatsappClicks = 0
+  let emailClicks = 0
+
+  for (const interaction of link.interactions) {
+    if (interaction.interactionType === 'call_click') callClicks += 1
+    if (interaction.interactionType === 'whatsapp_click') whatsappClicks += 1
+    if (interaction.interactionType === 'email_click') emailClicks += 1
+  }
+
+  return { callClicks, whatsappClicks, emailClicks }
+}
+
+function buildVehicleHistoryRows(
+  inquiryInventoryLinks: Array<{
+    inquiryInventoryLinkId: number
+    linkType: string
+    createdAt: Date | string | null
+    inventoryManagement: {
+      inventoryId: number
+      inventoryNumber: string | null
+      registrationNo: string | null
+      year: number | null
+      price: string | number | null
+      status: string | null
+      carVariantMaster: {
+        variant: string | null
+        carMakeMaster: { make: string | null } | null
+        carModelMaster: { model: string | null } | null
+      } | null
+    }
+  }> | undefined,
+  vehicleEmailLinks: VehicleEmailLinkRow[] | undefined,
+) {
+  const rows = new Map<number, {
+    inventoryId: number
+    inventoryNumber: string | null
+    registrationNo: string | null
+    vehicle: string
+    year: number | null
+    status: string | null
+    price: string | number | null
+    matchedAt: Date | string | null
+    emailedAt: Date | string | null
+    emailCount: number
+    humanViewCount: number
+    requestCount: number
+    callClicks: number
+    whatsappClicks: number
+    emailClicks: number
+  }>()
+
+  for (const link of inquiryInventoryLinks ?? []) {
+    const inventoryId = link.inventoryManagement.inventoryId
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(link.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean).join(' ') || '—'
+
+    const existing = rows.get(inventoryId)
+    const next = existing ?? {
+      inventoryId,
+      inventoryNumber: link.inventoryManagement.inventoryNumber,
+      registrationNo: link.inventoryManagement.registrationNo,
+      vehicle,
+      year: link.inventoryManagement.year,
+      status: link.inventoryManagement.status,
+      price: link.inventoryManagement.price,
+      matchedAt: null,
+      emailedAt: null,
+      emailCount: 0,
+      humanViewCount: 0,
+      requestCount: 0,
+      callClicks: 0,
+      whatsappClicks: 0,
+      emailClicks: 0,
+    }
+
+    if (link.linkType.toLowerCase() === 'matched' && !next.matchedAt) {
+      next.matchedAt = link.createdAt
+    }
+    if (link.linkType.toLowerCase() === 'emailed' && !next.emailedAt) {
+      next.emailedAt = link.createdAt
+    }
+
+    rows.set(inventoryId, next)
+  }
+
+  for (const link of vehicleEmailLinks ?? []) {
+    const inventoryId = link.inventoryManagement.inventoryId
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(link.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean).join(' ') || '—'
+    const engagement = summarizeVehicleEmailEngagement(link)
+
+    const existing = rows.get(inventoryId)
+    const next = existing ?? {
+      inventoryId,
+      inventoryNumber: link.inventoryManagement.inventoryNumber,
+      registrationNo: link.inventoryManagement.registrationNo,
+      vehicle,
+      year: link.inventoryManagement.year,
+      status: link.inventoryManagement.status,
+      price: link.inventoryManagement.price,
+      matchedAt: null,
+      emailedAt: null,
+      emailCount: 0,
+      humanViewCount: 0,
+      requestCount: 0,
+      callClicks: 0,
+      whatsappClicks: 0,
+      emailClicks: 0,
+    }
+
+    if (!next.emailedAt) {
+      next.emailedAt = link.emailSentAt ?? null
+    }
+
+    next.emailCount += 1
+    next.humanViewCount += link.humanViewCount
+    next.requestCount += link.requestCount
+    next.callClicks += engagement.callClicks
+    next.whatsappClicks += engagement.whatsappClicks
+    next.emailClicks += engagement.emailClicks
+
+    rows.set(inventoryId, next)
+  }
+
+  return [...rows.values()].sort((a, b) => {
+    const aTime = a.emailedAt ? new Date(a.emailedAt).getTime() : a.matchedAt ? new Date(a.matchedAt).getTime() : 0
+    const bTime = b.emailedAt ? new Date(b.emailedAt).getTime() : b.matchedAt ? new Date(b.matchedAt).getTime() : 0
+    return bTime - aTime
+  })
 }
 
 function csvValue(value: string | number | boolean | null | undefined) {
@@ -115,56 +376,75 @@ function buildFollowupExportFileName(rows: FollowupRow[], status: string, classi
 function exportFollowupCsv(rows: FollowupRow[], status: string, classification: string) {
   const headers = [
     'Inquiry ID',
-    'Inquiry No',
-    'Inquiry Date',
-    'Source',
+    'Inquiry_No',
+    'Date_of_Inquiry',
+    'WebSite',
+    'Inquiry Made By',
     'Inquiry Made By User ID',
-    'Linked Customer ID',
-    'Customer Name',
-    'Mobile',
+    'Linked_Customer_ID',
+    'Customer',
+    'MobileNo',
     'Email',
     'Make',
     'Model',
     'Variant',
-    'Car Year',
-    'Budget',
-    'Classification',
-    'Status',
-    'Sub-status',
-    'Follow-up Date',
-    'Visited Date',
-    'Remarks',
+    'Year',
+    'Budget_of_Customer',
+    'Latest_Classification',
+    'Latest_Status',
+    'Latest_Sub_Status',
+    'Latest_Follow_Up_Date',
+    'Visited_Date_of_Customer',
+    'Latest_Remark',
+    'Previous_Followup_Date',
+    'Previous_Followup_Status',
+    'Previous_Followup_Sub_Status',
+    'Previous Comments',
+    'Previous_Followup_Classification',
   ]
 
   const lines = [headers.map(csvValue).join(',')]
   for (const row of rows) {
-    const car = row.inquiryCarDetails[0]
-    const make = clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy)
-    const model = clean(car?.carVariantMaster?.carModelMaster?.model) || clean(car?.modelLegacy)
-    const variant = clean(car?.carVariantMaster?.variant) || clean(car?.variantLegacy)
-    const line = [
-      row.inquiryId,
-      row.inquiryNo,
-      fmtDate(row.dateOfInquiry),
-      row.website,
-      row.createdByUser?.displayName ?? row.createdByUser?.userName ?? row.createdBy,
-      row.customer?.custId ?? row.customerId,
-      row.customer?.custName ?? row.customerNameLegacy,
-      row.mobileno,
-      row.email,
-      make,
-      model,
-      variant,
-      car?.year ?? null,
-      row.budgetOfCustomer,
-      row.classification,
-      row.status,
-      row.subStatus,
-      fmtDate(row.followUpDate),
-      fmtDate(row.visitedDateOfCustomer ?? null),
-      row.remark,
-    ]
-    lines.push(line.map(csvValue).join(','))
+    const carRows = row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails : [null]
+    const historyRows = row.followupInquiry && row.followupInquiry.length > 0 ? row.followupInquiry : [null]
+
+    for (const car of carRows) {
+      const make = clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy)
+      const model = clean(car?.carVariantMaster?.carModelMaster?.model) || clean(car?.modelLegacy)
+      const variant = clean(car?.carVariantMaster?.variant) || clean(car?.variantLegacy)
+
+      for (const history of historyRows) {
+        const line = [
+          row.inquiryId,
+          row.inquiryNo,
+          fmtDate(row.dateOfInquiry),
+          row.website,
+          auditUserLabel(row.createdByUser, row.createdBy),
+          row.createdBy ?? null,
+          row.customer?.custId ?? row.customerId,
+          row.customer?.custName ?? row.customerNameLegacy,
+          row.mobileno,
+          row.email,
+          make,
+          model,
+          variant,
+          car?.year ?? null,
+          row.budgetOfCustomer,
+          row.classification,
+          row.status,
+          row.subStatus,
+          fmtDate(row.followUpDate),
+          fmtDate(row.visitedDateOfCustomer ?? null),
+          row.remark,
+          fmtDate(history?.followupDate ?? null),
+          history?.followupStatus ?? '',
+          history?.followupSubStatus ?? '',
+          history?.comments ?? '',
+          history?.followupClassification ?? '',
+        ]
+        lines.push(line.map(csvValue).join(','))
+      }
+    }
   }
 
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -236,6 +516,8 @@ export function FollowupClient({
   followUpDateTo: initialFollowUpDateTo,
   visitedDateFrom: initialVisitedDateFrom,
   visitedDateTo: initialVisitedDateTo,
+  restricted,
+  currentUserId,
 }: {
   initialData: FollowupRow[]
   search: string
@@ -261,6 +543,8 @@ export function FollowupClient({
   followUpDateTo: string
   visitedDateFrom: string
   visitedDateTo: string
+  restricted: boolean
+  currentUserId: string
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(initialSearch)
@@ -363,6 +647,9 @@ export function FollowupClient({
     setFollowUpDateTo(initialFollowUpDateTo)
     setVisitedDateFrom(initialVisitedDateFrom)
     setVisitedDateTo(initialVisitedDateTo)
+    if (restricted && currentUserId) {
+      setUserId(currentUserId)
+    }
   }, [initialCustomerMobile, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite])
 
   const pushQuery = (params: Record<string, string>) => {
@@ -634,24 +921,10 @@ export function FollowupClient({
   const save = () => {
     if (!logRow) return
     setError('')
-    const newErrors: Record<string, boolean> = {}
-
-    if (!form.comments?.trim()) {
-      newErrors.comments = true
-    }
-    if (form.status === 'FollowUp') {
-      if (!form.nextFollowUpDate?.trim()) {
-        newErrors.nextFollowUpDate = true
-      } else {
-        const today = new Date().toISOString().slice(0, 10)
-        if (form.nextFollowUpDate < today) {
-          newErrors.nextFollowUpDate = true
-        }
-      }
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
+    const validation = validateFollowupLogInput(form)
+    if (validation.error) {
+      setError(validation.error)
+      setErrors(validation.fieldErrors)
       return
     }
     setErrors({})
@@ -703,7 +976,7 @@ export function FollowupClient({
     setViewInquiryError('')
     setViewInquiryLoading(true)
 
-    getInquiryDetail(inquiryId)
+    getInquiryDetail(inquiryId, { route: '/followup' })
       .then(detail => {
         if (viewInquiryRequestRef.current !== requestId) return
         if (!detail) {
@@ -732,7 +1005,7 @@ export function FollowupClient({
     setEditInquiryErrors({})
     resetCarEditor()
 
-    getInquiryDetail(inquiryId)
+    getInquiryDetail(inquiryId, { route: '/followup' })
       .then(detail => {
         if (editInquiryRequestRef.current !== requestId) return
         if (!detail) {
@@ -832,73 +1105,16 @@ export function FollowupClient({
     if (!editInquiryId) return
 
     setEditInquiryError('')
-    const newErrors: Record<string, boolean> = {}
-
-    if (!editInquiryForm.customerId && !editInquiryForm.customerNameLegacy?.trim()) {
-      newErrors.customer = true
-    }
-    if (!editInquiryForm.mobileno?.trim() || !isValidPhone(editInquiryForm.mobileno)) {
-      newErrors.mobileno = true
-    }
-    if (editInquiryForm.email && !isValidEmail(editInquiryForm.email)) {
-      newErrors.email = true
-    }
-    if (!editInquiryForm.website?.trim()) {
-      newErrors.website = true
-    }
-    if (editInquiryForm.budgetOfCustomer !== null && editInquiryForm.budgetOfCustomer <= 0) {
-      newErrors.budgetOfCustomer = true
-    }
-    if (editInquiryForm.inquiryCars.length === 0) {
-      newErrors.inquiryCars = true
-    }
-    const invalidCarIndex = editInquiryForm.inquiryCars.findIndex(car => car.carYear !== null && !isValidYear(car.carYear))
-    if (invalidCarIndex >= 0) {
-      newErrors[`carYear-${invalidCarIndex}`] = true
-    }
-
-    const currentStatus = editInquiryForm.status.trim()
-    const currentSubStatus = editInquiryForm.subStatus.trim().toLowerCase()
-    const inquiryDate = editInquiryForm.dateOfInquiry.trim()
-    const followUpDate = editInquiryForm.followUpDate.trim()
-    const visitedDate = editInquiryForm.visitedDateOfCustomer.trim()
-
-    if (currentStatus === 'FollowUp' && !followUpDate) {
-      newErrors.followUpDate = true
-    }
-    if (currentSubStatus === 'visited' && !visitedDate) {
-      newErrors.visitedDateOfCustomer = true
-    }
-    if (inquiryDate && followUpDate && followUpDate < inquiryDate) {
-      newErrors.followUpDate = true
-      newErrors.dateOfInquiry = true
-    }
-    if (inquiryDate && visitedDate && visitedDate < inquiryDate) {
-      newErrors.visitedDateOfCustomer = true
-      newErrors.dateOfInquiry = true
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      if (newErrors.inquiryCars) {
-        setEditInquiryError('Add at least one car of interest before saving the inquiry.')
-      } else if (newErrors.followUpDate && currentStatus === 'FollowUp' && !followUpDate) {
-        setEditInquiryError('Follow-up date is required when status is FollowUp.')
-      } else if (newErrors.visitedDateOfCustomer && currentSubStatus === 'visited' && !visitedDate) {
-        setEditInquiryError('Visited date is required when sub-status is Visited.')
-      } else if (newErrors.followUpDate && newErrors.dateOfInquiry) {
-        setEditInquiryError('Follow-up date cannot be before inquiry date.')
-      } else if (newErrors.visitedDateOfCustomer && newErrors.dateOfInquiry) {
-        setEditInquiryError('Visited date cannot be before inquiry date.')
-      } else {
-        setEditInquiryError('Please fix the highlighted inquiry fields before saving.')
-      }
-      setEditInquiryErrors(newErrors)
+    const validation = validateInquiryFormInput(editInquiryForm)
+    if (validation.error) {
+      setEditInquiryError(validation.error)
+      setEditInquiryErrors(validation.fieldErrors)
       return
     }
 
     setEditInquiryErrors({})
     startTransition(async () => {
-      const result = await updateInquiry(editInquiryId, editInquiryForm)
+      const result = await updateInquiry(editInquiryId, editInquiryForm, { route: '/followup' })
       if (!result.success) {
         setEditInquiryError(result.error ?? 'Something went wrong saving this inquiry.')
         return
@@ -993,7 +1209,7 @@ export function FollowupClient({
       ) : null}
 
       <div className="flex flex-wrap gap-3 mb-4">
-        <SearchBar value={search} onChange={setSearch} placeholder="Customer, mobile..." disabled={isRoutePending} />
+        <SearchBar value={search} onChange={setSearch} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
         <Select
           value={status}
           onChange={e => setStatus(e.target.value)}
@@ -1025,9 +1241,9 @@ export function FollowupClient({
           disabled={isRoutePending}
           className="min-w-[200px]"
         />
-        <Select value={userId} onChange={e => setUserId(e.target.value)} disabled={isRoutePending} className="min-w-[200px]">
-          <option value="">All Users</option>
-          {users.map(item => <option key={item.userId} value={String(item.userId)}>{item.displayName ?? item.userName ?? `User #${item.userId}`}</option>)}
+        <Select value={restricted ? currentUserId : userId} onChange={e => setUserId(e.target.value)} disabled={isRoutePending || restricted} className="min-w-[200px]">
+          <option value="">{restricted ? 'My Inquiries Only' : 'All Users'}</option>
+          {users.map(item => <option key={item.userId} value={String(item.userId)}>{followupUserLabel(item)}</option>)}
         </Select>
         <Select value={makeId} onChange={e => pushQuery({ makeId: e.target.value, modelId: '', variantId: '', page: '1' })} disabled={isRoutePending} className="min-w-[180px]">
           <option value="">All Makes</option>
@@ -1110,7 +1326,7 @@ export function FollowupClient({
           </div>
         </div>
         <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
-          {hasActiveFilters ? 'Filtered view' : 'Default view'}
+          {restricted ? 'My inquiries only' : hasActiveFilters ? 'Filtered view' : 'Default view'}
         </div>
       </div>
 
@@ -1304,7 +1520,7 @@ export function FollowupClient({
                   {SUB_STATUS_SUGGESTIONS.map(s => <option key={s} value={s} />)}
                 </datalist>
               </div>
-              {form.status === 'FollowUp' && (
+              {isFollowupStatus(form.status) && (
                 <Input label="Next Follow-up Date *" type="date" value={form.nextFollowUpDate} onChange={e => f('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
               )}
             </div>
@@ -1344,7 +1560,7 @@ export function FollowupClient({
         )}
       </Modal>
 
-      <Modal title={`View Follow-up${viewHistoryRow ? ` — ${viewHistoryRow.inquiryNo ?? `Inquiry #${viewHistoryRow.inquiryId}`}` : ''}`} open={viewHistoryRow !== null} onClose={closeFollowupView}>
+      <Modal title={`View Follow-up${viewHistoryRow ? ` — ${viewHistoryRow.inquiryNo ?? `Inquiry #${viewHistoryRow.inquiryId}`}` : ''}`} open={viewHistoryRow !== null} width="max-w-6xl" onClose={closeFollowupView}>
         <div className="space-y-4">
           {viewHistoryLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
@@ -1354,79 +1570,255 @@ export function FollowupClient({
           ) : viewHistoryError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{viewHistoryError}</div>
           ) : viewHistoryRow ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inquiry Context</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Inquiry ID:</span> {viewHistoryRow.inquiryId}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry No:</span> {viewHistoryRow.inquiryNo ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(viewHistoryRow.dateOfInquiry) || '—'}</div>
-                    <div><span className="font-medium text-gray-900">Source:</span> {viewHistoryRow.website ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Current Follow-up Date:</span> {fmtDate(viewHistoryRow.followUpDate) || '—'}</div>
-                  </div>
-                </div>
+            (() => {
+              const sortedHistory = [...viewHistory].sort((a, b) => {
+                const aTime = toDateValue(a.createdDt ?? a.followupDate)?.getTime() ?? 0
+                const bTime = toDateValue(b.createdDt ?? b.followupDate)?.getTime() ?? 0
+                return bTime - aTime
+              })
+              const leadVehicle = getInquiryCarSummary(viewHistoryRow.inquiryCarDetails[0])
+              const vehicleSummary = getInquiryCarsSummary(viewHistoryRow.inquiryCarDetails)
+              const followupCount = sortedHistory.length
+              const dueDays = daysFromToday(viewHistoryRow.followUpDate)
+              const inquiryAge = daysFromToday(viewHistoryRow.dateOfInquiry)
+              const lastContact = sortedHistory[0]?.createdDt ?? sortedHistory[0]?.followupDate ?? null
+              const quietDays = lastContact ? daysFromToday(lastContact) : inquiryAge
+              const latestLoggedBeforeDue = lastContact && viewHistoryRow.followUpDate
+                ? (toDateValue(lastContact)?.getTime() ?? 0) < (toDateValue(viewHistoryRow.followUpDate)?.getTime() ?? 0)
+                : false
+              const showOverdue = viewHistoryRow.status === 'FollowUp' && dueDays !== null && dueDays > 0
+              const mobileNumber = viewHistoryRow.customer?.custMobile ?? viewHistoryRow.mobileno ?? ''
 
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer & Vehicle</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Linked Customer ID:</span> {viewHistoryRow.customer?.custId ?? viewHistoryRow.customerId ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Customer:</span> {viewHistoryRow.customer?.custName ?? viewHistoryRow.customerNameLegacy ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Mobile:</span> {viewHistoryRow.customer?.custMobile ?? viewHistoryRow.mobileno ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Email:</span> {viewHistoryRow.customer?.custEmail ?? viewHistoryRow.email ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Car of Interest:</span> {getInquiryCarSummary(viewHistoryRow.inquiryCarDetails[0])}</div>
-                  </div>
-                </div>
-              </div>
+              return (
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                  <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{viewHistoryRow.inquiryNo ?? `Inquiry/${viewHistoryRow.inquiryId}`}</span>
+                        {viewHistoryRow.website ? <span className="rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-[#1B2A6B]">{viewHistoryRow.website}</span> : null}
+                      </div>
+                      <h2 className="mt-3 text-3xl font-bold text-gray-900">{viewHistoryRow.customer?.custName ?? viewHistoryRow.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <span>Customer #{viewHistoryRow.customer?.custId ?? viewHistoryRow.customerId ?? '—'}</span>
+                        <span>·</span>
+                        <span>Raised {fmtLongDate(viewHistoryRow.dateOfInquiry)}</span>
+                        <span>·</span>
+                        <span>{vehicleSummary}</span>
+                      </div>
+                    </div>
 
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow-up Details</div>
-                {viewHistory.length === 0 ? (
-                  <div className="mt-3 text-sm text-gray-700">No follow-up history recorded yet.</div>
-                ) : (
-                  <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                      <thead
-                        className="text-left text-xs font-semibold uppercase tracking-wide text-white"
-                        style={{ backgroundColor: N }}
-                      >
-                        <tr>
-                          <th className="px-3 py-2">Sr.No.</th>
-                          <th className="px-3 py-2">Entry Date</th>
-                          <th className="px-3 py-2">Followup Date</th>
-                          <th className="px-3 py-2">Remarks</th>
-                          <th className="px-3 py-2">Status</th>
-                          <th className="px-3 py-2">Sub-status</th>
-                          <th className="px-3 py-2">Classification</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 bg-white">
-                        {viewHistory.map((item, index) => (
-                          <tr key={item.pkFollowupId}>
-                            <td className="px-3 py-2 text-gray-700">{index + 1}</td>
-                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtDate(item.createdDt ?? null) || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtDate(item.followupDate) || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700 min-w-[220px] break-words">{clean(item.comments) || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700">{item.followupStatus ?? '—'}</td>
-                            <td className="px-3 py-2 text-gray-700">{item.followupSubStatus ?? '—'}</td>
-                            <td className="px-3 py-2 text-gray-700">{item.followupClassification ?? '—'}</td>
-                          </tr>
+                    <div className="flex flex-col items-start gap-3 lg:items-end">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {viewHistoryRow.classification ? <Badge label={viewHistoryRow.classification} /> : null}
+                        {viewHistoryRow.status ? <Badge label={viewHistoryRow.status} /> : null}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {mobileNumber ? (
+                          <Btn variant="outline" onClick={() => { window.location.href = `tel:${mobileNumber}` }}>
+                            Call {mobileNumber}
+                          </Btn>
+                        ) : null}
+                        <Btn onClick={() => {
+                          closeFollowupView()
+                          openLog(viewHistoryRow)
+                        }}
+                        >
+                          Log follow-up
+                        </Btn>
+                      </div>
+                    </div>
+                  </div>
+
+                  {showOverdue ? (
+                    <div className="flex flex-col gap-3 border-t border-red-100 bg-red-50 px-6 py-4 text-sm text-red-700 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                        <div>
+                          <div className="font-semibold">{dueDays} day{dueDays === 1 ? '' : 's'} past the last scheduled follow-up</div>
+                          <div className="mt-1">
+                            Due {fmtLongDate(viewHistoryRow.followUpDate)}
+                            {latestLoggedBeforeDue && lastContact ? ` · nothing logged since ${fmtLongDate(lastContact)}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Btn variant="outline" onClick={() => {
+                          closeFollowupView()
+                          openInquiryEdit(viewHistoryRow.inquiryId)
+                        }}
+                        >
+                          Edit inquiry
+                        </Btn>
+                        <Btn onClick={() => {
+                          closeFollowupView()
+                          openLog(viewHistoryRow)
+                        }}
+                        >
+                          Reschedule
+                        </Btn>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-0 border-t border-gray-100 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="border-r border-gray-100 px-6 py-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Car Of Interest</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{leadVehicle}</div>
+                      <div className="mt-1 text-sm text-gray-500">{viewHistoryRow.subStatus ?? viewHistoryRow.remark ?? 'Requirement recorded on inquiry'}</div>
+                    </div>
+                    <div className="border-r border-gray-100 px-6 py-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Follow-ups Logged</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{followupCount}</div>
+                      <div className="mt-1 text-sm text-gray-500">{followupCount > 0 && lastContact ? `Last entry ${fmtMonthYear(lastContact)}` : 'No entries yet'}</div>
+                    </div>
+                    <div className="border-r border-gray-100 px-6 py-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Last Contact</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{lastContact ? fmtLongDate(lastContact) : 'Not logged'}</div>
+                      <div className="mt-1 text-sm text-gray-500">{quietDays !== null ? `${quietDays} day${quietDays === 1 ? '' : 's'} ago` : 'No activity yet'}</div>
+                    </div>
+                    <div className="px-6 py-5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Inquiry Age</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{inquiryAge !== null ? `${inquiryAge} days` : '—'}</div>
+                      <div className="mt-1 text-sm text-gray-500">{viewHistoryRow.dateOfInquiry ? `since ${fmtLongDate(viewHistoryRow.dateOfInquiry)}` : 'Inquiry date not set'}</div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-100 px-6 py-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Contact Cadence</div>
+                      <div className="text-sm text-gray-500">{fmtMonthYear(viewHistoryRow.dateOfInquiry)} → today</div>
+                    </div>
+                    <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700">Raised {fmtLongDate(viewHistoryRow.dateOfInquiry)}</span>
+                        {sortedHistory.slice(0, 5).reverse().map(item => (
+                          <span key={item.pkFollowupId} className="rounded-full border border-[#1B2A6B]/15 bg-white px-3 py-1 text-[#1B2A6B]">
+                            {fmtLongDate(item.createdDt ?? item.followupDate)} · {item.followupStatus ?? 'Follow-up'}
+                          </span>
                         ))}
-                      </tbody>
-                    </table>
+                        {showOverdue ? (
+                          <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-medium text-red-700">
+                            {dueDays} days, no contact
+                          </span>
+                        ) : viewHistoryRow.followUpDate ? (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                            Next follow-up {fmtLongDate(viewHistoryRow.followUpDate)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div className="flex justify-end">
-                <Btn variant="outline" onClick={closeFollowupView}>Close</Btn>
-              </div>
-            </>
+                  <div className="border-t border-gray-100 px-6 py-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Follow-up Log</div>
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-[#1B2A6B]"
+                        onClick={() => {
+                          closeFollowupView()
+                          openLog(viewHistoryRow)
+                        }}
+                      >
+                        Add entry
+                      </button>
+                    </div>
+
+                    <div className="mt-5 space-y-5">
+                      {showOverdue ? (
+                        <div className="relative pl-10">
+                          <span className="absolute left-0 top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-600 bg-white" />
+                          <span className="absolute left-[7px] top-6 bottom-[-20px] w-px bg-gray-200" />
+                          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="text-2xl font-semibold text-red-900">{fmtLongDate(viewHistoryRow.followUpDate)}</div>
+                              <span className="rounded-md bg-white px-2.5 py-1 text-sm text-red-700">{dueDays} days ago</span>
+                            </div>
+                            <div className="mt-3 text-xl font-semibold text-red-900">Scheduled follow-up is pending</div>
+                            <div className="mt-2 text-sm text-red-700">
+                              {latestLoggedBeforeDue && lastContact
+                                ? `This date was set earlier and nothing has been logged since ${fmtLongDate(lastContact)}.`
+                                : 'This inquiry still needs the next follow-up action to be logged.'}
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {mobileNumber ? (
+                                <Btn variant="outline" onClick={() => { window.location.href = `tel:${mobileNumber}` }}>
+                                  Call now
+                                </Btn>
+                              ) : null}
+                              <Btn onClick={() => {
+                                closeFollowupView()
+                                openLog(viewHistoryRow)
+                              }}
+                              >
+                                Reschedule
+                              </Btn>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {sortedHistory.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-gray-200 px-5 py-8 text-center text-sm text-gray-500">
+                          No follow-up history recorded yet.
+                        </div>
+                      ) : (
+                        sortedHistory.map((item, index) => {
+                          const entryAt = item.createdDt ?? item.followupDate
+                          const nextItem = sortedHistory[index + 1]
+                          const nextDate = nextItem?.createdDt ?? nextItem?.followupDate
+                          const gapDays = nextDate ? daysBetween(nextDate, entryAt) : null
+
+                          return (
+                            <div key={item.pkFollowupId} className="relative pl-10">
+                              <span className="absolute left-0 top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#1B2A6B] bg-white" />
+                              {index < sortedHistory.length - 1 ? <span className="absolute left-[7px] top-6 bottom-[-20px] w-px bg-gray-200" /> : null}
+                              <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <div className="text-2xl font-semibold text-gray-900">{fmtLongDate(entryAt)}</div>
+                                  <div className="text-sm text-gray-500">{fmtDateTime(entryAt)}</div>
+                                  {gapDays !== null ? <span className="rounded-md bg-gray-100 px-2.5 py-1 text-sm text-gray-600">+{gapDays} days</span> : null}
+                                </div>
+
+                                <div className="mt-3 text-xl font-semibold text-gray-900">{item.followupStatus ?? 'Follow-up logged'}</div>
+                                {item.followupSubStatus ? <div className="mt-1 text-sm font-medium text-[#1B2A6B]">{item.followupSubStatus}</div> : null}
+                                <div className="mt-3 text-base text-gray-700">{clean(item.comments) || 'No remark recorded for this follow-up.'}</div>
+
+                                <div className="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-600">
+                                  <span className="font-medium text-gray-900">{item.followupClassification ?? '—'}</span>
+                                  {item.followupDate ? <span>{` · Next follow-up set for ${fmtLongDate(item.followupDate)}`}</span> : null}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-6 py-4">
+                    <div className="text-sm text-gray-500">
+                      {lastContact ? `Last activity ${fmtDateTime(lastContact)}` : 'No follow-up activity recorded yet'}
+                    </div>
+                    <div className="flex gap-3">
+                      <Btn variant="outline" onClick={closeFollowupView}>Close</Btn>
+                      <Btn onClick={() => {
+                        closeFollowupView()
+                        openLog(viewHistoryRow)
+                      }}
+                      >
+                        Log follow-up
+                      </Btn>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()
           ) : null}
         </div>
       </Modal>
 
-      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} onClose={closeInquiryView}>
+      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} width="max-w-6xl" onClose={closeInquiryView}>
         <div className="space-y-4">
           {viewInquiryLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
@@ -1436,73 +1828,18 @@ export function FollowupClient({
           ) : viewInquiryError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{viewInquiryError}</div>
           ) : viewInquiry ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Linked Customer:</span> {viewInquiry.customer?.custName ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Linked Customer ID:</span> {viewInquiry.customer?.custId ?? viewInquiry.customerId ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Name:</span> {viewInquiry.customer?.custName ?? viewInquiry.customerNameLegacy ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Mobile:</span> {viewInquiry.customer?.custMobile ?? viewInquiry.mobileno ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Email:</span> {viewInquiry.customer?.custEmail ?? viewInquiry.email ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Source:</span> {viewInquiry.website ?? '—'}</div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inquiry</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Inquiry ID:</span> {viewInquiry.inquiryId}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry No:</span> {viewInquiry.inquiryNo ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(viewInquiry.dateOfInquiry) || '—'}</div>
-                    <div><span className="font-medium text-gray-900">Classification:</span> {viewInquiry.classification ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Status:</span> {viewInquiry.status ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Sub-status:</span> {viewInquiry.subStatus ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Budget:</span> {fmtMoney(viewInquiry.budgetOfCustomer)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Car Requirement</div>
-                {viewInquiry.inquiryCarDetails.length === 0 ? (
-                  <div className="mt-3 text-sm text-gray-700">No vehicle requirement captured.</div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {viewInquiry.inquiryCarDetails.map((car, index) => (
-                      <div key={car.inquiryCarDetailsId ?? `view-car-${index}`} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-3">
-                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Vehicle {index + 1}</div>
-                        <div className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                          <div><span className="font-medium text-gray-900">Make:</span> {clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Model:</span> {clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Variant:</span> {clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Sub Variant:</span> {clean(car.subVariant) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Year:</span> {car.year ?? '—'}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow-up</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  <div><span className="font-medium text-gray-900">Follow-up Date:</span> {fmtDate(viewInquiry.followUpDate) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Visited Date:</span> {fmtDate(viewInquiry.visitedDateOfCustomer) || '—'}</div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Remarks</div>
-                <div className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{viewInquiry.remark?.trim() ? viewInquiry.remark : '—'}</div>
-              </div>
-
-              <div className="flex justify-end">
-                <Btn variant="outline" onClick={closeInquiryView}>Close</Btn>
-              </div>
-            </>
+            <InquiryDetailView
+              inquiry={viewInquiry}
+              onClose={closeInquiryView}
+              onEdit={() => {
+                closeInquiryView()
+                openInquiryEdit(viewInquiry.inquiryId)
+              }}
+              onLogFollowup={() => {
+                closeInquiryView()
+                openLog(viewInquiry as unknown as FollowupRow)
+              }}
+            />
           ) : null}
         </div>
       </Modal>

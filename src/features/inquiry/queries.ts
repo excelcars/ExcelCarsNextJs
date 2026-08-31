@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
+import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
 
 export const INQUIRY_STATUSES = ['FollowUp', 'Closed'] as const
 export const INQUIRY_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
@@ -34,11 +35,16 @@ export interface ListInquiriesParams {
   modelId: string
   variantId: string
   page: number
+  restrictToUserId?: number | null
 }
 
-function buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId'>) {
+function buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'restrictToUserId'>) {
   const where: Prisma.InquiryWhereInput = {}
   const andConditions: Prisma.InquiryWhereInput[] = []
+
+  if (restrictToUserId) {
+    andConditions.push(buildInquiryOwnershipWhere(restrictToUserId))
+  }
 
   if (status !== 'All') {
     where.status = status
@@ -104,8 +110,24 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
       { inquiryNo: { contains: q, mode: 'insensitive' } },
       { mobileno: { contains: q, mode: 'insensitive' } },
       { email: { contains: q, mode: 'insensitive' } },
+      { website: { contains: q, mode: 'insensitive' } },
       { customerNameLegacy: { contains: q, mode: 'insensitive' } },
       { customer: { custName: { contains: q, mode: 'insensitive' } } },
+      {
+        inquiryCarDetails: {
+          some: {
+            OR: [
+              { makeLegacy: { contains: q, mode: 'insensitive' } },
+              { modelLegacy: { contains: q, mode: 'insensitive' } },
+              { variantLegacy: { contains: q, mode: 'insensitive' } },
+              { subVariant: { contains: q, mode: 'insensitive' } },
+              { carVariantMaster: { variant: { contains: q, mode: 'insensitive' } } },
+              { carVariantMaster: { carMakeMaster: { make: { contains: q, mode: 'insensitive' } } } },
+              { carVariantMaster: { carModelMaster: { model: { contains: q, mode: 'insensitive' } } } },
+            ],
+          },
+        },
+      },
     ]
   }
 
@@ -119,6 +141,13 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
 function inquiryDetailInclude() {
   return {
     customer: true,
+    assignedToUser: {
+      select: {
+        userId: true,
+        userName: true,
+        displayName: true,
+      },
+    },
     inquiryCarDetails: {
       orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
       include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } },
@@ -143,6 +172,14 @@ function inquiryListSelect() {
     subStatus: true,
     followUpDate: true,
     remark: true,
+    assignedTo: true,
+    assignedToUser: {
+      select: {
+        userId: true,
+        userName: true,
+        displayName: true,
+      },
+    },
     customer: {
       select: {
         custId: true,
@@ -183,8 +220,8 @@ function inquiryListSelect() {
   } satisfies Prisma.InquirySelect
 }
 
-export async function listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page }: ListInquiriesParams) {
-  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId })
+export async function listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page, restrictToUserId = null }: ListInquiriesParams) {
+  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId })
 
   const skip = Math.max(0, (page - 1) * PAGE_SIZE)
 
@@ -209,8 +246,8 @@ export async function getInquiryById(id: number) {
   })
 }
 
-export async function listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId'>) {
-  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId })
+export async function listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'restrictToUserId'>) {
+  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId })
   return prisma.inquiry.findMany({
     where,
     include: inquiryDetailInclude(),
@@ -248,4 +285,57 @@ export async function getInquirySourceSuggestions() {
   }
 
   return suggestions
+}
+
+export async function getInquirySubStatusSuggestions() {
+  const rows = await prisma.inquiry.findMany({
+    distinct: ['subStatus'],
+    where: { subStatus: { not: null } },
+    select: { subStatus: true },
+    orderBy: { subStatus: 'asc' },
+    take: 1000,
+  })
+
+  const seen = new Set<string>()
+  const suggestions: string[] = []
+
+  for (const row of rows) {
+    const value = row.subStatus?.trim()
+    if (!value) continue
+    const key = value.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    suggestions.push(value)
+  }
+
+  return suggestions
+}
+
+export async function getInquiryAssistants() {
+  return prisma.userTable.findMany({
+    where: {
+      status: 'Active',
+      roleName: 'InquiryAssistant',
+      empId: { not: null },
+    },
+    select: {
+      userId: true,
+      userName: true,
+      displayName: true,
+      employee: {
+        select: {
+          empId: true,
+          empFirstName: true,
+          empLastName: true,
+          empMobileNo: true,
+          empEmailId: true,
+        },
+      },
+    },
+    orderBy: [
+      { displayName: 'asc' },
+      { userName: 'asc' },
+      { userId: 'asc' },
+    ],
+  })
 }
