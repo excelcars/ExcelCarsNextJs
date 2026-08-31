@@ -16,7 +16,7 @@ export async function listCatalogSummary(search: string, page: number) {
       _count: { select: { carModelMaster: true, carVariantMaster: true } },
       carModelMaster: { orderBy: { model: 'asc' }, take: 3, include: {
         _count: { select: { carVariantMaster: true } },
-        carVariantMaster: { orderBy: { variant: 'asc' }, take: 3, select: { variant: true } },
+        carVariantMaster: { orderBy: { variant: 'asc' }, take: 3, select: { pkVariantId: true, variant: true } },
       } },
     } }),
     prisma.carMakeMaster.count({ where }),

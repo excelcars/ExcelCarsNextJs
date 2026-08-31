@@ -19,6 +19,8 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Dealers', functionName: 'Dealer_Management', route: '/config/dealers', description: 'Manage dealer master records.' },
   { group: 'Configuration', label: 'Customers', functionName: 'Customer_Management', route: '/config/customers', description: 'View and search customer records.' },
   { group: 'Configuration', label: 'Customer Management Write', functionName: CUSTOMER_WRITE_FUNCTION, route: '/config/customers', description: 'Add, edit, delete, and quick-create customer records. Requires Customers view access.', grantsRouteAccess: false },
+  { group: 'Configuration', label: 'Agents', functionName: 'Agent_Management', route: '/config/agents', description: 'Manage reusable Insurance and RTO agent master records.' },
+  { group: 'Configuration', label: 'Vehicle Masters', functionName: 'Vehicle_Master_Management', route: '/config/catalog', description: 'Manage Make, Model, and Variant master records.' },
   { group: 'Configuration', label: 'Feedback', functionName: FEEDBACK_FUNCTION, route: '/config/feedback', description: 'Manage customer feedback responses.' },
   { group: 'Configuration', label: 'Email Templates', functionName: 'Message_Template_Management', route: '/config/sms-email', description: 'Manage email templates.' },
 

@@ -9,7 +9,7 @@ Vehicle Masters manages the catalog hierarchy used by vehicle selectors througho
 
 `Make → Model → Variant`
 
-The page supports server-side search and pagination over Make rows, a compact three-column hierarchy summary, Make edit/delete, and hierarchical creation of Make, Model, and Variant records.
+The page supports server-side search and pagination over Make rows, a compact three-column hierarchy summary, Make/Model/Variant edit/delete, and hierarchical creation of Make, Model, and Variant records.
 
 ## 2. Source Evidence
 
@@ -67,13 +67,17 @@ For example:
 
 Search matches Make, Model, or Variant and returns matching Make rows with the same summary representation. Pagination is at the Make-row level, with 25 Makes per page.
 
+Displayed Model and Variant names are clickable. Clicking a Model or Variant opens its complete child-list manager. Clicking a Model's `+N` opens all Models for that Make; clicking a Variant `+N` opens all Variants for that Model. The child-list manager provides Edit and Delete actions for each Model or Variant and an Add Model/Add Variant action at the relevant level.
+
+When Edit is selected from a child-list manager, the manager closes before the edit modal opens. Only the active edit modal remains mounted, preventing the child-list modal from appearing behind it.
+
 ## 6. Add And Edit
 
 The Add Vehicle Master flow is hierarchical. The user can select an existing Make or choose `+ Add new make`; after a Make is selected, the user can select an existing Model or add a new Model; after a Model is selected, the user can select an existing Variant or add a new Variant.
 
 New child records are created immediately from the inline Add controls and the new record becomes selected for the next step. The final `Done` button closes the flow; there is no separate aggregate save operation.
 
-The Make edit modal supports editing a Make name. Make deletion is available from the summary row and is blocked when the database reports related records. Model and Variant creation is available in the hierarchical add flow.
+The Make edit modal supports editing a Make name. Make deletion is available from the summary row and is blocked when the database reports related records. Model and Variant edit/delete controls are available from their child-list manager. Model and Variant creation is also available in the hierarchical add flow and from the child-list manager.
 
 The add/edit fields are:
 
