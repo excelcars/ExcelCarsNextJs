@@ -10,6 +10,7 @@
     "infra:ps": "docker compose ps",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:ensure-inquiry-no-unique": "node scripts/ensure-inquiry-number-unique.mjs",
     "build": "prisma generate && next build",
     "dev:only": "next dev",
     "start": "next start",
@@ -36,8 +37,8 @@
     "vercel:build": "npx vercel build",
     "vercel:deploy:preview": "npx vercel deploy",
     "vercel:deploy:production": "npx vercel deploy --prod",
-    "worker": "node --enable-source-maps src/worker/index.js",
-    "worker:dev": "node --watch --enable-source-maps src/worker/index.js"
+    "worker": "node --enable-source-maps src/worker/index.mjs",
+    "worker:dev": "node --watch --enable-source-maps src/worker/index.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

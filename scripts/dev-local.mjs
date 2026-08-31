@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { ensureInquiryNumberUnique } from './ensure-inquiry-number-unique.mjs'
+import { ensureVehicleEmailLinkInquiry } from './ensure-vehicle-email-link-inquiry.mjs'
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -75,6 +77,8 @@ REDIS_URL=redis://redis:6379
 
   await run(process.execPath, [prisma, 'generate'])
   await run(process.execPath, [prisma, 'db', 'push', '--skip-generate'])
+  await ensureInquiryNumberUnique(process.env)
+  await ensureVehicleEmailLinkInquiry(process.env)
 
   const next = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next')
   if (!existsSync(next)) throw new Error('Dependencies are missing. Run npm install first.')

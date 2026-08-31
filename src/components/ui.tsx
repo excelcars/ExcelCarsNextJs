@@ -137,11 +137,11 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
 export function Table({ headers, children, empty = false, emptyMessage = 'No records found' }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-max text-sm">
+      <table className="w-full min-w-[1860px] table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal">
         <thead>
           <tr className="bg-gray-50 border-b border-gray-200">
             {headers.map(h => (
-              <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+              <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
             ))}
           </tr>
         </thead>

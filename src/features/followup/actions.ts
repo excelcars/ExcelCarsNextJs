@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
+import { isFollowupStatus, validateFollowupLogInput } from '@/lib/inquiryFollowupValidation'
 
 export interface LogFollowupInput {
   status: string
@@ -28,15 +30,16 @@ function toDate(value: string | null | undefined) {
 }
 
 export async function logFollowup(inquiryId: number, input: LogFollowupInput): Promise<ActionResult> {
-  if (!input.status) {
-    return { success: false, error: 'Status is required.' }
-  }
-  if (input.status === 'FollowUp' && !input.nextFollowUpDate) {
-    return { success: false, error: 'Next follow-up date is required unless the inquiry is being closed.' }
+  const validation = validateFollowupLogInput(input)
+  if (validation.error) {
+    return { success: false, error: validation.error }
   }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
+  if (!(await canAccessInquiryByOwnership(inquiryId, '/followup'))) {
+    return { success: false, error: 'You can only log follow-up for your own inquiries.' }
+  }
   const now = new Date()
   const selectedFollowupDate = toDate(input.nextFollowUpDate)
 
@@ -44,7 +47,7 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
     await prisma.followupInquiry.create({
       data: {
         fkInquiryId: inquiryId,
-        followupDate: input.status === 'FollowUp' ? selectedFollowupDate : null,
+        followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
         followupStatus: input.status,
         followupSubStatus: input.subStatus || null,
         followupClassification: input.classification || null,
@@ -62,7 +65,7 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
         subStatus: input.subStatus || null,
         classification: input.classification || null,
         remark: input.comments || null,
-        followUpDate: input.status === 'FollowUp' ? selectedFollowupDate : null,
+        followUpDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
         updatedDt: now,
         ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
       },

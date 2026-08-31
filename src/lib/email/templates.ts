@@ -15,7 +15,7 @@ interface VehicleDetailsEmailInput {
 }
 
 const row = (label: string, value: string) =>
-  `<tr><td style="padding:8px 14px;border:1px solid #d8d2c2;background:#f8f6f0;font-weight:600;">${label}</td><td style="padding:8px 14px;border:1px solid #d8d2c2;">${value || '—'}</td></tr>`
+  `<tr><td style="padding:8px 14px;border:1px solid #dce4f2;background:#f4f7fc;color:#142b62;font-weight:600;">${label}</td><td style="padding:8px 14px;border:1px solid #dce4f2;color:#263651;">${value || '—'}</td></tr>`
 
 export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject: string; html: string } {
   // legacy masked registration numbers to the first 5 characters in customer-facing emails
@@ -25,19 +25,19 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
   const ctaHtml = input.viewDetailsUrl
     ? `
       <div style="margin:24px 0;">
-        <a href="${input.viewDetailsUrl}" style="display:inline-block;background:#c59b3b;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:700;">
+        <a href="${input.viewDetailsUrl}" style="display:inline-block;background:#142b62;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:700;">
           View Full Vehicle Details &rarr;
         </a>
       </div>
       <p style="font-size:12px;color:#6b7280;word-break:break-all;margin-top:8px;">
         If the button does not work, open this link:<br>
-        <a href="${input.viewDetailsUrl}" style="color:#1B2A6B;text-decoration:underline;">${input.viewDetailsUrl}</a>
+        <a href="${input.viewDetailsUrl}" style="color:#d7194a;text-decoration:underline;">${input.viewDetailsUrl}</a>
       </p>
     `
     : ''
 
   const html = `
-    <div style="font-family:Arial,Helvetica,sans-serif;color:#1c2438;line-height:1.6;max-width:560px;">
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#263651;line-height:1.6;max-width:560px;">
       <p>Dear ${input.customerName},</p>
       <p>Thank you for choosing Excel Cars for buying your dream car.</p>
       <p>Below are the car details:</p>

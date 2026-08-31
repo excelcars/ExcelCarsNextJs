@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { ensureInquiryNumberUnique } from "./ensure-inquiry-number-unique.mjs";
+import { ensureVehicleEmailLinkInquiry } from "./ensure-vehicle-email-link-inquiry.mjs";
 
 const envFile = join(process.cwd(), ".env.staging.local");
 const prismaCli = join(process.cwd(), "node_modules", "prisma", "build", "index.js");
@@ -73,12 +75,13 @@ async function main() {
   }
 
   console.log("Using .env.staging.local for Prisma db push...");
-  await run(process.execPath, [prismaCli, "db", "push", ...process.argv.slice(2)], {
-    env: {
-      ...process.env,
-      ...stagingEnv,
-    },
-  });
+  const env = {
+    ...process.env,
+    ...stagingEnv,
+  };
+  await run(process.execPath, [prismaCli, "db", "push", ...process.argv.slice(2)], { env });
+  await ensureInquiryNumberUnique(env);
+  await ensureVehicleEmailLinkInquiry(env);
 }
 
 main().catch((error) => {

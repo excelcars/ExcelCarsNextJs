@@ -12,6 +12,7 @@ dist
 .env.staging.local
 .vercel
 /db
+/storage
 
 *.env.*
 !.env.example

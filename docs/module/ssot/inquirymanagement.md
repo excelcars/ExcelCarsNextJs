@@ -1,18 +1,19 @@
 # SSOT - Inquiry Management Module
-## Status: Next.js implemented; current-state business logic documented
+## Status: Next.js implemented; SSOT updated to current code on 2026-08-28
 
 **Module:** `inquiry`  
 **Project:** `ExcelCarsNextJs`  
-**Depends On:** `customer` linkage, vehicle catalog masters, inventory module, auth/session, email delivery, tracked vehicle email links  
-**Source of truth for this document:** `D:\projects\ExcelCarsNextJs\app\(dashboard)\inquiry\page.tsx`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\InquiryClient.tsx`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\actions.ts`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\queries.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\previous\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\inventory-match\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\export\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inventory\inquiries\route.ts`
+**Primary route:** `/inquiry`  
+**Depends On:** customer linkage and auto-create policy, vehicle catalog masters, inventory module, `followupInquiry`, `inquiryInventoryLinks`, auth/session, inquiry ownership rules, email delivery, tracked public vehicle links  
+**Source of truth for this document:** `D:\projects\ExcelCarsNextJs\app\(dashboard)\inquiry\page.tsx`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\InquiryClient.tsx`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\actions.ts`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\queries.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\previous\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\inventory-match\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\export\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inventory\inquiries\route.ts`, `D:\projects\ExcelCarsNextJs\middleware.ts`
 
 ## 1. Purpose
-This module manages inquiry records in the current Next.js admin dashboard.
+This module manages inquiry records inside the authenticated Next.js admin dashboard.
 
-It owns:
-- inquiry list, filtering, pagination, export, view, create, edit, and delete
+It currently owns:
+- inquiry list, filtering, paging, export, view, create, edit, delete
 - inquiry workflow capture:
-  - source
+  - source / website
   - customer/contact
   - classification
   - status
@@ -20,39 +21,53 @@ It owns:
   - follow-up date
   - visited date
   - remark
-- one-to-many car-of-interest capture per inquiry through `inquiryCarDetails`
-- duplicate/previous inquiry detection by mobile number
-- inquiry-side inventory match lookup
-- emailing a matched inventory vehicle to an inquiry recipient
-- best-effort first-save inquiry email when a car of interest exists
+  - assignment to inquiry assistant
+- one-to-many vehicle-interest capture through `inquiryCarDetails`
+- duplicate / overlapping inquiry warnings before save
+- inquiry-side inventory matching
+- explicit save-only vs save-and-send behavior
+- follow-up history append behavior through `followupInquiry`
+- persistent inquiry-to-inventory link history through `inquiryInventoryLinks`
+- inquiry detail timeline for linked inventory history
 
-It does not own:
-- customer master creation or update
-- inventory master ownership
-- inventory photo ownership
-- vehicle catalog master ownership
-- durable follow-up history as a separate table
+It depends on, but does not own:
+- customer master schema
+- inventory master schema
+- vehicle photo/media ownership
+- dashboard reporting outputs
 
 ## 2. Locked Current Scope
-- inquiry management UI is served at `/inquiry`
-- all reads and writes require authenticated session
-- the page is server-rendered for list/filter data and hydrated into a client management screen
-- inquiry create/edit uses a modal form rather than a full-page edit view
-- current implementation supports multiple vehicle-interest rows per inquiry
-- customer can be:
-  - linked from existing customer master through `CustomerPicker`
-  - stored as legacy/free-text contact data when no linked customer is chosen
-- source suggestions are taken from preferred defaults plus distinct saved inquiry websites
-- duplicate prior inquiries are checked by exact mobile number match
-- inventory matching is based on the selected make/model/variant/year values across the inquiry vehicle-interest rows
-- emailing from inquiry sends one selected inventory vehicle at a time
-- export follows the exact filters currently applied
+- inquiry UI is served at `/inquiry`
+- route access is protected by `canCurrentUserAccessRoute('/inquiry')`
+- unauthorized access is redirected to `/dashboard`
+- inquiry list queries can be ownership-restricted through `getInquiryOwnershipScopeForRoute('/inquiry')`
+- page data is server-rendered, then hydrated into `InquiryClient`
+- inquiry create/edit uses a modal workflow
+- one inquiry supports multiple `inquiryCarDetails` rows in UI and persistence
+- inquiry number is generated sequentially as `Inquiry/<number>`
+- database-level uniqueness protection now exists for `inquiry.inquiry_no`
+- source suggestions come from preferred defaults plus distinct saved `inquiry.website` values
+- sub-status suggestions come from distinct saved `inquiry.subStatus` values
+- duplicate warning checks normalized mobile, linked customer overlap, and existing open inquiry conditions
+- inquiry inventory matching works across all selected vehicle rows
+- save actions are explicit:
+  - `Save Only`
+  - `Save & Send Matching`
+- inquiry detail shows:
+  - full vehicle-interest list
+  - current inquiry state
+  - follow-up timeline
+  - linked inventory history
+  - tracked inventory email history with open/click activity
+  - create/update audit users
 
 ## 3. Data Ownership
-
-Primary tables owned or directly written by this module:
+Primary tables directly written by this module:
 - `inquiry`
 - `inquiryCarDetails`
+- `followupInquiry`
+- `inquiryInventoryLinks`
+- `vehicleEmailLink`
 
 Primary related tables read by this module:
 - `customer`
@@ -60,10 +75,9 @@ Primary related tables read by this module:
 - `carModelMaster`
 - `carVariantMaster`
 - `inventoryManagement`
-- `vehicleEmailLink`
-- `user`
+- `userTable`
 
-Minimum `inquiry` fields used by this module:
+Minimum `inquiry` fields used:
 - `inquiryId`
 - `inquiryNo`
 - `dateOfInquiry`
@@ -79,12 +93,13 @@ Minimum `inquiry` fields used by this module:
 - `subStatus`
 - `followUpDate`
 - `remark`
+- `assignedTo`
 - `createdDt`
 - `updatedDt`
 - `createdBy`
 - `updatedBy`
 
-Minimum `inquiryCarDetails` fields used by this module:
+Minimum `inquiryCarDetails` fields used:
 - `inquiryCarDetailsId`
 - `fkInquiryId`
 - `fkVariantId`
@@ -98,27 +113,44 @@ Minimum `inquiryCarDetails` fields used by this module:
 - `createdBy`
 - `updatedBy`
 
-Related `vehicleEmailLink` write side effect when inventory email is sent:
+Minimum `followupInquiry` fields written/read here:
+- `pkFollowupId`
+- `fkInquiryId`
+- `followupDate`
+- `followupStatus`
+- `followupSubStatus`
+- `followupClassification`
+- `comments`
+- `createdDt`
+- `updatedDt`
+- `createdBy`
+- `updatedBy`
+
+Minimum `inquiryInventoryLinks` fields written/read here:
+- `inquiryInventoryLinkId`
+- `inquiryId`
 - `inventoryId`
-- `customerId` (nullable)
-- `recipientEmail`
-- `recipientName`
-- `tokenHash`
-- `emailSentAt`
+- `linkType`
 - `isActive`
+- `createdAt`
+- `updatedAt`
+- `createdBy`
+- `updatedBy`
 
 ## 4. Interface Contracts
-
 Required page surface:
-- `GET /inquiry` through `app/(dashboard)/inquiry/page.tsx`
+- `GET /inquiry`
 
 Required server actions:
-- `createInquiry(input)`
+- `createInquiry(input, options?)`
 - `updateInquiry(id, input)`
 - `deleteInquiry(id)`
-- `getInquiryDetail(inquiryId)`
+- `getInquiryDetail(inquiryId, options?)`
+- `assignInquiry(input)`
 - `sendInquiryEmail(inquiryId)`
 - `sendInquiryInventoryEmail(inquiryId, inventoryId)`
+- `sendInquiryInventoryEmails(inquiryId, inventoryIds)`
+- `getNextInquiryNumber()`
 
 Required query functions:
 - `listInquiries(params)`
@@ -126,6 +158,8 @@ Required query functions:
 - `listInquiriesForExport(params)`
 - `getMakes()`
 - `getInquirySourceSuggestions()`
+- `getInquirySubStatusSuggestions()`
+- `getInquiryAssistants()`
 
 Required API surfaces:
 - `GET /api/inquiry/previous`
@@ -133,183 +167,162 @@ Required API surfaces:
 - `GET /api/inquiry/export`
 - `GET /api/inventory/inquiries`
 
-Required UI behaviors:
-- list inquiries with paging
-- free-text search
-- filter by:
-  - status
-  - classification
-  - source
-  - sub-status
-  - follow-up date
-  - visited date
-  - make
-  - model
-  - variant
-- open modal for new inquiry
-- open modal for edit inquiry
-- open detail view for inquiry
-- add/remove multiple vehicle-interest rows in the inquiry form
-- detect previous inquiries by mobile while editing
-- show matching inventory while editing based on vehicle selection
-- export all matching filtered inquiry rows as CSV
-- open inventory-email modal from an inquiry row
-
 ## 5. Business Rules
-- authenticated session is mandatory for page and API access
-- inquiry list defaults:
+- authenticated session is mandatory for all inquiry write actions
+- `/inquiry` browser access also requires route-level access permission
+- inquiry list defaults are:
   - `status = All`
   - `classification = All`
   - `source = All`
   - `subStatus = All`
-  - page size is fixed at `25`
-- inquiry statuses are locked to:
+  - fixed page size `25`
+- inquiry statuses currently remain:
   - `FollowUp`
   - `Closed`
-- inquiry classifications are locked to:
+- inquiry classifications remain:
   - `Hot`
   - `Warm`
   - `Cold`
-- new inquiry form defaults are:
+- new inquiry defaults are:
   - `dateOfInquiry = today`
   - `classification = Warm`
   - `status = FollowUp`
   - `followUpDate = empty`
-- create/update requires either:
-  - linked `customerId`, or
-  - free-text `customerNameLegacy`, or
-  - free-text `mobileno`
-- workflow validation rules:
+- validation rules:
   - when `status = FollowUp`, `followUpDate` is required
   - when `subStatus = Visited`, `visitedDateOfCustomer` is required
   - `followUpDate` cannot be earlier than `dateOfInquiry`
   - `visitedDateOfCustomer` cannot be earlier than `dateOfInquiry`
-- if a linked customer is selected:
-  - inquiry contact fields are resolved from `customer`
-  - selected customer must exist
-  - free-text contact values do not override linked customer canonical values during save
-- if no linked customer is selected:
-  - inquiry stores legacy/free-text `customerNameLegacy`, `mobileno`, and `email`
-- if `fkVariantId` is selected:
-  - make/model/variant text is resolved from catalog masters and stored into inquiry car detail legacy columns
-- if no `fkVariantId` is selected:
-  - inquiry car detail can still store `subVariant` and `year`
-  - no free-text make/model/variant form currently exists in this UI
-- create behavior:
-  - inserts one inquiry row
-  - optionally inserts multiple `inquiryCarDetails` child rows when vehicle rows contain meaningful values
-- update behavior:
-  - updates inquiry row
-  - replaces the existing inquiry car-detail set with the currently posted vehicle rows
-- delete behavior:
-  - deletes all `inquiryCarDetails` rows for the inquiry
-  - deletes the inquiry row
-- previous inquiry detection:
-  - exact case-insensitive mobile match on `mobileno`
-  - current inquiry id can be excluded while editing
-- inquiry list search matches:
-  - inquiry number
-  - mobile
-  - email
-  - legacy customer name
-  - linked customer name
-- make/model/variant filters work through `inquiryCarDetails` and catalog relations
+- inquiry save now uses an explicit customer resolution policy:
+  - if `customerId` is selected, canonical customer values are used
+  - if no `customerId` is selected and a normalized mobile matches an existing customer, that customer is linked
+  - if no matching customer exists and a customer name is present, a new customer is auto-created
+  - if no name is present, inquiry can still store mobile/email without creating a customer
+- one inquiry can save multiple meaningful car rows
+- on update, current implementation replaces the stored child set with the submitted child set
+- follow-up history is appended when workflow state changes meaningfully
+- create and update preserve inquiry summary fields on `inquiry` and append history to `followupInquiry`
+- duplicate warnings are informational, not hard blocking
+- users can still continue saving a genuine new inquiry after warning review
 
-## 6. Current Relationship Model
+## 6. Duplicate Detection
+Current duplicate warning logic uses `GET /api/inquiry/previous`.
+
+It checks:
+- normalized mobile overlap
+- linked customer overlap
+- existing open inquiry overlap
+
+Current warning actions in UI:
+- show matching inquiry cards
+- show reason chips such as:
+  - `Same mobile`
+  - `Same linked customer`
+  - `Open inquiry`
+- allow direct `View` link opening the inquiry in a new tab
+
+The current system does not auto-merge inquiries.
+
+## 7. Relationship Model
 - one linked `customer` can have many `inquiry` rows
 - one `inquiry` belongs to zero or one linked `customer`
-- one `inquiry` can have many `inquiryCarDetails` rows in storage and in the current UI
-- one inquiry can be matched against many inventory vehicles at read time through `/api/inquiry/inventory-match`
-- current app does not persist a direct inquiry-to-inventory link when showing matches
-- one inventory vehicle can be emailed to one inquiry recipient at a time from the inquiry email modal
+- one `inquiry` can have many `inquiryCarDetails`
+- one `inquiry` can have many `followupInquiry` history rows
+- one `inquiry` can have many `inquiryInventoryLinks`
+- one inventory vehicle can be linked to many inquiries over time
+- `inquiryInventoryLinks.linkType` currently records durable states already used by the app:
+  - `matched`
+  - `emailed`
 
-## 7. Inventory Integration
-- inquiry edit modal auto-loads matching inventory when any inquiry vehicle row has selected make, model, or variant data
-- inventory match query uses:
-  - `variantId` if available
-  - else `modelId`
-  - else `makeId`
-  - optional `year`
-- `/api/inquiry/inventory-match` returns up to 12 vehicles
-- inquiry inventory email modal preloads matching inventory across the inquiry vehicle rows
-- `/api/inventory/inquiries` supports lookup of inquiry candidates from inventory side:
-  - default result is recent inquiries with `status = FollowUp`
-  - search supports inquiry number, customer, mobile, email
+Important note:
+- durable inquiry-to-inventory links are a deliberate Next.js improvement beyond legacy parity
 
-## 8. Email Integration
-Two email paths exist in code:
+## 8. Inventory Integration
+- inquiry form supports multiple vehicle-interest rows
+- matching inventory is searched across all selected inquiry car rows
+- inventory matching prefers:
+  - exact `fkVariantId`
+  - else exact legacy make/model/variant text combination
+  - optional exact `year`
+- match search is limited to inventory with status `In Stock`
+- `/api/inquiry/inventory-match` is used for the matching workspace
+- `Save & Send Matching` can auto-send all selected matching inventory vehicles after save
+- successful automatic match-send persists:
+  - `matched` links for discovered inventory
+  - `emailed` links for successfully sent vehicles
+- inquiry detail shows linked inventory history with inventory snapshots
+
+## 9. Email Integration
+There are two code paths:
 - `sendInquiryEmail(inquiryId)`
-- `sendInquiryInventoryEmail(inquiryId, inventoryId)`
+- `sendInquiryInventoryEmail(inquiryId, inventoryId)` and `sendInquiryInventoryEmails(inquiryId, inventoryIds)`
 
-Current UI-anchored path:
-- `sendInquiryInventoryEmail(inquiryId, inventoryId)`
-- resolves inquiry recipient from linked customer email first, then inquiry email
-- resolves inventory vehicle details from inventory record
-- creates a tracked `vehicleEmailLink`
-- sends a vehicle-details email with tracked detail URL
-- deletes the just-created `vehicleEmailLink` if email send fails
+Current practical behavior:
+- `sendInquiryEmail()` sends a generic inquiry-interest email from the first inquiry car row
+- `sendInquiryInventoryEmail()` sends one concrete inventory vehicle email
+- `sendInquiryInventoryEmails()` sends multiple selected inventory vehicles one by one
+- inventory email path creates tracked `vehicleEmailLink` rows
+- on successful inventory email, the inquiry gets durable `inquiryInventoryLinks` with `linkType = emailed`
+- on failed inventory email, the just-created tracked link is cleaned up
+- inquiry detail now shows tracked inventory email history with:
+  - recipient
+  - sent time
+  - open counts
+  - first/last open
+  - call / WhatsApp / email click counts
 
-Best-effort first-save path:
-- `createInquiry()` calls internal `sendInquiryCarEmail(newInquiryId)` after successful create
-- this only attempts when a car of interest exists through `fkVariantId` or `carYear`
-- this email uses inquiry car-of-interest details, not a selected inventory record
-- save success is not rolled back if the email attempt fails
+Public email links:
+- vehicle email links point to `/vehicle/[slug]?t=<token>`
+- public vehicle pages are intentionally excluded from auth middleware
+- dashboard pages remain authenticated
 
-Important differences from legacy:
-- current inquiry email flow does not attach inventory photos
-- current inventory email flow creates tracked vehicle email links
-- current inquiry module does not create follow-up history rows during email sending
+## 10. Listing And Export Behavior
+Inquiry list is now aligned closer to the legacy screen.
 
-## 9. Export and Reporting
-- `GET /api/inquiry/export` returns all rows matching current filters
-- client exports CSV with columns:
-  - `Inquiry ID`
-  - `Inquiry No`
-  - `Inquiry Date`
-  - `Source`
-  - `Linked Customer ID`
-  - `Customer Name`
-  - `Mobile`
-  - `Email`
-  - `Make`
-  - `Model`
-  - `Variant`
-  - `Sub Variant`
-  - `Car Year`
-  - `Budget`
-  - `Classification`
-  - `Status`
-  - `Sub-status`
-  - `Follow-up Date`
-  - `Visited Date`
-  - `Remarks`
+Current grouped columns are:
+- `Sr. No`
+- `Inquiry_Date / Website`
+- `Customer Details`
+- `Car Details`
+- `Budget / Classification`
+- `Visited Date`
+- `Status / Sub Status`
+- `FollowUp Date`
+- `Remark`
+- `Actions`
 
-## 10. Known Current Constraints
-- there is no separate `followup` table integration in the current module
-- customer master is not upserted here; the module links an existing customer or stores legacy text
-- free-text make/model/variant fallback from legacy is not fully exposed in current inquiry UI
-- first-save inquiry email exists as a best-effort side effect but is not surfaced as an explicit user action in the form
-- inquiry-to-inventory relation remains read-time matching rather than persistent association
+Current export behavior:
+- export follows active filters
+- export expands one inquiry into multiple rows when multiple inquiry car rows exist
+- export format is shaped closer to legacy Excel expectations
 
-## 11. Tests Required
-- unauthenticated access to inquiry page and inquiry APIs is rejected
-- create inquiry succeeds with linked customer and valid workflow fields
-- create inquiry succeeds with free-text customer/mobile and valid workflow fields
-- create inquiry fails when no customer identity information is provided
-- `FollowUp` status requires follow-up date
-- `Visited` sub-status requires visited date
-- follow-up date cannot be before inquiry date
-- visited date cannot be before inquiry date
-- create inquiry writes exactly one `inquiryCarDetails` row when vehicle info exists
-- create inquiry can persist multiple `inquiryCarDetails` rows
-- update inquiry can persist multiple `inquiryCarDetails` rows
-- delete inquiry removes child `inquiryCarDetails` rows first
-- previous inquiry API returns same-mobile records excluding current inquiry when requested
-- make/model/variant filters return inquiries through `inquiryCarDetails` relation
-- export returns all matching rows, not just current page
-- inventory-match API returns vehicles by variant/model/make priority
-- `sendInquiryInventoryEmail` creates tracked email link and rolls it back on send failure
-- first-save best-effort inquiry email does not fail the inquiry save
+## 11. Form Arrangement
+The add/edit inquiry form currently follows this field arrangement:
+- first row:
+  - `Inquiry No*`
+  - `Date of Inquiry*`
+  - `Reference Website`
+- second row:
+  - `Link Existing Customer`
+- third row:
+  - `Customer Name*#`
+  - `Customer Mobile No*#`
+  - `Customer Email`
 
-## 12. SSOT Rule
-Inquiry Management in the current Next.js app is customer-linked, filterable, email-enabled, and now supports multiple vehicle-interest rows per inquiry. Any change to inquiry car-detail cardinality, persistent inquiry-to-inventory links, or follow-up history ownership must update this SSOT in the same change.
+Vehicle interest remains a separate multi-row section below the core inquiry fields.
+
+## 12. Follow-up Interconnection
+Inquiry and Follow-up are intentionally interconnected.
+
+Current shared behavior:
+- inquiry create/update can append `followupInquiry`
+- follow-up module reads current queue state from `inquiry`
+- follow-up history modal reads `followupInquiry`
+- dashboard follow-up metrics should later be derived from these same durable tables rather than ad hoc UI state
+
+## 13. Known Current Limits
+- no merge flow exists for duplicate inquiries
+- generic non-tracked `sendInquiryEmail()` history is still not persisted as a durable timeline
+- source is still suggestion-driven rather than strict canonical taxonomy
+- inquiry lifecycle still uses `FollowUp` / `Closed`; `Open` is not introduced yet
+- inquiry child-row updates still use replace-all semantics instead of per-row diff updates

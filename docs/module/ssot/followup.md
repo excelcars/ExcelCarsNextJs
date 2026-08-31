@@ -29,6 +29,8 @@ It depends on, but does not own:
 
 ## 2. Locked Current Scope
 - `/followup` is available inside the authenticated dashboard shell
+- route access is protected by `canCurrentUserAccessRoute('/followup')`
+- unauthorized route access is redirected to `/dashboard`
 - middleware redirects unauthenticated browser access to `/login`
 - the page is server-rendered from URL search params, then hydrated into a client filter and modal workflow
 - the queue is built from `inquiry` rows, not directly from `followupInquiry`
@@ -37,6 +39,7 @@ It depends on, but does not own:
 - history modal shows only the five most recent follow-up records
 - CSV export returns all matching rows, not just the current page
 - current screen supports browsing and logging only; it does not create or delete inquiries itself
+- queue queries can be ownership-restricted through `getInquiryOwnershipScopeForRoute('/followup')`
 
 ## 3. Data Ownership
 
@@ -128,10 +131,11 @@ Required UI actions:
 ## 5. Authentication And Access Control
 - middleware protects all non-API dashboard routes and redirects unauthenticated users to `/login`
 - `/followup` is therefore route-protected at the browser layer
+- `/followup` also checks `canCurrentUserAccessRoute('/followup')` and redirects unauthorized users to `/dashboard`
 - `GET /api/followup/history` and `GET /api/followup/export` explicitly require `auth()`
 - `logFollowup()` uses `auth()` only to populate audit fields; it does not perform a separate explicit permission or role check beyond current session presence
 - no follow-up-specific RBAC equivalent to legacy `DatabaseFunctionname = "FollowUp_Management"` exists in the current implementation
-- no creator-only restriction equivalent to legacy role id `4` filtering exists in current queue queries
+- creator/ownership restriction can be applied through shared inquiry ownership rules
 
 ## 6. Default State And URL Contract
 Search params supported by the page:
@@ -192,6 +196,11 @@ Supported filters in the current UI:
 - follow-up date from/to
 - visited date from/to
 
+Sub-status source:
+- follow-up screen still uses a hardcoded suggestion list in `FollowupClient`
+- inquiry screen uses live distinct sub-status values from the database
+- this is still a cross-module consistency gap
+
 Search matching:
 
 - `search` matches:
@@ -241,6 +250,7 @@ Important display rules:
 - the queue only selects one car detail per inquiry:
   - newest by `updatedDt desc`, then `inquiryCarDetailsId desc`
 - if an inquiry has multiple vehicle-interest rows, only the selected first row is visible in the follow-up table and export summary
+- exported follow-up rows still include follow-up history entries plus inquiry car rows, which is better for reporting than the visible table summary
 - overdue rows are computed client-side as `followUpDate < today`
 - overdue rows get a red-tinted background and warning icon
 - page header subtitle includes total count, overdue count on the current page, and page count when applicable

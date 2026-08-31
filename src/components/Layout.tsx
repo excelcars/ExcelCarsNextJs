@@ -157,7 +157,7 @@ const navItems: NavItem[] = [
       { label: 'Agents', href: '/config/agents' },
       { label: 'Vehicle Masters', href: '/config/catalog' },
       { label: 'Feedback', href: '/config/feedback' },
-      { label: 'SMS / Email', href: '/config/sms-email' },
+      { label: 'Email Templates', href: '/config/sms-email' },
     ],
   },
   {

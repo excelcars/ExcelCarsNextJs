@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
+import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
 
 export interface TodayFilters {
   fromDate: string
@@ -15,10 +16,10 @@ export async function listTodayFollowups({ fromDate, toDate, userId, restrictToU
   const rows = await prisma.followupInquiry.findMany({
     where: {
       updatedDt: { gte: from, lte: to },
-      // an InquiryAssistant-role user is always restricted to inquiries they created,
+      // an InquiryAssistant-role user is always restricted to inquiries they own,
       // regardless of the "Updated By" filter picked in the UI (matches legacy row-security rule)
       ...(restrictToUserId
-        ? { inquiry: { createdBy: restrictToUserId } }
+        ? { inquiry: buildInquiryOwnershipWhere(restrictToUserId) }
         : userId ? { updatedBy: userId } : {}),
     },
     include: {

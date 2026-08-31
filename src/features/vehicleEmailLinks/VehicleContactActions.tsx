@@ -37,7 +37,7 @@ export function VehicleContactActions({
       <a
         href={phoneHref}
         onClick={() => trackVehicleInteraction(token, 'call_click', 'Call Now')}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#c59b3b] px-4 py-3 text-sm font-semibold text-white"
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#142b62] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1e48]"
       >
         <Phone className="h-4 w-4" /> Call Now
       </a>
@@ -46,14 +46,14 @@ export function VehicleContactActions({
         target="_blank"
         rel="noreferrer"
         onClick={() => trackVehicleInteraction(token, 'whatsapp_click', 'WhatsApp')}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#111111] px-4 py-3 text-sm font-semibold text-white"
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#d7194a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#b5123d]"
       >
         <MessageCircle className="h-4 w-4" /> WhatsApp
       </a>
       <a
         href={mailHref}
         onClick={() => trackVehicleInteraction(token, 'email_click', 'Enquire Now')}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#d9cfbb] px-4 py-3 text-sm font-semibold text-gray-800 sm:col-span-2"
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#142b62] px-4 py-3 text-sm font-semibold text-[#142b62] transition hover:bg-[#f1f5fb] sm:col-span-2"
       >
         <Mail className="h-4 w-4" /> Enquire Now
       </a>
