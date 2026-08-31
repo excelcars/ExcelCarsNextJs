@@ -4,7 +4,26 @@
 **Scope:** Profile settings and password behavior only  
 **Existing source:** legacy `ExcelCars` ASP.NET MVC application and its verified legacy SSOT  
 **Current source:** `ExcelCarsNextJs` implementation and its verified Next.js profile SSOT  
-**Status:** Analysis only; no improvements are implemented by this document.
+**Status:** Gap analysis and implementation record. Approved improvements are recorded as implemented only where verified in the current Next.js source.
+
+## Approved decisions
+
+| # | Title | Final decision | Status |
+|---:|---|---|---|
+| 1 | **Old Password Migration** | Migration is already completed. No further work is required. | ✅ Closed / Not Required |
+| 2 | **Forgot Password** | Not required because System Admin can change a user's password. | ✅ Closed / Not Required |
+| 3 | **Inactive User Access** | On hold. | ⏸️ On Hold |
+| 4 | **Profile Input Validation** | Implemented with shared server-side validation and UI constraints. | ✅ Implemented |
+| 5 | **Field Length Limits** | Implemented with shared limits enforced in profile UI/server actions. | ✅ Implemented |
+| 6 | **Password Rules** | Implemented with one shared policy for profile and User Access password flows. | ✅ Implemented |
+| 7 | **All-Device Logout** | On hold. | ⏸️ On Hold |
+| 8 | **Profile Permission** | No separate profile permission is required; restricted fields remain non-editable. | ✅ Closed / Accepted |
+| 9 | **Employee Record Ownership** | Implemented with transactional ownership check and Prisma uniqueness constraint. | ✅ Implemented |
+| 10 | **Profile Loading Error** | Implemented with a profile route error boundary and retry action. | ✅ Implemented |
+| 11 | **Audit History** | On hold. | ⏸️ On Hold |
+| 12 | **Data Refresh / Concurrency** | On hold. | ⏸️ On Hold |
+
+The two closed items remain documented below for traceability. They are excluded from the active implementation order.
 
 ## 1. Executive comparison
 
@@ -54,6 +73,8 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 - `C:\KhizarShaikh\Project\ExcelCarsNextJs\src\lib\access\accessControl.ts`
 - `C:\KhizarShaikh\Project\ExcelCarsNextJs\prisma\schema.prisma`
 
+Cross-module SSOT references: [Profile SSOT](profile.md) and [User Access SSOT](useraccess.md). These modules share the `UserTable`/`AddEmployee` relationship and the validation contract in `src/lib/profileValidation.ts`.
+
 ## 3. Capability comparison
 
 | Capability | Existing .NET behavior | Current Next.js behavior | Gap status |
@@ -88,7 +109,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Legacy `ApModel/Model/Home/User.cs`, legacy `User_Table` schema in `db/excelCarsFinal.sql`; Next `auth.ts`, `prisma/schema.prisma` `UserTable.passwordHash`.
 
-**Priority / impact:** P0 / authentication cutover blocker and high security impact.
+**Priority / impact:** P0 historically / authentication cutover blocker and high security impact. **Final status: Closed / Not Required — migration is already completed.**
 
 ### GAP-02 — Forgot-password/reset workflow
 
@@ -104,7 +125,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Legacy `Views/Shared/_Layout.cshtml`, legacy SQL `Forgot_Password`; Next `prisma/schema.prisma`, `src/lib/email/sendMail.ts`.
 
-**Priority / impact:** P1 / user-recovery and operational impact.
+**Priority / impact:** P1 historically / user-recovery and operational impact. **Final status: Closed / Not Required — System Admin can change a user's password.**
 
 ### GAP-03 — Active-status enforcement for an already-issued session
 
@@ -120,7 +141,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `app/(dashboard)/profile/page.tsx`, `src/features/profile/actions.ts`, `auth.ts`, `src/lib/access/accessControl.ts`.
 
-**Priority / impact:** P1 / authorization and account-deactivation impact.
+**Priority / impact:** P1 / authorization and account-deactivation impact. **Final status: On Hold.**
 
 ### GAP-04 — Runtime validation of server-action inputs
 
@@ -136,7 +157,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `src/features/profile/actions.ts`, `src/lib/validation.ts`.
 
-**Priority / impact:** P1 / reliability and security hardening.
+**Priority / impact:** P1 / reliability and security hardening. **Final status: Implemented.**
 
 ### GAP-05 — Explicit maximum-length and input constraints for profile fields
 
@@ -144,15 +165,15 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Existing system behavior:** Legacy login inputs have browser maximum length 20; legacy employee fields have various view-level limits/keyboard restrictions in User Access. Those limits are not equivalent to a profile contract.
 
-**Current Next.js status:** The profile inputs do not define visible maximum lengths in `ProfileClient`. The server action has no maximum lengths for names, address, city, state, mobile, phone, pincode, or passwords.
+**Current Next.js status:** Profile and Admin User Access inputs display approved `current/max` counters and apply browser `maxLength` limits. The profile and User Access server actions enforce the limits independently, including when a client bypasses the UI. Admin User Access also enforces the email and username limits used by its account form.
 
-**Missing functionality or logic:** The database/application contract does not document or enforce maximum input lengths for profile submissions. The password action has no maximum length.
+**Missing functionality or logic:** No remaining approved field-length gap is identified for the implemented profile and Admin User Access submissions. Database column limits remain schema/database concerns and are not represented as separate Prisma `@db.VarChar` annotations.
 
-**Required improvement:** Obtain approved field limits from the target schema/product requirements, enforce them server-side, and mirror them in the UI. Avoid introducing limits by inference from legacy database types alone.
+**Required improvement:** Completed. Approved limits are centralized in `src/lib/profileValidation.ts`, enforced in both profile and User Access server actions, and mirrored in both UIs. Future schema-level limits should be added only if separately approved and compatible with existing data.
 
 **Relevant locations:** Next `ProfileClient.tsx`, `actions.ts`, `prisma/schema.prisma`.
 
-**Priority / impact:** P1 / data quality and abuse-resistance impact.
+**Priority / impact:** P1 / data quality and abuse-resistance impact. **Final status: Implemented, including Admin User Access server-side enforcement.**
 
 ### GAP-06 — Password policy parity and product rule decision
 
@@ -160,7 +181,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Existing system behavior:** Legacy login has no password-strength, reuse, expiry, retry, or MFA rule. New legacy accounts receive a generated username as their initial password.
 
-**Current Next.js status:** Profile password change requires minimum 8 characters, uppercase, lowercase, number, and special character. Next User Access uses a different rule in its own code: 8–100 characters with at least one letter and one number.
+**Current Next.js status:** Profile password change and User Access password creation/update use the same shared rule: 8–20 characters with uppercase, lowercase, number, and special character.
 
 **Missing functionality or logic:** Password rules are not uniform across Next.js account creation/admin update and self-service profile change. The code does not define password expiry, history, retry lockout, or MFA.
 
@@ -168,7 +189,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `src/features/profile/actions.ts`, `src/features/useraccess/actions.ts`, `src/features/useraccess/UserAccessClient.tsx`.
 
-**Priority / impact:** P1 / security and user-experience impact.
+**Priority / impact:** P1 / security and user-experience impact. **Final status: Implemented.**
 
 ### GAP-07 — Global session invalidation after password change
 
@@ -184,7 +205,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `src/features/profile/ProfileClient.tsx`, `src/features/profile/actions.ts`, `auth.ts`, `auth.config.ts`, `prisma/schema.prisma`.
 
-**Priority / impact:** P1 / account security impact.
+**Priority / impact:** P1 / account security impact. **Final status: On Hold.**
 
 ### GAP-08 — Profile-specific authorization decision
 
@@ -200,7 +221,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `app/(dashboard)/profile/page.tsx`, `src/features/profile/actions.ts`, `src/lib/access/accessControl.ts`, `src/lib/access/accessCatalog.ts`.
 
-**Priority / impact:** P1 / authorization clarity.
+**Priority / impact:** P1 / authorization clarity. **Final status: Closed / Accepted.**
 
 ### GAP-09 — Shared employee-record ownership guard
 
@@ -216,7 +237,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `src/features/profile/actions.ts`, `prisma/schema.prisma` relations `UserTable.employee` and `AddEmployee.userAccounts`.
 
-**Priority / impact:** P1 / data-integrity and privacy impact.
+**Priority / impact:** P1 / data-integrity and privacy impact. **Final status: Implemented.**
 
 ### GAP-10 — Database/query failure UX for profile page
 
@@ -232,7 +253,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `app/(dashboard)/profile/page.tsx`, `src/features/profile/queries.ts`, route error boundary conventions.
 
-**Priority / impact:** P2 / operational usability.
+**Priority / impact:** P2 / operational usability. **Final status: Implemented.**
 
 ### GAP-11 — Audit event completeness for profile changes
 
@@ -248,7 +269,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `src/features/profile/actions.ts`, `auth.ts`, existing audit/event models and exception logging infrastructure.
 
-**Priority / impact:** P2 / compliance and incident-response impact.
+**Priority / impact:** P2 / compliance and incident-response impact. **Final status: On Hold.**
 
 ### GAP-12 — Stale client state after concurrent/profile updates
 
@@ -264,7 +285,7 @@ Therefore, most visible profile functionality is Next.js-only enhancement rather
 
 **Relevant locations:** Next `src/features/profile/ProfileClient.tsx`, `src/features/profile/actions.ts`.
 
-**Priority / impact:** P2 / data consistency.
+**Priority / impact:** P2 / data consistency. **Final status: On Hold.**
 
 ## 5. Differences that are not missing functionality
 
@@ -280,12 +301,10 @@ These are verified differences but should not be copied as gaps without an expli
 
 ## 6. Implementation order recommendation
 
-1. Resolve legacy credential migration and password reset decisions (GAP-01, GAP-02).
-2. Add active-status and runtime input guards (GAP-03, GAP-04).
-3. Approve and unify password policy and session revocation requirements (GAP-06, GAP-07).
-4. Confirm profile authorization and employee-record ownership rules (GAP-08, GAP-09).
-5. Add controlled read failures and required audit events (GAP-10, GAP-11).
-6. Decide on field limits and canonical post-save/concurrency behavior (GAP-05, GAP-12).
+1. Apply the database uniqueness constraint for `UserTable.empId` in each target environment (GAP-09).
+2. Add automated/manual regression coverage for the implemented validation, password, ownership, and error workflows (GAP-04, GAP-05, GAP-06, GAP-09, GAP-10).
+
+GAP-03, GAP-07, GAP-11, and GAP-12 are explicitly on hold. GAP-01 and GAP-02 are closed/not required, and GAP-08 is closed/accepted.
 
 ## 7. Review record
 

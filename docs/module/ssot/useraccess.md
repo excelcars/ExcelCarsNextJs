@@ -8,6 +8,8 @@
 
 User Access manages employee-backed login accounts and assigns each account one role. It does not define the permissions granted by a role; that belongs to Role Access.
 
+Related module: [Profile SSOT](profile.md). The Profile module is the self-service surface for the same authenticated user's account and linked employee record. Shared field limits and password validation are defined in `src/lib/profileValidation.ts`; User Access applies them to administrator-created and administrator-edited accounts.
+
 Evidence: `app/(dashboard)/config/user-access/page.tsx`, `src/features/useraccess/UserAccessClient.tsx`, `actions.ts`, `queries.ts`, `permissions.ts`, `src/lib/access/accessControl.ts`, and `prisma/schema.prisma`.
 
 ## Authorization and hierarchy
@@ -22,9 +24,9 @@ The listing is paginated at 25 rows and filters by free-text search, status, rol
 
 ## Create and update
 
-Create is transactional: it creates the employee then the account. Required fields are first name, last name, gender (`M`/`F`), ten-digit mobile, valid email, role, username, and a password of 8-100 characters containing a letter and number. Username is limited to 4-50 characters using letters, digits, dot, underscore, or hyphen and must be unique. Passwords are bcrypt-hashed.
+Create is transactional: it creates the employee then the account. Required fields are first name, last name, gender (`M`/`F`), ten-digit mobile, valid email, role, username, and a password of 8-20 characters containing uppercase, lowercase, a number, and a special character. Server-side maximum lengths are first/last name 50, mobile 10, phone 10, email 100, address 200, city 50, pincode 6, username 50, and password 20. Username must use letters, digits, dot, underscore, or hyphen and must be unique. Passwords are bcrypt-hashed.
 
-Update validates the same contact and role rules. Username is retained; a blank password preserves the password, while a supplied valid password is re-hashed. The operator may set the account status. Both account and employee edits are audited with the acting user and timestamp.
+Update validates the same contact, field-length, password, and role rules. Username is retained; a blank password preserves the password, while a supplied valid password is re-hashed. The operator may set the account status. Both account and employee edits are audited with the acting user and timestamp.
 
 ## Deactivation and errors
 

@@ -7,6 +7,10 @@
 
 This document describes only behavior verified in the current Next.js source code. The module provides authenticated profile viewing, editing of selected employee fields, and self-service password change.
 
+Shared validation and limits are defined in `src/lib/profileValidation.ts` and reused by the profile and User Access workflows. The Admin User Access create/edit server action independently enforces the same approved field limits, so the UI counters are not the only protection.
+
+Related module: [User Access SSOT](useraccess.md). User Access is the administrative account-management surface for the same `UserTable` and `AddEmployee` records; this profile SSOT covers only the self-service `/profile` surface.
+
 ## 1. Source of truth
 
 Primary files:
@@ -128,7 +132,11 @@ Validation enforced by the action:
 - pincode blank or exactly 6 digits;
 - gender blank, `M`, or `F`.
 
-`isValidPhone` implements the optional blank behavior and `/^\d{10}$/`. There is no server-side length, character-set, email, city, state, or address validation in this action. Client `inputMode` is only a keyboard hint.
+The enforced maximum lengths are: first/last name 50, gender 1, mobile 10, phone 10, address 200, city 50, state 50, pincode 6, and passwords 20 characters. The UI mirrors these limits with `maxLength` and displays live `current/max` character counters for editable text and password fields; the server enforces the limits independently.
+
+The same server-side limit contract is applied when a System Admin creates or edits a user through User Access. Admin-side limits are first/last name 50, mobile 10, phone 10, email 100, address 200, city 50, pincode 6, username 50, and password 20 characters. The Admin User Access form displays counters for these fields, while the server rejects values over the limit even when the UI is bypassed. Gender is checked against the allowed `M`/`F` values, and state is submitted as a selected state id rather than free text.
+
+`isValidPhone` implements the optional blank behavior and `/^\d{10}$/`. There is no server-side character-set, email, city, state, or address content validation in this action. Client `inputMode` is only a keyboard hint. Malformed runtime payload shapes return a safe invalid-input error before string operations.
 
 The action first loads the account selecting only `empId`. If absent, it returns `Account not found.` It builds employee data with names, nullable personal fields, `updatedDate = now`, and `updatedBy = userId`.
 
@@ -138,6 +146,8 @@ Within one Prisma transaction:
 - a null `empId` causes a new `AddEmployee` row to be created with `createdDate = now` and `createdBy = userId`, followed by updating `UserTable.empId`;
 - `UserTable.displayName` becomes the submitted trimmed first/last names;
 - `UserTable.updatedDate` and `updatedBy` are updated.
+
+When updating an existing employee, the transaction checks whether another `UserTable` row references the same employee id. If so, the update is rejected with `This employee record is linked to another user account.` The Prisma schema also marks `UserTable.empId` unique, providing database-level one-account-per-employee enforcement when the schema constraint is applied.
 
 Any transaction/database exception returns `Could not update your profile. Please try again.`
 
@@ -191,7 +201,7 @@ The new password must pass these checks in order:
 4. one digit `\d`;
 5. one character matching `[^A-Za-z0-9]`.
 
-There is no maximum length check, username-similarity check, or password-history check. Reuse prevention only compares the new value with the submitted current-password text before database verification.
+The shared policy enforces a maximum length of 20 for the new password; the current and confirmation values are also capped at 20 by the server and UI. There is no username-similarity check or password-history check. Reuse prevention only compares the new value with the submitted current-password text before database verification.
 
 ## 11. Authentication and session integration
 
@@ -217,7 +227,11 @@ Prisma maps `UserTable` to `user_table`, `AddEmployee` to `add_employee`, and `F
 
 `ForgotPassword` contains verification code, email address, active flag, and audit fields in the schema, but no profile query/action or reset UI uses it. No forgot-password workflow is implemented here.
 
-## 14. Edge-case matrix
+## 14. Profile loading errors
+
+`app/(dashboard)/profile/error.tsx` provides the route-level error UI for profile rendering/query failures. It displays `Unable to load your profile`, asks the user to try again or sign in again, and exposes a `Try again` button that calls the Next.js route error reset function. The profile page still redirects to `/login` when the session/user cannot be resolved; the boundary covers unexpected rendering or data-loading exceptions.
+
+## 15. Edge-case matrix
 
 | Condition | Result |
 |---|---|
@@ -239,10 +253,10 @@ Prisma maps `UserTable` to `user_table`, `AddEmployee` to `add_employee`, and `F
 | Successful password update | Revalidate profile, show message, sign out to `/login`. |
 | Outside click/Escape on menu | Close menu. |
 
-## 15. Verified non-scope
+## 16. Verified non-scope
 
 The current code does not implement forgot-password request/reset, email delivery, reset-token expiry or rate limiting, email/username/role/status/permission editing from `/profile`, avatar upload, profile notifications, password history, global session revocation, profile-specific permissions, or profile search/filter/sort/pagination/listing/export.
 
-## 16. Review record
+## 17. Review record
 
 Two code-review passes were completed for the Next.js implementation. The first pass inventoried and traced the route, client component, server actions, query, layout/menu, middleware, authentication, validation helper, Prisma schema, and login integration. The second pass re-read the implementation from the route outward and verified each visible control, state transition, selected field, validation branch, transaction branch, error message, navigation target, and session side effect. Statements in this SSOT are limited to behavior found in those files; rationale not expressed by code is not treated as an implemented rule.
