@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, type ComponentProps } from 'react'
 import { Check, Eye, EyeOff, LockKeyhole, Pencil, UserRound, X } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { Btn, Input, PageHeader, Select, Textarea } from '@/components/ui'
 import { changeMyPassword, updateMyProfile, type UpdateMyProfileInput } from './actions'
+import { PROFILE_FIELD_LIMITS } from '@/lib/profileValidation'
 
 type ProfileData = {
   userName: string | null
@@ -43,6 +44,18 @@ function personalFormFromProfile(profile: ProfileData): UpdateMyProfileInput {
     empStateLegacy: profile.employee?.empStateLegacy ?? '',
     empPincode: profile.employee?.empPincode ?? '',
   }
+}
+
+function CharacterCount({ value, maxLength }: { value: string; maxLength: number }) {
+  return <div className="mt-1 text-right text-[11px] text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
+}
+
+function CountedInput({ value = '', maxLength, ...props }: Omit<ComponentProps<typeof Input>, 'value' | 'maxLength'> & { value?: string; maxLength: number }) {
+  return <div><Input {...props} value={value} maxLength={maxLength} /><CharacterCount value={value} maxLength={maxLength} /></div>
+}
+
+function CountedTextarea({ value = '', maxLength, ...props }: Omit<ComponentProps<typeof Textarea>, 'value' | 'maxLength'> & { value?: string; maxLength: number }) {
+  return <div><Textarea {...props} value={value} maxLength={maxLength} /><CharacterCount value={value} maxLength={maxLength} /></div>
 }
 
 export function ProfileClient({ profile }: { profile: ProfileData }) {
@@ -156,20 +169,20 @@ export function ProfileClient({ profile }: { profile: ProfileData }) {
             {editingPersonal ? (
               <form onSubmit={savePersonalInformation} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="First name *" value={personalForm.empFirstName} onChange={event => updatePersonalField('empFirstName', event.target.value)} disabled={isPending} />
-                  <Input label="Last name *" value={personalForm.empLastName} onChange={event => updatePersonalField('empLastName', event.target.value)} disabled={isPending} />
+                  <CountedInput label="First name *" value={personalForm.empFirstName} onChange={event => updatePersonalField('empFirstName', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.firstName} required />
+                  <CountedInput label="Last name *" value={personalForm.empLastName} onChange={event => updatePersonalField('empLastName', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.lastName} required />
                   <Select label="Gender" value={personalForm.empGender} onChange={event => updatePersonalField('empGender', event.target.value)} disabled={isPending}>
                     <option value="">Not specified</option>
                     <option value="M">M</option>
                     <option value="F">F</option>
                   </Select>
-                  <Input label="Mobile" inputMode="numeric" value={personalForm.empMobileNo} onChange={event => updatePersonalField('empMobileNo', event.target.value)} disabled={isPending} />
-                  <Input label="Phone" inputMode="numeric" value={personalForm.empPhoneNo} onChange={event => updatePersonalField('empPhoneNo', event.target.value)} disabled={isPending} />
-                  <Input label="City" value={personalForm.empCity} onChange={event => updatePersonalField('empCity', event.target.value)} disabled={isPending} />
-                  <Input label="State" value={personalForm.empStateLegacy} onChange={event => updatePersonalField('empStateLegacy', event.target.value)} disabled={isPending} />
-                  <Input label="Pincode" inputMode="numeric" value={personalForm.empPincode} onChange={event => updatePersonalField('empPincode', event.target.value)} disabled={isPending} />
+                  <CountedInput label="Mobile" inputMode="numeric" value={personalForm.empMobileNo} onChange={event => updatePersonalField('empMobileNo', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.mobile} />
+                  <CountedInput label="Phone" inputMode="numeric" value={personalForm.empPhoneNo} onChange={event => updatePersonalField('empPhoneNo', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.phone} />
+                  <CountedInput label="City" value={personalForm.empCity} onChange={event => updatePersonalField('empCity', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.city} />
+                  <CountedInput label="State" value={personalForm.empStateLegacy} onChange={event => updatePersonalField('empStateLegacy', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.state} />
+                  <CountedInput label="Pincode" inputMode="numeric" value={personalForm.empPincode} onChange={event => updatePersonalField('empPincode', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.pincode} />
                 </div>
-                <Textarea label="Address" value={personalForm.empAddress} onChange={event => updatePersonalField('empAddress', event.target.value)} disabled={isPending} />
+                <CountedTextarea label="Address" value={personalForm.empAddress} onChange={event => updatePersonalField('empAddress', event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.address} />
                 <p className="text-xs text-gray-500">Email, username, role, status, and permissions can only be changed by an administrator.</p>
                 {personalMessage && <div className={`rounded-lg border px-4 py-3 text-sm ${personalMessage.type === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`} role="alert">{personalMessage.text}</div>}
                 <div className="flex justify-end gap-2 pt-1">
@@ -205,19 +218,19 @@ export function ProfileClient({ profile }: { profile: ProfileData }) {
 
           <form onSubmit={submitPasswordChange} className="space-y-4">
             <div className="relative">
-              <Input label="Current password" type={showCurrentPassword ? 'text' : 'password'} autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} disabled={isPending} className="pr-10" />
+              <CountedInput label="Current password" type={showCurrentPassword ? 'text' : 'password'} autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.password} className="pr-10" />
               <button type="button" onClick={() => setShowCurrentPassword(value => !value)} aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'} className="absolute right-3 top-7 cursor-pointer text-gray-400 hover:text-gray-600">
                 {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             <div className="relative">
-              <Input label="New password" type={showNewPassword ? 'text' : 'password'} autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} disabled={isPending} className="pr-10" />
+              <CountedInput label="New password" type={showNewPassword ? 'text' : 'password'} autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.password} className="pr-10" />
               <button type="button" onClick={() => setShowNewPassword(value => !value)} aria-label={showNewPassword ? 'Hide new password' : 'Show new password'} className="absolute right-3 top-7 cursor-pointer text-gray-400 hover:text-gray-600">
                 {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             <div className="relative">
-              <Input label="Confirm new password" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} disabled={isPending} className="pr-10" />
+              <CountedInput label="Confirm new password" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} disabled={isPending} maxLength={PROFILE_FIELD_LIMITS.password} className="pr-10" />
               <button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'} className="absolute right-3 top-7 cursor-pointer text-gray-400 hover:text-gray-600">
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>

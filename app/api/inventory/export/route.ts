@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { listInventoryForExport, type InventoryListParams } from '@/features/inventory/queries'
 
 function toStringParam(value: string | null) {
@@ -7,8 +7,7 @@ function toStringParam(value: string | null) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const searchParams = req.nextUrl.searchParams
   const filters: InventoryListParams = {

@@ -4,18 +4,21 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Eye, Mail, X, Images, Upload, Loader2, Download, SlidersHorizontal, Link2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, Mail, X, Images, Upload, Loader2, Download, SlidersHorizontal, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
+import { CatalogTextPicker } from '@/components/CatalogTextPicker'
+import { createMake, createModel, createVariant } from '@/features/catalog/adminActions'
 import { INVENTORY_STATUSES } from './queries'
-import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, syncInventoryToInquiry, updateInventoryEmailRecipient, type InventoryFormInput } from './actions'
-import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
+import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, getInventoryBulkEmailConfig, updateInventoryEmailRecipient, getInventorySku, getNextInventoryNumber, type InventoryFormInput } from './actions'
+import { isValidEmail, isValidInventoryOwnerMobile, isValidYear, normalizeRegistrationNo } from '@/lib/validation'
 
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
 interface CarVariantMaster { pkVariantId: number; variant: string | null }
-interface Dealer { dealerId: number; dealerName: string | null; dealerEmail: string | null }
+interface Dealer { dealerId: number; dealerName: string | null; dealerMobileNo: string | null; dealerEmail: string | null }
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
+interface EmailProgressItem { inventoryId: number; label: string; status: 'pending' | 'sending' | 'sent' | 'failed'; error?: string }
 
 interface InventoryRow {
   inventoryId: number
@@ -101,6 +104,7 @@ interface InquiryOption {
   subStatus: string | null
   customer: CustomerOption | null
   inquiryCarDetails: Array<{
+    fkVariantId: number | null
     year: number | null
     carVariantMaster: {
       variant: string | null
@@ -151,6 +155,9 @@ interface InventoryFilters {
 }
 
 const fmt = (n: string | number | null) => (n !== null && n !== '' ? `₹${Number(n).toLocaleString('en-IN')}` : '—')
+const formatPriceInput = (value: number | null) => value === null || !Number.isFinite(value)
+  ? ''
+  : value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
 const fmtDateTime = (value: string | Date | null | undefined) => value ? new Date(value).toLocaleString('en-IN') : '—'
 const clean = (v: string | null | undefined) => {
   const value = v?.trim()
@@ -159,6 +166,32 @@ const clean = (v: string | null | undefined) => {
 }
 const text = (v: string | null | undefined) => clean(v).toLowerCase()
 const num = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? null : Number(v))
+const INVENTORY_FUEL_TYPES = ['Petrol', 'Diesel', 'CNG']
+
+function InventoryDetailCell({
+  items,
+}: {
+  items: Array<[string, string | number | boolean | null | undefined]>
+}) {
+  return (
+    <div className="space-y-0.5 text-xs leading-5 text-gray-600">
+      {items.map(([label, value]) => {
+        const displayValue = value === null || value === undefined || value === ''
+          ? '—'
+          : typeof value === 'boolean'
+            ? value ? 'Yes' : 'No'
+            : String(value)
+
+        return (
+          <div key={label}>
+            <span className="font-semibold text-gray-700">{label}:</span>{' '}
+            <span>{displayValue}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 function emptyFilters(): InventoryFilters {
   return {
@@ -489,6 +522,7 @@ export function InventoryClient({
   const [editId, setEditId] = useState<number | null>(null)
   const [originalStatus, setOriginalStatus] = useState<string | null>(null)
   const [currentInventoryNumber, setCurrentInventoryNumber] = useState<string | null>(null)
+  const [currentSku, setCurrentSku] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [errors, setErrors] = useState<Record<string, boolean>>({})
@@ -496,6 +530,13 @@ export function InventoryClient({
 
   const [selectedMakeId, setSelectedMakeId] = useState<number | null>(null)
   const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
+  const [catalogMakeText, setCatalogMakeText] = useState('')
+  const [catalogModelText, setCatalogModelText] = useState('')
+  const [catalogVariantText, setCatalogVariantText] = useState('')
+  const [catalogAddType, setCatalogAddType] = useState<'make' | 'model' | 'variant' | null>(null)
+  const [catalogAddValue, setCatalogAddValue] = useState('')
+  const [catalogAddError, setCatalogAddError] = useState('')
+  const [catalogAddPending, setCatalogAddPending] = useState(false)
   const [models, setModels] = useState<CarModelMaster[]>([])
   const [variants, setVariants] = useState<CarVariantMaster[]>([])
   const [viewRow, setViewRow] = useState<InventoryRow | null>(null)
@@ -507,6 +548,8 @@ export function InventoryClient({
   const [discardOpen, setDiscardOpen] = useState(false)
 
   const [emailRow, setEmailRow] = useState<InventoryRow | null>(null)
+  const [emailRows, setEmailRows] = useState<InventoryRow[]>([])
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<number[]>([])
   const [recipientType, setRecipientType] = useState<'dealer' | 'customer'>('customer')
   const [dealerQuery, setDealerQuery] = useState('')
   const [dealerOpen, setDealerOpen] = useState(false)
@@ -519,6 +562,8 @@ export function InventoryClient({
   const [recipientEmailError, setRecipientEmailError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [emailSentMessage, setEmailSentMessage] = useState<string | null>(null)
+  const [emailProgress, setEmailProgress] = useState<EmailProgressItem[]>([])
+  const [isEmailSending, setIsEmailSending] = useState(false)
   const [photoRow, setPhotoRow] = useState<InventoryRow | null>(null)
   const [photos, setPhotos] = useState<InventoryPhoto[]>([])
   const [photoError, setPhotoError] = useState('')
@@ -531,14 +576,12 @@ export function InventoryClient({
   const [inquiryRow, setInquiryRow] = useState<InventoryRow | null>(null)
   const [inquiryQuery, setInquiryQuery] = useState('')
   const [inquiryMatches, setInquiryMatches] = useState<InquiryOption[]>([])
-  const [selectedInquiry, setSelectedInquiry] = useState<InquiryOption | null>(null)
   const [inquiryLoading, setInquiryLoading] = useState(false)
   const [inquiryError, setInquiryError] = useState('')
-  const [isSyncingInquiry, startSyncInquiryTransition] = useTransition()
+  const [refreshAfterInquiryClose, setRefreshAfterInquiryClose] = useState(false)
   const inquiryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inquiryRequestRef = useRef(0)
   const listDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [pendingInventoryRefresh, setPendingInventoryRefresh] = useState(false)
   const [isListLoading, setIsListLoading] = useState(false)
   const PAGE_SIZE_OPTIONS = [25, 50, 100]
   const isEditDirty = modal === 'edit' && buildDirtySnapshot(form, selectedCustomer) !== editBaselineRef.current
@@ -799,7 +842,14 @@ export function InventoryClient({
       setInquiryLoading(true)
       setInquiryError('')
       try {
-        const res = await fetch(`/api/inventory/inquiries?q=${encodeURIComponent(inquiryQuery)}`)
+        const variantId = inquiryRow.fkVariantId
+        if (!variantId) {
+          setInquiryMatches([])
+          setInquiryError('This inventory does not have a linked Variant.')
+          setInquiryLoading(false)
+          return
+        }
+        const res = await fetch(`/api/inventory/inquiries?variantId=${variantId}&q=${encodeURIComponent(inquiryQuery)}`)
         const payload = await res.json()
         if (inquiryRequestRef.current !== requestId) return
         if (!res.ok) {
@@ -935,7 +985,7 @@ export function InventoryClient({
 
   const hydrateEditForm = async (row: InventoryRow) => {
     setForm({
-      registrationNo: row.registrationNo ?? '',
+      registrationNo: normalizeRegistrationNo(row.registrationNo),
       fkVariantId: row.fkVariantId,
       makeLegacy: row.makeLegacy ?? '',
       modelLegacy: row.modelLegacy ?? '',
@@ -963,6 +1013,10 @@ export function InventoryClient({
     setSelectedCustomer(row.customer)
     setOriginalStatus(row.status ?? null)
     setCurrentInventoryNumber(row.inventoryNumber)
+    setCurrentSku(row.sku)
+    setCatalogMakeText(row.carVariantMaster?.carMakeMaster?.make ?? row.makeLegacy ?? '')
+    setCatalogModelText(row.carVariantMaster?.carModelMaster?.model ?? row.modelLegacy ?? '')
+    setCatalogVariantText(row.carVariantMaster?.variant ?? row.variantLegacy ?? '')
 
     const makeId = row.carVariantMaster?.carMakeMaster?.pkMakeId ?? null
     const modelId = row.carVariantMaster?.carModelMaster?.pkModelId ?? null
@@ -1000,6 +1054,10 @@ export function InventoryClient({
     setForm(nextForm)
     setSelectedCustomer(null)
     setCurrentInventoryNumber(null)
+    setCurrentSku(null)
+    setCatalogMakeText('')
+    setCatalogModelText('')
+    setCatalogVariantText('')
     setEditId(null)
     setOriginalStatus(null)
     setViewRow(null)
@@ -1009,6 +1067,7 @@ export function InventoryClient({
     setDetailLoading(false)
     editBaselineRef.current = buildDirtySnapshot(nextForm, null)
     setModal('add')
+    void getNextInventoryNumber().then(setCurrentInventoryNumber)
   }
 
   const openEdit = async (r: InventoryRow) => {
@@ -1016,6 +1075,10 @@ export function InventoryClient({
     setForm(emptyForm())
     setSelectedCustomer(null)
     setCurrentInventoryNumber(r.inventoryNumber)
+    setCurrentSku(r.sku)
+    setCatalogMakeText('')
+    setCatalogModelText('')
+    setCatalogVariantText('')
     setOriginalStatus(null)
     resetCascade()
     setError('')
@@ -1029,7 +1092,7 @@ export function InventoryClient({
       if (detailRequestRef.current !== requestId) return
       await hydrateEditForm(detailRow)
       editBaselineRef.current = buildDirtySnapshot({
-        registrationNo: detailRow.registrationNo ?? '',
+        registrationNo: normalizeRegistrationNo(detailRow.registrationNo),
         fkVariantId: detailRow.fkVariantId,
         makeLegacy: detailRow.makeLegacy ?? '',
         modelLegacy: detailRow.modelLegacy ?? '',
@@ -1098,25 +1161,115 @@ export function InventoryClient({
     closeModalImmediately()
   }
 
-  const onMakeChange = async (makeId: number) => {
-    setSelectedMakeId(makeId || null)
+  const refreshSku = async (make: string, model: string, colour: string) => {
+    const sku = await getInventorySku(make, model, colour, editId ?? undefined)
+    setCurrentSku(sku || null)
+  }
+
+  const f = <K extends keyof InventoryFormInput>(k: K, v: InventoryFormInput[K]) => {
+    setForm(prev => ({ ...prev, [k]: v }))
+    if (k === 'colour') {
+      const make = makes.find(item => item.pkMakeId === selectedMakeId)?.make ?? form.makeLegacy
+      const model = models.find(item => item.pkModelId === selectedModelId)?.model ?? form.modelLegacy
+      void refreshSku(make ?? '', model ?? '', String(v))
+    }
+  }
+
+  const onOwnerTypeChange = (value: string) => {
+    f('ownedType', value)
+    if (value === 'Excel Cars') {
+      f('ownedBy', 'Excel Cars')
+    } else {
+      f('ownedBy', '')
+      f('mobileNoOwnedBy', '')
+      f('emailIdOwnedBy', '')
+    }
+  }
+
+  const onDealerChange = (value: string) => {
+    const dealer = dealers.find(item => item.dealerName?.trim().toLowerCase() === value.trim().toLowerCase())
+    f('ownedBy', value)
+    f('mobileNoOwnedBy', dealer?.dealerMobileNo ?? '')
+    f('emailIdOwnedBy', dealer?.dealerEmail ?? '')
+  }
+
+  const onCatalogMakeChange = async (value: string) => {
+    setCatalogMakeText(value)
+    setCatalogModelText('')
+    setCatalogVariantText('')
     setSelectedModelId(null)
     setVariants([])
-    setForm(f => ({ ...f, fkVariantId: null }))
-    if (!makeId) { setModels([]); return }
-    const res = await fetch(`/api/catalog/models?makeId=${makeId}`)
-    setModels(await res.json())
+    setForm(prev => ({ ...prev, fkVariantId: null }))
+    const match = makes.find(item => item.make?.trim().toLowerCase() === value.trim().toLowerCase())
+    setSelectedMakeId(match?.pkMakeId ?? null)
+    if (match) {
+      const res = await fetch(`/api/catalog/models?makeId=${match.pkMakeId}`)
+      setModels(await res.json())
+    } else setModels([])
   }
 
-  const onModelChange = async (modelId: number) => {
-    setSelectedModelId(modelId || null)
-    setForm(f => ({ ...f, fkVariantId: null }))
-    if (!modelId) { setVariants([]); return }
-    const res = await fetch(`/api/catalog/variants?modelId=${modelId}`)
-    setVariants(await res.json())
+  const onCatalogModelChange = async (value: string) => {
+    setCatalogModelText(value)
+    setCatalogVariantText('')
+    setForm(prev => ({ ...prev, fkVariantId: null }))
+    const match = models.find(item => item.model?.trim().toLowerCase() === value.trim().toLowerCase())
+    setSelectedModelId(match?.pkModelId ?? null)
+    if (match) {
+      const res = await fetch(`/api/catalog/variants?modelId=${match.pkModelId}`)
+      setVariants(await res.json())
+    } else setVariants([])
   }
 
-  const f = <K extends keyof InventoryFormInput>(k: K, v: InventoryFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+  const openCatalogAdd = (type: 'make' | 'model' | 'variant', value: string) => {
+    setCatalogAddType(type)
+    setCatalogAddValue(value)
+    setCatalogAddError('')
+  }
+
+  const addCatalogValue = async () => {
+    if (!catalogAddType || !catalogAddValue.trim()) return
+    setCatalogAddPending(true)
+    setCatalogAddError('')
+    try {
+      if (catalogAddType === 'make') {
+        const result = await createMake(catalogAddValue)
+        if (!result.success || !result.id) throw new Error(result.error ?? 'Could not add make.')
+        setCatalogMakeText(catalogAddValue.trim())
+        setSelectedMakeId(result.id)
+        setCatalogModelText('')
+        setCatalogVariantText('')
+        setSelectedModelId(null)
+        setVariants([])
+        setForm(prev => ({ ...prev, fkVariantId: null }))
+        const response = await fetch(`/api/catalog/models?makeId=${result.id}`)
+        setModels(await response.json())
+      } else if (catalogAddType === 'model') {
+        if (!selectedMakeId) throw new Error('Add or select a Make first.')
+        const result = await createModel(catalogAddValue, selectedMakeId)
+        if (!result.success || !result.id) throw new Error(result.error ?? 'Could not add model.')
+        setCatalogModelText(catalogAddValue.trim())
+        setSelectedModelId(result.id)
+        setCatalogVariantText('')
+        setVariants([])
+        setForm(prev => ({ ...prev, fkVariantId: null }))
+        const response = await fetch(`/api/catalog/variants?modelId=${result.id}`)
+        setVariants(await response.json())
+      } else {
+        if (!selectedMakeId || !selectedModelId) throw new Error('Add or select a Make and Model first.')
+        const result = await createVariant(catalogAddValue, selectedMakeId, selectedModelId)
+        if (!result.success || !result.id) throw new Error(result.error ?? 'Could not add variant.')
+        const variantId = result.id
+        setCatalogVariantText(catalogAddValue.trim())
+        setForm(prev => ({ ...prev, fkVariantId: variantId }))
+        setVariants(prev => [...prev, { pkVariantId: variantId, variant: catalogAddValue.trim() }])
+      }
+      setCatalogAddType(null)
+    } catch (err) {
+      setCatalogAddError(err instanceof Error ? err.message : 'Could not add catalog value.')
+    } finally {
+      setCatalogAddPending(false)
+    }
+  }
   const setFilter = <K extends keyof InventoryFilters>(key: K, value: InventoryFilters[K]) => setFilters(prev => ({ ...prev, [key]: value }))
   const clearAllFilters = () => {
     setSearchInput('')
@@ -1135,6 +1288,7 @@ export function InventoryClient({
 
   const openEmail = (r: InventoryRow) => {
     setEmailRow(r)
+    setEmailRows([r])
     setRecipientType('customer')
     setEmailSelectedDealer(null)
     setEmailSelectedCustomer(null)
@@ -1145,6 +1299,25 @@ export function InventoryClient({
     setDealerQuery('')
     setEmailError('')
     setEmailSentMessage(null)
+    setEmailProgress([])
+  }
+
+  const openBulkEmail = () => {
+    const rows = filtered.filter(row => selectedInventoryIds.includes(row.inventoryId))
+    if (rows.length === 0) return
+    setEmailRow(rows[0])
+    setEmailRows(rows)
+    setRecipientType('customer')
+    setEmailSelectedDealer(null)
+    setEmailSelectedCustomer(null)
+    setEmailRecipients([])
+    setEditingRecipientEmailKey(null)
+    setRecipientEmailDraft('')
+    setRecipientEmailError('')
+    setDealerQuery('')
+    setEmailError('')
+    setEmailSentMessage(null)
+    setEmailProgress([])
   }
 
   const addEmailRecipient = (recipient: EmailRecipient) => {
@@ -1187,13 +1360,24 @@ export function InventoryClient({
     })
   }
 
-  const openInquirySync = (r: InventoryRow) => {
+  const openInquiryView = (r: InventoryRow) => {
     setInquiryRow(r)
+    setRefreshAfterInquiryClose(false)
     setInquiryQuery('')
     setInquiryMatches([])
-    setSelectedInquiry(null)
     setInquiryError('')
     inquiryRequestRef.current += 1
+  }
+
+  const closeInquiryView = () => {
+    setInquiryRow(null)
+    setInquiryMatches([])
+    setInquiryQuery('')
+    setInquiryError('')
+    if (refreshAfterInquiryClose) {
+      setRefreshAfterInquiryClose(false)
+      window.location.reload()
+    }
   }
 
   const buildInventoryRowFromForm = (inventoryId: number, inventoryNumber: string | null): InventoryRow => ({
@@ -1228,26 +1412,6 @@ export function InventoryClient({
     _count: { inventoryPhotos: data.find(r => r.inventoryId === inventoryId)?._count.inventoryPhotos ?? 0 },
     carVariantMaster: null,
   })
-
-  const syncInquiry = () => {
-    if (!inquiryRow || !selectedInquiry) {
-      setInquiryError('Select an inquiry to update.')
-      return
-    }
-    setInquiryError('')
-    startSyncInquiryTransition(async () => {
-      const result = await syncInventoryToInquiry(inquiryRow.inventoryId, { inquiryId: selectedInquiry.inquiryId })
-      if (!result.success) {
-        setInquiryError(result.error ?? 'Could not update inquiry.')
-        return
-      }
-      setInquiryRow(null)
-      setSelectedInquiry(null)
-      setInquiryMatches([])
-      setInquiryQuery('')
-      if (pendingInventoryRefresh) window.location.reload()
-    })
-  }
 
   const refreshPhotoCount = (inventoryId: number, delta: number) => {
     setData(prev => prev.map(row => row.inventoryId === inventoryId
@@ -1367,7 +1531,7 @@ export function InventoryClient({
     })
   }
 
-  const sendEmail = () => {
+  const sendEmail = async () => {
     if (!emailRow) return
     if (!emailConfigured) {
       setEmailError('Email is not configured yet — add SMTP_HOST, SMTP_USER, SMTP_PASSWORD and EMAIL_FROM_ADDRESS to the environment.')
@@ -1378,19 +1542,49 @@ export function InventoryClient({
       return
     }
     setEmailError('')
-    startTransition(async () => {
-      const result = await sendInventoryEmail(emailRow.inventoryId, {
-        recipients: emailRecipients.map(recipient => ({
-          recipientType: recipient.recipientType,
-          recipientId: recipient.recipientId,
-        })),
-      })
-      if (!result.success) {
-        setEmailError(result.error ?? 'Something went wrong sending this email.')
+    setIsEmailSending(true)
+    try {
+      const rows = emailRows.length > 0 ? emailRows : [emailRow]
+      const recipients = emailRecipients.map(recipient => ({ recipientType: recipient.recipientType, recipientId: recipient.recipientId }))
+      setEmailProgress(rows.map(row => ({ inventoryId: row.inventoryId, label: row.registrationNo ?? row.inventoryNumber ?? `Vehicle #${row.inventoryId}`, status: 'pending' })))
+      if (rows.length > 1) {
+        const limits = await getInventoryBulkEmailConfig()
+        if (!limits) {
+          setEmailError('Not authorized.')
+          return
+        }
+        if (rows.length > limits.maxVehicles) {
+          setEmailError(`Select no more than ${limits.maxVehicles} vehicles for bulk email.`)
+          return
+        }
+        if (recipients.length > limits.maxRecipients || rows.length * recipients.length > limits.maxMessages) {
+          setEmailError(`Bulk email is limited to ${limits.maxVehicles} vehicles, ${limits.maxRecipients} recipients, and ${limits.maxMessages} total emails.`)
+          return
+        }
+      }
+
+      const failures: string[] = []
+      let sentCount = 0
+      for (const row of rows) {
+        setEmailProgress(prev => prev.map(item => item.inventoryId === row.inventoryId ? { ...item, status: 'sending' } : item))
+        const result = await sendInventoryEmail(row.inventoryId, { recipients })
+        if (result.success) {
+          sentCount += 1
+          setEmailProgress(prev => prev.map(item => item.inventoryId === row.inventoryId ? { ...item, status: 'sent' } : item))
+        } else {
+          const message = result.error ?? 'Email failed.'
+          failures.push(row.registrationNo ?? row.inventoryNumber ?? `Vehicle #${row.inventoryId}`)
+          setEmailProgress(prev => prev.map(item => item.inventoryId === row.inventoryId ? { ...item, status: 'failed', error: message } : item))
+        }
+      }
+      if (sentCount === 0) {
+        setEmailError('Could not send email for any selected vehicle.')
         return
       }
-      setEmailSentMessage(result.message ?? `Email sent to ${emailRecipients.length} recipient${emailRecipients.length === 1 ? '' : 's'}.`)
-    })
+      setEmailSentMessage(`${sentCount} vehicle${sentCount === 1 ? '' : 's'} sent to ${emailRecipients.length} recipient${emailRecipients.length === 1 ? '' : 's'}.${failures.length > 0 ? ` Failed: ${failures.join(', ')}.` : ''}`)
+    } finally {
+      setIsEmailSending(false)
+    }
   }
 
   const save = () => {
@@ -1400,7 +1594,7 @@ export function InventoryClient({
     if (!form.registrationNo?.trim()) {
       newErrors.registrationNo = true
     }
-    if (!form.fkVariantId) {
+    if (!catalogMakeText.trim() || !catalogModelText.trim() || !form.fkVariantId || !catalogVariantText.trim()) {
       newErrors.fkVariantId = true
     }
     if (form.year === null || form.year === undefined) {
@@ -1409,16 +1603,31 @@ export function InventoryClient({
     if (form.year !== null && form.year !== undefined && !isValidYear(form.year)) {
       newErrors.year = true
     }
+    if (form.isCarRegistered === true && !form.tax.trim()) {
+      newErrors.tax = true
+    }
+    if (form.isCarRegistered === true && form.kmsDriven === null) {
+      newErrors.kmsDriven = true
+    }
+    if (!form.colour.trim()) {
+      newErrors.colour = true
+    }
+    if (!form.fuelType.trim()) {
+      newErrors.fuelType = true
+    }
     if (form.kmsDriven !== null && Number(form.kmsDriven) < 0) {
       newErrors.kmsDriven = true
     }
-    if (form.noOfOwners !== null && form.noOfOwners < 1) {
+    if (form.noOfOwners === null || form.noOfOwners === undefined || !Number.isInteger(form.noOfOwners) || form.noOfOwners < 1) {
       newErrors.noOfOwners = true
     }
-    if (form.price !== null && Number(form.price) <= 0) {
+    if (form.price === null || !Number.isFinite(form.price) || form.price <= 0) {
       newErrors.price = true
     }
-    if (form.mobileNoOwnedBy && !isValidPhone(form.mobileNoOwnedBy)) {
+    if (form.isCarRegistered === true && !form.insuranceType.trim()) {
+      newErrors.insuranceType = true
+    }
+    if (form.mobileNoOwnedBy && !isValidInventoryOwnerMobile(form.mobileNoOwnedBy)) {
       newErrors.mobileNoOwnedBy = true
     }
     if (form.emailIdOwnedBy && !isValidEmail(form.emailIdOwnedBy)) {
@@ -1431,8 +1640,15 @@ export function InventoryClient({
     }
     setErrors({})
 
+    const saveForm = {
+      ...form,
+      makeLegacy: form.makeLegacy.trim() || catalogMakeText.trim(),
+      modelLegacy: form.modelLegacy.trim() || catalogModelText.trim(),
+      variantLegacy: form.variantLegacy.trim() || catalogVariantText.trim(),
+    }
+
     startTransition(async () => {
-      const result = editId ? await updateInventory(editId, form) : await createInventory(form)
+      const result = editId ? await updateInventory(editId, saveForm) : await createInventory(saveForm)
       if (!result.success) {
         setError(result.error ?? 'Something went wrong.')
         return
@@ -1445,8 +1661,8 @@ export function InventoryClient({
           : (form.status === 'Booked' || form.status === 'Sold')
       )
       if (shouldPromptInquiry) {
-        setPendingInventoryRefresh(true)
-        openInquirySync(buildInventoryRowFromForm(savedInventoryId, result.inventoryNumber ?? currentInventoryNumber))
+        openInquiryView(buildInventoryRowFromForm(savedInventoryId, result.inventoryNumber ?? currentInventoryNumber))
+        setRefreshAfterInquiryClose(true)
         return
       }
       window.location.reload()
@@ -1484,6 +1700,9 @@ export function InventoryClient({
         subtitle={`${total.toLocaleString('en-IN')} vehicles${filters.status !== 'All' ? ` · ${filters.status}` : ''}`}
         action={
           <div className="flex items-center gap-2">
+            <Btn variant="outline" size="sm" onClick={openBulkEmail} disabled={selectedInventoryIds.length === 0}>
+              <Mail className="w-3.5 h-3.5" />Send Email{selectedInventoryIds.length > 0 ? ` (${selectedInventoryIds.length})` : ''}
+            </Btn>
             <Btn variant="outline" size="sm" onClick={exportAllMatchingRows} disabled={isExporting || total === 0}>
               <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}
             </Btn>
@@ -1644,29 +1863,72 @@ export function InventoryClient({
             <span>Loading inventory results...</span>
           </div>
         ) : null}
-        <Table headers={['Inv No', 'SKU', 'Reg No', 'Vehicle', 'Year', 'Fuel', 'KM', 'Price', 'Status', 'Customer', 'Owner', 'Actions']} empty={filtered.length === 0}>
-          {filtered.map(r => (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-gray-500">{selectedInventoryIds.length > 0 ? `${selectedInventoryIds.length} vehicle${selectedInventoryIds.length === 1 ? '' : 's'} selected` : 'Select vehicles for bulk email'}</span>
+          <div className="flex gap-2">
+            <Btn variant="ghost" size="sm" onClick={() => setSelectedInventoryIds(filtered.map(row => row.inventoryId))} disabled={filtered.length === 0}>Select visible</Btn>
+            {selectedInventoryIds.length > 0 ? <Btn variant="ghost" size="sm" onClick={() => setSelectedInventoryIds([])}>Clear selection</Btn> : null}
+          </div>
+        </div>
+        <div className="[&_table]:min-w-0 [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:w-16 [&_th:first-child]:min-w-16 [&_th:first-child]:max-w-16 [&_td:first-child]:w-16 [&_td:first-child]:min-w-16 [&_td:first-child]:max-w-16">
+        <Table headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Actions']} empty={filtered.length === 0}>
+          {filtered.map((r, index) => (
             <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.inventoryNumber ?? '—'}</td>
-            <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.sku ?? '—'}</td>
-            <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">{r.registrationNo ?? '—'}</td>
+            <td className="px-2 py-3 text-center"><input type="checkbox" checked={selectedInventoryIds.includes(r.inventoryId)} onChange={event => setSelectedInventoryIds(prev => event.target.checked ? [...prev, r.inventoryId] : prev.filter(id => id !== r.inventoryId))} aria-label={`Select ${r.registrationNo ?? r.inventoryNumber ?? 'vehicle'}`} /></td>
+            <td className="px-4 py-3 text-center font-semibold text-gray-700">{((page - 1) * pageSize) + index + 1}</td>
             <td className="px-4 py-3">
-              <div className="font-medium text-gray-900">
-                {[clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy), clean(r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy)].filter(Boolean).join(' ') || '—'}
-              </div>
-              <div className="text-xs text-gray-500">{clean(r.carVariantMaster?.variant ?? r.variantLegacy)} {r.colour ? `· ${r.colour}` : ''}</div>
+              <InventoryDetailCell items={[
+                ['Make', clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy)],
+                ['Model', clean(r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy)],
+                ['Variant', clean(r.carVariantMaster?.variant ?? r.variantLegacy)],
+              ]} />
             </td>
-            <td className="px-4 py-3 text-gray-700">{r.year ?? '—'}</td>
-            <td className="px-4 py-3 text-gray-700">{r.fuelType ?? '—'}</td>
-            <td className="px-4 py-3 text-gray-700">{r.kmsDriven !== null ? Number(r.kmsDriven).toLocaleString('en-IN') : '—'}</td>
-            <td className="px-4 py-3 font-semibold text-gray-900">{fmt(r.price)}</td>
-            <td className="px-4 py-3">{r.status ? <Badge label={r.status} /> : '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.customerName ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.ownedBy ?? '—'}</td>
             <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
+              <InventoryDetailCell items={[
+                ['Year', r.year],
+                ['Month', r.month],
+                ['Colour', r.colour],
+              ]} />
+            </td>
+            <td className="px-4 py-3">
+              <InventoryDetailCell items={[
+                ['No. of Owners', r.noOfOwners],
+                ['Tax', r.tax],
+                ['Fuel Type', r.fuelType],
+              ]} />
+            </td>
+            <td className="px-4 py-3">
+              <InventoryDetailCell items={[
+                ['Regi. No', r.registrationNo],
+                ['Kms Driven', r.kmsDriven !== null ? Number(r.kmsDriven).toFixed(2) : null],
+                ['Insurance Type', r.insuranceType],
+              ]} />
+            </td>
+            <td className="px-4 py-3">
+              <InventoryDetailCell items={[
+                ['Price', r.price !== null ? Number(r.price).toFixed(2) : null],
+                ['Status', r.status],
+              ]} />
+            </td>
+            <td className="px-4 py-3">
+              <InventoryDetailCell items={[
+                ['Owned Type', r.ownedType],
+                ['Owned By', r.ownedBy],
+                ['Mobile', r.mobileNoOwnedBy],
+                ['Email', r.emailIdOwnedBy],
+              ]} />
+            </td>
+            <td className="px-4 py-3">
+              <InventoryDetailCell items={[
+                ['Customer', r.customerName ?? r.customer?.custName],
+                ['Mobile', r.customer?.custMobile],
+                ['Email', r.customer?.custEmail],
+              ]} />
+            </td>
+            <td className="px-4 py-3">
+              <div className="flex items-center flex-wrap gap-1">
                 <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openInquirySync(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Update Inquiry"><Link2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => openInquiryView(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Search Inquiry"><Search className="w-3.5 h-3.5" /></button>
                 <button onClick={() => openPhotos(r)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition" title="Manage Photos">
                   <span className="relative inline-flex">
                     <Images className="w-3.5 h-3.5" />
@@ -1681,6 +1943,7 @@ export function InventoryClient({
             </tr>
           ))}
         </Table>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1817,59 +2080,80 @@ export function InventoryClient({
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <Input label="Inventory No" value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled />
-              <Input label="SKU" value={editId ? (data.find(r => r.inventoryId === editId)?.sku ?? 'Auto-generated') : 'Auto-generated on save'} readOnly disabled />
-              <Input label="Registration No *" value={form.registrationNo} onChange={e => f('registrationNo', e.target.value)} placeholder="MH12AB1234" error={errors.registrationNo} />
+              <Input label="SKU" value={currentSku ?? 'Enter make, model, and colour'} readOnly disabled />
+              <Input label="Registration No *" value={form.registrationNo} onChange={e => f('registrationNo', normalizeRegistrationNo(e.target.value))} placeholder="Any registration value" error={errors.registrationNo} />
               <Select label="Status" value={form.status} onChange={e => f('status', e.target.value)}>
                 {INVENTORY_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Select label="Make *" value={selectedMakeId ?? ''} onChange={e => onMakeChange(Number(e.target.value))} error={errors.fkVariantId}>
-                <option value="">Select Make</option>
-                {makes.map(m => <option key={m.pkMakeId} value={m.pkMakeId}>{m.make}</option>)}
-              </Select>
-              <Select label="Model *" value={selectedModelId ?? ''} onChange={e => onModelChange(Number(e.target.value))} disabled={!selectedMakeId} error={errors.fkVariantId}>
-                <option value="">Select Model</option>
-                {models.map(m => <option key={m.pkModelId} value={m.pkModelId}>{m.model}</option>)}
-              </Select>
-              <Select label="Variant *" value={form.fkVariantId ?? ''} onChange={e => f('fkVariantId', Number(e.target.value) || null)} disabled={!selectedModelId} error={errors.fkVariantId}>
-                <option value="">Select Variant</option>
-                {variants.map(v => <option key={v.pkVariantId} value={v.pkVariantId}>{v.variant}</option>)}
-              </Select>
-              <Input label="Legacy Make" value={form.makeLegacy} onChange={e => f('makeLegacy', e.target.value)} placeholder="Use when variant is unavailable" />
-              <Input label="Legacy Model" value={form.modelLegacy} onChange={e => f('modelLegacy', e.target.value)} />
-              <Input label="Legacy Variant" value={form.variantLegacy} onChange={e => f('variantLegacy', e.target.value)} />
-              <Input label="Year" type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} error={errors.year} />
+              <CatalogTextPicker label="Make *" value={catalogMakeText} onChange={value => void onCatalogMakeChange(value)} onAdd={value => openCatalogAdd('make', value)} placeholder="Search make..." options={makes.map(make => make.make ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label="Model *" value={catalogModelText} onChange={value => void onCatalogModelChange(value)} onAdd={value => openCatalogAdd('model', value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={models.map(model => model.model ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label="Variant *" value={catalogVariantText} onChange={value => { setCatalogVariantText(value); const match = variants.find(item => item.variant?.trim().toLowerCase() === value.trim().toLowerCase()); f('fkVariantId', match?.pkVariantId ?? null) }} onAdd={value => openCatalogAdd('variant', value)} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={variants.map(variant => variant.variant ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <Input label="Year *" type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} error={errors.year} />
               <Input label="Month" value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
-              <Input label="Colour" value={form.colour} onChange={e => f('colour', e.target.value)} />
-              <Input label="Fuel Type" value={form.fuelType} onChange={e => f('fuelType', e.target.value)} placeholder="Petrol / Diesel / CNG" />
-              <Input label="No. of Owners" type="number" value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
-              <Select label="Tax" value={form.tax} onChange={e => f('tax', e.target.value)}>
+              <Input label="Colour *" value={form.colour} onChange={e => f('colour', e.target.value)} onBlur={() => void refreshSku(catalogMakeText || form.makeLegacy, catalogModelText || form.modelLegacy, form.colour)} error={errors.colour} />
+              <Select label="Fuel Type *" value={form.fuelType} onChange={e => f('fuelType', e.target.value)} error={errors.fuelType}>
+                <option value="">Select Fuel Type</option>
+                {form.fuelType && !INVENTORY_FUEL_TYPES.includes(form.fuelType) ? <option value={form.fuelType}>{form.fuelType}</option> : null}
+                {INVENTORY_FUEL_TYPES.map(fuelType => <option key={fuelType} value={fuelType}>{fuelType}</option>)}
+              </Select>
+              <Input label="No. of Owners *" type="number" min={1} step={1} value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
+              <Select label={`Tax${form.isCarRegistered === true ? ' *' : ''}`} value={form.tax} onChange={e => f('tax', e.target.value)} error={errors.tax}>
                 <option value="">Select Tax Type</option>
                 <option value="Individual">Individual</option>
                 <option value="Corporate">Corporate</option>
               </Select>
-              <Select
-                label="Car Registered"
-                value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'}
-                onChange={e => f('isCarRegistered', e.target.value === '' ? null : e.target.value === 'yes')}
-              >
+              <Select label="Car Registered" value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'} onChange={e => f('isCarRegistered', e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null)}>
                 <option value="">Select</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </Select>
-              <Input label="KM Driven" type="number" value={form.kmsDriven ?? ''} onChange={e => f('kmsDriven', e.target.value ? +e.target.value : null)} error={errors.kmsDriven} />
-              <Input label="Insurance Type" value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" />
-              <Input label="Price (₹)" type="number" value={form.price ?? ''} onChange={e => f('price', e.target.value ? +e.target.value : null)} error={errors.price} />
-              <Input label="Owner Type" value={form.ownedType} onChange={e => f('ownedType', e.target.value)} placeholder="Dealer / Self / Customer" />
-              <Input label="Owned By" value={form.ownedBy} onChange={e => f('ownedBy', e.target.value)} />
-              <Input label="Owner Mobile" value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value)} error={errors.mobileNoOwnedBy} />
+              <Input
+                label={`KM Driven${form.isCarRegistered === true ? ' *' : ''}`}
+                type="text"
+                inputMode="decimal"
+                value={formatPriceInput(form.kmsDriven)}
+                onChange={e => {
+                  const raw = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '')
+                  const parts = raw.split('.')
+                  const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : raw
+                  f('kmsDriven', normalized ? Number(normalized) : null)
+                }}
+                error={errors.kmsDriven}
+              />
+              <Input label={`Insurance Type${form.isCarRegistered === true ? ' *' : ''}`} value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" error={errors.insuranceType} />
+              <Input
+                label="Price (₹) *"
+                type="text"
+                inputMode="decimal"
+                value={formatPriceInput(form.price)}
+                onChange={e => {
+                  const raw = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '')
+                  const parts = raw.split('.')
+                  const normalized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : raw
+                  f('price', normalized ? Number(normalized) : null)
+                }}
+                error={errors.price}
+              />
+              <Select label="Owner Type *" value={form.ownedType} onChange={e => onOwnerTypeChange(e.target.value)} error={errors.ownedType}>
+                <option value="">Select Owner Type</option>
+                {form.ownedType && !['Excel Cars', 'Dealer', 'Individual'].includes(form.ownedType) ? <option value={form.ownedType}>{form.ownedType}</option> : null}
+                <option value="Excel Cars">Excel Cars</option>
+                <option value="Dealer">Dealer</option>
+                <option value="Individual">Individual</option>
+              </Select>
+              {form.ownedType === 'Dealer' ? (
+                <CatalogTextPicker label="Name of Owner *" value={form.ownedBy} onChange={onDealerChange} placeholder="Search dealer..." options={dealers.map(dealer => dealer.dealerName ?? '').filter(Boolean)} error={errors.ownedBy} />
+              ) : (
+                <Input label="Name of Owner *" value={form.ownedBy} autoComplete="new-password" onChange={e => f('ownedBy', e.target.value)} error={errors.ownedBy} />
+              )}
+              <Input label="Owner Mobile" value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" maxLength={11} error={errors.mobileNoOwnedBy} />
               <Input label="Owner Email" type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-600">Linked Customer</label>
+                <label className="text-xs font-medium text-gray-600">Customer</label>
                 <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
               </div>
-              <Input label="Customer / Source" value={form.customerName} onChange={e => f('customerName', e.target.value)} placeholder="Customer name or lead source" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <Textarea label="Internal Comments" value={form.internalComments} onChange={e => f('internalComments', e.target.value)} />
@@ -1882,9 +2166,34 @@ export function InventoryClient({
               <Btn variant="outline" onClick={requestModalClose}>Cancel</Btn>
               <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Vehicle'}</Btn>
             </div>
+            <datalist id="inventory-makes">
+              {makes.map(make => <option key={make.pkMakeId} value={make.make ?? ''} />)}
+            </datalist>
+            <datalist id="inventory-models">
+              {models.map(model => <option key={model.pkModelId} value={model.model ?? ''} />)}
+            </datalist>
+            <datalist id="inventory-variants">
+              {variants.map(variant => <option key={variant.pkVariantId} value={variant.variant ?? ''} />)}
+            </datalist>
           </div>
           )
         ) : null}
+      </Modal>
+
+      <Modal
+        title={`Add ${catalogAddType === 'make' ? 'Make' : catalogAddType === 'model' ? 'Model' : 'Variant'}`}
+        open={catalogAddType !== null}
+        onClose={() => { if (!catalogAddPending) setCatalogAddType(null) }}
+        width="max-w-md"
+      >
+        <div className="space-y-4">
+          <Input label="Name" value={catalogAddValue} onChange={event => setCatalogAddValue(event.target.value)} autoFocus />
+          {catalogAddError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{catalogAddError}</div>}
+          <div className="flex justify-end gap-3">
+            <Btn variant="outline" onClick={() => setCatalogAddType(null)} disabled={catalogAddPending}>Cancel</Btn>
+            <Btn onClick={() => void addCatalogValue()} disabled={catalogAddPending || !catalogAddValue.trim()}>{catalogAddPending ? 'Adding...' : 'Add'}</Btn>
+          </div>
+        </div>
       </Modal>
 
       <ConfirmDialog
@@ -1901,10 +2210,23 @@ export function InventoryClient({
         message="This will permanently delete the vehicle record. This action cannot be undone."
       />
 
-      <Modal title={`Send Car Details${emailRow ? ` — ${emailRow.registrationNo ?? emailRow.sku ?? ''}` : ''}`} open={!!emailRow} onClose={() => setEmailRow(null)}>
+      <Modal title={`Send Car Details${emailRows.length > 1 ? ` — ${emailRows.length} vehicles` : emailRow ? ` — ${emailRow.registrationNo ?? emailRow.sku ?? ''}` : ''}`} open={!!emailRow} onClose={() => setEmailRow(null)}>
         {emailRow && (
           emailSentMessage ? (
             <div className="space-y-4">
+              {emailRows.length > 1 ? <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-gray-600">{emailSentMessage ? 'Email sent for these vehicles' : 'Sending these vehicles'}: {emailRows.map(row => row.registrationNo ?? row.inventoryNumber ?? `#${row.inventoryId}`).join(', ')}</div> : null}
+              {emailProgress.length > 0 ? (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-medium text-gray-600">
+                    <span>{emailProgress.some(item => item.status === 'sending') ? `Sending ${emailProgress.findIndex(item => item.status === 'sending') + 1} of ${emailProgress.length} vehicles` : 'Email sending completed'}</span>
+                    <span>{emailProgress.filter(item => item.status === 'sent' || item.status === 'failed').length} of {emailProgress.length}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#1B2A6B] transition-all" style={{ width: `${(emailProgress.filter(item => item.status === 'sent' || item.status === 'failed').length / emailProgress.length) * 100}%` }} /></div>
+                  <div className="space-y-1 text-xs">
+                    {emailProgress.map(item => <div key={item.inventoryId} className="flex items-center justify-between gap-3"><span className="truncate">{item.label}</span><span className={item.status === 'sent' ? 'text-green-600' : item.status === 'failed' ? 'text-red-600' : item.status === 'sending' ? 'text-blue-600' : 'text-gray-400'}>{item.status === 'sent' ? 'Sent' : item.status === 'failed' ? `Failed${item.error ? `: ${item.error}` : ''}` : item.status === 'sending' ? 'Sending...' : 'Waiting'}</span></div>)}
+                  </div>
+                </div>
+              ) : null}
               <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">{emailSentMessage}</div>
               <div className="flex justify-end"><Btn onClick={() => setEmailRow(null)}>Close</Btn></div>
             </div>
@@ -2075,7 +2397,7 @@ export function InventoryClient({
 
               <div className="flex gap-3 justify-end pt-2">
                 <Btn variant="outline" onClick={() => setEmailRow(null)}>Cancel</Btn>
-                <Btn onClick={sendEmail} disabled={isPending || !emailConfigured || emailRecipients.length === 0}>{isPending ? 'Sending...' : `Send Email${emailRecipients.length > 0 ? ` (${emailRecipients.length})` : ''}`}</Btn>
+                <Btn onClick={() => void sendEmail()} disabled={isPending || isEmailSending || !emailConfigured || emailRecipients.length === 0}>{isEmailSending ? 'Sending...' : `Send Email${emailRecipients.length > 0 ? ` (${emailRecipients.length})` : ''}`}</Btn>
               </div>
             </div>
           )
@@ -2184,21 +2506,14 @@ export function InventoryClient({
         ) : null}
       </Modal>
 
-      <Modal title={`Update Inquiry${inquiryRow ? ` — ${inquiryRow.registrationNo ?? inquiryRow.inventoryNumber ?? ''}` : ''}`} open={!!inquiryRow} onClose={() => {
-        setInquiryRow(null)
-        setSelectedInquiry(null)
-        setInquiryMatches([])
-        setInquiryQuery('')
-        setInquiryError('')
-        if (pendingInventoryRefresh) window.location.reload()
-      }} width="max-w-4xl">
+      <Modal title={`Matching Inquiries${inquiryRow ? ` — ${inquiryRow.registrationNo ?? inquiryRow.inventoryNumber ?? ''}` : ''}`} open={!!inquiryRow} onClose={closeInquiryView} width="max-w-4xl">
         {inquiryRow ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
               <div><span className="font-medium text-gray-800">Vehicle:</span> {vehicleLabel(inquiryRow)}</div>
               <div><span className="font-medium text-gray-800">Inventory Status:</span> {inquiryRow.status ?? '—'}</div>
-              <div><span className="font-medium text-gray-800">What this will do:</span> update the selected inquiry with this vehicle and move the lead to {inquiryRow.status === 'Sold' ? 'Closed / Sold Car' : 'FollowUp / Booked Vehicle'}.</div>
-              <div><span className="font-medium text-gray-800">No inquiry exists?</span> You can skip this step and keep the inventory save as-is.</div>
+              <div><span className="font-medium text-gray-800">Purpose:</span> view customers who have shown interest in this vehicle.</div>
+              <div><span className="font-medium text-gray-800">Editing:</span> open the inquiry to edit it on the Inquiry page.</div>
             </div>
 
             <Input
@@ -2218,14 +2533,11 @@ export function InventoryClient({
               ) : (
                 <div className="divide-y divide-gray-100">
                   {inquiryMatches.map(inquiry => {
-                    const car = inquiry.inquiryCarDetails[0]
-                    const isSelected = selectedInquiry?.inquiryId === inquiry.inquiryId
+                    const car = inquiry.inquiryCarDetails.find(item => item.fkVariantId === inquiryRow.fkVariantId)
                     return (
-                      <button
+                      <div
                         key={inquiry.inquiryId}
-                        type="button"
-                        onClick={() => setSelectedInquiry(inquiry)}
-                        className={`w-full px-4 py-3 text-left transition ${isSelected ? 'bg-violet-50' : 'hover:bg-gray-50'}`}
+                        className="w-full px-4 py-3 text-left transition hover:bg-gray-50"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
@@ -2239,9 +2551,12 @@ export function InventoryClient({
                           <div className="flex items-center gap-2">
                             {inquiry.classification ? <Badge label={inquiry.classification} /> : null}
                             {inquiry.status ? <Badge label={inquiry.status} /> : null}
+                            <button type="button" className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-[#1B2A6B] hover:bg-blue-50" onClick={() => router.push(`/inquiry?edit=${inquiry.inquiryId}`)}>
+                              Open Inquiry
+                            </button>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -2249,17 +2564,7 @@ export function InventoryClient({
             </div>
 
             <div className="flex justify-end gap-3">
-              <Btn variant="outline" onClick={() => {
-                setInquiryRow(null)
-                setSelectedInquiry(null)
-                setInquiryMatches([])
-                setInquiryQuery('')
-                setInquiryError('')
-                if (pendingInventoryRefresh) window.location.reload()
-              }}>Skip for now</Btn>
-              <Btn onClick={syncInquiry} disabled={isSyncingInquiry || !selectedInquiry}>
-                {isSyncingInquiry ? 'Updating...' : 'Update Inquiry'}
-              </Btn>
+              <Btn variant="outline" onClick={closeInquiryView}>Close</Btn>
             </div>
           </div>
         ) : null}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import Link, { useLinkStatus } from 'next/link'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
@@ -14,29 +14,6 @@ interface NavItem {
   icon: ReactNode
   href?: string
   children?: { label: string; href: string }[]
-}
-
-function NavigationLoadingIndicator() {
-  const { pending } = useLinkStatus()
-
-  if (!pending) return null
-
-  return (
-    <>
-      <span
-        className="absolute inset-x-0 top-0 z-50 h-0.5 animate-pulse bg-[#C8102E]"
-        aria-hidden="true"
-      />
-      <span
-        className="fixed right-5 top-[4.5rem] z-50 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 shadow-lg"
-        role="status"
-        aria-live="polite"
-      >
-        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-200 border-t-[#C8102E]" />
-        Loading page...
-      </span>
-    </>
-  )
 }
 
 function ProfileMenu({
@@ -253,7 +230,6 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
               >
                 {item.icon}
                 {sidebarOpen && <span>{item.label}</span>}
-                <NavigationLoadingIndicator />
               </Link>
             ) : (
               <div>
@@ -280,7 +256,6 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
                       >
                         {(pathname === child.href || pathname.startsWith(`${child.href}/`)) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}
                         {child.label}
-                        <NavigationLoadingIndicator />
                       </Link>
                     ))}
                   </div>

@@ -53,8 +53,42 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.displayName || user.userName || undefined,
           username: user.userName || undefined,
           roleName: user.roleName ?? null,
+          authVersion: user.authVersion,
         };
       },
     }),
   ],
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt({ token, user }) {
+      if (user) {
+        token.username = user.username;
+        token.roleName = user.roleName;
+        token.authVersion = user.authVersion;
+      }
+
+      const userId = Number(token.sub);
+      if (!Number.isInteger(userId) || userId <= 0) return null;
+
+      // JWTs are not trusted for account state. This centralized check makes
+      // status changes and authVersion bumps revoke every device.
+      const currentUser = await prisma.userTable.findUnique({
+        where: { userId },
+        select: { status: true, authVersion: true },
+      });
+
+      if (!currentUser || currentUser.status !== "Active" || currentUser.authVersion !== token.authVersion) {
+        return null;
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
+      if (!token.sub) return session;
+      session.user.id = token.sub;
+      session.user.username = token.username as string;
+      session.user.roleName = token.roleName as string | null;
+      return session;
+    },
+  },
 });

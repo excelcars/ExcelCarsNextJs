@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition, type ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Pencil, Search, Trash2 } from 'lucide-react'
 import { Badge, Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createUserAccount, updateUserAccount, deactivateUserAccount, type UserAccessFormInput } from './actions'
 import { GENDERS, STATUSES, USER_ACCESS_PAGE_SIZE } from './queries'
+import { PASSWORD_POLICY_MESSAGE, passwordPolicyError, PROFILE_FIELD_LIMITS } from '@/lib/profileValidation'
 
 interface RoleOption { roleId: number; roleName: string | null }
 interface StateOption { stateId: number; statename: string }
@@ -48,9 +49,16 @@ type FieldErrors = Partial<Record<keyof UserAccessFormInput, string>>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const USERNAME_RE = /^[A-Za-z0-9._-]{4,50}$/
-const PASSWORD_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,100}$/
 const GENDER_OPTIONS = GENDERS.map(value => ({ value, label: value }))
 const STATUS_OPTIONS = STATUSES.map(value => ({ value, label: value }))
+
+function CharacterCount({ value, maxLength }: { value: string; maxLength: number }) {
+  return <div className="mt-1 text-right text-[11px] text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
+}
+
+function CountedInput({ value = '', maxLength, ...props }: Omit<ComponentProps<typeof Input>, 'value' | 'maxLength'> & { value?: string; maxLength: number }) {
+  return <div><Input {...props} value={value} maxLength={maxLength} /><CharacterCount value={value} maxLength={maxLength} /></div>
+}
 
 function formatAddress(employee: EmployeeInfo | null) {
   if (!employee) return '—'
@@ -429,8 +437,8 @@ export function UserAccessClient({
     }
     if (mode === 'create' && !trimmedPassword) {
       fields.password = 'Password is required.'
-    } else if (trimmedPassword && !PASSWORD_RE.test(trimmedPassword)) {
-      fields.password = mode === 'update' ? 'New password must be 8 to 100 characters and include at least one letter and one number.' : 'Password must be 8 to 100 characters and include at least one letter and one number.'
+    } else if (trimmedPassword && passwordPolicyError(trimmedPassword)) {
+      fields.password = PASSWORD_POLICY_MESSAGE
     }
 
     return { fields }
@@ -615,48 +623,48 @@ export function UserAccessClient({
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Input label="First Name *" value={form.empFirstName} onChange={e => f('empFirstName', e.target.value)} error={!!fieldErrors.empFirstName} maxLength={50} />
+              <CountedInput label="First Name *" value={form.empFirstName} onChange={e => f('empFirstName', e.target.value)} error={!!fieldErrors.empFirstName} maxLength={50} />
               <FieldMessage message={fieldErrors.empFirstName} />
             </div>
             <div>
-              <Input label="Last Name *" value={form.empLastName} onChange={e => f('empLastName', e.target.value)} error={!!fieldErrors.empLastName} maxLength={50} />
+              <CountedInput label="Last Name *" value={form.empLastName} onChange={e => f('empLastName', e.target.value)} error={!!fieldErrors.empLastName} maxLength={50} />
               <FieldMessage message={fieldErrors.empLastName} />
             </div>
             <DropdownField label="Gender" value={form.empGender} onChange={value => f('empGender', value)} options={GENDER_OPTIONS} placeholder="Select Gender" error={!!fieldErrors.empGender} errorMessage={fieldErrors.empGender} />
             <div>
-              <Input label="Mobile *" value={form.empMobileNo} onChange={e => f('empMobileNo', e.target.value.replace(/\D/g, '').slice(0, 10))} error={!!fieldErrors.empMobileNo} inputMode="numeric" maxLength={10} />
+              <CountedInput label="Mobile *" value={form.empMobileNo} onChange={e => f('empMobileNo', e.target.value.replace(/\D/g, '').slice(0, 10))} error={!!fieldErrors.empMobileNo} inputMode="numeric" maxLength={10} />
               <FieldMessage message={fieldErrors.empMobileNo} />
             </div>
             <div>
-              <Input label="Phone" value={form.empPhoneNo} onChange={e => f('empPhoneNo', e.target.value.replace(/\D/g, '').slice(0, 10))} error={!!fieldErrors.empPhoneNo} inputMode="numeric" maxLength={10} />
+              <CountedInput label="Phone" value={form.empPhoneNo} onChange={e => f('empPhoneNo', e.target.value.replace(/\D/g, '').slice(0, 10))} error={!!fieldErrors.empPhoneNo} inputMode="numeric" maxLength={10} />
               <FieldMessage message={fieldErrors.empPhoneNo} />
             </div>
             <div>
-              <Input label="Email *" type="email" value={form.empEmailId} onChange={e => f('empEmailId', e.target.value)} error={!!fieldErrors.empEmailId} maxLength={100} />
+              <CountedInput label="Email *" type="email" value={form.empEmailId} onChange={e => f('empEmailId', e.target.value)} error={!!fieldErrors.empEmailId} maxLength={100} />
               <FieldMessage message={fieldErrors.empEmailId} />
             </div>
             <div>
-              <Input label="City" value={form.empCity} onChange={e => f('empCity', e.target.value)} maxLength={50} />
+              <CountedInput label="City" value={form.empCity} onChange={e => f('empCity', e.target.value)} maxLength={50} />
               <FieldMessage />
             </div>
             <DropdownField label="State" value={form.fkStateId ? String(form.fkStateId) : ''} onChange={value => f('fkStateId', Number(value) || null)} options={stateOptions} placeholder="Select State" searchable />
             <div>
-              <Input label="Pincode" value={form.empPincode} onChange={e => f('empPincode', e.target.value.replace(/\D/g, '').slice(0, 6))} error={!!fieldErrors.empPincode} inputMode="numeric" maxLength={6} />
+              <CountedInput label="Pincode" value={form.empPincode} onChange={e => f('empPincode', e.target.value.replace(/\D/g, '').slice(0, 6))} error={!!fieldErrors.empPincode} inputMode="numeric" maxLength={6} />
               <FieldMessage message={fieldErrors.empPincode} />
             </div>
           </div>
           <div>
-            <Input label="Address" value={form.empAddress} onChange={e => f('empAddress', e.target.value)} maxLength={200} />
+            <CountedInput label="Address" value={form.empAddress} onChange={e => f('empAddress', e.target.value)} maxLength={200} />
             <FieldMessage />
           </div>
 
           <div className="border-t border-gray-100 pt-4 grid grid-cols-3 gap-4">
             <div>
-              <Input label="Username *" value={form.userName} onChange={e => f('userName', e.target.value)} error={!!fieldErrors.userName} disabled={!!editId} className={editId ? 'bg-gray-50' : ''} maxLength={50} />
+              <CountedInput label="Username *" value={form.userName} onChange={e => f('userName', e.target.value)} error={!!fieldErrors.userName} disabled={!!editId} className={editId ? 'bg-gray-50' : ''} maxLength={50} />
               <FieldMessage message={fieldErrors.userName} />
             </div>
             <div>
-              <Input label={editId ? 'New Password (leave blank to keep)' : 'Password *'} type="password" value={form.password} onChange={e => f('password', e.target.value)} error={!!fieldErrors.password} maxLength={100} />
+              <CountedInput label={editId ? 'New Password (leave blank to keep)' : 'Password *'} type="password" value={form.password} onChange={e => f('password', e.target.value)} error={!!fieldErrors.password} maxLength={PROFILE_FIELD_LIMITS.password} />
               <FieldMessage message={fieldErrors.password} />
             </div>
             <DropdownField label="Role *" value={form.roleId ? String(form.roleId) : ''} onChange={value => f('roleId', Number(value) || null)} options={roleOptions} placeholder="Select Role" error={!!fieldErrors.roleId} errorMessage={fieldErrors.roleId} searchable />

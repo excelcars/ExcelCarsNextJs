@@ -16,16 +16,18 @@ export interface ListUsersParams {
 export async function listUsers({ search, status, roleId, stateId, page }: ListUsersParams) {
   const where: Prisma.UserTableWhereInput = {}
 
+  // Only show user accounts that have a matching employee record.
+  // This makes the user_table -> add_employee relationship behave like an inner join.
+  where.employee = stateId
+    ? { is: { fkStateId: Number(stateId) } }
+    : { isNot: null }
+
   if (status !== 'All') {
     where.status = status
   }
 
   if (roleId) {
     where.roleId = Number(roleId)
-  }
-
-  if (stateId) {
-    where.employee = { is: { fkStateId: Number(stateId) } }
   }
 
   if (search.trim()) {

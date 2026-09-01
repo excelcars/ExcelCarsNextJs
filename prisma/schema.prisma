@@ -1018,11 +1018,12 @@ model UserTable {
   roleId                            Int?                       @map("role_id")
   roleName                          String?                    @map("role_name")
   status                            String?
-  empId                             Int?                       @map("emp_id")
+  empId                             Int?                       @unique(map: "uq_user_table_emp_id") @map("emp_id")
   displayName                       String?                    @map("display_name")
   emailId                           String?                    @map("email_id")
   lastLoginTime                     DateTime?                  @map("last_login_time") @db.Timestamptz(6)
   lastLogoutTime                    DateTime?                  @map("last_logout_time") @db.Timestamptz(6)
+  authVersion                       Int                        @default(0) @map("auth_version")
   createdDate                       DateTime?                  @map("created_date") @db.Timestamptz(6)
   createdBy                         Int?                       @map("created_by")
   updatedDate                       DateTime?                  @map("updated_date") @db.Timestamptz(6)

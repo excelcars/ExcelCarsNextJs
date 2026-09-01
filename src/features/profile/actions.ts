@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '../../../auth'
 import { prisma } from '@/lib/db/prisma'
 import { isValidPhone } from '@/lib/validation'
+import { isStringRecord, passwordPolicyError, PROFILE_FIELD_LIMITS } from '@/lib/profileValidation'
 
 export interface UpdateMyProfileInput {
   empFirstName: string
@@ -34,6 +35,41 @@ function nullable(value: string) {
   return trimmed || null
 }
 
+const PROFILE_STRING_FIELDS = [
+  'empFirstName', 'empLastName', 'empGender', 'empMobileNo', 'empPhoneNo',
+  'empAddress', 'empCity', 'empStateLegacy', 'empPincode',
+] as const
+
+class EmployeeOwnershipError extends Error {}
+
+function hasProfileStringFields(input: unknown): input is UpdateMyProfileInput {
+  return isStringRecord(input) && PROFILE_STRING_FIELDS.every(field => typeof input[field] === 'string')
+}
+
+function profileInputError(input: UpdateMyProfileInput): string | null {
+  const limits: Array<[keyof UpdateMyProfileInput, number]> = [
+    ['empFirstName', PROFILE_FIELD_LIMITS.firstName],
+    ['empLastName', PROFILE_FIELD_LIMITS.lastName],
+    ['empGender', PROFILE_FIELD_LIMITS.gender],
+    ['empMobileNo', PROFILE_FIELD_LIMITS.mobile],
+    ['empPhoneNo', PROFILE_FIELD_LIMITS.phone],
+    ['empAddress', PROFILE_FIELD_LIMITS.address],
+    ['empCity', PROFILE_FIELD_LIMITS.city],
+    ['empStateLegacy', PROFILE_FIELD_LIMITS.state],
+    ['empPincode', PROFILE_FIELD_LIMITS.pincode],
+  ]
+  const exceeded = limits.find(([field, limit]) => input[field].trim().length > limit)
+  if (exceeded) {
+    const labels: Partial<Record<keyof UpdateMyProfileInput, string>> = {
+      empFirstName: 'First name', empLastName: 'Last name', empGender: 'Gender',
+      empMobileNo: 'Mobile', empPhoneNo: 'Phone', empAddress: 'Address',
+      empCity: 'City', empStateLegacy: 'State', empPincode: 'Pincode',
+    }
+    return `${labels[exceeded[0]] ?? exceeded[0]} must be ${exceeded[1]} characters or fewer.`
+  }
+  return null
+}
+
 export async function updateMyProfile(input: UpdateMyProfileInput): Promise<ChangePasswordResult> {
   const session = await auth()
   const sessionUserId = session?.user?.id
@@ -43,6 +79,10 @@ export async function updateMyProfile(input: UpdateMyProfileInput): Promise<Chan
     return { success: false, error: 'Your session has expired. Please sign in again.' }
   }
 
+  if (!hasProfileStringFields(input)) {
+    return { success: false, error: 'Profile information is invalid.' }
+  }
+
   const firstName = input.empFirstName.trim()
   const lastName = input.empLastName.trim()
   const mobile = input.empMobileNo.trim()
@@ -50,6 +90,8 @@ export async function updateMyProfile(input: UpdateMyProfileInput): Promise<Chan
   const pincode = input.empPincode.trim()
 
   if (!firstName || !lastName) return { success: false, error: 'First name and last name are required.' }
+  const fieldLimitError = profileInputError(input)
+  if (fieldLimitError) return { success: false, error: fieldLimitError }
   if (!isValidPhone(mobile) || !isValidPhone(phone)) return { success: false, error: 'Mobile and phone numbers must contain 10 digits.' }
   if (pincode && !/^\d{6}$/.test(pincode)) return { success: false, error: 'Pincode must contain 6 digits.' }
   if (input.empGender && !['M', 'F'].includes(input.empGender)) return { success: false, error: 'Select a valid gender.' }
@@ -75,6 +117,11 @@ export async function updateMyProfile(input: UpdateMyProfileInput): Promise<Chan
       }
 
       if (existing.empId) {
+        const otherAccount = await transaction.userTable.findFirst({
+          where: { empId: existing.empId, NOT: { userId } },
+          select: { userId: true },
+        })
+        if (otherAccount) throw new EmployeeOwnershipError('Employee record is linked to another account.')
         await transaction.addEmployee.update({ where: { empId: existing.empId }, data: employeeData })
       } else {
         const employee = await transaction.addEmployee.create({
@@ -92,21 +139,15 @@ export async function updateMyProfile(input: UpdateMyProfileInput): Promise<Chan
         },
       })
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof EmployeeOwnershipError) {
+      return { success: false, error: 'This employee record is linked to another user account.' }
+    }
     return { success: false, error: 'Could not update your profile. Please try again.' }
   }
 
   revalidatePath('/profile')
   return { success: true }
-}
-
-function passwordPolicyError(password: string): string | null {
-  if (password.length < 8) return 'Password must be at least 8 characters.'
-  if (!/[A-Z]/.test(password)) return 'Password must include an uppercase letter.'
-  if (!/[a-z]/.test(password)) return 'Password must include a lowercase letter.'
-  if (!/\d/.test(password)) return 'Password must include a number.'
-  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include a special character.'
-  return null
 }
 
 export async function changeMyPassword(input: ChangePasswordInput): Promise<ChangePasswordResult> {
@@ -117,8 +158,15 @@ export async function changeMyPassword(input: ChangePasswordInput): Promise<Chan
   if (!Number.isInteger(userId) || userId <= 0) {
     return { success: false, error: 'Your session has expired. Please sign in again.' }
   }
+
+  if (!isStringRecord(input) || !['currentPassword', 'newPassword', 'confirmPassword'].every(field => typeof input[field] === 'string')) {
+    return { success: false, error: 'Password information is invalid.' }
+  }
   if (!input.currentPassword || !input.newPassword || !input.confirmPassword) {
     return { success: false, error: 'All password fields are required.' }
+  }
+  if ([input.currentPassword, input.newPassword, input.confirmPassword].some(password => password.length > PROFILE_FIELD_LIMITS.password)) {
+    return { success: false, error: `Password must be ${PROFILE_FIELD_LIMITS.password} characters or fewer.` }
   }
   if (input.newPassword !== input.confirmPassword) {
     return { success: false, error: 'New password and confirmation do not match.' }
@@ -146,6 +194,7 @@ export async function changeMyPassword(input: ChangePasswordInput): Promise<Chan
       where: { userId },
       data: {
         passwordHash,
+        authVersion: { increment: 1 },
         updatedDate: new Date(),
         updatedBy: userId,
       },

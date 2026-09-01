@@ -1,4 +1,4 @@
-CREATE TABLE "message_attachment_upload" (
+CREATE TABLE IF NOT EXISTS "message_attachment_upload" (
     "upload_id" UUID NOT NULL,
     "template_id" INTEGER NOT NULL,
     "stored_path" TEXT NOT NULL,
@@ -11,12 +11,19 @@ CREATE TABLE "message_attachment_upload" (
     CONSTRAINT "message_attachment_upload_pkey" PRIMARY KEY ("upload_id")
 );
 
-CREATE INDEX "ix_message_attachment_upload_template" ON "message_attachment_upload"("template_id");
-CREATE INDEX "ix_message_attachment_upload_user_scope" ON "message_attachment_upload"("created_by", "scope");
+CREATE INDEX IF NOT EXISTS "ix_message_attachment_upload_template" ON "message_attachment_upload"("template_id");
+CREATE INDEX IF NOT EXISTS "ix_message_attachment_upload_user_scope" ON "message_attachment_upload"("created_by", "scope");
 
-ALTER TABLE "message_attachment_upload"
-  ADD CONSTRAINT "fk_message_attachment_upload_template"
-  FOREIGN KEY ("template_id") REFERENCES "message_template"("type_id") ON DELETE CASCADE ON UPDATE NO ACTION;
-ALTER TABLE "message_attachment_upload"
-  ADD CONSTRAINT "fk_message_attachment_upload_user"
-  FOREIGN KEY ("created_by") REFERENCES "user_table"("user_id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_message_attachment_upload_template') THEN
+    ALTER TABLE "message_attachment_upload"
+      ADD CONSTRAINT "fk_message_attachment_upload_template"
+      FOREIGN KEY ("template_id") REFERENCES "message_template"("type_id") ON DELETE CASCADE ON UPDATE NO ACTION;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_message_attachment_upload_user') THEN
+    ALTER TABLE "message_attachment_upload"
+      ADD CONSTRAINT "fk_message_attachment_upload_user"
+      FOREIGN KEY ("created_by") REFERENCES "user_table"("user_id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+  END IF;
+END $$;
