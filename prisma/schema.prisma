@@ -398,6 +398,9 @@ model Inquiry {
   followupInquiry       FollowupInquiry[]
   inquiryInventoryLinks InquiryInventoryLink[]
   vehicleEmailLinks     VehicleEmailLink[]
+  whatsappDeliveryLogs  WhatsAppDeliveryLog[]
+  inquiryInventoryEmailLogs InquiryInventoryEmailLog[]
+  noInventoryNotificationLogs InquiryNoInventoryNotificationLog[]
   assignedToUser        UserTable?          @relation("inquiry_assigned_toTouser_table", fields: [assignedTo], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_assigned_to_user")
   createdByUser         UserTable?          @relation("inquiry_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_created_by_user")
   customer              Customer?           @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_customer_id")
@@ -584,6 +587,8 @@ model InventoryManagement {
   inventoryPhotos  InventoryPhotos[]
   inquiryInventoryLinks InquiryInventoryLink[]
   vehicleEmailLinks VehicleEmailLink[]
+  whatsappDeliveryLogs WhatsAppDeliveryLog[]
+  inquiryInventoryEmailLogs InquiryInventoryEmailLog[]
   feedbackInvitations FeedbackInvitation[]
   loanManagement   LoanManagement[]
   rtoAgent         RtoAgent[]
@@ -600,6 +605,7 @@ model VehicleEmailLink {
   customerId         Int?                    @map("customer_id")
   recipientEmail     String                  @map("recipient_email")
   recipientName      String?                 @map("recipient_name")
+  channel            String                  @default("Email")
   tokenHash          String                  @unique(map: "idx_vehicle_email_links_token_hash_uq") @map("token_hash")
   emailSentAt        DateTime?               @map("email_sent_at") @db.Timestamptz(6)
   createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -621,6 +627,65 @@ model VehicleEmailLink {
   @@index([customerId], map: "idx_vehicle_email_links_customer_id")
   @@index([recipientEmail], map: "idx_vehicle_email_links_recipient_email")
   @@map("vehicle_email_links")
+}
+
+model WhatsAppDeliveryLog {
+  whatsAppDeliveryLogId Int               @id @default(autoincrement()) @map("whatsapp_delivery_log_id")
+  inquiryId             Int               @map("inquiry_id")
+  inventoryId           Int               @map("inventory_id")
+  recipientMobile       String            @map("recipient_mobile")
+  recipientName         String?           @map("recipient_name")
+  templateName          String            @map("template_name")
+  templateLanguage      String            @map("template_language")
+  vehicleName           String            @map("vehicle_name")
+  buttonUrlSuffix       String?           @map("button_url_suffix")
+  providerMessageId     String?           @map("provider_message_id")
+  status                String
+  errorMessage          String?           @map("error_message")
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt           DateTime?         @map("attempted_at") @db.Timestamptz(6)
+  inquiry               Inquiry           @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_whatsapp_delivery_log_inquiry")
+  inventoryManagement   InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_whatsapp_delivery_log_inventory")
+
+  @@unique([inquiryId, inventoryId], map: "uq_whatsapp_delivery_log_inquiry_inventory")
+  @@index([inquiryId, createdAt], map: "ix_whatsapp_delivery_log_inquiry_created")
+  @@index([status, createdAt], map: "ix_whatsapp_delivery_log_status_created")
+  @@map("whatsapp_delivery_log")
+}
+
+model InquiryInventoryEmailLog {
+  inquiryInventoryEmailLogId Int                 @id @default(autoincrement()) @map("inquiry_inventory_email_log_id")
+  inquiryId                  Int                 @map("inquiry_id")
+  inventoryId                Int                 @map("inventory_id")
+  recipientEmail             String              @map("recipient_email")
+  status                     String
+  errorMessage               String?             @map("error_message")
+  createdAt                  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt                DateTime?           @map("attempted_at") @db.Timestamptz(6)
+  inquiry                    Inquiry             @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_inventory_email_log_inquiry")
+  inventoryManagement        InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_email_log_inventory")
+
+  @@unique([inquiryId, inventoryId], map: "uq_inquiry_inventory_email_log_inquiry_inventory")
+  @@index([inquiryId, createdAt], map: "ix_inquiry_inventory_email_log_inquiry_created")
+  @@map("inquiry_inventory_email_log")
+}
+
+model InquiryNoInventoryNotificationLog {
+  inquiryNoInventoryNotificationLogId Int      @id @default(autoincrement()) @map("inquiry_no_inventory_notification_log_id")
+  inquiryId                            Int      @map("inquiry_id")
+  channel                              String
+  recipient                            String
+  templateName                         String?  @map("template_name")
+  status                               String
+  errorMessage                         String?  @map("error_message")
+  providerMessageId                    String?  @map("provider_message_id")
+  createdAt                            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt                          DateTime? @map("attempted_at") @db.Timestamptz(6)
+  inquiry                              Inquiry  @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_no_inventory_notification_log_inquiry")
+
+  @@unique([inquiryId, channel], map: "uq_inquiry_no_inventory_notification_log_inquiry_channel")
+  @@index([inquiryId, createdAt], map: "ix_inquiry_no_inventory_notification_log_inquiry_created")
+  @@map("inquiry_no_inventory_notification_log")
 }
 
 model VehicleEmailLinkVisit {
@@ -758,6 +823,16 @@ model MessageTemplate {
   updatedByUser   UserTable?        @relation("message_template_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_updated_by_user")
 
   @@map("message_template")
+}
+
+model WhatsAppMessageDraft {
+  whatsAppMessageDraftId Int      @id @default(autoincrement()) @map("whatsapp_message_draft_id")
+  title                 String
+  message               String
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("whatsapp_message_draft")
 }
 
 model EmailDeliveryLog {

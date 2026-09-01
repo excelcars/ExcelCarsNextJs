@@ -54,9 +54,15 @@ Each saved email template has an Attachments action. It accepts PDF, JPG, PNG, a
 
 `sendEmail` requires `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `EMAIL_FROM_ADDRESS`. It uses `SMTP_PORT` (default 587), `SMTP_SECURE === 'true'`, optional `EMAIL_FROM_NAME` (default `Excel Cars`), and sends an optional CC from `STAFF_CC_EMAIL`. It returns the configuration error or Nodemailer’s error message to the UI. It sends one direct recipient at a time, includes saved and extra attachments, and has no queue/retry/timeout policy in this code.
 
-## 6. Future WhatsApp direction
+## 6. Enquiry WhatsApp automation
 
-SMS is not supported in the active UI or server actions. Historic SMS rows remain preserved but hidden. WhatsApp is the intended future messaging channel; it is not shown as a template type yet because no approved WhatsApp Business provider/account, template-approval process, consent rules, or delivery integration is configured. Adding an option before those dependencies exist would create a non-functional workflow.
+SMS is not supported in the active UI or server actions. Historic SMS rows remain preserved but hidden. A separate automatic WhatsApp path is now used only when an enquiry is created: each selected car row is matched against `In Stock` inventory by its variant (or legacy make/model/variant) and optional year. A message is submitted only for an exact one-row match; zero or multiple matches send nothing. Multiple exact matches across different car rows result in one message per unique inventory item.
+
+The Meta Cloud API template is fixed to `enquiry_temp` in English. Its body variables are the customer name and matched vehicle name; its dynamic URL-button parameter is the relative `vehicle/{slug}?t={token}` suffix. The approved template owns the URL origin. Each generated token resolves the precise inventory item through the existing public vehicle page.
+
+The same exact-match rule also submits the existing vehicle-details email when the enquiry has a customer email address. `InquiryInventoryEmailLog` prevents repeated automatic email sends for an enquiry/inventory pair; an email failure is separately recorded and does not change the successful enquiry result.
+
+`WhatsAppDeliveryLog` is created before the API request and has a unique `(inquiryId, inventoryId)` key, preventing duplicate sends for a repeated car row or repeat action. Failures are stored as `Failed` and do not change the successful enquiry result. `Submitted` means Meta accepted the send request; delivery status and inbound webhooks are intentionally out of scope. The path requires `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN`; `WHATSAPP_GRAPH_API_VERSION` defaults to `v23.0`.
 
 ## 7. Errors and second-pass coverage result
 

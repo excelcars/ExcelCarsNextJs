@@ -84,9 +84,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
+      if (!session.user || typeof token.sub !== "string" || typeof token.username !== "string") {
+        return session;
+      }
+
       session.user.id = token.sub;
-      session.user.username = token.username as string;
-      session.user.roleName = token.roleName as string | null;
+      session.user.username = token.username;
+      session.user.roleName = typeof token.roleName === "string" ? token.roleName : null;
       return session;
     },
   },

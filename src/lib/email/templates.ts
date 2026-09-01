@@ -64,3 +64,15 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
 
   return { subject: 'Car Details', html }
 }
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] as string))
+}
+
+export function noInventoryEnquiryEmail(customerName: string): { subject: string; html: string } {
+  const name = escapeHtml(customerName || 'Customer')
+  return {
+    subject: 'We received your enquiry — Excel Cars',
+    html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#263651;line-height:1.6;max-width:560px;"><p>Hi ${name}, thank you for your enquiry with Excel Cars.</p><p>We have received your request and our team will get in touch with you shortly.</p><p>For any immediate assistance, you can contact us at 82923002.</p><p>We’ll be happy to assist you.</p></div>`,
+  }
+}

@@ -1098,6 +1098,8 @@ export function InquiryClient({
         const params = new URLSearchParams()
         if (mobile) params.set('mobile', mobile)
         if (customerId) params.set('customerId', String(customerId))
+        const variantIds = form.inquiryCars.map(car => car.fkVariantId).filter((id): id is number => Boolean(id))
+        if (variantIds.length) params.set('variantIds', variantIds.join(','))
         if (editId) params.set('excludeInquiryId', String(editId))
         const res = await fetch(`/api/inquiry/previous?${params.toString()}`)
         const payload = await res.json()
@@ -1308,7 +1310,7 @@ export function InquiryClient({
   }
 
   const f = <K extends keyof InquiryFormInput>(k: K, v: InquiryFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
-  const save = (mode: 'save-only' | 'save-and-send-matching' = 'save-only') => {
+  const save = () => {
     setError('')
     const validation = validateInquiryFormInput(form)
     if (validation.error) {
@@ -1320,7 +1322,7 @@ export function InquiryClient({
     startTransition(async () => {
       const result = editId
         ? await updateInquiry(editId, form)
-        : await createInquiry(form, { sendMatchingInventoryOnCreate: mode === 'save-and-send-matching' })
+        : await createInquiry(form)
       if (!result.success) {
         setError(result.error ?? 'Something went wrong.')
         setSaveFeedback(null)
@@ -1338,9 +1340,11 @@ export function InquiryClient({
     if (!deleteId) return
     startTransition(async () => {
       const result = await deleteInquiry(deleteId)
-      if (!result.success) setError(result.error ?? 'Could not delete this record.')
+      setSaveFeedback(result.success
+        ? { ok: true, message: result.message ?? 'Inquiry deleted successfully.' }
+        : { ok: false, message: result.error ?? 'Could not delete this record.' })
       setDeleteId(null)
-      router.refresh()
+      if (result.success) router.refresh()
     })
   }
 
@@ -1913,12 +1917,9 @@ export function InquiryClient({
           <div className="flex gap-3 justify-end pt-2">
             <Btn variant="outline" onClick={requestCloseInquiryModal}>Cancel</Btn>
             {editId ? (
-              <Btn onClick={() => save('save-only')} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
+              <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
             ) : (
-              <>
-                <Btn variant="outline" onClick={() => save('save-only')} disabled={isPending}>{isPending ? 'Saving...' : 'Save Only'}</Btn>
-                <Btn onClick={() => save('save-and-send-matching')} disabled={isPending}>{isPending ? 'Saving...' : 'Save & Send Matching'}</Btn>
-              </>
+              <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
             )}
           </div>
         </div>
