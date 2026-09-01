@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 import { summarizeVehicleEmailInteractions } from '@/features/vehicleEmailLinks/service'
 
-export const INVENTORY_STATUSES = ['In Stock', 'Booked', 'Loan Process', 'Not Available', 'Sold'] as const
+export const INVENTORY_STATUSES = ['In Stock', 'Booked', 'Loan Process', 'Not Available', 'Sold', 'RTO Process'] as const
 
 export interface InventoryListParams {
   search?: string
@@ -348,7 +348,7 @@ export async function getVariantsByModel(modelId: number) {
 
 export async function getDealers() {
   return prisma.dealerMaster.findMany({
-    select: { dealerId: true, dealerName: true, dealerEmail: true },
+    select: { dealerId: true, dealerName: true, dealerMobileNo: true, dealerEmail: true },
     orderBy: { dealerName: 'asc' },
   })
 }
