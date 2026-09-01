@@ -3,7 +3,7 @@ import path from 'path'
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads', 'inventory')
 const PUBLIC_PREFIX = '/uploads/inventory'
@@ -25,8 +25,7 @@ function fileNameFromPath(photoPath: string | null) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const inventoryId = Number(req.nextUrl.searchParams.get('inventoryId'))
   const inventoryNumber = req.nextUrl.searchParams.get('inventoryNumber')?.trim() || null
@@ -55,8 +54,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const formData = await req.formData()
   const inventoryId = Number(formData.get('inventoryId'))
@@ -131,8 +129,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
   const documentId = Number(body?.documentId)
@@ -144,7 +141,7 @@ export async function DELETE(req: NextRequest) {
   if (photo.path?.startsWith(PUBLIC_PREFIX)) {
     const resolvedPath = path.resolve(path.join(process.cwd(), 'public', photo.path.replace(/^\//, '')))
     const resolvedRoot = path.resolve(UPLOAD_ROOT)
-    if (!resolvedPath.startsWith(resolvedRoot)) {
+    if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) {
       return NextResponse.json({ error: 'Unsafe photo path.' }, { status: 400 })
     }
     try {

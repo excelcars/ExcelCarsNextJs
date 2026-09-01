@@ -2,12 +2,16 @@
 
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
+import { unlink } from 'fs/promises'
+import path from 'path'
 import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { sendEmail } from '@/lib/email/sendMail'
 import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
+import { normalizeRegistrationNo, validateInventoryInput } from '@/lib/validation'
+import { getInventoryBulkEmailLimits } from './emailLimits'
 
 export interface InventoryFormInput {
   registrationNo: string
@@ -42,6 +46,8 @@ export interface ActionResult {
   message?: string
   inventoryId?: number
   inventoryNumber?: string | null
+  sentInventoryIds?: number[]
+  failedInventoryIds?: number[]
 }
 
 async function currentUserId(): Promise<number | null> {
@@ -49,41 +55,100 @@ async function currentUserId(): Promise<number | null> {
 }
 
 function hasVehicleIdentity(input: InventoryFormInput) {
-  return Boolean(
-    input.fkVariantId
-    || input.makeLegacy.trim()
-    || input.modelLegacy.trim()
-    || input.variantLegacy.trim(),
-  )
+  return Boolean(input.fkVariantId && input.makeLegacy.trim() && input.modelLegacy.trim())
+}
+
+async function validateVariantRelationship(input: InventoryFormInput) {
+  if (!input.fkVariantId) return 'Variant is required.'
+
+  const variant = await prisma.carVariantMaster.findUnique({
+    where: { pkVariantId: input.fkVariantId },
+    include: { carMakeMaster: true, carModelMaster: true },
+  })
+  if (!variant) return 'The selected variant does not exist.'
+
+  const makeMatches = variant.carMakeMaster?.make?.trim().toLowerCase() === input.makeLegacy.trim().toLowerCase()
+  const modelMatches = variant.carModelMaster?.model?.trim().toLowerCase() === input.modelLegacy.trim().toLowerCase()
+  if (!makeMatches || !modelMatches) {
+    return 'The selected variant must belong to the selected make and model.'
+  }
+  return null
+}
+
+function legacySkuPart(value: string) {
+  return value.length < 3 ? value : value.substring(0, 3)
+}
+
+/** Returns the next inventory number using the legacy Inventory/{number} sequence. */
+export async function getNextInventoryNumber() {
+  if (!(await currentUserId())) return null
+  const latest = await prisma.inventoryManagement.findFirst({
+    where: { inventoryNumber: { not: null } },
+    orderBy: { inventoryId: 'desc' },
+    select: { inventoryNumber: true },
+  })
+  const match = latest?.inventoryNumber?.match(/^([^/]+)\/(\d+)$/)
+  return match ? `${match[1]}/${Number(match[2]) + 1}` : 'Inventory/1'
+}
+
+/** Returns the legacy SKU preview/next value for a make, model, and colour. */
+export async function getInventorySku(make: string, model: string, colour: string, excludeInventoryId?: number) {
+  if (!(await currentUserId())) return ''
+  const cleanMake = make.trim()
+  const cleanModel = model.trim()
+  const cleanColour = colour.trim()
+  if (!cleanMake || !cleanModel || !cleanColour) return ''
+
+  const previous = await prisma.inventoryManagement.findFirst({
+    where: {
+      makeLegacy: cleanMake,
+      modelLegacy: cleanModel,
+      colour: cleanColour,
+      ...(excludeInventoryId ? { NOT: { inventoryId: excludeInventoryId } } : {}),
+    },
+    orderBy: { inventoryId: 'desc' },
+    select: { sku: true },
+  })
+
+  if (previous?.sku) {
+    const parts = previous.sku.split('-')
+    const last = Number(parts[parts.length - 1])
+    if (parts.length > 1 && Number.isInteger(last)) {
+      parts[parts.length - 1] = String(last + 1)
+      return parts.join('-')
+    }
+  }
+
+  return `${legacySkuPart(cleanMake)}-${legacySkuPart(cleanModel)}-${legacySkuPart(cleanColour)}-1`
 }
 
 function buildData(input: InventoryFormInput) {
   return {
-    registrationNo: input.registrationNo || null,
+    registrationNo: normalizeRegistrationNo(input.registrationNo) || null,
     ...(input.fkVariantId
       ? { carVariantMaster: { connect: { pkVariantId: input.fkVariantId } } }
       : {}),
-    makeLegacy: input.makeLegacy || null,
-    modelLegacy: input.modelLegacy || null,
-    variantLegacy: input.variantLegacy || null,
-    colour: input.colour || null,
+    makeLegacy: input.makeLegacy.trim() || null,
+    modelLegacy: input.modelLegacy.trim() || null,
+    variantLegacy: input.variantLegacy.trim() || null,
+    colour: input.colour.trim() || null,
     year: input.year,
-    month: input.month || null,
-    fuelType: input.fuelType || null,
+    month: input.month.trim() || null,
+    fuelType: input.fuelType.trim() || null,
     noOfOwners: input.noOfOwners,
-    tax: input.tax || null,
+    tax: input.tax.trim() || null,
     isCarRegistered: input.isCarRegistered,
     kmsDriven: input.kmsDriven,
-    insuranceType: input.insuranceType || null,
+    insuranceType: input.insuranceType.trim() || null,
     price: input.price,
-    status: input.status || null,
-    ownedType: input.ownedType || null,
-    ownedBy: input.ownedBy || null,
-    mobileNoOwnedBy: input.mobileNoOwnedBy || null,
-    emailIdOwnedBy: input.emailIdOwnedBy || null,
-    customerName: input.customerName || null,
-    internalComments: input.internalComments || null,
-    otherRemarks: input.otherRemarks || null,
+    status: input.status.trim() || null,
+    ownedType: input.ownedType.trim() || null,
+    ownedBy: input.ownedBy.trim() || null,
+    mobileNoOwnedBy: input.mobileNoOwnedBy.trim() || null,
+    emailIdOwnedBy: input.emailIdOwnedBy.trim() || null,
+    customerName: input.customerName.trim() || null,
+    internalComments: input.internalComments.trim() || null,
+    otherRemarks: input.otherRemarks.trim() || null,
     ...(input.customerId
       ? { customer: { connect: { custId: input.customerId } } }
       : {}),
@@ -131,20 +196,47 @@ async function createTrackedVehicleEmailLink({
 }
 
 export async function createInventory(input: InventoryFormInput): Promise<ActionResult> {
-  if (!input.registrationNo?.trim()) {
-    return { success: false, error: 'Registration number is required.' }
-  }
+  input = { ...input, registrationNo: normalizeRegistrationNo(input.registrationNo) }
+  const validationError = validateInventoryInput(input)
+  if (validationError) return { success: false, error: validationError }
   if (!hasVehicleIdentity(input)) {
-    return { success: false, error: 'Select a catalog variant or enter legacy vehicle details.' }
+    return { success: false, error: 'Make, Model, and Variant are required.' }
   }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
+    const relationshipError = await validateVariantRelationship(input)
+    if (relationshipError) return { success: false, error: relationshipError }
+
+    const normalizedRegistrationNo = normalizeRegistrationNo(input.registrationNo)
+    if (normalizedRegistrationNo.length > 5) {
+      const duplicate = await prisma.inventoryManagement.findFirst({
+        where: { registrationNo: normalizedRegistrationNo },
+        select: { inventoryId: true },
+      })
+      if (duplicate) return { success: false, error: 'This registration number is already active on another vehicle in stock.' }
+    }
+
+    let skuMake = input.makeLegacy
+    let skuModel = input.modelLegacy
+    if (input.fkVariantId && (!skuMake.trim() || !skuModel.trim())) {
+      const variant = await prisma.carVariantMaster.findUnique({
+        where: { pkVariantId: input.fkVariantId },
+        include: { carMakeMaster: true, carModelMaster: true },
+      })
+      skuMake = variant?.carMakeMaster?.make ?? skuMake
+      skuModel = variant?.carModelMaster?.model ?? skuModel
+    }
+    const sku = await getInventorySku(skuMake, skuModel, input.colour)
+    const inventoryNumber = await getNextInventoryNumber()
+    if (!inventoryNumber) return { success: false, error: 'Not authorized.' }
     const created = await prisma.inventoryManagement.create({
       data: {
         ...buildData(input),
+        sku,
+        inventoryNumber,
         createdDate: new Date(),
         updatedDate: new Date(),
         ...(userId ? { createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } } } : {}),
@@ -152,34 +244,37 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
       select: { inventoryId: true, inventoryNumber: true },
     })
 
-    const inventoryNumber = `Inventory/${created.inventoryId}`
-    const sku = `EC-${String(created.inventoryId).padStart(4, '0')}`
-
-    const finalized = await prisma.inventoryManagement.update({
-      where: { inventoryId: created.inventoryId },
-      data: { sku, inventoryNumber },
-      select: { inventoryId: true, inventoryNumber: true },
-    })
-
     revalidatePath('/inventory')
-    return { success: true, inventoryId: finalized.inventoryId, inventoryNumber: finalized.inventoryNumber }
+    return { success: true, inventoryId: created.inventoryId, inventoryNumber: created.inventoryNumber }
   } catch (err) {
     return { success: false, error: describeError(err) }
   }
 }
 
 export async function updateInventory(id: number, input: InventoryFormInput): Promise<ActionResult> {
-  if (!input.registrationNo?.trim()) {
-    return { success: false, error: 'Registration number is required.' }
-  }
+  input = { ...input, registrationNo: normalizeRegistrationNo(input.registrationNo) }
+  const validationError = validateInventoryInput(input)
+  if (validationError) return { success: false, error: validationError }
   if (!hasVehicleIdentity(input)) {
-    return { success: false, error: 'Select a catalog variant or enter legacy vehicle details.' }
+    return { success: false, error: 'Make, Model, and Variant are required.' }
   }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
+    const relationshipError = await validateVariantRelationship(input)
+    if (relationshipError) return { success: false, error: relationshipError }
+
+    const normalizedRegistrationNo = normalizeRegistrationNo(input.registrationNo)
+    if (normalizedRegistrationNo.length > 5) {
+      const duplicate = await prisma.inventoryManagement.findFirst({
+        where: { registrationNo: normalizedRegistrationNo, NOT: { inventoryId: id } },
+        select: { inventoryId: true },
+      })
+      if (duplicate) return { success: false, error: 'This registration number is already active on another vehicle in stock.' }
+    }
+
     const updated = await prisma.inventoryManagement.update({
       where: { inventoryId: id },
       data: {
@@ -201,7 +296,46 @@ export async function deleteInventory(id: number): Promise<ActionResult> {
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
   try {
-    await prisma.inventoryManagement.delete({ where: { inventoryId: id } })
+    const inventory = await prisma.inventoryManagement.findUnique({
+      where: { inventoryId: id },
+      select: { inventoryId: true },
+    })
+    if (!inventory) return { success: false, error: 'Vehicle not found.' }
+
+    const [photos, checklistCount, dsaCount, insuranceCount, inquiryLinkCount, emailLinkCount, feedbackCount, loanCount, rtoCount] = await Promise.all([
+      prisma.inventoryPhotos.findMany({ where: { fkInventoryId: id }, select: { path: true } }),
+      prisma.checkListDocMain.count({ where: { inventoryId: id } }),
+      prisma.dsaManagement.count({ where: { inventoryId: id } }),
+      prisma.insuranceMain.count({ where: { inventoryId: id } }),
+      prisma.inquiryInventoryLink.count({ where: { inventoryId: id } }),
+      prisma.vehicleEmailLink.count({ where: { inventoryId: id } }),
+      prisma.feedbackInvitation.count({ where: { inventoryId: id } }),
+      prisma.loanManagement.count({ where: { inventoryId: id } }),
+      prisma.rtoAgent.count({ where: { inventoryId: id } }),
+    ])
+    const dependencyCounts: Array<[string, number]> = [
+      ['checklist', checklistCount],
+      ['DSA', dsaCount],
+      ['insurance', insuranceCount],
+      ['inquiry link', inquiryLinkCount],
+      ['email link', emailLinkCount],
+      ['feedback invitation', feedbackCount],
+      ['loan', loanCount],
+      ['RTO', rtoCount],
+    ]
+    const dependencies = dependencyCounts
+      .filter(([, count]) => count > 0)
+      .map(([name, count]) => `${count} ${name}${count === 1 ? '' : ' records'}`)
+    if (dependencies.length > 0) {
+      return { success: false, error: `Cannot delete this vehicle because it has related records: ${dependencies.join(', ')}.` }
+    }
+
+    await prisma.$transaction(async tx => {
+      await tx.inventoryPhotos.deleteMany({ where: { fkInventoryId: id } })
+      await tx.inventoryManagement.delete({ where: { inventoryId: id } })
+    })
+
+    await cleanupInventoryPhotoFiles(photos.map(photo => photo.path))
   } catch (err) {
     return { success: false, error: describeError(err) }
   }
@@ -442,11 +576,68 @@ export async function syncInventoryToInquiry(inventoryId: number, input: SyncInv
 function describeError(err: unknown): string {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2002') {
-      return 'This registration number is already active on another vehicle in stock.'
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(',') : String(err.meta?.target ?? '')
+      if (target.includes('registration')) return 'This registration number is already active on another vehicle in stock.'
+      if (target.includes('inventory_number')) return 'The generated inventory number is already in use.'
+      if (target.includes('sku')) return 'The generated SKU is already in use.'
+      return 'A unique value is already in use.'
     }
     if (err.code === 'P2003') {
-      return 'This vehicle has related records (checklist, insurance, loan, RTO, or DSA entries) and cannot be deleted.'
+      return 'This vehicle has related records and cannot be deleted. Review the dependent module records first.'
     }
   }
   return 'Something went wrong saving this record.'
+}
+
+export async function sendBulkInventoryEmail(inventoryIds: number[], input: SendInventoryEmailInput): Promise<ActionResult> {
+  const authorizedUserId = await currentUserId()
+  if (!authorizedUserId) return { success: false, error: 'Not authorized.' }
+
+  const ids = [...new Set(inventoryIds.filter(Number.isInteger))]
+  const recipients = input.recipients.filter(recipient => Number.isInteger(recipient.recipientId))
+  const limits = getInventoryBulkEmailLimits()
+  if (ids.length === 0) return { success: false, error: 'Select at least one vehicle.' }
+  if (ids.length > limits.maxVehicles) return { success: false, error: `Select no more than ${limits.maxVehicles} vehicles for bulk email.` }
+  if (recipients.length === 0) return { success: false, error: 'Add at least one recipient.' }
+  if (recipients.length > limits.maxRecipients) return { success: false, error: `Add no more than ${limits.maxRecipients} recipients for bulk email.` }
+  if (ids.length * recipients.length > limits.maxMessages) return { success: false, error: `This send would create ${ids.length * recipients.length} emails. The limit is ${limits.maxMessages}.` }
+
+  const sentInventoryIds: number[] = []
+  const failedInventoryIds: number[] = []
+  for (const inventoryId of ids) {
+    const result = await sendInventoryEmail(inventoryId, { recipients })
+    if (result.success) sentInventoryIds.push(inventoryId)
+    else failedInventoryIds.push(inventoryId)
+  }
+
+  return {
+    success: sentInventoryIds.length > 0,
+    error: sentInventoryIds.length === 0 ? 'Could not send email for any selected vehicle.' : undefined,
+    message: `${sentInventoryIds.length} vehicle${sentInventoryIds.length === 1 ? '' : 's'} processed.${failedInventoryIds.length > 0 ? ` ${failedInventoryIds.length} failed.` : ''}`,
+    sentInventoryIds,
+    failedInventoryIds,
+  }
+}
+
+export async function getInventoryBulkEmailConfig() {
+  if (!(await currentUserId())) return null
+  return getInventoryBulkEmailLimits()
+}
+
+async function cleanupInventoryPhotoFiles(photoPaths: Array<string | null>) {
+  const uploadRoot = path.join(process.cwd(), 'public', 'uploads', 'inventory')
+  const root = path.resolve(uploadRoot)
+
+  await Promise.all(photoPaths.map(async photoPath => {
+    if (!photoPath?.startsWith('/uploads/inventory')) return
+    const resolved = path.resolve(path.join(process.cwd(), 'public', photoPath.replace(/^\//, '')))
+    if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return
+    try {
+      await unlink(resolved)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('Inventory photo cleanup failed:', resolved, error)
+      }
+    }
+  }))
 }

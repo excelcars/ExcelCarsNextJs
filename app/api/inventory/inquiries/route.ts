@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
-  const where = q
-    ? {
+  const variantId = Number(req.nextUrl.searchParams.get('variantId'))
+  if (!Number.isInteger(variantId) || variantId <= 0) {
+    return NextResponse.json({ error: 'A linked inventory Variant is required.' }, { status: 400 })
+  }
+
+  const where = {
+    AND: [
+      { inquiryCarDetails: { some: { fkVariantId: variantId } } },
+      ...(q ? [{
         OR: [
           { inquiryNo: { contains: q, mode: 'insensitive' as const } },
           { customerNameLegacy: { contains: q, mode: 'insensitive' as const } },
@@ -16,8 +22,9 @@ export async function GET(req: NextRequest) {
           { email: { contains: q, mode: 'insensitive' as const } },
           { customer: { custName: { contains: q, mode: 'insensitive' as const } } },
         ],
-      }
-    : { status: 'FollowUp' }
+      }] : []),
+    ],
+  }
 
   const rows = await prisma.inquiry.findMany({
     where,
@@ -31,7 +38,6 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: { inquiryId: 'desc' },
-    take: q ? 20 : 10,
   })
 
   return NextResponse.json(rows)

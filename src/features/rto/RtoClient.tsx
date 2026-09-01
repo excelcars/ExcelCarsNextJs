@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
 import {
@@ -217,74 +218,6 @@ function exportRtoCsv(rows: RtoRow[], filters: RtoFilters) {
 function vehicleLabel(v: Vehicle) {
   const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
   return `${v.registrationNo ?? v.sku ?? '—'} — ${parts.join(' ')}`
-}
-
-function CatalogTextPicker({
-  label,
-  placeholder,
-  value,
-  onChange,
-  options,
-  error,
-}: {
-  label: string
-  placeholder: string
-  value: string
-  onChange: (value: string) => void
-  options: string[]
-  error?: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', closeOnOutsidePointer)
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
-  }, [open])
-
-  const matches = useMemo(() => {
-    const q = value.trim().toLowerCase()
-    if (!q) return options.slice(0, 15)
-    return options.filter(option => option.toLowerCase().includes(q)).slice(0, 15)
-  }, [options, value])
-
-  return (
-    <div ref={pickerRef} className="relative">
-      <Input
-        label={label}
-        placeholder={placeholder}
-        value={value}
-        onChange={e => { onChange(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-        error={error}
-      />
-      {open && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-          {matches.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
-          ) : matches.map(option => (
-            <button
-              key={option}
-              type="button"
-              onMouseDown={event => {
-                event.preventDefault()
-                onChange(option)
-                setOpen(false)
-              }}
-              className="w-full text-left px-3 py-2 text-sm text-gray-800 hover:bg-gray-50 border-b border-gray-50 last:border-0"
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 }
 
 function emptyForm(): RtoFormInput {
