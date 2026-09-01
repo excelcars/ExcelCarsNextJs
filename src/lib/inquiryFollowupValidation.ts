@@ -1,4 +1,4 @@
-import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
+import { isValidEmail, isValidPhone, isValidYear } from './validation.ts'
 
 type ValidationResult = {
   fieldErrors: Record<string, boolean>
@@ -15,6 +15,8 @@ type InquiryFormLike = {
   mobileno: string
   email: string
   website: string
+  sourceCode: string
+  sourceDetail: string
   budgetOfCustomer: number | null
   dateOfInquiry: string
   visitedDateOfCustomer: string
@@ -27,12 +29,44 @@ type InquiryFormLike = {
 }
 
 type FollowupLogLike = {
+  contactOutcome: string
   status: string
   subStatus: string
+  useOtherSubStatus?: boolean
+  otherSubStatus?: string
   classification: string
   comments: string
   nextFollowUpDate: string
 }
+
+export const FOLLOWUP_CONTACT_OUTCOMES = [
+  'spoke_to_customer',
+  'no_answer',
+  'asked_to_call_back',
+  'number_not_working',
+] as const
+
+export const FOLLOWUP_ALLOWED_STATUSES = ['Open', 'FollowUp', 'Closed'] as const
+
+export const FOLLOWUP_ALLOWED_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
+
+export const FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS = [
+  'Ringing',
+  'Not Intrested',
+  'Busy',
+  'Desired Car Not In Stock',
+  'Not connected',
+  'Already Bought Car',
+  'Visited',
+  'Gave Details',
+  'Sold Car',
+  'Asked to call back',
+  'Negotiation',
+  'Visit scheduled',
+  'Deal done',
+  'Lost',
+  'Unreachable',
+] as const
 
 function buildValidationResult(fieldErrors: Record<string, boolean>, error: string | null): ValidationResult {
   return { fieldErrors, error }
@@ -47,6 +81,10 @@ export function isVisitedSubStatus(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase() === 'visited'
 }
 
+export function resolveFollowupSubStatusInput(input: Pick<FollowupLogLike, 'subStatus' | 'useOtherSubStatus' | 'otherSubStatus'>) {
+  return (input.useOtherSubStatus ? input.otherSubStatus : input.subStatus)?.trim() ?? ''
+}
+
 export function validateInquiryFormInput(input: InquiryFormLike): ValidationResult {
   const fieldErrors: Record<string, boolean> = {}
 
@@ -59,7 +97,7 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
   if (input.email && !isValidEmail(input.email)) {
     fieldErrors.email = true
   }
-  if (!input.website?.trim()) {
+  if (!input.sourceCode?.trim()) {
     fieldErrors.website = true
   }
   if (input.budgetOfCustomer !== null && input.budgetOfCustomer <= 0) {
@@ -120,11 +158,23 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
 
 export function validateFollowupLogInput(input: FollowupLogLike, today = new Date().toISOString().slice(0, 10)): ValidationResult {
   const fieldErrors: Record<string, boolean> = {}
+  const contactOutcome = input.contactOutcome.trim()
   const status = input.status.trim()
+  const classification = input.classification.trim()
+  const subStatus = resolveFollowupSubStatusInput(input)
   const nextFollowUpDate = input.nextFollowUpDate.trim()
 
-  if (!status) {
+  if (!contactOutcome || !FOLLOWUP_CONTACT_OUTCOMES.includes(contactOutcome as (typeof FOLLOWUP_CONTACT_OUTCOMES)[number])) {
+    fieldErrors.contactOutcome = true
+  }
+  if (!status || !FOLLOWUP_ALLOWED_STATUSES.includes(status as (typeof FOLLOWUP_ALLOWED_STATUSES)[number])) {
     fieldErrors.status = true
+  }
+  if (!classification || !FOLLOWUP_ALLOWED_CLASSIFICATIONS.includes(classification as (typeof FOLLOWUP_ALLOWED_CLASSIFICATIONS)[number])) {
+    fieldErrors.classification = true
+  }
+  if (input.useOtherSubStatus && !subStatus) {
+    fieldErrors.otherSubStatus = true
   }
   if (!input.comments?.trim()) {
     fieldErrors.comments = true
@@ -142,6 +192,15 @@ export function validateFollowupLogInput(input: FollowupLogLike, today = new Dat
 
   if (fieldErrors.status) {
     return buildValidationResult(fieldErrors, 'Status is required.')
+  }
+  if (fieldErrors.classification) {
+    return buildValidationResult(fieldErrors, 'Classification is required.')
+  }
+  if (fieldErrors.contactOutcome) {
+    return buildValidationResult(fieldErrors, 'Select whether the customer was reached before saving follow-up.')
+  }
+  if (fieldErrors.otherSubStatus) {
+    return buildValidationResult(fieldErrors, 'Enter the custom sub-status when OTHER is selected.')
   }
   if (fieldErrors.comments) {
     return buildValidationResult(fieldErrors, 'Remark is required before saving follow-up.')

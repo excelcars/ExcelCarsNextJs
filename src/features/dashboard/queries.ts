@@ -53,14 +53,20 @@ export async function getDashboardStats() {
 }
 
 export async function getLeadSourceBreakdown() {
-  const rows = await prisma.inquiry.groupBy({
-    by: ['website'],
-    _count: { website: true },
-    where: { website: { not: null } },
-    orderBy: { _count: { website: 'desc' } },
+  const [rows] = await Promise.all([
+    prisma.inquirySourceMaster.findMany({
+    where: { inquiries: { some: {} } },
+    select: {
+      displayName: true,
+      _count: { select: { inquiries: true } },
+    },
+    orderBy: { inquiries: { _count: 'desc' } },
     take: 6,
-  })
-  return rows.map((r) => ({ name: r.website ?? 'Unknown', value: r._count.website }))
+    }),
+  ])
+  return [
+    ...rows.map((row) => ({ name: row.displayName, value: row._count.inquiries })),
+  ].sort((a, b) => b.value - a.value).slice(0, 6)
 }
 
 export async function getPendingFollowups(limit = 8) {

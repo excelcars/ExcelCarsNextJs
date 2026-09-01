@@ -1,5 +1,5 @@
 # SSOT - Inquiry Management Improvements
-## Status: Mixed completion tracker for current Next.js module, reviewed on 2026-08-28
+## Status: Completion tracker for current Next.js module, reviewed against legacy on 2026-09-01
 
 **Module:** `inquiry`  
 **Project:** `ExcelCarsNextJs`  
@@ -24,27 +24,27 @@ Done:
 - explicit `Save Only` vs `Save & Send Matching`
 - persistent inquiry-to-inventory links with currently used states `matched` and `emailed`
 - inquiry detail now shows follow-up timeline and linked inventory history
+- durable inquiry email attempt history in inquiry detail
 - public vehicle email links work without dashboard login
 - inquiry listing layout moved closer to legacy grouped columns
 - inquiry export moved closer to legacy row format
 - DB-level unique protection for `inquiry_no`
+- inventory workflow states are stored only for vehicles that exist in inventory
+- inquiry lifecycle is normalized to `Open`, `FollowUp`, and `Closed`
+- durable inquiry audit/event logging is available
+- controlled Source Master, legacy source mapping, exact source filters, and an unmapped legacy bucket are available
+- final legacy Inquiry and Follow-up verification pass completed on 2026-09-01
 
 Partial:
 - inventory matching workspace is present but not yet rich enough for operator decisions
-- inquiry detail now shows tracked inventory email history, but generic email outcomes and broader workflow states are still incomplete
-- source handling has suggestions and preferred defaults, but not strict controlled taxonomy
-- docs are now being updated to current truth, but final closure still needs a last full pass after remaining work
+- automated coverage now protects validation, source-master rules, public email links, and text vehicle filters; database-backed workflow tests are still needed
+- docs are aligned to this implementation pass; dashboard reporting closure remains a later phase
 
 Pending:
-- full email outcome history in inquiry detail
-- richer inventory shortlist / rejection / conversion states
-- lifecycle semantics review
-- audit/event logging
-- follow-up-first quick workspace
 - reporting outputs
 - final email media strategy
-- automated tests
-- final legacy closure pass
+- database-backed automated tests for create/update/email/link persistence
+- optional Source Master administration UI
 
 ## 3. Improvement Themes
 The current module is functional, but several structural improvements still remain. The main themes are:
@@ -411,31 +411,40 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 
 ### Step 7 - Add persistent inquiry-to-inventory links
 - legacy `.NET` system did not persist durable inquiry-to-inventory links; inventory search and customer email were transient workflow actions only
-- status: partial
+- status: mostly done
 - table/model exists and is in use
 - `matched` and `emailed` are persisted
-- richer lifecycle states are still pending
+- inventory-backed lifecycle states are now also persisted:
+  - `shortlisted`
+  - `visited`
+  - `booked`
+  - `rejected`
+- this workflow is intentionally limited to vehicles that actually exist in inventory
+- non-inventory partner/dealer handling stays in follow-up and remarks
 - treat this as a deliberate Next.js improvement beyond parity, not a legacy restoration item
 
 ### Step 8 - Record email and inventory history in inquiry detail
-- status: partial
+- status: mostly done
 - linked inventory history is shown
 - tracked inventory email history is now shown in inquiry detail
-- generic inquiry-email history and broader outcome coverage are still pending
+- generic inquiry-email attempts are now stored and shown durably in inquiry detail
+- inventory workflow states are stored for actual in-stock inventory only
+- partner/dealer sourcing remains a remark/follow-up process by business decision and does not create an inventory link
 
 ### Step 9 - Improve inventory matching workspace
 - status: partial
 - basic match results and availability are visible
-- richer operator state and explanation are still pending
+- richer operator state for already linked inventory is now visible in inquiry detail
+- match explanation and deeper workspace cues are still pending
 
 ### Step 10 - Improve inquiry lifecycle semantics
-- status: pending
-- review current `status`, `subStatus`, and `classification`
-- define final lifecycle model for `Open`, `FollowUp`, `Closed` if adopted
-- map sub-status and follow-up actions consistently
+- status: done
+- lifecycle is `Open`, `FollowUp`, and `Closed`
+- follow-up logging writes the selected next date only for `FollowUp` and clears it for `Closed`
+- classification and sub-status remain supporting information, not a second lifecycle model
 
 ### Step 11 - Add audit and event logging
-- status: pending
+- status: mostly done
 - log inquiry created
 - log inquiry updated
 - log inquiry deleted
@@ -443,11 +452,14 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - log follow-up recorded
 - log inventory linked
 - log email sent
+- inquiry detail now shows a durable event log backed by `inquiry_activity_log`
+- remaining gap is mainly broader reporting/analytics use of this event data, not missing storage
 
 ### Step 12 - Normalize source / lead channel governance
-- status: partial
-- preferred defaults and live suggestions exist
-- strict canonical taxonomy is still pending
+- status: done for the approved master-data baseline
+- `inquiry_source_master` provides stable source codes, labels, categories, active state, and detail requirements
+- `legacy_inquiry_source_mapping` maps historic raw values; historic blank Website rows are assigned to `Unknown`, distinct from user-selected `Other`
+- a restricted source-master administration screen is optional future work
 
 ### Step 13 - Build follow-up-first workspace improvements
 - status: pending
@@ -472,22 +484,17 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - avoid oversized or unbounded email attachments
 
 ### Step 16 - Add automated coverage
-- status: pending
-- test multi-vehicle create/update/remove
-- test follow-up history append behavior
-- test duplicate handling with normalized mobile/customer
-- test customer snapshot consistency
-- test inquiry-inventory link persistence
-- test explicit save-only vs save-and-send flows
-- test inquiry detail history rendering
+- status: partial
+- current Node tests cover inquiry/follow-up validation, `OTHER` sub-status behavior, Source Master invariants, public email links, and legacy text-vehicle filter construction
+- remaining database-backed tests: multi-vehicle create/update/remove, duplicate detection, customer upsert, history append, inventory-link persistence, and save/send email flows
 
 ### Step 17 - Update SSOT during each completed slice
-- status: in progress
+- status: done for this implementation pass
 - update `D:\projects\ExcelCarsNextJs\docs\module\ssot\inquirymanagement.md` whenever current behavior changes
 - keep this improvement document marked against actual completion state
 
 ### Step 18 - Final legacy business-logic verification
-- status: pending
+- status: done on 2026-09-01
 - re-read `D:\projects\ExcelCars\ExcelCars\Controllers\AdminController.cs`
 - re-read `D:\projects\ExcelCars\ExcelCars\Views\Admin\InquiryManagement.cshtml`
 - re-read `D:\projects\ExcelCars\ApModel\Model\Inquiry\Inquiry.cs`
@@ -497,6 +504,29 @@ Use this as the one-by-one delivery checklist for completing Inquiry Management.
 - intentionally improved
 - intentionally excluded and documented
 - only close Inquiry Management implementation after this final verification pass
+
+### Final Verification Result - 2026-09-01
+Reviewed legacy `AdminController`, `InquiryManagement.cshtml`, `Inquiry.cs`, `Followup_Management.cs`, and `Follow_Up_Management.cshtml` against the current Next.js flows.
+
+Covered or intentionally improved:
+- legacy inquiry number generation is protected by a database unique constraint and application retry behavior
+- legacy one-to-many car details are preserved in the inquiry editor, listing, follow-up queue, and exports
+- legacy customer lookup/upsert is replaced by controlled existing-customer linking, normalized mobile matching, and safe auto-create
+- legacy duplicate mobile check is improved to a warning that also considers linked customer and open inquiry overlap
+- legacy follow-up date/history behavior is normalized across inquiry and follow-up writes
+- legacy stock matching and email actions are retained, with durable inventory links and email/event history
+- legacy source text values are normalized through Source Master while historic blanks remain auditable
+- legacy Make/Model/Variant text filtering is available alongside normalized catalog dropdown filters
+
+Intentional differences:
+- `Save Only` does not send email; `Save & Send Matching` makes that side effect explicit
+- non-inventory partner/dealer sourcing is kept in follow-up remarks, not represented as an inventory link
+- the queue is paginated for performance while export returns all matching rows
+- current validation is stricter than legacy for required contact outcome, remark, and valid next follow-up date
+
+Deferred to dashboard/reporting work:
+- legacy dashboard drill-down presets and Own-count entry points
+- aggregate conversion, aging, source, and engagement reporting
 
 ## 11. Non-goals For The First Improvement Pass
 - full CRM assignment engine

@@ -1,12 +1,15 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
-import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
+import { buildInquiryOwnershipWhere, type InquiryOwnershipMode } from '@/lib/access/inquiryOwnership'
+import { buildVehicleTextFilter } from './vehicleFilters'
 
 export const FOLLOWUP_PAGE_SIZE = 25
 
 export interface FollowupFilters {
   search: string
   classification: string
+  contactOutcome: string
+  customerName: string
   inquiryDateFrom: string
   inquiryDateTo: string
   followUpDateFrom: string
@@ -21,8 +24,12 @@ export interface FollowupFilters {
   makeId: string
   modelId: string
   variantId: string
+  legacyMake: string
+  legacyModel: string
+  legacyVariant: string
   page: number
   restrictToUserId?: number | null
+  ownershipMode?: InquiryOwnershipMode
 }
 
 const startOfDay = (value: string) => new Date(`${value}T00:00:00.000`)
@@ -34,6 +41,15 @@ function followupListSelect() {
     inquiryNo: true,
     dateOfInquiry: true,
     website: true,
+    sourceId: true,
+    sourceDetail: true,
+    source: {
+      select: {
+        code: true,
+        displayName: true,
+        requiresDetail: true,
+      },
+    },
     customerId: true,
     customerNameLegacy: true,
     mobileno: true,
@@ -99,6 +115,7 @@ function followupExportSelect() {
         pkFollowupId: true,
         createdDt: true,
         followupDate: true,
+        contactOutcome: true,
         followupStatus: true,
         followupSubStatus: true,
         followupClassification: true,
@@ -111,6 +128,8 @@ function followupExportSelect() {
 function buildFollowupWhere({
   search,
   classification,
+  contactOutcome,
+  customerName,
   inquiryDateFrom,
   inquiryDateTo,
   followUpDateFrom,
@@ -125,7 +144,11 @@ function buildFollowupWhere({
   makeId,
   modelId,
   variantId,
+  legacyMake,
+  legacyModel,
+  legacyVariant,
   restrictToUserId,
+  ownershipMode = 'created-or-assigned',
 }: Omit<FollowupFilters, 'page'>) {
   const q = search.trim()
   const andConditions: Prisma.InquiryWhereInput[] = []
@@ -159,14 +182,28 @@ function buildFollowupWhere({
     })
   }
 
+  const vehicleTextFilter = buildVehicleTextFilter({ legacyMake, legacyModel, legacyVariant })
+  if (vehicleTextFilter) {
+    andConditions.push(vehicleTextFilter as Prisma.InquiryWhereInput)
+  }
+
   return {
     ...(andConditions.length || effectiveOwnershipUserId
-      ? { AND: [...andConditions, ...(effectiveOwnershipUserId ? [buildInquiryOwnershipWhere(effectiveOwnershipUserId)] : [])] }
+      ? { AND: [...andConditions, ...(effectiveOwnershipUserId ? [buildInquiryOwnershipWhere(effectiveOwnershipUserId, ownershipMode)] : [])] }
       : {}),
     ...(status !== 'All' ? { status } : {}),
     ...(classification !== 'All' ? { classification } : {}),
+    ...(contactOutcome ? { followupInquiry: { some: { contactOutcome } } } : {}),
+    ...(customerName
+      ? {
+          OR: [
+            { customerNameLegacy: { contains: customerName, mode: 'insensitive' } },
+            { customer: { custName: { contains: customerName, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
     ...(subStatus ? { subStatus: { contains: subStatus, mode: 'insensitive' } } : {}),
-    ...(website ? { website: { contains: website, mode: 'insensitive' } } : {}),
+    ...(website ? { source: { code: website } } : {}),
     ...(customerMobile ? { mobileno: { contains: customerMobile, mode: 'insensitive' } } : {}),
     ...((inquiryDateFrom || inquiryDateTo)
       ? {
@@ -200,6 +237,7 @@ function buildFollowupWhere({
             { inquiryNo: { contains: q, mode: 'insensitive' } },
             { email: { contains: q, mode: 'insensitive' } },
             { website: { contains: q, mode: 'insensitive' } },
+            { source: { displayName: { contains: q, mode: 'insensitive' } } },
             { customer: { custName: { contains: q, mode: 'insensitive' } } },
             {
               inquiryCarDetails: {
@@ -225,6 +263,8 @@ function buildFollowupWhere({
 export async function listFollowupQueue({
   search,
   classification,
+  contactOutcome,
+  customerName,
   inquiryDateFrom,
   inquiryDateTo,
   followUpDateFrom,
@@ -239,12 +279,18 @@ export async function listFollowupQueue({
   makeId,
   modelId,
   variantId,
+  legacyMake,
+  legacyModel,
+  legacyVariant,
   page,
   restrictToUserId = null,
+  ownershipMode = 'created-or-assigned',
 }: FollowupFilters) {
   const where = buildFollowupWhere({
     search,
     classification,
+    contactOutcome,
+    customerName,
     inquiryDateFrom,
     inquiryDateTo,
     followUpDateFrom,
@@ -259,7 +305,11 @@ export async function listFollowupQueue({
     makeId,
     modelId,
     variantId,
+    legacyMake,
+    legacyModel,
+    legacyVariant,
     restrictToUserId,
+    ownershipMode,
   })
   const safePage = Math.max(1, page || 1)
   const skip = (safePage - 1) * FOLLOWUP_PAGE_SIZE
@@ -292,11 +342,16 @@ export async function listFollowupsForExport(filters: Omit<FollowupFilters, 'pag
   })
 }
 
-export async function getRecentFollowups(inquiryId: number, limit?: number, restrictToUserId?: number | null) {
+export async function getRecentFollowups(
+  inquiryId: number,
+  limit?: number,
+  restrictToUserId?: number | null,
+  ownershipMode: InquiryOwnershipMode = 'created-or-assigned',
+) {
   return prisma.followupInquiry.findMany({
     where: {
       fkInquiryId: inquiryId,
-      ...(restrictToUserId ? { inquiry: buildInquiryOwnershipWhere(restrictToUserId) } : {}),
+      ...(restrictToUserId ? { inquiry: buildInquiryOwnershipWhere(restrictToUserId, ownershipMode) } : {}),
     },
     orderBy: { createdDt: 'desc' },
     ...(typeof limit === 'number' ? { take: limit } : {}),

@@ -1,4 +1,5 @@
 import { getMakes, getModelsByMake, getVariantsByModel } from '@/features/inventory/queries'
+import { getInquirySources } from '@/features/inquiry/queries'
 import { getUsersForFollowupFilter, listFollowupQueue } from '@/features/followup/queries'
 import { FollowupClient } from '@/features/followup/FollowupClient'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
@@ -12,6 +13,8 @@ export default async function FollowupPage({
     search?: string
     classification?: string
     status?: string
+    contactOutcome?: string
+    customerName?: string
     subStatus?: string
     website?: string
     customerMobile?: string
@@ -19,6 +22,9 @@ export default async function FollowupPage({
     makeId?: string
     modelId?: string
     variantId?: string
+    legacyMake?: string
+    legacyModel?: string
+    legacyVariant?: string
     page?: string
     inquiryDateFrom?: string
     inquiryDateTo?: string
@@ -33,6 +39,8 @@ export default async function FollowupPage({
   const search = sp.search ?? ''
   const classification = sp.classification ?? 'All'
   const status = sp.status ?? 'FollowUp'
+  const contactOutcome = sp.contactOutcome ?? ''
+  const customerName = sp.customerName ?? ''
   const subStatus = sp.subStatus ?? ''
   const website = sp.website ?? ''
   const customerMobile = sp.customerMobile ?? ''
@@ -40,6 +48,9 @@ export default async function FollowupPage({
   const makeId = sp.makeId ?? ''
   const modelId = sp.modelId ?? ''
   const variantId = sp.variantId ?? ''
+  const legacyMake = sp.legacyMake ?? ''
+  const legacyModel = sp.legacyModel ?? ''
+  const legacyVariant = sp.legacyVariant ?? ''
   const page = Math.max(1, Number(sp.page) || 1)
   const inquiryDateFrom = sp.inquiryDateFrom ?? ''
   const inquiryDateTo = sp.inquiryDateTo ?? ''
@@ -52,11 +63,13 @@ export default async function FollowupPage({
   const parsedMakeId = Number(makeId)
   const parsedModelId = Number(modelId)
 
-  const [rows, makes, models, variants, users] = await Promise.all([
+  const [rows, makes, models, variants, users, sourceOptions] = await Promise.all([
     listFollowupQueue({
       search,
       classification,
       status,
+      contactOutcome,
+      customerName,
       subStatus,
       website,
       customerMobile,
@@ -64,6 +77,9 @@ export default async function FollowupPage({
       makeId,
       modelId,
       variantId,
+      legacyMake,
+      legacyModel,
+      legacyVariant,
       page,
       inquiryDateFrom,
       inquiryDateTo,
@@ -72,11 +88,13 @@ export default async function FollowupPage({
       visitedDateFrom,
       visitedDateTo,
       restrictToUserId: ownershipScope.restrictToUserId,
+      ownershipMode: ownershipScope.ownershipMode,
     }),
     getMakes(),
     Number.isFinite(parsedMakeId) && parsedMakeId > 0 ? getModelsByMake(parsedMakeId) : Promise.resolve([]),
     Number.isFinite(parsedModelId) && parsedModelId > 0 ? getVariantsByModel(parsedModelId) : Promise.resolve([]),
     getUsersForFollowupFilter(),
+    getInquirySources(),
   ])
 
   const data = rows.rows.map((r) => ({
@@ -90,8 +108,11 @@ export default async function FollowupPage({
       search={search}
       classification={classification}
       status={status}
+      contactOutcome={contactOutcome}
+      customerName={customerName}
       subStatus={subStatus}
       website={website}
+      sourceOptions={sourceOptions}
       customerMobile={customerMobile}
       users={users}
       userId={userId}
@@ -101,6 +122,9 @@ export default async function FollowupPage({
       makeId={makeId}
       modelId={modelId}
       variantId={variantId}
+      legacyMake={legacyMake}
+      legacyModel={legacyModel}
+      legacyVariant={legacyVariant}
       total={rows.total}
       page={rows.page}
       pageCount={rows.pageCount}

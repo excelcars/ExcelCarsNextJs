@@ -73,9 +73,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Own-count and self-only filtering  
 **Existing System Behavior:** Legacy supports `Type_of_Count = Own`, and role id `4` users are always restricted to creator-owned inquiries.  
-**Current Next.js Status:** The queue has an optional user filter dropdown, but no automatic self-only restriction and no special “Own” workflow.  
-**Missing Functionality or Logic:** Role-based self-only visibility is not enforced. Dashboard “Own” behavior is absent.  
-**Required Improvement:** Implement equivalent role-aware restrictions and/or explicit own-filter entry links if those rules are still required.  
+**Current Next.js Status:** Partially fixed. Restricted follow-up users now get creator-only visibility in `/followup`, matching the legacy queue rule more closely. Other users can still view all rows or narrow manually with the user filter.  
+**Missing Functionality or Logic:** Dedicated dashboard `Own` drill-down entry links are still not implemented.  
+**Required Improvement:** Keep the creator-only restriction for restricted follow-up users and add explicit dashboard `Own` presets later if required.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ApModel\Model\Followup_Management\Followup_Management.cs`, `D:\projects\ExcelCars\ExcelCars\Views\Home\DashBoard.cshtml`  
 **Priority / Impact:** High
 
@@ -83,9 +83,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Module-specific authorization  
 **Existing System Behavior:** Legacy page actions use `AuthorizeFilter(DatabaseFunctionname = "FollowUp_Management")`.  
-**Current Next.js Status:** Current route/API protection only checks authenticated session.  
-**Missing Functionality or Logic:** No follow-up-specific permission gate comparable to the legacy feature-level authorization.  
-**Required Improvement:** Add a module-level permission model if the application still requires function-specific access control beyond login.  
+**Current Next.js Status:** Covered. `/followup` route access, export API, and history API already enforce function-based access through `canCurrentUserAccessRoute('/followup')` and `getAuthorizedUserIdForRoute('/followup')`, which is the current RBAC equivalent of legacy function-level authorization.  
+**Missing Functionality or Logic:** None for the current access-control baseline.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Controllers\AdminController.cs`  
 **Priority / Impact:** High
 
@@ -93,9 +93,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Full inquiry car-detail visibility  
 **Existing System Behavior:** Legacy queue renders every linked car of interest in the row.  
-**Current Next.js Status:** Current queue and export summarize only one selected `inquiryCarDetails` row.  
-**Missing Functionality or Logic:** Additional car-interest rows are hidden from the main follow-up screen and omitted from export.  
-**Required Improvement:** Show all vehicle-interest rows, or add an explicit multi-car drill-in that preserves equivalent visibility.  
+**Current Next.js Status:** Covered. Current queue renders all linked `inquiryCarDetails` blocks inline, and export expands per inquiry-car row.  
+**Missing Functionality or Logic:** None for core multi-car visibility in the queue/export.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Views\Admin\Follow_Up_Management.cshtml`, `D:\projects\ExcelCarsNextJs\src\features\followup\queries.ts`, `D:\projects\ExcelCarsNextJs\src\features\followup\FollowupClient.tsx`  
 **Priority / Impact:** High
 
@@ -103,9 +103,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Export of previous follow-up details  
 **Existing System Behavior:** Legacy export includes both latest inquiry state and prior follow-up history fields, producing one row per inquiry/car/history combination.  
-**Current Next.js Status:** Current export is one row per inquiry and does not include previous follow-up date, previous status, previous sub-status, previous comments, or previous classification.  
-**Missing Functionality or Logic:** Follow-up history context is absent from exported data.  
-**Required Improvement:** Extend export to include history detail or agree on a simplified replacement export format.  
+**Current Next.js Status:** Covered. Current export includes previous follow-up date, status, sub-status, comments, and classification, and expands rows across inquiry-car and follow-up-history combinations.  
+**Missing Functionality or Logic:** None for the approved export history coverage baseline.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Controllers\AdminController.cs`, `D:\projects\ExcelCars\ApModel\Model\Followup_Management\Followup_Management.cs`, `D:\projects\ExcelCarsNextJs\src\features\followup\FollowupClient.tsx`  
 **Priority / Impact:** High
 
@@ -113,9 +113,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Meaning of `followupInquiry.followupDate`  
 **Existing System Behavior:** Legacy follow-up history stores the chosen next follow-up date in `Followup_Inquiry.Followup_Date`.  
-**Current Next.js Status:** `/followup` modal writes `followupInquiry.followupDate = now`, while inquiry create/update writes the selected scheduled follow-up date.  
-**Missing Functionality or Logic:** The same history table now carries two different meanings depending on the write path.  
-**Required Improvement:** Normalize the history contract so all writers store the same business meaning, then update all readers and reports consistently.  
+**Current Next.js Status:** Fixed. `/followup` and inquiry create/update now both store the selected scheduled follow-up date when status is `FollowUp`, and `null` when status is `Closed`.  
+**Missing Functionality or Logic:** None for the core history-date contract. Readers and future reports should continue to rely on this normalized meaning.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ApModel\Model\Followup_Management\Followup_Management.cs`, `D:\projects\ExcelCarsNextJs\src\features\followup\actions.ts`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\actions.ts`  
 **Priority / Impact:** High
 
@@ -123,9 +123,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Consistent follow-up validation  
 **Existing System Behavior:** Legacy effectively allowed sparse saves except for `OTHER` sub-status text; it did not strongly enforce comments or future dates.  
-**Current Next.js Status:** Client requires comments and future-or-today follow-up dates, but server does not enforce those same rules.  
-**Missing Functionality or Logic:** Client/server validation are inconsistent; direct server action calls can bypass client requirements.  
-**Required Improvement:** Decide the approved validation policy and enforce it identically on both client and server.  
+**Current Next.js Status:** Fixed for the approved current contract. Client and server both enforce reached outcome, allowed status, allowed classification, required remark, and a required today-or-future next follow-up date when status is `FollowUp`.  
+**Missing Functionality or Logic:** None for the current approved validation contract. This remains stricter than legacy by design unless later changed.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Views\Admin\Follow_Up_Management.cshtml`, `D:\projects\ExcelCarsNextJs\src\features\followup\FollowupClient.tsx`, `D:\projects\ExcelCarsNextJs\src\features\followup\actions.ts`  
 **Priority / Impact:** Medium-High
 
@@ -133,9 +133,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Explicit `OTHER` sub-status flow  
 **Existing System Behavior:** Legacy queue provides an `OTHER` option and a mandatory text input for the real sub-status value.  
-**Current Next.js Status:** Current modal only offers a free-text input with datalist suggestions.  
-**Missing Functionality or Logic:** There is no explicit `OTHER` state or dedicated validation path matching legacy behavior.  
-**Required Improvement:** If legacy users depend on the explicit `OTHER` workflow, add it or confirm that unrestricted free text is the approved replacement.  
+**Current Next.js Status:** Covered. Current modal now provides a standard sub-status picker plus explicit `OTHER`, and requires custom text when `OTHER` is selected. The stored value remains the real entered sub-status text.  
+**Missing Functionality or Logic:** None for the approved legacy-style `OTHER` workflow.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Views\Admin\Follow_Up_Management.cshtml`  
 **Priority / Impact:** Medium
 
@@ -143,19 +143,19 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Dedicated customer-name search field  
 **Existing System Behavior:** Legacy has a separate customer name input with autocomplete.  
-**Current Next.js Status:** Current module only supports a general free-text search box.  
-**Missing Functionality or Logic:** No dedicated customer-name field and no autocomplete-assisted customer-name search.  
-**Required Improvement:** Add a distinct customer-name filter if legacy operator workflow still depends on it.  
+**Current Next.js Status:** Partially fixed. Current module now includes a dedicated customer-name filter, but it is a plain text filter rather than autocomplete-assisted legacy search.  
+**Missing Functionality or Logic:** Autocomplete-assisted customer-name picking is still absent.  
+**Required Improvement:** Keep the dedicated filter and add autocomplete later only if operators still rely on it.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Views\Admin\Follow_Up_Management.cshtml`  
 **Priority / Impact:** Medium
 
-## 10. Source / Website Autocomplete
+## 10. Source / Website Governance
 
-**Feature / Business Logic Name:** Website/source autocomplete  
+**Feature / Business Logic Name:** Controlled website/source taxonomy  
 **Existing System Behavior:** Legacy website filter uses an autocomplete endpoint and exact matching.  
-**Current Next.js Status:** Current website filter is a free-text contains filter.  
-**Missing Functionality or Logic:** Suggestive website picking and exact website matching semantics are gone.  
-**Required Improvement:** Restore suggestion support and decide whether exact or contains matching is the intended business rule.  
+**Current Next.js Status:** Complete. Next.js now uses `inquiry_source_master` with stable codes, a legacy mapping table, exact code filtering, and assigns historic blank Website values to `Unknown`.  
+**Missing Functionality or Logic:** No source-management administration screen exists yet; master rows are seeded from the approved workbook.  
+**Required Improvement:** Add a restricted source-master administration screen only when business users need to add, disable, or reorder sources themselves.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ExcelCars\Views\Admin\Follow_Up_Management.cshtml`, `D:\projects\ExcelCars\ApModel\Model\Followup_Management\Followup_Management.cs`  
 **Priority / Impact:** Medium
 
@@ -163,9 +163,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Free-text make/model/variant filtering  
 **Existing System Behavior:** Legacy filters vehicle text exactly through autocomplete-backed text inputs against stored legacy strings.  
-**Current Next.js Status:** Current module filters only through normalized make/model/variant ids.  
-**Missing Functionality or Logic:** Free-text vehicle matching against legacy text values is not exposed. Inquiries with incomplete or non-normalized vehicle links may be harder to find.  
-**Required Improvement:** Add fallback text-based vehicle filters or fully backfill/normalize all inquiry car-detail records and accept the new contract.  
+**Current Next.js Status:** Complete. Next.js provides independent Make, Model, and Variant text filters alongside normalized dropdowns. Each text criterion matches historic text fields and normalized catalog values on the same inquiry-car row.  
+**Missing Functionality or Logic:** Legacy autocomplete assistance is intentionally not required for the current baseline; typing directly is supported.  
+**Required Improvement:** Completed for the approved search baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ApModel\Model\Followup_Management\Followup_Management.cs`, `D:\projects\ExcelCars\ExcelCars\Views\Admin\Follow_Up_Management.cshtml`, `D:\projects\ExcelCarsNextJs\src\features\followup\queries.ts`  
 **Priority / Impact:** Medium-High
 
@@ -183,9 +183,9 @@ Design and workflow implication:
 
 **Feature / Business Logic Name:** Complete follow-up history visibility  
 **Existing System Behavior:** Legacy history popup loads all follow-up rows for the inquiry.  
-**Current Next.js Status:** Current API returns only the most recent five entries.  
-**Missing Functionality or Logic:** Longer-running inquiries do not expose complete follow-up history from the follow-up module.  
-**Required Improvement:** Add full-history viewing or pagination if complete historical visibility is still required operationally.  
+**Current Next.js Status:** Covered. Quick log modal still loads recent history for speed, and the dedicated follow-up history view can load all entries for the inquiry.  
+**Missing Functionality or Logic:** None for full-history visibility in the current modal/view flow.  
+**Required Improvement:** Completed for the current implementation baseline.  
 **Relevant Existing Code Location:** `D:\projects\ExcelCars\ApModel\Model\Followup_Management\Followup_Management.cs`, `D:\projects\ExcelCarsNextJs\src\features\followup\queries.ts`  
 **Priority / Impact:** Medium
 
