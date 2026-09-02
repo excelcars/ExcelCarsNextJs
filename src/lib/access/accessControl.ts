@@ -11,6 +11,9 @@ export interface AuthorizedActor {
 export interface CurrentUserAccessProfile {
   userId: number
   roleId: number
+  displayName: string | null
+  userName: string | null
+  roleName: string | null
   grantedFunctionNames: string[]
 }
 
@@ -21,7 +24,7 @@ export async function getCurrentUserAccessProfile(): Promise<CurrentUserAccessPr
 
   const user = await prisma.userTable.findUnique({
     where: { userId: sessionUserId },
-    select: { userId: true, roleId: true, status: true },
+    select: { userId: true, roleId: true, status: true, displayName: true, userName: true, roleName: true },
   })
 
   if (!user || user.status !== 'Active' || user.roleId == null) return null
@@ -40,6 +43,9 @@ export async function getCurrentUserAccessProfile(): Promise<CurrentUserAccessPr
   return {
     userId: user.userId,
     roleId: user.roleId,
+    displayName: user.displayName,
+    userName: user.userName,
+    roleName: user.roleName,
     grantedFunctionNames: [...new Set(grantedFunctionNames)],
   }
 }
