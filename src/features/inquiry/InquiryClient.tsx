@@ -3,15 +3,29 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Download, Loader2, Eye, UserPlus } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
 import { assignInquiry, createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
 import { isValidYear } from '@/lib/validation'
 import { isFollowupStatus, isVisitedSubStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { formatInquiryInventoryWorkflowLabel } from './workflow'
 import type { InquirySourceOption } from './sourceMaster'
+import { InquiryFilters } from './InquiryFilters'
+import { InquiryRowActions } from './InquiryRowActions'
+import { InquiryTable } from './InquiryTable'
+import { InquiryTableRows } from './InquiryTableRows'
+import { AssignInquiryModal } from './AssignInquiryModal'
+import { InquiryViewModal } from './InquiryViewModal'
+import { EmailInquirySummary } from './EmailInquirySummary'
+import { EmailInventoryState } from './EmailInventoryState'
+import { InquiryFormModal } from './InquiryFormModal'
+import { EmailVehicleModal } from './EmailVehicleModal'
+import { ListPagination } from '@/components/ListPagination'
+import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface CarMakeMaster { pkMakeId: number; make: string | null }
@@ -599,6 +613,7 @@ export function InquiryClient({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [searchInput, setSearchInput] = useState(search)
+  const debouncedSearchInput = useDebouncedValue(searchInput, LIST_FILTER_DEBOUNCE_MS)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [form, setForm] = useState<InquiryFormInput>(emptyForm())
   const [savedFormSnapshot, setSavedFormSnapshot] = useState<string>(JSON.stringify(emptyForm()))
@@ -852,7 +867,6 @@ export function InquiryClient({
     ? 'No inquiries match the current filters.'
     : 'No inquiries found yet.'
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewRequestRef = useRef(0)
   const editRequestRef = useRef(0)
   const previousInquiryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1096,12 +1110,10 @@ export function InquiryClient({
   }, [makeId, modelId])
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (searchInput === search) return
-    debounceRef.current = setTimeout(() => pushQuery({ search: searchInput }), 400)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    if (debouncedSearchInput === search) return
+    pushQuery({ search: debouncedSearchInput })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput])
+  }, [debouncedSearchInput])
 
   useEffect(() => {
     if (modal && visitedSelected && !form.visitedDateOfCustomer) {
@@ -1458,73 +1470,38 @@ export function InquiryClient({
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
 
-      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-gray-900">Filters</div>
-            <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600">Search</label>
-            <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, source, vehicle..." disabled={isRoutePending} />
-          </div>
-          <Select label="Source" value={source} onChange={e => pushQuery({ source: e.target.value })} disabled={isRoutePending}>
-          <option value="All">All Sources</option>
-          {sourceOptions.map(item => <option key={item.code} value={item.code}>{item.displayName}</option>)}
-          </Select>
-          <Select label="Sub-status" value={subStatus} onChange={e => pushQuery({ subStatus: e.target.value })} disabled={isRoutePending}>
-          <option value="All">All Sub-statuses</option>
-          {subStatusSuggestions.map(item => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <Select label="Make" value={makeId} onChange={e => pushQuery({ makeId: e.target.value, modelId: '', variantId: '' })} disabled={isRoutePending}>
-          <option value="">All Makes</option>
-          {makes.map(item => <option key={item.pkMakeId} value={String(item.pkMakeId)}>{item.make ?? '—'}</option>)}
-          </Select>
-          <Select label="Model" value={modelId} onChange={e => pushQuery({ modelId: e.target.value, variantId: '' })} disabled={isRoutePending || !makeId}>
-          <option value="">All Models</option>
-          {filterModels.map(item => <option key={item.pkModelId} value={String(item.pkModelId)}>{item.model ?? '—'}</option>)}
-          </Select>
-          <Select label="Variant" value={variantId} onChange={e => pushQuery({ variantId: e.target.value })} disabled={isRoutePending || !modelId}>
-          <option value="">All Variants</option>
-          {filterVariants.map(item => <option key={item.pkVariantId} value={String(item.pkVariantId)}>{item.variant ?? '—'}</option>)}
-          </Select>
-          <Input label="Follow-up Date" type="date" value={followUpDate} onChange={e => pushQuery({ followUpDate: e.target.value })} disabled={isRoutePending} />
-          <Input label="Visited Date" type="date" value={visitedDate} onChange={e => pushQuery({ visitedDate: e.target.value })} disabled={isRoutePending} />
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-medium text-gray-600">Classification</label>
-            <div className="flex flex-wrap gap-1.5">
-              {['All', ...INQUIRY_CLASSIFICATIONS].map(c => (
-                <button key={c} onClick={() => pushQuery({ classification: c })} disabled={isRoutePending}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${classification === c || (classification === 'All' && c === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  style={classification === c || (classification === 'All' && c === 'All') ? { backgroundColor: '#C8102E' } : {}}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-medium text-gray-600">Status</label>
-            <div className="flex flex-wrap gap-1.5">
-              {['All', ...INQUIRY_STATUSES].map(s => (
-                <button key={s} onClick={() => pushQuery({ status: s })} disabled={isRoutePending}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${status === s || (status === 'All' && s === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  style={status === s || (status === 'All' && s === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 flex justify-end">
-          <Btn variant="outline" size="sm" onClick={resetFilters} disabled={isRoutePending || (!search.trim() && status === 'All' && classification === 'All' && source === 'All' && subStatus === 'All' && !followUpDate && !visitedDate && !makeId && !modelId && !variantId)}>
-            Reset Filters
-          </Btn>
-        </div>
-      </div>
+      <InquiryFilters
+        search={searchInput}
+        source={source}
+        subStatus={subStatus}
+        makeId={makeId}
+        modelId={modelId}
+        variantId={variantId}
+        followUpDate={followUpDate}
+        visitedDate={visitedDate}
+        classification={classification}
+        status={status}
+        isRoutePending={isRoutePending}
+        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || followUpDate || visitedDate || makeId || modelId || variantId)}
+        sourceOptions={sourceOptions}
+        subStatusSuggestions={subStatusSuggestions}
+        makes={makes}
+        models={filterModels}
+        variants={filterVariants}
+        classifications={INQUIRY_CLASSIFICATIONS}
+        statuses={INQUIRY_STATUSES}
+        onSearchChange={setSearchInput}
+        onSourceChange={source => pushQuery({ source })}
+        onSubStatusChange={subStatus => pushQuery({ subStatus })}
+        onMakeChange={makeId => pushQuery({ makeId, modelId: '', variantId: '' })}
+        onModelChange={modelId => pushQuery({ modelId, variantId: '' })}
+        onVariantChange={variantId => pushQuery({ variantId })}
+        onFollowUpDateChange={followUpDate => pushQuery({ followUpDate })}
+        onVisitedDateChange={visitedDate => pushQuery({ visitedDate })}
+        onClassificationChange={classification => pushQuery({ classification })}
+        onStatusChange={status => pushQuery({ status })}
+        onReset={resetFilters}
+      />
 
       {emailFeedback && (
         <div className={`mb-4 rounded-lg px-4 py-3 text-sm border ${emailFeedback.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
@@ -1571,8 +1548,8 @@ export function InquiryClient({
             ? 'pointer-events-none select-none opacity-45 transition-opacity'
             : 'transition-opacity'}
         >
-          <Table headers={['Sr. No', 'Inquiry_Date / Website', 'Customer Details', 'Car Details', 'Budget / Classification', 'Visited Date', 'Status / Sub Status', 'FollowUp Date', 'Remark', 'Actions']} empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
-            {initialData.map((r, index) => {
+          <InquiryTable empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
+            <InquiryTableRows rows={initialData}>{(r, index) => {
               const name = r.customer?.custName ?? r.customerNameLegacy ?? '—'
               const mobile = r.customer?.custMobile ?? r.mobileno ?? '—'
               const email = r.customer?.custEmail ?? r.email ?? ''
@@ -1629,52 +1606,35 @@ export function InquiryClient({
                   <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followUpDate) || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 max-w-[260px] whitespace-normal break-words">{r.remark?.trim() ? r.remark : '—'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleSendEmail(r)} disabled={isEmailPending && emailingId === r.inquiryId}
-                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition disabled:opacity-40" title="Send car details by email">
-                        <Mail className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition" title="View">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => openAssign(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Assign Inquiry">
-                        <UserPlus className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => setDeleteId(r.inquiryId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
+                    <InquiryRowActions
+                      inquiryId={r.inquiryId}
+                      isEmailPending={isEmailPending && emailingId === r.inquiryId}
+                      onSendEmail={() => handleSendEmail(r)}
+                      onView={() => openView(r)}
+                      onEdit={() => openEdit(r)}
+                      onAssign={() => openAssign(r)}
+                      onDelete={() => setDeleteId(r.inquiryId)}
+                    />
                   </td>
                 </tr>
               )
-            })}
-          </Table>
+            }}</InquiryTableRows>
+          </InquiryTable>
         </div>
-        {isRoutePending ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-white/35 backdrop-blur-[1px] text-sm text-gray-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <div>Updating inquiry list...</div>
-          </div>
-        ) : null}
+        {isRoutePending ? <ListLoadingOverlay message="Updating inquiry list..." /> : null}
       </div>
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-xs text-gray-500">
-            Showing {pageStart.toLocaleString('en-IN')}-{pageEnd.toLocaleString('en-IN')} of {total.toLocaleString('en-IN')} · Page {page} of {pageCount}
-          </div>
-          <div className="flex gap-1.5">
-            <Btn variant="outline" size="sm" disabled={isRoutePending || page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}>
-              <ChevronLeft className="w-3.5 h-3.5" />Prev
-            </Btn>
-            <Btn variant="outline" size="sm" disabled={isRoutePending || page >= pageCount} onClick={() => pushQuery({ page: String(page + 1) })}>
-              Next<ChevronRight className="w-3.5 h-3.5" />
-            </Btn>
-          </div>
-        </div>
-      )}
+      <ListPagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        showingText={`Showing ${pageStart.toLocaleString('en-IN')}-${pageEnd.toLocaleString('en-IN')}`}
+        pending={isRoutePending}
+        className="mt-4"
+        onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
+      />
 
-      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} width="max-w-6xl" onClose={closeView}>
-        <div className="space-y-4">
+      <InquiryViewModal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} onClose={closeView}>
           {viewLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -1691,10 +1651,9 @@ export function InquiryClient({
               onOpenMatch={() => openEmailModal(viewInquiry)}
             />
           ) : null}
-        </div>
-      </Modal>
+      </InquiryViewModal>
 
-      <Modal title={editId ? 'Edit Inquiry' : 'New Inquiry'} open={!!modal} onClose={requestCloseInquiryModal}>
+      <InquiryFormModal editing={Boolean(editId)} open={!!modal} onClose={requestCloseInquiryModal}>
         {editLoading ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -2000,46 +1959,21 @@ export function InquiryClient({
           </div>
         </div>
         )}
-      </Modal>
+      </InquiryFormModal>
 
-      <Modal title={assignInquiryRow ? `Assign Inquiry — ${assignInquiryRow.inquiryNo ?? `Inquiry #${assignInquiryRow.inquiryId}`}` : 'Assign Inquiry'} open={!!assignInquiryRow} onClose={closeAssign}>
-        {assignInquiryRow ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              <div><span className="font-medium text-gray-900">Customer:</span> {assignInquiryRow.customer?.custName ?? assignInquiryRow.customerNameLegacy ?? '—'}</div>
-              <div><span className="font-medium text-gray-900">Current Assignee:</span> {userOptionLabel(assignInquiryRow.assignedToUser)}</div>
-            </div>
+      <AssignInquiryModal
+        row={assignInquiryRow}
+        users={inquiryAssistants}
+        value={assignUserId}
+        error={assignError}
+        pending={isAssignPending}
+        userLabel={userOptionLabel}
+        onChange={setAssignUserId}
+        onClose={closeAssign}
+        onSave={saveAssignment}
+      />
 
-            <Select label="Assign To" value={assignUserId} onChange={e => setAssignUserId(e.target.value)} disabled={isAssignPending}>
-              <option value="">Unassigned</option>
-              {inquiryAssistants.map(user => (
-                <option key={user.userId} value={user.userId}>
-                  {userOptionLabel(user)}
-                </option>
-              ))}
-            </Select>
-
-            {inquiryAssistants.length === 0 ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                No active InquiryAssistant users are available for assignment.
-              </div>
-            ) : null}
-
-            {assignError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{assignError}</div>
-            ) : null}
-
-            <div className="flex justify-end gap-3">
-              <Btn variant="outline" onClick={closeAssign} disabled={isAssignPending}>Cancel</Btn>
-              <Btn onClick={saveAssignment} disabled={isAssignPending}>
-                {isAssignPending ? 'Saving...' : 'Save Assignment'}
-              </Btn>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal title={`Send Matching Inventory${emailInquiryRow ? ` — ${emailInquiryRow.inquiryNo ?? `Inquiry #${emailInquiryRow.inquiryId}`}` : ''}`} open={!!emailInquiryRow} width="max-w-6xl" onClose={() => {
+      <EmailVehicleModal title={`Send Matching Inventory${emailInquiryRow ? ` — ${emailInquiryRow.inquiryNo ?? `Inquiry #${emailInquiryRow.inquiryId}`}` : ''}`} open={!!emailInquiryRow} onClose={() => {
         if (isEmailPending) return
         emailInventoryRequestRef.current += 1
         setEmailInquiryRow(null)
@@ -2051,25 +1985,12 @@ export function InquiryClient({
       }}>
         {emailInquiryRow ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-              <div><span className="font-medium text-gray-800">Customer:</span> {emailInquiryRow.customer?.custName ?? emailInquiryRow.customerNameLegacy ?? '—'}</div>
-              <div><span className="font-medium text-gray-800">Email:</span> {emailInquiryRow.customer?.custEmail ?? emailInquiryRow.email ?? '—'}</div>
-              <div><span className="font-medium text-gray-800">Mobile:</span> {emailInquiryRow.mobileno ?? '—'}</div>
-            </div>
+            <EmailInquirySummary customer={emailInquiryRow.customer?.custName ?? emailInquiryRow.customerNameLegacy ?? '—'} email={emailInquiryRow.customer?.custEmail ?? emailInquiryRow.email ?? '—'} mobile={emailInquiryRow.mobileno ?? '—'} />
 
-            {emailModalError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{emailModalError}</div>
-            ) : null}
+            {emailModalError ? <EmailInventoryState type="error" message={emailModalError} /> : null}
 
-            {emailInventoryLoading ? (
-              <div className="flex min-h-24 flex-col items-center justify-center gap-3 text-sm text-gray-500">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <div>Loading matching inventory...</div>
-              </div>
-            ) : emailInventoryMatches.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
-                No matching inventory found for this inquiry yet.
-              </div>
+            {emailInventoryLoading ? <EmailInventoryState type="loading" message="Loading matching inventory..." /> : emailInventoryMatches.length === 0 ? (
+              <EmailInventoryState type="empty" message="No matching inventory found for this inquiry yet." />
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -2215,7 +2136,7 @@ export function InquiryClient({
             </div>
           </div>
         ) : null}
-      </Modal>
+      </EmailVehicleModal>
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this inquiry record? This cannot be undone." />

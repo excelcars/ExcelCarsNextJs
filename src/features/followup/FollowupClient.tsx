@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Phone, PhoneCall, AlertTriangle, Eye, Pencil, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, N } from '@/components/ui'
+import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, N } from '@/components/ui'
 import { logFollowup, type LogFollowupInput } from './actions'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
@@ -11,7 +11,18 @@ import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES } from '@/features/inquiry/qu
 import { getInquiryDetail, updateInquiry, type InquiryCarInput, type InquiryFormInput } from '@/features/inquiry/actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 import { FOLLOWUP_CONTACT_OUTCOMES, FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
+import { FollowupFilters } from './FollowupFilters'
+import { FollowupTable } from './FollowupTable'
+import { ListPagination } from '@/components/ListPagination'
+import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
+import { buildFollowupExportFileName, csvValue } from './followupExportHelpers'
+import { LogFollowupModal } from './LogFollowupModal'
+import { FollowupHistoryModal } from './FollowupHistoryModal'
+import { FollowupInquiryViewModal } from './FollowupInquiryViewModal'
+import { FollowupInquiryEditModal } from './FollowupInquiryEditModal'
 
 const CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 const STATUSES = ['Open', 'FollowUp', 'Closed'] as const
@@ -400,27 +411,6 @@ function buildVehicleHistoryRows(
   })
 }
 
-function csvValue(value: string | number | boolean | null | undefined) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function buildFollowupExportFileName(rows: FollowupRow[], status: string, classification: string) {
-  const today = new Date().toISOString().slice(0, 10)
-  const parts = ['followup']
-  if (status && status !== 'All') parts.push(slugify(status))
-  if (classification && classification !== 'All') parts.push(slugify(classification))
-  if (parts.length === 1) parts.push(`${rows.length}-rows`)
-  parts.push(today)
-  return `${parts.join('-')}.csv`
-}
-
 function exportFollowupCsv(rows: FollowupRow[], status: string, classification: string) {
   const headers = [
     'Inquiry ID',
@@ -501,7 +491,7 @@ function exportFollowupCsv(rows: FollowupRow[], status: string, classification: 
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = buildFollowupExportFileName(rows, status, classification)
+  link.download = buildFollowupExportFileName(rows.length, status, classification)
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -571,9 +561,6 @@ export function FollowupClient({
   makeId,
   modelId,
   variantId,
-  legacyMake: initialLegacyMake,
-  legacyModel: initialLegacyModel,
-  legacyVariant: initialLegacyVariant,
   total,
   page,
   pageCount,
@@ -604,9 +591,6 @@ export function FollowupClient({
   makeId: string
   modelId: string
   variantId: string
-  legacyMake: string
-  legacyModel: string
-  legacyVariant: string
   total: number
   page: number
   pageCount: number
@@ -628,9 +612,10 @@ export function FollowupClient({
   const [website, setWebsite] = useState(initialWebsite)
   const [customerMobile, setCustomerMobile] = useState(initialCustomerMobile)
   const [userId, setUserId] = useState(initialUserId)
-  const [legacyMake, setLegacyMake] = useState(initialLegacyMake)
-  const [legacyModel, setLegacyModel] = useState(initialLegacyModel)
-  const [legacyVariant, setLegacyVariant] = useState(initialLegacyVariant)
+  const debouncedSearch = useDebouncedValue(search, LIST_FILTER_DEBOUNCE_MS)
+  const debouncedCustomerName = useDebouncedValue(customerName, LIST_FILTER_DEBOUNCE_MS)
+  const debouncedSubStatus = useDebouncedValue(subStatus, LIST_FILTER_DEBOUNCE_MS)
+  const debouncedCustomerMobile = useDebouncedValue(customerMobile, LIST_FILTER_DEBOUNCE_MS)
   const [inquiryDateFrom, setInquiryDateFrom] = useState(initialInquiryDateFrom)
   const [inquiryDateTo, setInquiryDateTo] = useState(initialInquiryDateTo)
   const [followUpDateFrom, setFollowUpDateFrom] = useState(initialFollowUpDateFrom)
@@ -687,9 +672,6 @@ export function FollowupClient({
     makeId ? 1 : 0,
     modelId ? 1 : 0,
     variantId ? 1 : 0,
-    legacyMake.trim() ? 1 : 0,
-    legacyModel.trim() ? 1 : 0,
-    legacyVariant.trim() ? 1 : 0,
     classification !== 'All' ? 1 : 0,
     inquiryDateFrom ? 1 : 0,
     inquiryDateTo ? 1 : 0,
@@ -710,9 +692,6 @@ export function FollowupClient({
     makeId ||
     modelId ||
     variantId ||
-    legacyMake.trim() ||
-    legacyModel.trim() ||
-    legacyVariant.trim() ||
     classification !== 'All' ||
     inquiryDateFrom ||
     inquiryDateTo ||
@@ -732,9 +711,6 @@ export function FollowupClient({
     setWebsite(initialWebsite)
     setCustomerMobile(initialCustomerMobile)
     setUserId(initialUserId)
-    setLegacyMake(initialLegacyMake)
-    setLegacyModel(initialLegacyModel)
-    setLegacyVariant(initialLegacyVariant)
     setInquiryDateFrom(initialInquiryDateFrom)
     setInquiryDateTo(initialInquiryDateTo)
     setFollowUpDateFrom(initialFollowUpDateFrom)
@@ -744,7 +720,7 @@ export function FollowupClient({
     if (restricted && currentUserId) {
       setUserId(currentUserId)
     }
-  }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialLegacyMake, initialLegacyModel, initialLegacyVariant, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
+  }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
 
   const pushQuery = (params: Record<string, string>) => {
     const q = new URLSearchParams({
@@ -760,9 +736,6 @@ export function FollowupClient({
       makeId,
       modelId,
       variantId,
-      legacyMake: initialLegacyMake,
-      legacyModel: initialLegacyModel,
-      legacyVariant: initialLegacyVariant,
       page: String(page),
       inquiryDateFrom: initialInquiryDateFrom,
       inquiryDateTo: initialInquiryDateTo,
@@ -781,26 +754,22 @@ export function FollowupClient({
   }
 
   useEffect(() => {
-    const handle = setTimeout(() => {
-      if (
-        search !== initialSearch ||
-        status !== initialStatus ||
-        contactOutcome !== initialContactOutcome ||
-        customerName !== initialCustomerName ||
-        subStatus !== initialSubStatus ||
-        website !== initialWebsite ||
-        customerMobile !== initialCustomerMobile ||
-        userId !== initialUserId ||
-        legacyMake !== initialLegacyMake ||
-        legacyModel !== initialLegacyModel ||
-        legacyVariant !== initialLegacyVariant
-      ) {
-        pushQuery({ search, status, contactOutcome, customerName, subStatus, website, customerMobile, userId, legacyMake, legacyModel, legacyVariant, page: '1' })
-      }
-    }, 400)
-    return () => clearTimeout(handle)
+    if (
+      debouncedSearch !== initialSearch ||
+      debouncedCustomerName !== initialCustomerName ||
+      debouncedSubStatus !== initialSubStatus ||
+      debouncedCustomerMobile !== initialCustomerMobile
+    ) {
+      pushQuery({
+        search: debouncedSearch,
+        customerName: debouncedCustomerName,
+        subStatus: debouncedSubStatus,
+        customerMobile: debouncedCustomerMobile,
+        page: '1',
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contactOutcome, customerMobile, customerName, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialLegacyMake, initialLegacyModel, initialLegacyVariant, initialSearch, initialStatus, initialSubStatus, initialUserId, initialWebsite, legacyMake, legacyModel, legacyVariant, search, status, subStatus, userId, website])
+  }, [debouncedCustomerMobile, debouncedCustomerName, debouncedSearch, debouncedSubStatus, initialCustomerMobile, initialCustomerName, initialSearch, initialSubStatus])
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -1263,9 +1232,6 @@ export function FollowupClient({
         if (makeId) params.set('makeId', makeId)
         if (modelId) params.set('modelId', modelId)
         if (variantId) params.set('variantId', variantId)
-        if (legacyMake.trim()) params.set('legacyMake', legacyMake)
-        if (legacyModel.trim()) params.set('legacyModel', legacyModel)
-        if (legacyVariant.trim()) params.set('legacyVariant', legacyVariant)
         if (inquiryDateFrom) params.set('inquiryDateFrom', inquiryDateFrom)
         if (inquiryDateTo) params.set('inquiryDateTo', inquiryDateTo)
         if (followUpDateFrom) params.set('followUpDateFrom', followUpDateFrom)
@@ -1293,9 +1259,6 @@ export function FollowupClient({
     setWebsite('')
     setCustomerMobile('')
     setUserId('')
-    setLegacyMake('')
-    setLegacyModel('')
-    setLegacyVariant('')
     setInquiryDateFrom('')
     setInquiryDateTo('')
     setFollowUpDateFrom('')
@@ -1313,9 +1276,6 @@ export function FollowupClient({
       makeId: '',
       modelId: '',
       variantId: '',
-      legacyMake: '',
-      legacyModel: '',
-      legacyVariant: '',
       classification: 'All',
       inquiryDateFrom: '',
       inquiryDateTo: '',
@@ -1346,153 +1306,56 @@ export function FollowupClient({
         <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
       ) : null}
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <SearchBar value={search} onChange={setSearch} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
-        <Select
-          value={status}
-          onChange={e => setStatus(e.target.value)}
-          disabled={isRoutePending}
-          className="min-w-[160px]"
-        >
-          {STATUSES.map(option => (
-            <option key={option} value={option}>
-              {option === 'FollowUp' ? 'Follow-up Only' : option}
-            </option>
-          ))}
-          <option value="All">All Status</option>
-        </Select>
-        <Select
-          value={contactOutcome}
-          onChange={e => setContactOutcome(e.target.value)}
-          disabled={isRoutePending}
-          className="min-w-[210px]"
-        >
-          <option value="">All reached outcomes</option>
-          {CONTACT_OUTCOME_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.title}</option>)}
-        </Select>
-        <Input
-          value={customerName}
-          onChange={e => setCustomerName(e.target.value)}
-          placeholder="Customer name..."
-          disabled={isRoutePending}
-          className="min-w-[220px]"
-        />
-        <Input
-          value={subStatus}
-          onChange={e => setSubStatus(e.target.value)}
-          placeholder="Filter sub-status..."
-          disabled={isRoutePending}
-          className="min-w-[220px]"
-        />
-        <Select
-          value={website}
-          onChange={e => setWebsite(e.target.value)}
-          disabled={isRoutePending}
-          className="min-w-[220px]"
-        >
-          <option value="">All Sources</option>
-          {sourceOptions.map(item => <option key={item.code} value={item.code}>{item.displayName}</option>)}
-        </Select>
-        <Input
-          value={customerMobile}
-          onChange={e => setCustomerMobile(e.target.value)}
-          placeholder="Customer mobile..."
-          disabled={isRoutePending}
-          className="min-w-[200px]"
-        />
-        <Select value={restricted ? currentUserId : userId} onChange={e => setUserId(e.target.value)} disabled={isRoutePending || restricted} className="min-w-[200px]">
-          <option value="">{restricted ? 'My Inquiries Only' : 'All Users'}</option>
-          {users.map(item => <option key={item.userId} value={String(item.userId)}>{followupUserLabel(item)}</option>)}
-        </Select>
-        <Select value={makeId} onChange={e => pushQuery({ makeId: e.target.value, modelId: '', variantId: '', page: '1' })} disabled={isRoutePending} className="min-w-[180px]">
-          <option value="">All Makes</option>
-          {makes.map(item => <option key={item.pkMakeId} value={String(item.pkMakeId)}>{item.make ?? '—'}</option>)}
-        </Select>
-        <Select value={modelId} onChange={e => pushQuery({ modelId: e.target.value, variantId: '', page: '1' })} disabled={isRoutePending || !makeId} className="min-w-[180px]">
-          <option value="">All Models</option>
-          {models.map(item => <option key={item.pkModelId} value={String(item.pkModelId)}>{item.model ?? '—'}</option>)}
-        </Select>
-        <Select value={variantId} onChange={e => pushQuery({ variantId: e.target.value, page: '1' })} disabled={isRoutePending || !modelId} className="min-w-[180px]">
-          <option value="">All Variants</option>
-          {variants.map(item => <option key={item.pkVariantId} value={String(item.pkVariantId)}>{item.variant ?? '—'}</option>)}
-        </Select>
-        <Input
-          value={legacyMake}
-          onChange={e => setLegacyMake(e.target.value)}
-          placeholder="Vehicle make text..."
-          disabled={isRoutePending}
-          className="min-w-[180px]"
-        />
-        <Input
-          value={legacyModel}
-          onChange={e => setLegacyModel(e.target.value)}
-          placeholder="Vehicle model text..."
-          disabled={isRoutePending}
-          className="min-w-[180px]"
-        />
-        <Input
-          value={legacyVariant}
-          onChange={e => setLegacyVariant(e.target.value)}
-          placeholder="Vehicle variant text..."
-          disabled={isRoutePending}
-          className="min-w-[180px]"
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {['All', ...CLASSIFICATIONS].map(c => (
-            <button key={c} onClick={() => pushQuery({ classification: c })}
-              disabled={isRoutePending}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${classification === c ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              style={classification === c ? { backgroundColor: '#C8102E' } : {}}>
-              {c}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <Input
-          label="Inquiry Date From"
-          type="date"
-          value={inquiryDateFrom}
-          onChange={e => setInquiryDateFrom(e.target.value)}
-          disabled={isRoutePending}
-        />
-        <Input
-          label="Inquiry Date To"
-          type="date"
-          value={inquiryDateTo}
-          onChange={e => setInquiryDateTo(e.target.value)}
-          disabled={isRoutePending}
-        />
-        <Input
-          label="Follow-up Date From"
-          type="date"
-          value={followUpDateFrom}
-          onChange={e => setFollowUpDateFrom(e.target.value)}
-          disabled={isRoutePending}
-        />
-        <Input
-          label="Follow-up Date To"
-          type="date"
-          value={followUpDateTo}
-          onChange={e => setFollowUpDateTo(e.target.value)}
-          disabled={isRoutePending}
-        />
-        <Input
-          label="Visited Date From"
-          type="date"
-          value={visitedDateFrom}
-          onChange={e => setVisitedDateFrom(e.target.value)}
-          disabled={isRoutePending}
-        />
-        <Input
-          label="Visited Date To"
-          type="date"
-          value={visitedDateTo}
-          onChange={e => setVisitedDateTo(e.target.value)}
-          disabled={isRoutePending}
-        />
-      </div>
+      <FollowupFilters
+        search={search}
+        status={status}
+        contactOutcome={contactOutcome}
+        customerName={customerName}
+        subStatus={subStatus}
+        website={website}
+        customerMobile={customerMobile}
+        userId={userId}
+        makeId={makeId}
+        modelId={modelId}
+        variantId={variantId}
+        classification={classification}
+        inquiryDateFrom={inquiryDateFrom}
+        inquiryDateTo={inquiryDateTo}
+        followUpDateFrom={followUpDateFrom}
+        followUpDateTo={followUpDateTo}
+        visitedDateFrom={visitedDateFrom}
+        visitedDateTo={visitedDateTo}
+        restricted={restricted}
+        currentUserId={currentUserId}
+        isRoutePending={isRoutePending}
+        statuses={STATUSES}
+        classifications={CLASSIFICATIONS}
+        contactOutcomes={CONTACT_OUTCOME_OPTIONS}
+        sourceOptions={sourceOptions}
+        users={users}
+        makes={makes}
+        models={models}
+        variants={variants}
+        userLabel={followupUserLabel}
+        onSearchChange={setSearch}
+        onStatusChange={status => pushQuery({ status, page: '1' })}
+        onContactOutcomeChange={contactOutcome => pushQuery({ contactOutcome, page: '1' })}
+        onCustomerNameChange={setCustomerName}
+        onSubStatusChange={setSubStatus}
+        onWebsiteChange={website => pushQuery({ website, page: '1' })}
+        onCustomerMobileChange={setCustomerMobile}
+        onUserIdChange={userId => pushQuery({ userId, page: '1' })}
+        onClassificationChange={classification => pushQuery({ classification })}
+        onMakeChange={makeId => pushQuery({ makeId, modelId: '', variantId: '', page: '1' })}
+        onModelChange={modelId => pushQuery({ modelId, variantId: '', page: '1' })}
+        onVariantChange={variantId => pushQuery({ variantId, page: '1' })}
+        onInquiryDateFromChange={setInquiryDateFrom}
+        onInquiryDateToChange={setInquiryDateTo}
+        onFollowUpDateFromChange={setFollowUpDateFrom}
+        onFollowUpDateToChange={setFollowUpDateTo}
+        onVisitedDateFromChange={setVisitedDateFrom}
+        onVisitedDateToChange={setVisitedDateTo}
+      />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
         <div>
@@ -1523,141 +1386,28 @@ export function FollowupClient({
             ? 'pointer-events-none select-none opacity-45 transition-opacity'
             : 'transition-opacity'}
         >
-          <Table
-            headers={[
-              'Inquiry Date / Website',
-              'Customer Details',
-              'Car Details',
-              'Budget / Visited Date',
-              'Classification / Follow-up Status / Sub-status',
-              'Follow-up Date / Inquiry Made By',
-              'Remark',
-              'Follow-up',
-              'Inquiry',
-            ]}
-            empty={initialData.length === 0}
-          >
-            {initialData.map(r => {
-              const name = r.customer?.custName ?? r.customerNameLegacy ?? '—'
-              const overdue = isOverdue(r.followUpDate)
-              const inquiryMadeBy = r.createdByUser?.displayName ?? r.createdByUser?.userName ?? (r.createdBy ? `User #${r.createdBy}` : '—')
-              return (
-                <tr key={r.inquiryId} className={`hover:bg-gray-50 transition ${overdue ? 'bg-red-50/40' : ''}`}>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1 text-sm text-gray-700 min-w-[160px]">
-                      <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(r.dateOfInquiry) || '—'}</div>
-                      <div className="break-words"><span className="font-medium text-gray-900">Website:</span> {r.website ?? '—'}{r.sourceDetail ? ` (${r.sourceDetail})` : ''}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    <div className="space-y-1 min-w-[180px]">
-                      <div className="font-medium text-gray-900 break-words">{name}</div>
-                      <div className="flex items-center gap-1 font-mono">
-                        <Phone className="w-3 h-3 text-gray-400" />{r.customer?.custMobile ?? r.mobileno ?? '—'}
-                      </div>
-                      <div className="break-words text-gray-600">{r.customer?.custEmail ?? r.email ?? '—'}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="min-w-[180px] space-y-3 text-sm text-gray-700">
-                      {r.inquiryCarDetails.length > 0 ? r.inquiryCarDetails.map(car => (
-                        <div key={car.inquiryCarDetailsId ?? `${car.makeLegacy}-${car.modelLegacy}-${car.variantLegacy}-${car.year ?? 'na'}`} className="border-b border-dashed border-gray-200 pb-2 last:border-b-0 last:pb-0">
-                          <div><span className="font-medium text-gray-900">Make:</span> {clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Model:</span> {clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Variant:</span> {clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || clean(car.subVariant) || '—'}</div>
-                          <div><span className="font-medium text-gray-900">Year:</span> {car.year ?? '—'}</div>
-                        </div>
-                      )) : (
-                        <div>—</div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 min-w-[150px]">
-                    <div><span className="font-medium text-gray-900">Budget:</span> {fmtMoney(r.budgetOfCustomer)}</div>
-                    <div className="mt-2"><span className="font-medium text-gray-900">Visited Date:</span> {fmtDate(r.visitedDateOfCustomer ?? null) || '—'}</div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 min-w-[200px]">
-                    <div><span className="font-medium text-gray-900">Classification:</span> {r.classification ? <span className="ml-1 inline-block align-middle"><Badge label={r.classification} /></span> : ' —'}</div>
-                    <div className="mt-2"><span className="font-medium text-gray-900">Status:</span> {r.status ? <span className="ml-1 inline-block align-middle"><Badge label={r.status} /></span> : ' —'}</div>
-                    <div className="mt-2 break-words"><span className="font-medium text-gray-900">Sub-status:</span> {r.subStatus ?? '—'}</div>
-                  </td>
-                  <td className="px-4 py-3 text-sm min-w-[180px]">
-                    <div className={`flex items-center gap-1 ${overdue ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>
-                      {overdue && <AlertTriangle className="w-3.5 h-3.5" />}
-                      <span className="font-medium text-gray-900">Follow-up Date:</span>
-                      <span>{fmtDate(r.followUpDate) || '—'}</span>
-                    </div>
-                    <div className="mt-2 break-words text-gray-700">
-                      <span className="font-medium text-gray-900">Inquiry Made By:</span> {inquiryMadeBy}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700 min-w-[160px] break-words">{r.remark ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex min-w-[96px] items-center justify-center gap-2">
-                      <button
-                        onClick={() => openLog(r)}
-                        className="inline-flex p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition"
-                        title="Edit Follow-up"
-                      >
-                        <PhoneCall className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => openFollowupView(r.inquiryId)}
-                        className="inline-flex p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition"
-                        title="View Follow-up"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex min-w-[96px] items-center justify-center gap-2">
-                      <button
-                        onClick={() => openInquiryView(r.inquiryId)}
-                        className="inline-flex p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition"
-                        title="View Inquiry"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => openInquiryEdit(r.inquiryId)}
-                        className="inline-flex p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"
-                        title="Edit Inquiry"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </Table>
+          <FollowupTable
+            rows={initialData}
+            onLogFollowup={openLog}
+            onViewFollowup={openFollowupView}
+            onViewInquiry={openInquiryView}
+            onEditInquiry={openInquiryEdit}
+          />
         </div>
-        {isRoutePending ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-white/35 backdrop-blur-[1px] text-sm text-gray-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <div>Updating follow-up list...</div>
-          </div>
-        ) : null}
+        {isRoutePending ? <ListLoadingOverlay message="Updating follow-up list..." /> : null}
       </div>
 
-      {pageCount > 1 && (
-        <div className="mt-4 flex items-center justify-between">
-          <div className="text-xs text-gray-500">
-            Showing {((page - 1) * initialData.length) + (initialData.length ? 1 : 0)}-{((page - 1) * 25) + initialData.length} of {total.toLocaleString('en-IN')} · Page {page} of {pageCount}
-          </div>
-          <div className="flex gap-1.5">
-            <Btn variant="outline" size="sm" disabled={isRoutePending || page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}>
-              <ChevronLeft className="w-3.5 h-3.5" />Prev
-            </Btn>
-            <Btn variant="outline" size="sm" disabled={isRoutePending || page >= pageCount} onClick={() => pushQuery({ page: String(page + 1) })}>
-              Next<ChevronRight className="w-3.5 h-3.5" />
-            </Btn>
-          </div>
-        </div>
-      )}
+      <ListPagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        showingText={`Showing ${((page - 1) * initialData.length) + (initialData.length ? 1 : 0)}-${((page - 1) * 25) + initialData.length}`}
+        pending={isRoutePending}
+        className="mt-4"
+        onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
+      />
 
-      <Modal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={!!logRow} width="max-w-5xl" onClose={() => setLogRow(null)}>
+      <LogFollowupModal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={!!logRow} onClose={() => setLogRow(null)}>
         {logRow && (
           (() => {
             const today = new Date()
@@ -1967,9 +1717,9 @@ export function FollowupClient({
             )
           })()
         )}
-      </Modal>
+      </LogFollowupModal>
 
-      <Modal title={`View Follow-up${viewHistoryRow ? ` — ${viewHistoryRow.inquiryNo ?? `Inquiry #${viewHistoryRow.inquiryId}`}` : ''}`} open={viewHistoryRow !== null} width="max-w-6xl" onClose={closeFollowupView}>
+      <FollowupHistoryModal title={`View Follow-up${viewHistoryRow ? ` — ${viewHistoryRow.inquiryNo ?? `Inquiry #${viewHistoryRow.inquiryId}`}` : ''}`} open={viewHistoryRow !== null} onClose={closeFollowupView}>
         <div className="space-y-4">
           {viewHistoryLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
@@ -2225,9 +1975,9 @@ export function FollowupClient({
             })()
           ) : null}
         </div>
-      </Modal>
+      </FollowupHistoryModal>
 
-      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} width="max-w-6xl" onClose={closeInquiryView}>
+      <FollowupInquiryViewModal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} onClose={closeInquiryView}>
         <div className="space-y-4">
           {viewInquiryLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
@@ -2252,9 +2002,9 @@ export function FollowupClient({
             />
           ) : null}
         </div>
-      </Modal>
+      </FollowupInquiryViewModal>
 
-      <Modal title={editInquiryId ? `Edit Inquiry — #${editInquiryId}` : 'Edit Inquiry'} open={editInquiryId !== null} onClose={closeInquiryEdit}>
+      <FollowupInquiryEditModal title={editInquiryId ? `Edit Inquiry — #${editInquiryId}` : 'Edit Inquiry'} open={editInquiryId !== null} onClose={closeInquiryEdit}>
         {editInquiryLoading ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -2431,7 +2181,7 @@ export function FollowupClient({
             </div>
           </div>
         )}
-      </Modal>
+      </FollowupInquiryEditModal>
     </div>
   )
 }

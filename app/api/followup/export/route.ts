@@ -29,9 +29,6 @@ export async function GET(req: NextRequest) {
   const makeId = req.nextUrl.searchParams.get('makeId')?.trim() ?? ''
   const modelId = req.nextUrl.searchParams.get('modelId')?.trim() ?? ''
   const variantId = req.nextUrl.searchParams.get('variantId')?.trim() ?? ''
-  const legacyMake = req.nextUrl.searchParams.get('legacyMake')?.trim() ?? ''
-  const legacyModel = req.nextUrl.searchParams.get('legacyModel')?.trim() ?? ''
-  const legacyVariant = req.nextUrl.searchParams.get('legacyVariant')?.trim() ?? ''
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
 
   const rows = await listFollowupsForExport({
@@ -53,9 +50,6 @@ export async function GET(req: NextRequest) {
     makeId,
     modelId,
     variantId,
-    legacyMake,
-    legacyModel,
-    legacyVariant,
     restrictToUserId: ownershipScope.restrictToUserId,
     ownershipMode: ownershipScope.ownershipMode,
   })

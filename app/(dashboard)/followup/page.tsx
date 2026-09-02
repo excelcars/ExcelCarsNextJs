@@ -22,9 +22,6 @@ export default async function FollowupPage({
     makeId?: string
     modelId?: string
     variantId?: string
-    legacyMake?: string
-    legacyModel?: string
-    legacyVariant?: string
     page?: string
     inquiryDateFrom?: string
     inquiryDateTo?: string
@@ -48,9 +45,6 @@ export default async function FollowupPage({
   const makeId = sp.makeId ?? ''
   const modelId = sp.modelId ?? ''
   const variantId = sp.variantId ?? ''
-  const legacyMake = sp.legacyMake ?? ''
-  const legacyModel = sp.legacyModel ?? ''
-  const legacyVariant = sp.legacyVariant ?? ''
   const page = Math.max(1, Number(sp.page) || 1)
   const inquiryDateFrom = sp.inquiryDateFrom ?? ''
   const inquiryDateTo = sp.inquiryDateTo ?? ''
@@ -77,9 +71,6 @@ export default async function FollowupPage({
       makeId,
       modelId,
       variantId,
-      legacyMake,
-      legacyModel,
-      legacyVariant,
       page,
       inquiryDateFrom,
       inquiryDateTo,
@@ -122,9 +113,6 @@ export default async function FollowupPage({
       makeId={makeId}
       modelId={modelId}
       variantId={variantId}
-      legacyMake={legacyMake}
-      legacyModel={legacyModel}
-      legacyVariant={legacyVariant}
       total={rows.total}
       page={rows.page}
       pageCount={rows.pageCount}

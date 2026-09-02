@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 import { buildInquiryOwnershipWhere, type InquiryOwnershipMode } from '@/lib/access/inquiryOwnership'
-import { buildVehicleTextFilter } from './vehicleFilters'
 
 export const FOLLOWUP_PAGE_SIZE = 25
 
@@ -24,9 +23,6 @@ export interface FollowupFilters {
   makeId: string
   modelId: string
   variantId: string
-  legacyMake: string
-  legacyModel: string
-  legacyVariant: string
   page: number
   restrictToUserId?: number | null
   ownershipMode?: InquiryOwnershipMode
@@ -144,9 +140,6 @@ function buildFollowupWhere({
   makeId,
   modelId,
   variantId,
-  legacyMake,
-  legacyModel,
-  legacyVariant,
   restrictToUserId,
   ownershipMode = 'created-or-assigned',
 }: Omit<FollowupFilters, 'page'>) {
@@ -180,11 +173,6 @@ function buildFollowupWhere({
         },
       },
     })
-  }
-
-  const vehicleTextFilter = buildVehicleTextFilter({ legacyMake, legacyModel, legacyVariant })
-  if (vehicleTextFilter) {
-    andConditions.push(vehicleTextFilter as Prisma.InquiryWhereInput)
   }
 
   return {
@@ -279,9 +267,6 @@ export async function listFollowupQueue({
   makeId,
   modelId,
   variantId,
-  legacyMake,
-  legacyModel,
-  legacyVariant,
   page,
   restrictToUserId = null,
   ownershipMode = 'created-or-assigned',
@@ -305,9 +290,6 @@ export async function listFollowupQueue({
     makeId,
     modelId,
     variantId,
-    legacyMake,
-    legacyModel,
-    legacyVariant,
     restrictToUserId,
     ownershipMode,
   })

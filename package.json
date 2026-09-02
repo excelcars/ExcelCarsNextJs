@@ -22,7 +22,7 @@
     "dev:only": "next dev",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts src/lib/inquiryFollowupValidation.test.ts src/features/inquiry/sourceMaster.test.ts src/features/followup/vehicleFilters.test.ts",
+    "test": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts src/lib/inquiryFollowupValidation.test.ts src/features/inquiry/sourceMaster.test.ts",
     "test:vehicle-email-links": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts",
     "typecheck": "tsc --noEmit",
     "db:migrate:dev": "npx prisma migrate dev",

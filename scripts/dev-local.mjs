@@ -81,7 +81,6 @@ REDIS_URL=redis://redis:6379
   await ensureInquiryNumberUnique(process.env)
   await ensureVehicleEmailLinkInquiry(process.env)
   await ensureInquiryStatusConstraint(process.env)
-  await run(process.execPath, [join(process.cwd(), 'scripts', 'sync-inquiry-sources.mjs')])
 
   const next = join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next')
   if (!existsSync(next)) throw new Error('Dependencies are missing. Run npm install first.')

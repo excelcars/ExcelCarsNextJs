@@ -156,6 +156,7 @@ const navItems: NavItem[] = [
       { label: 'Customers', href: '/config/customers' },
       { label: 'Agents', href: '/config/agents' },
       { label: 'Vehicle Masters', href: '/config/catalog' },
+      { label: 'Inquiry Source Master', href: '/config/inquiry-sources' },
       { label: 'Feedback', href: '/config/feedback' },
       { label: 'Email Templates', href: '/config/sms-email' },
     ],

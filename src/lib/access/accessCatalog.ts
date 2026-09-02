@@ -12,6 +12,7 @@ export const ROLE_ACCESS_FUNCTION = 'Role_Access_Management'
 export const CUSTOMER_WRITE_FUNCTION = 'Customer_Management_Write'
 export const FEEDBACK_FUNCTION = 'Customer_Feedback_Management'
 export const LEGACY_FEEDBACK_FUNCTION = 'Feedback_Management'
+export const INQUIRY_SOURCE_MASTER_FUNCTION = 'Inquiry_Source_Master_Management'
 
 export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Role Access', functionName: ROLE_ACCESS_FUNCTION, route: '/config/role-access', description: 'Manage which roles can access each module.' },
@@ -21,6 +22,7 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Customer Management Write', functionName: CUSTOMER_WRITE_FUNCTION, route: '/config/customers', description: 'Add, edit, delete, and quick-create customer records. Requires Customers view access.', grantsRouteAccess: false },
   { group: 'Configuration', label: 'Agents', functionName: 'Agent_Management', route: '/config/agents', description: 'Manage reusable Insurance and RTO agent master records.' },
   { group: 'Configuration', label: 'Vehicle Masters', functionName: 'Vehicle_Master_Management', route: '/config/catalog', description: 'Manage Make, Model, and Variant master records.' },
+  { group: 'Configuration', label: 'Inquiry Source Master', functionName: INQUIRY_SOURCE_MASTER_FUNCTION, route: '/config/inquiry-sources', description: 'View the controlled Reference Website / Source master used by inquiries.' },
   { group: 'Configuration', label: 'Feedback', functionName: FEEDBACK_FUNCTION, route: '/config/feedback', description: 'Manage customer feedback responses.' },
   { group: 'Configuration', label: 'Email Templates', functionName: 'Message_Template_Management', route: '/config/sms-email', description: 'Manage email templates.' },
 

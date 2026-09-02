@@ -1,0 +1,2 @@
+'use client'
+export function EmailInquirySummary({ customer, email, mobile }: { customer: string; email: string; mobile: string }) { return <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600"><div><span className="font-medium text-gray-800">Customer:</span> {customer}</div><div><span className="font-medium text-gray-800">Email:</span> {email}</div><div><span className="font-medium text-gray-800">Mobile:</span> {mobile}</div></div> }

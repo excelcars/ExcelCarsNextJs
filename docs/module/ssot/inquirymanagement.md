@@ -1,9 +1,10 @@
 # SSOT - Inquiry Management Module
-## Status: Next.js implemented; SSOT updated to current code on 2026-08-28
+## Status: Next.js implemented; SSOT merged with completed improvements on 2026-09-02
 
 **Module:** `inquiry`  
 **Project:** `ExcelCarsNextJs`  
 **Primary route:** `/inquiry`  
+**Source master route:** `/config/inquiry-sources`
 **Depends On:** customer linkage and auto-create policy, vehicle catalog masters, inventory module, `followupInquiry`, `inquiryInventoryLinks`, auth/session, inquiry ownership rules, email delivery, tracked public vehicle links  
 **Source of truth for this document:** `D:\projects\ExcelCarsNextJs\app\(dashboard)\inquiry\page.tsx`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\InquiryClient.tsx`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\actions.ts`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\queries.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\previous\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\inventory-match\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inquiry\export\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\inventory\inquiries\route.ts`, `D:\projects\ExcelCarsNextJs\middleware.ts`
 
@@ -51,7 +52,8 @@ It depends on, but does not own:
 - source is selected from active `inquiry_source_master` records using a stable source code
 - `Reference` and `Other` require `inquiry.source_detail` so referral/exception context is retained
 - `inquiry.website` is preserved as historical raw text for existing inquiries and written as the canonical display label for new edits/saves
-- the legacy mapping table backfills `inquiry.source_id`; historically blank values remain explicitly unmapped
+- the legacy mapping table backfills `inquiry.source_id`; historically blank Website values are assigned to `Unknown`, not `Other`
+- Source Master administration is permission-protected at `/config/inquiry-sources` through `Inquiry_Source_Master_Management`
 - sub-status suggestions come from distinct saved `inquiry.subStatus` values
 - duplicate warning checks normalized mobile, linked customer overlap, and existing open inquiry conditions
 - inquiry inventory matching works across all selected vehicle rows
@@ -180,6 +182,7 @@ Minimum `inquiryEmailHistory` fields written/read here:
 ## 4. Interface Contracts
 Required page surface:
 - `GET /inquiry`
+- `GET /config/inquiry-sources`
 
 Required server actions:
 - `createInquiry(input, options?)`
@@ -191,6 +194,9 @@ Required server actions:
 - `sendInquiryInventoryEmail(inquiryId, inventoryId)`
 - `sendInquiryInventoryEmails(inquiryId, inventoryIds)`
 - `getNextInquiryNumber()`
+- `createInquirySource(input)`
+- `updateInquirySource(sourceId, input)`
+- `deleteInquirySource(sourceId)`
 
 Required query functions:
 - `listInquiries(params)`
@@ -220,6 +226,7 @@ Required API surfaces:
   - `Open`
   - `FollowUp`
   - `Closed`
+- the database constraint `ck_inquiry_status` accepts only `Open`, `FollowUp`, `Closed`, or `null`
 - inquiry classifications remain:
   - `Hot`
   - `Warm`
@@ -246,6 +253,14 @@ Required API surfaces:
 - create and update preserve inquiry summary fields on `inquiry` and append history to `followupInquiry`
 - duplicate warnings are informational, not hard blocking
 - users can still continue saving a genuine new inquiry after warning review
+
+### Source Master Administration
+- Source Master is listed in the Configuration menu only for roles granted `Inquiry_Source_Master_Management`
+- it supports searchable listing, fixed page size `25`, create, edit, active/inactive state, detail requirement, category, code, and reporting order
+- source code is normalized to uppercase underscore format and source name/code must remain unique
+- deleting a source is permitted only when no `inquiry` references it
+- successful deletion removes its `legacy_inquiry_source_mapping` rows in the same transaction
+- Source Master import/backfill is an explicit `db:sync-inquiry-sources*` operation; it is not run automatically by `npm run dev`
 
 ## 6. Duplicate Detection
 Current duplicate warning logic uses `GET /api/inquiry/previous`.
@@ -400,3 +415,4 @@ Current shared behavior:
 - historic blank Website values are classified as `Unknown`; `Other` remains for a user-selected source that needs a detail
 - inquiry lifecycle now uses `Open` / `FollowUp` / `Closed`
 - inquiry child-row updates still use replace-all semantics instead of per-row diff updates
+- Source Master supports CRUD, but it does not yet provide bulk import/export from the browser UI; controlled imports remain command-based

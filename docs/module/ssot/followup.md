@@ -1,10 +1,10 @@
 # SSOT - Follow-up Module
-## Status: Next.js implemented; current-state business logic documented
+## Status: Next.js implemented; SSOT merged with completed improvements on 2026-09-02
 
 **Module:** `followup`  
 **Project:** `ExcelCarsNextJs`  
 **Primary route:** `/followup`  
-**Depends on:** inquiry module, `followupInquiry` history table, auth/session, vehicle catalog masters, user table, dashboard links  
+**Depends on:** inquiry module, `followupInquiry` history table, controlled Inquiry Source Master, auth/session, vehicle catalog masters, user table, dashboard links
 **Source of truth for this document:** `D:\projects\ExcelCarsNextJs\app\(dashboard)\followup\page.tsx`, `D:\projects\ExcelCarsNextJs\src\features\followup\FollowupClient.tsx`, `D:\projects\ExcelCarsNextJs\src\features\followup\queries.ts`, `D:\projects\ExcelCarsNextJs\src\features\followup\actions.ts`, `D:\projects\ExcelCarsNextJs\app\api\followup\history\route.ts`, `D:\projects\ExcelCarsNextJs\app\api\followup\export\route.ts`, `D:\projects\ExcelCarsNextJs\src\features\inquiry\actions.ts`, `D:\projects\ExcelCarsNextJs\src\features\dashboard\queries.ts`, `D:\projects\ExcelCarsNextJs\src\components\Layout.tsx`, `D:\projects\ExcelCarsNextJs\middleware.ts`, `D:\projects\ExcelCarsNextJs\auth.ts`
 
 ## 1. Purpose
@@ -145,7 +145,9 @@ Search params supported by the page:
 - `classification`
 - `status`
 - `subStatus`
+- `contactOutcome`
 - `website`
+- `customerName`
 - `customerMobile`
 - `userId`
 - `makeId`
@@ -200,9 +202,9 @@ Supported filters in the current UI:
 - visited date from/to
 
 Sub-status source:
-- follow-up screen still uses a hardcoded suggestion list in `FollowupClient`
-- inquiry screen uses live distinct sub-status values from the database
-- this is still a cross-module consistency gap
+- follow-up logging uses the approved friendly status and sub-status options, plus explicit `OTHER` custom text
+- inquiry editing continues to offer saved sub-status suggestions
+- unifying these two suggestion strategies remains an open business decision
 
 Search matching:
 
@@ -438,12 +440,9 @@ Client-side CSV columns:
 
 Current export characteristics:
 
-- export uses the same single summarized car per inquiry as the queue
-- follow-up history rows are not expanded into the CSV
-- the `Inquiry Made By User ID` header is misleading in the current implementation:
-  - exported value is `createdByUser.displayName`
-  - else `createdByUser.userName`
-  - else numeric `createdBy`
+- export expands one inquiry across its vehicle-interest rows and follow-up-history rows
+- it exports both `Inquiry Made By` and the numeric `Inquiry Made By User ID`
+- it includes source detail and prior follow-up date, status, sub-status, comments, and classification
 - file name is generated from status/classification and current date
 
 ## 15. Dashboard And Navigation Integration
@@ -473,6 +472,8 @@ Current dashboard integration is narrower than legacy:
 - quick log shows recent history, while the dedicated inquiry/follow-up history view shows the full timeline
 - current client and server validation share the same required outcome, status, classification, remark, custom `OTHER` sub-status, and next-date rules
 - historic blank Website values are classified as `Unknown`; `Other` remains for a user-selected source that needs a detail
+- source/website values are governed by the permission-protected Inquiry Source Master at `/config/inquiry-sources`
+- current Source Master administration supports list, search, pagination, create, edit, active/inactive state, and deletion only when no inquiry uses the source
 
 ## 18. Tests Required
 - unauthenticated route access is redirected to `/login`
@@ -492,6 +493,7 @@ Current dashboard integration is narrower than legacy:
 - closing an inquiry from the modal nulls the parent `followUpDate`
 - inquiry create/update append follow-up history only under the documented conditions
 - source-master codes are unique and `Reference` / `Other` require a detail value
+- Source Master deletion is blocked when an inquiry references the source
 
 ## 19. SSOT Rule
 Any change to follow-up filtering, follow-up history writing, dashboard entry links, creator-based access behavior, or the “single visible car per inquiry” presentation rule must update this SSOT in the same change.
