@@ -172,12 +172,22 @@ const navItems: NavItem[] = [
   },
 ]
 
-export function Layout({ children, accessibleRoutes = [] }: { children: ReactNode; accessibleRoutes?: string[] }) {
+export function Layout({
+  children,
+  accessibleRoutes = [],
+  displayName: initialDisplayName,
+  roleName: initialRoleName = '',
+}: {
+  children: ReactNode
+  accessibleRoutes?: string[]
+  displayName?: string
+  roleName?: string
+}) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ Operations: true, Configuration: false, Reports: false })
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ Operations: true, Configuration: true, Reports: true })
   const accessibleRouteSet = new Set(accessibleRoutes)
 
   const visibleNavItems = navItems
@@ -206,8 +216,8 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
     return item.children?.some(c => pathname === c.href || pathname.startsWith(`${c.href}/`))
   }
 
-  const displayName = session?.user?.name || 'User'
-  const roleName = session?.user?.roleName || ''
+  const displayName = initialDisplayName || session?.user?.name || session?.user?.username || 'User'
+  const roleName = initialRoleName || session?.user?.roleName || ''
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -234,8 +244,9 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
             ) : (
               <div>
                 <button
+                  type="button"
                   onClick={() => toggle(item.label)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${isActive(item) ? 'text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                  className={`w-full flex cursor-pointer items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${isActive(item) || expanded[item.label] ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
                 >
                   {item.icon}
                   {sidebarOpen && (
@@ -247,6 +258,9 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
                 </button>
                 {sidebarOpen && expanded[item.label] && item.children && (
                   <div className="ml-7 mt-0.5 space-y-0.5">
+                    {item.children.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-white/35">No accessible pages</div>
+                    )}
                     {item.children.map(child => (
                       <Link
                         key={child.href}
@@ -313,7 +327,7 @@ export function Layout({ children, accessibleRoutes = [] }: { children: ReactNod
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className={`flex-1 overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-6'}`}>
           {children}
         </main>
       </div>

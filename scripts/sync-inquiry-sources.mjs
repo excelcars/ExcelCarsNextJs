@@ -1,6 +1,33 @@
 import { readFile, writeFile } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PrismaClient } from '@prisma/client'
+
+const envFileArg = process.argv.find((arg) => arg.startsWith('--env-file='))
+if (envFileArg) {
+  const envFile = join(process.cwd(), envFileArg.slice('--env-file='.length))
+  if (!existsSync(envFile)) throw new Error(`Missing environment file: ${envFile}`)
+
+  // Explicit environment selection must replace the local DATABASE_URL inherited by the CLI.
+  for (const rawLine of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+
+    const separatorIndex = line.indexOf('=')
+    if (separatorIndex === -1) continue
+
+    const key = line.slice(0, separatorIndex).trim()
+    let value = line.slice(separatorIndex + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    process.env[key] = value
+  }
+}
+
+if (envFileArg?.includes('.env.production') && (!process.argv.includes('--force') || !process.argv.includes('--confirm-production'))) {
+  throw new Error('Refusing to change production sources without --force --confirm-production.')
+}
 
 const prisma = new PrismaClient()
 
@@ -20,8 +47,11 @@ function normalizeSource(value) {
 }
 
 async function main() {
+  const databaseHost = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).hostname : 'unknown database host'
   const filePath = join(process.cwd(), 'db', 'inquiry-source-import.json')
   const { sourceRows, mappingRows } = JSON.parse(await readFile(filePath, 'utf8'))
+
+  console.log(`Syncing inquiry sources to ${databaseHost}...`)
 
   for (const source of sourceRows) {
     const reportingSort = reportingSortByCode[source.code]
@@ -104,7 +134,19 @@ async function main() {
   await writeFile(reportPath, csv)
 
   const unmapped = unmappedRows.reduce((sum, row) => sum + row._count.inquiryId, 0)
-  console.log(`Inquiry sources synced: ${sourceRows.length} master rows, ${uniqueMappings.size} legacy mappings, ${backfilled} mapped inquiries, ${blankBackfilled} blank websites assigned to Unknown, ${unmapped} inquiries unmapped. Review ${reportPath}.`)
+  const orderedSources = await prisma.inquirySourceMaster.findMany({
+    select: { code: true, reportingSort: true },
+    orderBy: { reportingSort: 'asc' },
+  })
+  const sequentialSort =
+    orderedSources.length === sourceRows.length &&
+    orderedSources.every((source, index) => source.reportingSort === index + 1)
+
+  if (!sequentialSort) {
+    throw new Error('Source reporting sort verification failed: expected the seeded sources to occupy every position from 1 through 35.')
+  }
+
+  console.log(`Inquiry sources synced: ${sourceRows.length} master rows, ${uniqueMappings.size} legacy mappings, ${backfilled} mapped inquiries, ${blankBackfilled} blank websites assigned to Unknown, ${unmapped} inquiries unmapped. Verified reporting_sort 1-${orderedSources.length}. Review ${reportPath}.`)
 }
 
 main()

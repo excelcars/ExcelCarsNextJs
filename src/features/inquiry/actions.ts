@@ -8,8 +8,9 @@ import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
 import { isFollowupStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { sendEmail } from '@/lib/email/sendMail'
-import { vehicleDetailsEmail } from '@/lib/email/templates'
+import { noInventoryEnquiryEmail, vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
+import { normalizeWhatsAppRecipient, sendEnquiryTemplate, sendNoInventoryEnquiryTemplate } from '@/lib/whatsapp/meta'
 import { getInquiryActivityEvents, logInquiryEvent } from './eventLog'
 import { INQUIRY_INVENTORY_WORKFLOW_OPTIONS, type InquiryInventoryWorkflowType } from './workflow'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
@@ -56,6 +57,11 @@ export interface AssignInquiryInput {
 
 export interface CreateInquiryOptions {
   sendMatchingInventoryOnCreate?: boolean
+}
+
+type NotificationAttemptResult = {
+  status: 'submitted' | 'failed' | 'skipped'
+  error?: string
 }
 
 async function createTrackedVehicleEmailLink({
@@ -865,20 +871,7 @@ async function findMatchingInventoryIdsForInquiryCars(resolvedCarDetails: Awaite
   const matchIds = new Set<number>()
 
   for (const car of resolvedCarDetails) {
-    const where: Prisma.InventoryManagementWhereInput = {
-      status: { equals: 'In Stock', mode: 'insensitive' },
-      ...(car.year ? { year: car.year } : {}),
-    }
-
-    if (car.fkVariantId) {
-      where.fkVariantId = car.fkVariantId
-    } else {
-      where.AND = [
-        car.makeLegacy ? { makeLegacy: { equals: car.makeLegacy, mode: 'insensitive' } } : {},
-        car.modelLegacy ? { modelLegacy: { equals: car.modelLegacy, mode: 'insensitive' } } : {},
-        car.variantLegacy ? { variantLegacy: { equals: car.variantLegacy, mode: 'insensitive' } } : {},
-      ]
-    }
+    const where = buildInventoryMatchWhere(car)
 
     const matches = await prisma.inventoryManagement.findMany({
       where,
@@ -893,6 +886,320 @@ async function findMatchingInventoryIdsForInquiryCars(resolvedCarDetails: Awaite
   }
 
   return [...matchIds]
+}
+
+function buildInventoryMatchWhere(car: Awaited<ReturnType<typeof resolveInquiryCarDetail>>): Prisma.InventoryManagementWhereInput {
+  const where: Prisma.InventoryManagementWhereInput = {
+    status: { equals: 'In Stock', mode: 'insensitive' },
+    ...(car.year ? { year: car.year } : {}),
+  }
+
+  if (car.fkVariantId) {
+    where.fkVariantId = car.fkVariantId
+  } else {
+    where.AND = [
+      car.makeLegacy ? { makeLegacy: { equals: car.makeLegacy, mode: 'insensitive' } } : {},
+      car.modelLegacy ? { modelLegacy: { equals: car.modelLegacy, mode: 'insensitive' } } : {},
+      car.variantLegacy ? { variantLegacy: { equals: car.variantLegacy, mode: 'insensitive' } } : {},
+    ]
+  }
+  return where
+}
+
+async function findUniquelyMatchedInventoryIdsForInquiryCars(resolvedCarDetails: Awaited<ReturnType<typeof resolveInquiryCarDetails>>) {
+  const inventoryIds = new Set<number>()
+  let noMatchCount = 0
+  let ambiguousCount = 0
+
+  for (const car of resolvedCarDetails) {
+    const matches = await prisma.inventoryManagement.findMany({
+      where: buildInventoryMatchWhere(car),
+      select: { inventoryId: true },
+      orderBy: { inventoryId: 'desc' },
+      take: 2,
+    })
+    if (matches.length === 1) inventoryIds.add(matches[0].inventoryId)
+    else if (matches.length === 0) noMatchCount += 1
+    else ambiguousCount += 1
+  }
+
+  return { inventoryIds: [...inventoryIds], noMatchCount, ambiguousCount }
+}
+
+async function createTrackedVehicleWhatsAppLink({
+  inquiryId,
+  inventoryId,
+  customerId,
+  recipientMobile,
+  recipientName,
+  slug,
+}: {
+  inquiryId: number
+  inventoryId: number
+  customerId: number | null
+  recipientMobile: string
+  recipientName: string
+  slug: string
+}) {
+  const { rawToken, tokenHash } = generateVehicleEmailToken()
+  const row = await prisma.vehicleEmailLink.create({
+    data: {
+      inventoryManagement: { connect: { inventoryId } },
+      inquiry: { connect: { inquiryId } },
+      ...(customerId ? { customer: { connect: { custId: customerId } } } : {}),
+      // This legacy table is also the secure public-vehicle-link store. The channel
+      // makes the non-email recipient value unambiguous for future reporting.
+      recipientEmail: `whatsapp:${recipientMobile}`,
+      recipientName: recipientName || null,
+      channel: 'WhatsApp',
+      tokenHash,
+      isActive: true,
+    },
+  })
+
+  const url = new URL(buildTrackedVehicleUrl(slug, rawToken))
+  return {
+    vehicleEmailLinkId: row.vehicleEmailLinkId,
+    buttonUrlSuffix: `${url.pathname}${url.search}`.replace(/^\//, ''),
+  }
+}
+
+async function sendInquiryInventoryWhatsApp(inquiryId: number, inventoryId: number) {
+  const [inquiry, inventory] = await Promise.all([
+    prisma.inquiry.findUnique({ where: { inquiryId }, include: { customer: true } }),
+    prisma.inventoryManagement.findUnique({
+      where: { inventoryId },
+      include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } },
+    }),
+  ])
+  if (!inquiry || !inventory) return { status: 'failed', error: 'Matching inquiry or inventory was not found.' } satisfies NotificationAttemptResult
+
+  const customerName = inquiry.customer?.custName?.trim() || inquiry.customerNameLegacy?.trim() || 'Customer'
+  const recipientMobile = normalizeWhatsAppRecipient(inquiry.customer?.custMobile || inquiry.mobileno)
+  const make = inventory.carVariantMaster?.carMakeMaster?.make ?? inventory.makeLegacy ?? ''
+  const model = inventory.carVariantMaster?.carModelMaster?.model ?? inventory.modelLegacy ?? ''
+  const variant = inventory.carVariantMaster?.variant ?? inventory.variantLegacy ?? ''
+  const vehicleName = [inventory.year ? String(inventory.year) : '', make, model, variant].filter(Boolean).join(' ').trim() || `Inventory ${inventory.inventoryNumber || inventory.inventoryId}`
+
+  let deliveryLog: { whatsAppDeliveryLogId: number }
+  try {
+    deliveryLog = await prisma.whatsAppDeliveryLog.create({
+      data: {
+        inquiryId,
+        inventoryId,
+        recipientMobile: recipientMobile || '',
+        recipientName: customerName,
+        templateName: 'enquiry_temp',
+        templateLanguage: 'en',
+        vehicleName,
+        status: 'Preparing',
+      },
+      select: { whatsAppDeliveryLogId: true },
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return { status: 'skipped' } satisfies NotificationAttemptResult
+    throw error
+  }
+
+  if (!recipientMobile) {
+    await prisma.whatsAppDeliveryLog.update({
+      where: { whatsAppDeliveryLogId: deliveryLog.whatsAppDeliveryLogId },
+      data: { status: 'Failed', errorMessage: 'The inquiry has no valid 10-digit customer mobile number.', attemptedAt: new Date() },
+    })
+    return { status: 'failed', error: 'The inquiry has no valid 10-digit customer mobile number.' } satisfies NotificationAttemptResult
+  }
+
+  try {
+    const vehicleLink = await createTrackedVehicleWhatsAppLink({
+      inquiryId,
+      inventoryId,
+      customerId: inquiry.customerId,
+      recipientMobile,
+      recipientName: customerName,
+      slug: buildVehicleSlug({ make, model, variant, year: inventory.year }),
+    })
+    await prisma.whatsAppDeliveryLog.update({
+      where: { whatsAppDeliveryLogId: deliveryLog.whatsAppDeliveryLogId },
+      data: { buttonUrlSuffix: vehicleLink.buttonUrlSuffix, attemptedAt: new Date(), status: 'Sending' },
+    })
+
+    const result = await sendEnquiryTemplate({
+      to: recipientMobile,
+      customerName,
+      vehicleName,
+      buttonUrlSuffix: vehicleLink.buttonUrlSuffix,
+    })
+    await prisma.whatsAppDeliveryLog.update({
+      where: { whatsAppDeliveryLogId: deliveryLog.whatsAppDeliveryLogId },
+      data: {
+        status: result.success ? 'Submitted' : 'Failed',
+        providerMessageId: result.providerMessageId ?? null,
+        errorMessage: result.success ? null : (result.error || 'WhatsApp API request failed.').slice(0, 1000),
+      },
+    })
+    return result.success
+      ? { status: 'submitted' } satisfies NotificationAttemptResult
+      : { status: 'failed', error: result.error || 'WhatsApp API request failed.' } satisfies NotificationAttemptResult
+  } catch (error) {
+    await prisma.whatsAppDeliveryLog.update({
+      where: { whatsAppDeliveryLogId: deliveryLog.whatsAppDeliveryLogId },
+      data: { status: 'Failed', errorMessage: 'Could not prepare the WhatsApp vehicle link.', attemptedAt: new Date() },
+    }).catch(() => undefined)
+    console.error('Inquiry WhatsApp automation failed:', error)
+    return { status: 'failed', error: 'Could not prepare the WhatsApp vehicle link.' } satisfies NotificationAttemptResult
+  }
+}
+
+async function sendWhatsAppForMatchedInquiryInventory(inquiryId: number, inventoryIds: number[]) {
+  return Promise.all(inventoryIds.map(inventoryId => sendInquiryInventoryWhatsApp(inquiryId, inventoryId)))
+}
+
+async function sendAutomatedInquiryInventoryEmail(inquiryId: number, inventoryId: number, userId: number | null) {
+  const recipient = await getInquiryRecipient(inquiryId)
+  if ('error' in recipient) return { status: 'failed', error: recipient.error } satisfies NotificationAttemptResult
+
+  let deliveryLog: { inquiryInventoryEmailLogId: number }
+  try {
+    deliveryLog = await prisma.inquiryInventoryEmailLog.create({
+      data: {
+        inquiryId,
+        inventoryId,
+        recipientEmail: recipient.toEmail,
+        status: 'Preparing',
+      },
+      select: { inquiryInventoryEmailLogId: true },
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return { status: 'skipped' } satisfies NotificationAttemptResult
+    throw error
+  }
+
+  try {
+    const session = await auth()
+    const result = await sendMatchedInventoryEmailToInquiryRecipient({
+      inquiryId,
+      inventoryId,
+      signedBy: session?.user?.name || 'Excel Cars Team',
+      userId,
+    })
+    await prisma.inquiryInventoryEmailLog.update({
+      where: { inquiryInventoryEmailLogId: deliveryLog.inquiryInventoryEmailLogId },
+      data: {
+        status: result.success ? 'Sent' : 'Failed',
+        errorMessage: result.success ? null : (result.error || 'Could not send inventory email.').slice(0, 1000),
+        attemptedAt: new Date(),
+      },
+    })
+    return result.success
+      ? { status: 'submitted' } satisfies NotificationAttemptResult
+      : { status: 'failed', error: result.error || 'Could not send inventory email.' } satisfies NotificationAttemptResult
+  } catch (error) {
+    await prisma.inquiryInventoryEmailLog.update({
+      where: { inquiryInventoryEmailLogId: deliveryLog.inquiryInventoryEmailLogId },
+      data: { status: 'Failed', errorMessage: 'Could not send inventory email.', attemptedAt: new Date() },
+    }).catch(() => undefined)
+    console.error('Inquiry email automation failed:', error)
+    return { status: 'failed', error: 'Could not send inventory email.' } satisfies NotificationAttemptResult
+  }
+}
+
+async function sendEmailForMatchedInquiryInventory(inquiryId: number, inventoryIds: number[], userId: number | null) {
+  return Promise.all(inventoryIds.map(inventoryId => sendAutomatedInquiryInventoryEmail(inquiryId, inventoryId, userId)))
+}
+
+async function createNoInventoryNotificationLog({ inquiryId, channel, recipient, templateName }: { inquiryId: number; channel: string; recipient: string; templateName: string | null }) {
+  try {
+    return await prisma.inquiryNoInventoryNotificationLog.create({
+      data: { inquiryId, channel, recipient, templateName, status: 'Preparing' },
+      select: { inquiryNoInventoryNotificationLogId: true },
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return null
+    throw error
+  }
+}
+
+async function sendNoInventoryWhatsApp(inquiryId: number): Promise<NotificationAttemptResult> {
+  const inquiry = await prisma.inquiry.findUnique({ where: { inquiryId }, include: { customer: true } })
+  if (!inquiry) return { status: 'failed', error: 'Inquiry not found.' }
+  const customerName = inquiry.customer?.custName?.trim() || inquiry.customerNameLegacy?.trim() || 'Customer'
+  const recipientMobile = normalizeWhatsAppRecipient(inquiry.customer?.custMobile || inquiry.mobileno)
+  const log = await createNoInventoryNotificationLog({ inquiryId, channel: 'WhatsApp', recipient: recipientMobile || '', templateName: 'enquiry_noinventory' })
+  if (!log) return { status: 'skipped' }
+  if (!recipientMobile) {
+    await prisma.inquiryNoInventoryNotificationLog.update({ where: { inquiryNoInventoryNotificationLogId: log.inquiryNoInventoryNotificationLogId }, data: { status: 'Failed', errorMessage: 'The inquiry has no valid 10-digit customer mobile number.', attemptedAt: new Date() } })
+    return { status: 'failed', error: 'The inquiry has no valid 10-digit customer mobile number.' }
+  }
+  const result = await sendNoInventoryEnquiryTemplate({ to: recipientMobile, customerName })
+  await prisma.inquiryNoInventoryNotificationLog.update({
+    where: { inquiryNoInventoryNotificationLogId: log.inquiryNoInventoryNotificationLogId },
+    data: { status: result.success ? 'Submitted' : 'Failed', errorMessage: result.success ? null : (result.error || 'WhatsApp API request failed.').slice(0, 1000), providerMessageId: result.providerMessageId ?? null, attemptedAt: new Date() },
+  })
+  return result.success ? { status: 'submitted' } : { status: 'failed', error: result.error }
+}
+
+async function sendNoInventoryEmail(inquiryId: number): Promise<NotificationAttemptResult> {
+  const recipient = await getInquiryRecipient(inquiryId)
+  const email = 'error' in recipient ? '' : recipient.toEmail
+  const name = 'error' in recipient ? 'Customer' : recipient.toName
+  const log = await createNoInventoryNotificationLog({ inquiryId, channel: 'Email', recipient: email, templateName: null })
+  if (!log) return { status: 'skipped' }
+  if (!email) {
+    await prisma.inquiryNoInventoryNotificationLog.update({ where: { inquiryNoInventoryNotificationLogId: log.inquiryNoInventoryNotificationLogId }, data: { status: 'Failed', errorMessage: 'This inquiry has no customer email on file.', attemptedAt: new Date() } })
+    return { status: 'failed', error: 'This inquiry has no customer email on file.' }
+  }
+  const message = noInventoryEnquiryEmail(name)
+  const result = await sendEmail({ to: email, ...message })
+  await prisma.inquiryNoInventoryNotificationLog.update({
+    where: { inquiryNoInventoryNotificationLogId: log.inquiryNoInventoryNotificationLogId },
+    data: { status: result.success ? 'Sent' : 'Failed', errorMessage: result.success ? null : (result.error || 'Could not send email.').slice(0, 1000), attemptedAt: new Date() },
+  })
+  return result.success ? { status: 'submitted' } : { status: 'failed', error: result.error }
+}
+
+async function sendNoInventoryNotifications(inquiryId: number) {
+  const [whatsapp, email] = await Promise.all([sendNoInventoryWhatsApp(inquiryId), sendNoInventoryEmail(inquiryId)])
+  return { whatsapp, email }
+}
+
+function describeNotificationResults({
+  matchedInventoryCount,
+  noMatchCount,
+  ambiguousCount,
+  whatsapp,
+  email,
+}: {
+  matchedInventoryCount: number
+  noMatchCount: number
+  ambiguousCount: number
+  whatsapp: NotificationAttemptResult[]
+  email: NotificationAttemptResult[]
+}) {
+  const messages = ['Inquiry saved.']
+  if (matchedInventoryCount === 0) messages.push('No exact in-stock inventory match was found, so no notifications were sent.')
+  else messages.push(`${matchedInventoryCount} exact inventory ${matchedInventoryCount === 1 ? 'match was' : 'matches were'} found.`)
+
+  const describeChannel = (label: string, results: NotificationAttemptResult[], acceptedWording: string) => {
+    const submitted = results.filter(result => result.status === 'submitted').length
+    const failed = results.filter(result => result.status === 'failed')
+    if (submitted) messages.push(`${label}: ${acceptedWording} for ${submitted} ${submitted === 1 ? 'vehicle' : 'vehicles'}${label === 'Email' ? '; delivery is not yet confirmed.' : '.'}`)
+    if (failed.length) messages.push(`${label} failed: ${failed.map(result => result.error).filter(Boolean).join(' ')}`)
+  }
+
+  describeChannel('WhatsApp', whatsapp, 'submitted to Meta')
+  describeChannel('Email', email, 'accepted by SMTP')
+  if (noMatchCount) messages.push(`${noMatchCount} car ${noMatchCount === 1 ? 'choice had' : 'choices had'} no in-stock match.`)
+  if (ambiguousCount) messages.push(`${ambiguousCount} car ${ambiguousCount === 1 ? 'choice matched multiple inventory items' : 'choices matched multiple inventory items'}; those notifications were skipped.`)
+  return messages.join(' ')
+}
+
+function describeNoInventoryNotificationResults(whatsapp: NotificationAttemptResult, email: NotificationAttemptResult) {
+  const message = ['Inquiry saved. No in-stock inventory match was found.']
+  if (whatsapp.status === 'submitted') message.push('WhatsApp no-inventory message submitted to Meta.')
+  else if (whatsapp.status === 'failed') message.push(`WhatsApp failed: ${whatsapp.error || 'unknown error.'}`)
+  if (email.status === 'submitted') message.push('No-inventory email accepted by SMTP; delivery is not yet confirmed.')
+  else if (email.status === 'failed') message.push(`Email failed: ${email.error || 'unknown error.'}`)
+  return message.join(' ')
 }
 
 export async function getInquiryDetail(inquiryId: number, options: { route?: string } = {}) {
@@ -1040,7 +1347,7 @@ export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds
   }
 
   let sentCount = 0
-  const failedIds: number[] = []
+  const failures: string[] = []
 
   for (const inventoryId of uniqueInventoryIds) {
     const result = await sendMatchedInventoryEmailToInquiryRecipient({
@@ -1052,19 +1359,19 @@ export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds
     if (result.success) {
       sentCount += 1
     } else {
-      failedIds.push(inventoryId)
+      failures.push(result.error || `Vehicle #${inventoryId}`)
     }
   }
 
   if (sentCount === 0) {
-    return { success: false, error: 'Could not send any of the selected matching inventory vehicles.' }
+    return { success: false, error: `No matching emails were accepted by SMTP. ${failures.join(' ')}`.trim() }
   }
 
   return {
     success: true,
-    message: failedIds.length > 0
-      ? `Sent ${sentCount} matching vehicle email${sentCount === 1 ? '' : 's'}. Failed for ${failedIds.length} vehicle${failedIds.length === 1 ? '' : 's'}.`
-      : `Sent ${sentCount} matching vehicle email${sentCount === 1 ? '' : 's'}.`,
+    message: failures.length > 0
+      ? `Email accepted by SMTP for ${sentCount} matching ${sentCount === 1 ? 'vehicle' : 'vehicles'}; delivery is not yet confirmed. Failed for ${failures.length} ${failures.length === 1 ? 'vehicle' : 'vehicles'}: ${failures.join(' ')}`
+      : `Email accepted by SMTP for ${sentCount} matching ${sentCount === 1 ? 'vehicle' : 'vehicles'}; delivery is not yet confirmed.`,
   }
 }
 
@@ -1252,6 +1559,33 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
 
   let resultMessage: string | undefined
 
+  // The enquiry has committed at this point. WhatsApp failures must never roll it
+  // back or turn a successful save into an error for the user.
+  if (newInquiryId && resolvedCarDetails.length > 0) {
+    try {
+      const matches = await findUniquelyMatchedInventoryIdsForInquiryCars(resolvedCarDetails)
+      if (matches.inventoryIds.length === 0 && matches.noMatchCount > 0 && matches.ambiguousCount === 0) {
+        const noInventory = await sendNoInventoryNotifications(newInquiryId)
+        resultMessage = describeNoInventoryNotificationResults(noInventory.whatsapp, noInventory.email)
+      } else {
+        const [whatsapp, email] = await Promise.all([
+          sendWhatsAppForMatchedInquiryInventory(newInquiryId, matches.inventoryIds),
+          sendEmailForMatchedInquiryInventory(newInquiryId, matches.inventoryIds, userId),
+        ])
+        resultMessage = describeNotificationResults({
+          matchedInventoryCount: matches.inventoryIds.length,
+          noMatchCount: matches.noMatchCount,
+          ambiguousCount: matches.ambiguousCount,
+          whatsapp,
+          email,
+        })
+      }
+    } catch (error) {
+      console.error('Inquiry notification automation failed:', error)
+      resultMessage = 'Inquiry saved, but automatic WhatsApp and email notifications could not be checked.'
+    }
+  }
+
   if (newInquiryId && resolvedCarDetails.length > 0 && options.sendMatchingInventoryOnCreate) {
     try {
       const matchedInventoryIds = await findMatchingInventoryIdsForInquiryCars(resolvedCarDetails)
@@ -1263,17 +1597,18 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
           userId,
         })
         const emailResult = await sendInquiryInventoryEmails(newInquiryId, matchedInventoryIds)
-        resultMessage = emailResult.success
-          ? (emailResult.message ?? 'Inquiry saved and matching inventory email sent.')
-          : 'Inquiry saved, but matching inventory email could not be sent.'
+        const manualMessage = emailResult.success
+          ? (emailResult.message ?? 'Matching inventory email accepted by SMTP; delivery is not yet confirmed.')
+          : `Manual matching inventory email failed: ${emailResult.error ?? 'unknown error.'}`
+        resultMessage = [resultMessage, manualMessage].filter(Boolean).join(' ')
       } else {
-        resultMessage = 'Inquiry saved. No matching inventory was available to send.'
+        resultMessage = [resultMessage, 'No matching inventory was available for the manual email send.'].filter(Boolean).join(' ')
       }
     } catch {
-      resultMessage = 'Inquiry saved, but matching inventory email could not be sent.'
+      resultMessage = [resultMessage, 'Manual matching inventory email could not be sent.'].filter(Boolean).join(' ')
     }
   } else if (options.sendMatchingInventoryOnCreate) {
-    resultMessage = 'Inquiry saved. No vehicle rows were available for matching inventory send.'
+    resultMessage = [resultMessage, 'No vehicle rows were available for the manual email send.'].filter(Boolean).join(' ')
   }
 
   revalidatePath('/inquiry')
@@ -1529,8 +1864,15 @@ export async function deleteInquiry(id: number): Promise<ActionResult> {
         customer: { select: { custName: true } },
       },
     })
-    await prisma.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
-    await prisma.inquiry.delete({ where: { inquiryId: id } })
+
+    await prisma.$transaction(async tx => {
+      // These are non-cascading legacy relations and must be removed before
+      // their parent inquiry. Notification logs and inventory links cascade.
+      await tx.followupInquiry.deleteMany({ where: { fkInquiryId: id } })
+      await tx.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
+      await tx.inquiry.delete({ where: { inquiryId: id } })
+    })
+
     await logInquiryEvent(prisma, {
       inquiryId: id,
       eventType: 'inquiry_deleted',
@@ -1544,7 +1886,8 @@ export async function deleteInquiry(id: number): Promise<ActionResult> {
   }
 
   revalidatePath('/inquiry')
-  return { success: true }
+  revalidatePath('/followup')
+  return { success: true, message: 'Inquiry deleted successfully.' }
 }
 
 function describeError(err: unknown): string {

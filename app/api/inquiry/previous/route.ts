@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const mobile = req.nextUrl.searchParams.get('mobile')?.trim() ?? ''
   const customerId = Number(req.nextUrl.searchParams.get('customerId'))
   const excludeInquiryId = Number(req.nextUrl.searchParams.get('excludeInquiryId'))
+  const variantIds = (req.nextUrl.searchParams.get('variantIds') ?? '').split(',').map(Number).filter(Number.isFinite)
   const normalizedMobile = normalizeMobile(mobile)
 
   if (!normalizedMobile && !customerId) return NextResponse.json([])
@@ -55,7 +56,11 @@ export async function GET(req: NextRequest) {
     orderBy: { inquiryId: 'desc' },
   })
 
-  const enrichedRows = rows.map(row => {
+  const vehicleMatches = variantIds.length > 0
+    ? rows.filter(row => row.inquiryCarDetails.some(car => car.fkVariantId && variantIds.includes(car.fkVariantId)))
+    : []
+
+  const enrichedRows = vehicleMatches.map(row => {
     const matchReasons: string[] = []
     const rowMobile = normalizeMobile(row.customer?.custMobile ?? row.mobileno)
 
@@ -65,6 +70,7 @@ export async function GET(req: NextRequest) {
     if (customerId && row.customer?.custId === customerId) {
       matchReasons.push('Same linked customer')
     }
+    matchReasons.push('Same vehicle interest')
     if ((row.status ?? '').trim().toLowerCase() !== 'closed') {
       matchReasons.push('Open inquiry')
     }

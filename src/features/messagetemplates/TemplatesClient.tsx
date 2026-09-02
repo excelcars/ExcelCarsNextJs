@@ -24,7 +24,6 @@ function emptyForm(): TemplateFormInput {
 export function TemplatesClient({ initialData }: { initialData: TemplateRow[] }) {
   const [data, setData] = useState(initialData)
   const [search, setSearch] = useState('')
-  const [filterType, setFilterType] = useState('All')
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [form, setForm] = useState<TemplateFormInput>(emptyForm())
   const [editId, setEditId] = useState<number | null>(null)
@@ -55,9 +54,9 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
     const q = search.toLowerCase()
     return data.filter(r => {
       const matches = !q || (r.messageSubject ?? '').toLowerCase().includes(q) || (r.messageBody ?? '').toLowerCase().includes(q)
-      return matches && (filterType === 'All' || r.messageType === filterType)
+      return matches
     })
-  }, [data, search, filterType])
+  }, [data, search])
 
   const openAdd = () => { setForm(emptyForm()); setEditId(null); setError(''); setModal('add') }
   const openEdit = (r: TemplateRow) => {
@@ -194,15 +193,6 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
 
       <div className="flex flex-wrap gap-3 mb-4">
         <SearchBar value={search} onChange={setSearch} placeholder="Subject, body..." />
-        <div className="flex gap-1.5">
-          {['All', ...MESSAGE_TYPES].map(t => (
-            <button key={t} onClick={() => setFilterType(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterType === t ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              style={filterType === t ? { backgroundColor: '#1B2A6B' } : {}}>
-              {t}
-            </button>
-          ))}
-        </div>
       </div>
 
       <Table headers={['Type', 'Subject', 'Body', 'Actions']} empty={filtered.length === 0}>

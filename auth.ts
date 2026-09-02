@@ -74,20 +74,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // status changes and authVersion bumps revoke every device.
       const currentUser = await prisma.userTable.findUnique({
         where: { userId },
-        select: { status: true, authVersion: true },
+        select: { status: true, authVersion: true, displayName: true, userName: true, roleName: true },
       });
 
       if (!currentUser || currentUser.status !== "Active" || currentUser.authVersion !== token.authVersion) {
         return null;
       }
 
+      token.name = currentUser.displayName || currentUser.userName || token.name;
+      token.username = currentUser.userName || token.username;
+      token.roleName = currentUser.roleName ?? token.roleName;
+
       return token;
     },
     async session({ session, token }) {
-      if (!token.sub) return session;
+      if (!session.user || typeof token.sub !== "string" || typeof token.username !== "string") {
+        return session;
+      }
+
       session.user.id = token.sub;
-      session.user.username = token.username as string;
-      session.user.roleName = token.roleName as string | null;
+      session.user.username = token.username;
+      session.user.roleName = typeof token.roleName === "string" ? token.roleName : null;
+      session.user.name = typeof token.name === "string" ? token.name : session.user.username;
       return session;
     },
   },
