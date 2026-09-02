@@ -73,7 +73,7 @@ export default async function InventoryPage({
   const page = Number(sp.page) || 1
   const pageSize = Number(sp.pageSize) || 25
 
-  const [{ rows, total, pageCount }, makes, dealers, inventoryColours] = await Promise.all([
+  const [{ rows, total, pageCount, page: safePage, pageSize: safePageSize }, makes, dealers, inventoryColours] = await Promise.all([
     listInventory({
       search,
       status,
@@ -153,9 +153,9 @@ export default async function InventoryPage({
       initialInternalComments={internalComments}
       initialOtherRemarks={otherRemarks}
       total={total}
-      page={page}
+      page={safePage}
       pageCount={pageCount}
-      pageSize={pageSize}
+      pageSize={safePageSize}
     />
   )
 }

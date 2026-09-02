@@ -6,7 +6,11 @@ import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!(await canCurrentUserAccessRoute('/config/customers')) && !(await canCurrentUserAccessRoute('/config/feedback'))) {
+  if (
+    !(await canCurrentUserAccessRoute('/config/customers'))
+    && !(await canCurrentUserAccessRoute('/config/feedback'))
+    && !(await canCurrentUserAccessRoute('/inventory'))
+  ) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

@@ -4,155 +4,21 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Eye, Mail, X, Images, Upload, Loader2, Download, Link2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus, Mail, X, Upload, Loader2, Download } from 'lucide-react'
+import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import { createMake, createModel, createVariant } from '@/features/catalog/adminActions'
 import { INVENTORY_STATUSES } from './queries'
-import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryEmailRecipient, getInventorySku, getNextInventoryNumber, type InventoryFormInput } from './actions'
+import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, sendBulkInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryEmailRecipient, getInventorySku, getNextInventoryNumber, type InventoryFormInput } from './actions'
 import { isValidEmail, isValidInventoryOwnerMobile, isValidYear, normalizeRegistrationNo } from '@/lib/validation'
-
-interface CarMakeMaster { pkMakeId: number; make: string | null }
-interface CarModelMaster { pkModelId: number; model: string | null }
-interface CarVariantMaster { pkVariantId: number; variant: string | null }
-interface Dealer { dealerId: number; dealerName: string | null; dealerMobileNo: string | null; dealerEmail: string | null }
-interface CustomerOption { custId: number; custName: string; custAddress?: string | null; custMobile: string | null; custEmail: string | null }
-interface EmailProgressItem { inventoryId: number; label: string; status: 'pending' | 'sending' | 'sent' | 'failed'; error?: string }
-
-interface InventoryRow {
-  inventoryId: number
-  inventoryNumber: string | null
-  sku: string | null
-  registrationNo: string | null
-  makeLegacy: string | null
-  modelLegacy: string | null
-  variantLegacy: string | null
-  year: number | null
-  month: string | null
-  colour: string | null
-  fuelType: string | null
-  noOfOwners: number | null
-  tax: string | null
-  isCarRegistered: boolean | null
-  kmsDriven: string | null
-  insuranceType: string | null
-  price: string | null
-  status: string | null
-  ownedType: string | null
-  ownedBy: string | null
-  mobileNoOwnedBy: string | null
-  emailIdOwnedBy: string | null
-  customerId: number | null
-  customerName: string | null
-  internalComments: string | null
-  otherRemarks: string | null
-  fkVariantId: number | null
-  customer: CustomerOption | null
-  _count: { inventoryPhotos: number }
-  vehicleEmailLinks?: Array<{
-    vehicleEmailLinkId: number
-    recipientEmail: string
-    recipientName: string | null
-    emailSentAt: string | Date | null
-    firstRequestedAt: string | Date | null
-    firstHumanViewAt: string | Date | null
-    lastRequestedAt: string | Date | null
-    requestCount: number
-    humanViewCount: number
-    isActive: boolean
-    interactionSummary?: {
-      callClickCount: number
-      whatsappClickCount: number
-      emailClickCount: number
-      firstInteractionAt: string | Date | null
-      lastInteractionAt: string | Date | null
-    }
-  }>
-  carVariantMaster: {
-    variant: string | null
-    carMakeMaster: { pkMakeId: number; make: string | null } | null
-    carModelMaster: { pkModelId: number; model: string | null } | null
-  } | null
-}
-
-interface InventoryPhoto {
-  documentId: number
-  path: string | null
-  inventoryNumberLegacy: string | null
-  isUploadedHere: boolean
-  fileName: string
-}
-
-interface UploadQueueItem {
-  id: string
-  file: File
-  previewUrl: string
-  status: 'queued' | 'uploading' | 'uploaded' | 'failed'
-  error?: string
-}
-
-interface InquiryOption {
-  inquiryId: number
-  inquiryNo: string | null
-  customerId: number | null
-  customerNameLegacy: string | null
-  mobileno: string | null
-  email: string | null
-  classification: string | null
-  status: string | null
-  subStatus: string | null
-  customer: CustomerOption | null
-  inquiryCarDetails: Array<{
-    fkVariantId: number | null
-    year: number | null
-    carVariantMaster: {
-      variant: string | null
-      carMakeMaster: { make: string | null } | null
-      carModelMaster: { model: string | null } | null
-    } | null
-  }>
-}
-
-interface EmailRecipient {
-  key: string
-  recipientType: 'dealer' | 'customer'
-  recipientId: number
-  name: string
-  email: string | null
-  meta: string
-}
-
-interface InventoryFilters {
-  search: string
-  status: string
-  make: string
-  model: string
-  fuelType: string
-  inventoryNumber: string
-  sku: string
-  registrationNo: string
-  variant: string
-  colour: string
-  year: string
-  month: string
-  noOfOwners: string
-  tax: string
-  isCarRegistered: string
-  kmsMin: string
-  kmsMax: string
-  insuranceType: string
-  priceMin: string
-  priceMax: string
-  ownedType: string
-  ownedBy: string
-  mobileNoOwnedBy: string
-  emailIdOwnedBy: string
-  customerName: string
-  linkedCustomer: string
-  internalComments: string
-  otherRemarks: string
-}
+import type { CarMakeMaster, CarModelMaster, CarVariantMaster, Dealer, CustomerOption, EmailProgressItem, InventoryRow, InventoryPhoto, UploadQueueItem, InquiryOption, EmailRecipient, InventoryFilters } from './inventoryTypes'
+import { InventoryDetailCell } from './InventoryDetailCell'
+import { InventoryTable } from './InventoryTable'
+import { InventoryPagination } from './InventoryPagination'
+import { InventoryFilters as InventoryFiltersPanel, type InventoryFilterChip } from './InventoryFilters'
+import { InventoryConfirmDialogs } from './InventoryConfirmDialogs'
+import { useInventoryFilters } from './hooks/useInventoryFilters'
 
 const fmt = (n: string | number | null) => (n !== null && n !== '' ? `₹${Number(n).toLocaleString('en-IN')}` : '—')
 const formatPriceInput = (value: number | null) => value === null || !Number.isFinite(value)
@@ -167,31 +33,6 @@ const clean = (v: string | null | undefined) => {
 const text = (v: string | null | undefined) => clean(v).toLowerCase()
 const num = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? null : Number(v))
 const INVENTORY_FUEL_TYPES = ['Petrol', 'Diesel', 'CNG']
-
-function InventoryDetailCell({
-  items,
-}: {
-  items: Array<[string, string | number | boolean | null | undefined]>
-}) {
-  return (
-    <div className="space-y-0.5 text-xs leading-5 text-gray-600">
-      {items.map(([label, value]) => {
-        const displayValue = value === null || value === undefined || value === ''
-          ? '—'
-          : typeof value === 'boolean'
-            ? value ? 'Yes' : 'No'
-            : String(value)
-
-        return (
-          <div key={label}>
-            <span className="font-semibold text-gray-700">{label}:</span>{' '}
-            <span>{displayValue}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 function emptyFilters(): InventoryFilters {
   return {
@@ -706,42 +547,7 @@ export function InventoryClient({
     return withEmail.filter(d => (d.dealerName ?? '').toLowerCase().includes(q)).slice(0, 20)
   }, [dealers, dealerQuery])
 
-  const filtered = useMemo(() => {
-    const q = filters.search.toLowerCase()
-    return data.filter(r => {
-      const make = clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy)
-      const model = clean(r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy)
-      const variant = clean(r.carVariantMaster?.variant ?? r.variantLegacy)
-      const matches = !q
-        || (r.registrationNo ?? '').toLowerCase().includes(q)
-        || make.toLowerCase().includes(q)
-        || model.toLowerCase().includes(q)
-        || variant.toLowerCase().includes(q)
-        || (r.colour ?? '').toLowerCase().includes(q)
-        || (r.ownedBy ?? '').toLowerCase().includes(q)
-        || (r.mobileNoOwnedBy ?? '').toLowerCase().includes(q)
-      if (!matches) return false
-      if (filters.status !== 'All' && r.status !== filters.status) return false
-      if (filters.fuelType && clean(r.fuelType) !== filters.fuelType) return false
-      if (filters.ownedType && text(r.ownedType) !== filters.ownedType.toLowerCase()) return false
-      return true
-    })
-  }, [data, filters])
-
-  const activeFilterChips = useMemo(() => {
-    const items: Array<{ key: keyof InventoryFilters; label: string }> = []
-    const push = (key: keyof InventoryFilters, label: string, value: string) => {
-      if (!value || value === 'All') return
-      items.push({ key, label: `${label}: ${value}` })
-    }
-    push('search', 'Search', filters.search)
-    push('status', 'Status', filters.status)
-    push('fuelType', 'Fuel', filters.fuelType)
-    push('ownedType', 'Owner Type', filters.ownedType)
-    return items
-  }, [filters])
-
-  const hasActiveFilters = activeFilterChips.length > 0
+  const { activeFilterChips, hasActiveFilters } = useInventoryFilters(filters)
   const vehicleLabel = (r: InventoryRow | InquiryOption['inquiryCarDetails'][number]) => {
     const variantRecord = 'carVariantMaster' in r ? r.carVariantMaster : null
     const makeLegacy = 'makeLegacy' in r ? r.makeLegacy : null
@@ -785,18 +591,8 @@ export function InventoryClient({
     }
   }, [inquiryQuery, inquiryRow])
 
-  useEffect(() => {
-    if (listDebounceRef.current) clearTimeout(listDebounceRef.current)
-    if (searchInput === initialSearch) return
-    setFilters(prev => ({ ...prev, search: searchInput }))
-    listDebounceRef.current = setTimeout(() => pushQuery({ search: searchInput, page: '1' }), 400)
-    return () => {
-      if (listDebounceRef.current) clearTimeout(listDebounceRef.current)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput])
-
   const serverFilterSnapshot = useMemo(() => ({
+    search: filters.search,
     status: filters.status,
     make: filters.make,
     model: filters.model,
@@ -827,6 +623,7 @@ export function InventoryClient({
   }), [filters])
 
   const initialServerFilterSnapshot = useMemo(() => ({
+    search: initialSearch,
     status: initialStatus,
     make: initialMake,
     model: initialModel,
@@ -877,6 +674,7 @@ export function InventoryClient({
     initialPriceMax,
     initialPriceMin,
     initialRegistrationNo,
+    initialSearch,
     initialSku,
     initialStatus,
     initialTax,
@@ -1075,7 +873,7 @@ export function InventoryClient({
   }
 
   const refreshSku = async (make: string, model: string, colour: string) => {
-    const sku = await getInventorySku(make, model, colour, editId ?? undefined)
+    const sku = await getInventorySku(make, model, colour)
     setCurrentSku(sku || null)
   }
 
@@ -1216,7 +1014,7 @@ export function InventoryClient({
   }
 
   const openBulkEmail = () => {
-    const rows = filtered.filter(row => selectedInventoryIds.includes(row.inventoryId))
+    const rows = data.filter(row => selectedInventoryIds.includes(row.inventoryId))
     if (rows.length === 0) return
     setEmailRow(rows[0])
     setEmailRows(rows)
@@ -1483,27 +1281,35 @@ export function InventoryClient({
           setEmailError(`Bulk email is limited to ${limits.maxVehicles} vehicles, ${limits.maxRecipients} recipients, and ${limits.maxMessages} total emails.`)
           return
         }
-      }
 
-      const failures: string[] = []
-      let sentCount = 0
-      for (const row of rows) {
-        setEmailProgress(prev => prev.map(item => item.inventoryId === row.inventoryId ? { ...item, status: 'sending' } : item))
-        const result = await sendInventoryEmail(row.inventoryId, { recipients })
-        if (result.success) {
-          sentCount += 1
-          setEmailProgress(prev => prev.map(item => item.inventoryId === row.inventoryId ? { ...item, status: 'sent' } : item))
-        } else {
-          const message = result.error ?? 'Email failed.'
-          failures.push(row.registrationNo ?? row.inventoryNumber ?? `Vehicle #${row.inventoryId}`)
-          setEmailProgress(prev => prev.map(item => item.inventoryId === row.inventoryId ? { ...item, status: 'failed', error: message } : item))
+        setEmailProgress(prev => prev.map(item => ({ ...item, status: 'sending' })))
+        const result = await sendBulkInventoryEmail(rows.map(row => row.inventoryId), { recipients })
+        const sentIds = new Set(result.sentInventoryIds ?? [])
+        const failedIds = new Set(result.failedInventoryIds ?? rows.filter(row => !sentIds.has(row.inventoryId)).map(row => row.inventoryId))
+        setEmailProgress(prev => prev.map(item => sentIds.has(item.inventoryId)
+          ? { ...item, status: 'sent', error: undefined }
+          : { ...item, status: 'failed', error: 'Email failed.' }))
+        if (!result.success) {
+          setEmailError(result.error ?? 'Could not send email for any selected vehicle.')
+          return
         }
-      }
-      if (sentCount === 0) {
-        setEmailError('Could not send email for any selected vehicle.')
+        const failures = rows
+          .filter(row => failedIds.has(row.inventoryId))
+          .map(row => row.registrationNo ?? row.inventoryNumber ?? `Vehicle #${row.inventoryId}`)
+        setEmailSentMessage(`${sentIds.size} vehicle${sentIds.size === 1 ? '' : 's'} sent to ${emailRecipients.length} recipient${emailRecipients.length === 1 ? '' : 's'}.${failures.length > 0 ? ` Failed: ${failures.join(', ')}.` : ''}`)
         return
       }
-      setEmailSentMessage(`${sentCount} vehicle${sentCount === 1 ? '' : 's'} sent to ${emailRecipients.length} recipient${emailRecipients.length === 1 ? '' : 's'}.${failures.length > 0 ? ` Failed: ${failures.join(', ')}.` : ''}`)
+
+      const row = rows[0]
+      setEmailProgress(prev => prev.map(item => ({ ...item, status: 'sending' })))
+      const result = await sendInventoryEmail(row.inventoryId, { recipients })
+      if (!result.success) {
+        setEmailProgress(prev => prev.map(item => ({ ...item, status: 'failed', error: result.error ?? 'Email failed.' })))
+        setEmailError(result.error ?? 'Could not send email for this vehicle.')
+        return
+      }
+      setEmailProgress(prev => prev.map(item => ({ ...item, status: 'sent', error: undefined })))
+      setEmailSentMessage(`1 vehicle sent to ${emailRecipients.length} recipient${emailRecipients.length === 1 ? '' : 's'}.`)
     } finally {
       setIsEmailSending(false)
     }
@@ -1637,71 +1443,7 @@ export function InventoryClient({
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
 
-      <div className="mb-4 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto]">
-          <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Search make, model, variant, colour, owner, mobile or registration..." disabled={isListLoading} />
-          <Select disabled={isListLoading} value={filters.status} onChange={e => {
-            const nextStatus = e.target.value
-            setFilter('status', nextStatus)
-          }}>
-            <option value="All">All Statuses</option>
-            {INVENTORY_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
-          <Select disabled={isListLoading} value={filters.fuelType} onChange={e => {
-            const nextFuelType = e.target.value
-            setFilter('fuelType', nextFuelType)
-          }}>
-            <option value="">All Fuels</option>
-            {INVENTORY_FUEL_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
-          </Select>
-          <Select disabled={isListLoading} value={filters.ownedType} onChange={e => setFilter('ownedType', e.target.value)}>
-            <option value="">All Owner Types</option>
-            <option value="Excel Cars">Excel Cars</option>
-            <option value="Dealer">Dealer</option>
-            <option value="Individual">Individual</option>
-          </Select>
-          {hasActiveFilters ? <Btn variant="ghost" onClick={clearAllFilters} disabled={isListLoading}>Clear All</Btn> : null}
-        </div>
-
-        {activeFilterChips.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {activeFilterChips.map(chip => (
-              <button
-                key={`${chip.key}-${chip.label}`}
-                type="button"
-                onClick={() => {
-                  if (chip.key === 'search') {
-                    setSearchInput('')
-                    setFilter('search', '')
-                    return
-                  }
-                  if (chip.key === 'status') {
-                    setFilter('status', 'All')
-                    return
-                  }
-                  if (chip.key === 'make') {
-                    setFilter('make', '')
-                    setFilter('model', '')
-                    return
-                  }
-                  if (chip.key === 'model') {
-                    setFilter('model', '')
-                    return
-                  }
-                  if (chip.key === 'fuelType') {
-                    setFilter('fuelType', '')
-                    return
-                  }
-                  setFilter(chip.key, '')
-                }}
-                className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
-              >
-                {chip.label}<X className="w-3 h-3" />
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <InventoryFiltersPanel searchInput={searchInput} filters={filters} activeFilterChips={activeFilterChips as InventoryFilterChip[]} isLoading={isListLoading} fuelTypes={INVENTORY_FUEL_TYPES} onSearchChange={value => { setSearchInput(value); setFilter('search', value) }} onFilterChange={(key, value) => setFilter(key, value)} onClear={clearAllFilters} />
 
       <div className={`space-y-3 transition-opacity ${isListLoading ? 'opacity-60' : 'opacity-100'}`}>
         {isListLoading ? (
@@ -1713,112 +1455,36 @@ export function InventoryClient({
         <div className="flex items-center justify-between gap-3 text-sm">
           <span className="text-gray-500">{selectedInventoryIds.length > 0 ? `${selectedInventoryIds.length} vehicle${selectedInventoryIds.length === 1 ? '' : 's'} selected` : 'Select vehicles for bulk email'}</span>
           <div className="flex gap-2">
-            <Btn variant="ghost" size="sm" onClick={() => setSelectedInventoryIds(filtered.map(row => row.inventoryId))} disabled={filtered.length === 0}>Select visible</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => setSelectedInventoryIds(data.map(row => row.inventoryId))} disabled={data.length === 0}>Select visible</Btn>
             {selectedInventoryIds.length > 0 ? <Btn variant="ghost" size="sm" onClick={() => setSelectedInventoryIds([])}>Clear selection</Btn> : null}
           </div>
         </div>
-        <div className="[&_table]:min-w-0 [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:w-16 [&_th:first-child]:min-w-16 [&_th:first-child]:max-w-16 [&_td:first-child]:w-16 [&_td:first-child]:min-w-16 [&_td:first-child]:max-w-16">
-        <Table headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Actions']} empty={filtered.length === 0}>
-          {filtered.map((r, index) => (
-            <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
-            <td className="px-2 py-3 text-center"><input type="checkbox" checked={selectedInventoryIds.includes(r.inventoryId)} onChange={event => setSelectedInventoryIds(prev => event.target.checked ? [...prev, r.inventoryId] : prev.filter(id => id !== r.inventoryId))} aria-label={`Select ${r.registrationNo ?? r.inventoryNumber ?? 'vehicle'}`} /></td>
-            <td className="px-4 py-3 text-center font-semibold text-gray-700">{((page - 1) * pageSize) + index + 1}</td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['Make', clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy)],
-                ['Model', clean(r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy)],
-                ['Variant', clean(r.carVariantMaster?.variant ?? r.variantLegacy)],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['Year', r.year],
-                ['Month', r.month],
-                ['Colour', r.colour],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['No. of Owners', r.noOfOwners],
-                ['Tax', r.tax],
-                ['Fuel Type', r.fuelType],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['Regi. No', r.registrationNo],
-                ['Kms Driven', r.kmsDriven !== null ? Number(r.kmsDriven).toFixed(2) : null],
-                ['Insurance Type', r.insuranceType],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['Price', r.price !== null ? Number(r.price).toFixed(2) : null],
-                ['Status', r.status],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['Owned Type', r.ownedType],
-                ['Owned By', r.ownedBy],
-                ['Mobile', r.mobileNoOwnedBy],
-                ['Email', r.emailIdOwnedBy],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <InventoryDetailCell items={[
-                ['Customer', r.customerName ?? r.customer?.custName],
-                ['Mobile', r.customer?.custMobile],
-                ['Email', r.customer?.custEmail],
-              ]} />
-            </td>
-            <td className="px-4 py-3">
-              <div className="flex items-center flex-wrap gap-1">
-                <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openInquirySync(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Update Inquiry"><Link2 className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openPhotos(r)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition" title="Manage Photos">
-                  <span className="relative inline-flex">
-                    <Images className="w-3.5 h-3.5" />
-                    {r._count.inventoryPhotos > 0 ? <span className="absolute -right-2 -top-2 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-[10px] leading-4 text-white text-center">{r._count.inventoryPhotos}</span> : null}
-                  </span>
-                </button>
-                <button onClick={() => openEmail(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Send Email"><Mail className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteId(r.inventoryId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </td>
-            </tr>
-          ))}
-        </Table>
-        </div>
+        <InventoryTable
+          rows={data}
+          selectedInventoryIds={selectedInventoryIds}
+          page={page}
+          pageSize={pageSize}
+          onSelectionChange={(inventoryId, checked) => setSelectedInventoryIds(prev => checked ? [...prev, inventoryId] : prev.filter(id => id !== inventoryId))}
+          onView={openView}
+          onInquirySync={openInquirySync}
+          onPhotos={openPhotos}
+          onEmail={openEmail}
+          onEdit={openEdit}
+          onDelete={setDeleteId}
+        />
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-xs text-gray-500">
-          Page {page} of {pageCount} · {total.toLocaleString('en-IN')} total records
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500">Rows</span>
-            <Select
-              value={String(pageSize)}
-              onChange={e => pushQuery({ pageSize: e.target.value, page: '1' })}
-              className="min-w-24"
-              disabled={isListLoading}
-            >
-              {PAGE_SIZE_OPTIONS.map(option => <option key={option} value={option}>{option} / page</option>)}
-            </Select>
-          </div>
-          <div className="flex gap-1.5">
-            <Btn variant="outline" size="sm" disabled={page <= 1 || isPending || isListLoading} onClick={() => pushQuery({ page: String(page - 1) })}>
-              <ChevronLeft className="w-3.5 h-3.5" />Prev
-            </Btn>
-            <Btn variant="outline" size="sm" disabled={page >= pageCount || isPending || isListLoading} onClick={() => pushQuery({ page: String(page + 1) })}>
-              Next<ChevronRight className="w-3.5 h-3.5" />
-            </Btn>
-          </div>
-        </div>
-      </div>
+      <InventoryPagination
+        page={page}
+        pageCount={pageCount}
+        pageSize={pageSize}
+        total={total}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        isPending={isPending}
+        isLoading={isListLoading}
+        onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
+        onPageSizeChange={nextPageSize => pushQuery({ pageSize: String(nextPageSize), page: '1' })}
+      />
 
       <Modal title={modal === 'view' ? 'Vehicle Details' : editId ? 'Edit Vehicle' : 'Add New Vehicle'} open={!!modal} onClose={requestModalClose} width="max-w-5xl">
         {modal === 'view' ? (
@@ -2043,18 +1709,13 @@ export function InventoryClient({
         </div>
       </Modal>
 
-      <ConfirmDialog
-        open={discardOpen}
-        onClose={() => setDiscardOpen(false)}
-        onConfirm={closeModalImmediately}
-        title="Discard changes?"
-        confirmLabel="Discard"
-        message="You have unsaved changes in this vehicle form. Discard them and close?"
-      />
-
-      <ConfirmDialog
-        open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
-        message="This will permanently delete the vehicle record. This action cannot be undone."
+      <InventoryConfirmDialogs
+        discardOpen={discardOpen}
+        deleteOpen={deleteId !== null}
+        onCloseDiscard={() => setDiscardOpen(false)}
+        onDiscard={closeModalImmediately}
+        onCloseDelete={() => setDeleteId(null)}
+        onDelete={del}
       />
 
       <Modal title={`Send Car Details${emailRows.length > 1 ? ` — ${emailRows.length} vehicles` : emailRow ? ` — ${emailRow.registrationNo ?? emailRow.sku ?? ''}` : ''}`} open={!!emailRow} onClose={() => setEmailRow(null)}>

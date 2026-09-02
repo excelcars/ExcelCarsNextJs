@@ -12,6 +12,7 @@ export const ROLE_ACCESS_FUNCTION = 'Role_Access_Management'
 export const CUSTOMER_WRITE_FUNCTION = 'Customer_Management_Write'
 export const FEEDBACK_FUNCTION = 'Customer_Feedback_Management'
 export const LEGACY_FEEDBACK_FUNCTION = 'Feedback_Management'
+export const INVENTORY_FUNCTION = 'Inventory_Management'
 
 export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Role Access', functionName: ROLE_ACCESS_FUNCTION, route: '/config/role-access', description: 'Manage which roles can access each module.' },
@@ -24,7 +25,7 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Feedback', functionName: FEEDBACK_FUNCTION, route: '/config/feedback', description: 'Manage customer feedback responses.' },
   { group: 'Configuration', label: 'Email Templates', functionName: 'Message_Template_Management', route: '/config/sms-email', description: 'Manage email templates.' },
 
-  { group: 'Operations', label: 'Inventory', functionName: 'Inventory_Management', route: '/inventory', description: 'Manage inventory records.' },
+  { group: 'Operations', label: 'Inventory', functionName: INVENTORY_FUNCTION, route: '/inventory', description: 'Manage inventory records.' },
   { group: 'Operations', label: 'Checklist / Docs', functionName: 'Checklist_Management', route: '/checklist', description: 'Manage vehicle checklist and document records.' },
   { group: 'Operations', label: 'Inquiries', functionName: 'Inquiry_Management', route: '/inquiry', description: 'Manage customer inquiries.' },
   { group: 'Operations', label: 'Loan Management', functionName: 'Loan_Management', route: '/loan', description: 'Manage loan referrals and payments.' },
