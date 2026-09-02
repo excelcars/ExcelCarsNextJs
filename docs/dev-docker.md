@@ -217,3 +217,18 @@ npm run db:copy-data:production -- --force --confirm-production
 ```
 
 Use these only when you intentionally want direct push/restore behavior outside the normal migration process.
+
+Added separate source-sync commands:
+
+
+# Local
+npm run db:sync-inquiry-sources
+npm run db:ensure-inquiry-status
+
+# Staging
+npm run db:sync-inquiry-sources:staging
+npm run db:ensure-inquiry-status:staging
+
+# Production
+npm run db:sync-inquiry-sources:production
+npm run db:ensure-inquiry-status:production

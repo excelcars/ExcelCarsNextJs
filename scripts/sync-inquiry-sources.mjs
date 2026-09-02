@@ -25,6 +25,10 @@ if (envFileArg) {
   }
 }
 
+if (envFileArg?.includes('.env.production') && (!process.argv.includes('--force') || !process.argv.includes('--confirm-production'))) {
+  throw new Error('Refusing to change production sources without --force --confirm-production.')
+}
+
 const prisma = new PrismaClient()
 
 const reportingSortByCode = {
