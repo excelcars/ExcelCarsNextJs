@@ -4,11 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
-import { isFollowupStatus, validateFollowupLogInput } from '@/lib/inquiryFollowupValidation'
+import { isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput } from '@/lib/inquiryFollowupValidation'
+import { logInquiryEvent } from '@/features/inquiry/eventLog'
 
 export interface LogFollowupInput {
+  contactOutcome: string
   status: string
   subStatus: string
+  useOtherSubStatus?: boolean
+  otherSubStatus?: string
   classification: string
   comments: string
   nextFollowUpDate: string
@@ -42,33 +46,53 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
   }
   const now = new Date()
   const selectedFollowupDate = toDate(input.nextFollowUpDate)
+  const resolvedSubStatus = resolveFollowupSubStatusInput(input)
 
   try {
-    await prisma.followupInquiry.create({
-      data: {
-        fkInquiryId: inquiryId,
-        followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
-        followupStatus: input.status,
-        followupSubStatus: input.subStatus || null,
-        followupClassification: input.classification || null,
-        comments: input.comments || null,
-        createdDt: now,
-        updatedDt: now,
-        ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
-      },
-    })
+    await prisma.$transaction(async tx => {
+      const followup = await tx.followupInquiry.create({
+        data: {
+          fkInquiryId: inquiryId,
+          followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
+          contactOutcome: input.contactOutcome || null,
+          followupStatus: input.status,
+          followupSubStatus: resolvedSubStatus || null,
+          followupClassification: input.classification || null,
+          comments: input.comments || null,
+          createdDt: now,
+          updatedDt: now,
+          ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+        },
+      })
 
-    await prisma.inquiry.update({
-      where: { inquiryId },
-      data: {
-        status: input.status,
-        subStatus: input.subStatus || null,
-        classification: input.classification || null,
-        remark: input.comments || null,
-        followUpDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
-        updatedDt: now,
-        ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
-      },
+      await tx.inquiry.update({
+        where: { inquiryId },
+        data: {
+          status: input.status,
+          subStatus: resolvedSubStatus || null,
+          classification: input.classification || null,
+          remark: input.comments || null,
+          followUpDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
+          updatedDt: now,
+          ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
+        },
+      })
+
+      await logInquiryEvent(tx, {
+        inquiryId,
+        eventType: 'followup_recorded',
+        eventLabel: 'Follow-up recorded',
+        eventDetail: [
+          input.status ? `Status ${input.status}` : '',
+          resolvedSubStatus ? `Sub-status ${resolvedSubStatus}` : '',
+          input.classification ? `Class ${input.classification}` : '',
+          input.nextFollowUpDate ? `Next ${input.nextFollowUpDate}` : '',
+          input.comments?.trim() ? input.comments.trim() : '',
+        ].filter(Boolean).join(' · '),
+        actorUserId: userId,
+        followupId: followup.pkFollowupId,
+        createdAt: now,
+      })
     })
   } catch {
     return { success: false, error: 'Something went wrong logging this follow-up.' }

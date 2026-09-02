@@ -38,9 +38,16 @@ export async function GET(req: NextRequest) {
     take: 100,
   })
 
+  const matchReasons = [
+    variantId ? 'Exact variant match' : modelId ? 'Same model match' : makeId ? 'Same make match' : '',
+    year ? 'Year matched' : '',
+    'Currently in stock',
+  ].filter(Boolean)
+
   return NextResponse.json(rows.map(row => ({
     ...row,
     kmsDriven: row.kmsDriven ? row.kmsDriven.toString() : null,
     price: row.price ? row.price.toString() : null,
+    matchReasons,
   })))
 }

@@ -27,7 +27,9 @@ It currently owns:
 - inquiry-side inventory matching
 - explicit save-only vs save-and-send behavior
 - follow-up history append behavior through `followupInquiry`
+- durable inquiry email attempt history through `inquiryEmailHistories`
 - persistent inquiry-to-inventory link history through `inquiryInventoryLinks`
+- durable inquiry event trail through `inquiry_activity_log`
 - inquiry detail timeline for linked inventory history
 
 It depends on, but does not own:
@@ -46,7 +48,10 @@ It depends on, but does not own:
 - one inquiry supports multiple `inquiryCarDetails` rows in UI and persistence
 - inquiry number is generated sequentially as `Inquiry/<number>`
 - database-level uniqueness protection now exists for `inquiry.inquiry_no`
-- source suggestions come from preferred defaults plus distinct saved `inquiry.website` values
+- source is selected from active `inquiry_source_master` records using a stable source code
+- `Reference` and `Other` require `inquiry.source_detail` so referral/exception context is retained
+- `inquiry.website` is preserved as historical raw text for existing inquiries and written as the canonical display label for new edits/saves
+- the legacy mapping table backfills `inquiry.source_id`; historically blank values remain explicitly unmapped
 - sub-status suggestions come from distinct saved `inquiry.subStatus` values
 - duplicate warning checks normalized mobile, linked customer overlap, and existing open inquiry conditions
 - inquiry inventory matching works across all selected vehicle rows
@@ -58,6 +63,7 @@ It depends on, but does not own:
   - current inquiry state
   - follow-up timeline
   - linked inventory history
+  - generic and inventory email attempt history with delivery outcomes
   - tracked inventory email history with open/click activity
   - create/update audit users
 
@@ -66,8 +72,12 @@ Primary tables directly written by this module:
 - `inquiry`
 - `inquiryCarDetails`
 - `followupInquiry`
+- `inquiryEmailHistory`
 - `inquiryInventoryLinks`
 - `vehicleEmailLink`
+- `inquiry_activity_log`
+- `inquiry_source_master`
+- `legacy_inquiry_source_mapping`
 
 Primary related tables read by this module:
 - `customer`
@@ -77,11 +87,26 @@ Primary related tables read by this module:
 - `inventoryManagement`
 - `userTable`
 
+Minimum `inquiry_activity_log` fields written/read here:
+- `inquiry_activity_log_id`
+- `inquiry_id`
+- `event_type`
+- `event_label`
+- `event_detail`
+- `actor_user_id`
+- `actor_user_name`
+- `inventory_id`
+- `followup_id`
+- `inquiry_car_details_id`
+- `created_at`
+
 Minimum `inquiry` fields used:
 - `inquiryId`
 - `inquiryNo`
 - `dateOfInquiry`
 - `website`
+- `sourceId`
+- `sourceDetail`
 - `customerId`
 - `customerNameLegacy`
 - `mobileno`
@@ -117,6 +142,7 @@ Minimum `followupInquiry` fields written/read here:
 - `pkFollowupId`
 - `fkInquiryId`
 - `followupDate`
+- `contactOutcome`
 - `followupStatus`
 - `followupSubStatus`
 - `followupClassification`
@@ -136,6 +162,20 @@ Minimum `inquiryInventoryLinks` fields written/read here:
 - `updatedAt`
 - `createdBy`
 - `updatedBy`
+
+Minimum `inquiryEmailHistory` fields written/read here:
+- `inquiryEmailHistoryId`
+- `inquiryId`
+- `inventoryId`
+- `emailType`
+- `recipientEmail`
+- `recipientName`
+- `emailSubject`
+- `deliveryStatus`
+- `errorMessage`
+- `sentAt`
+- `createdAt`
+- `attemptedBy`
 
 ## 4. Interface Contracts
 Required page surface:
@@ -157,7 +197,7 @@ Required query functions:
 - `getInquiryById(id)`
 - `listInquiriesForExport(params)`
 - `getMakes()`
-- `getInquirySourceSuggestions()`
+- `getInquirySources()`
 - `getInquirySubStatusSuggestions()`
 - `getInquiryAssistants()`
 
@@ -177,6 +217,7 @@ Required API surfaces:
   - `subStatus = All`
   - fixed page size `25`
 - inquiry statuses currently remain:
+  - `Open`
   - `FollowUp`
   - `Closed`
 - inquiry classifications remain:
@@ -186,10 +227,11 @@ Required API surfaces:
 - new inquiry defaults are:
   - `dateOfInquiry = today`
   - `classification = Warm`
-  - `status = FollowUp`
+  - `status = Open`
   - `followUpDate = empty`
 - validation rules:
   - when `status = FollowUp`, `followUpDate` is required
+  - when `status = Open` or `Closed`, `followUpDate` is cleared
   - when `subStatus = Visited`, `visitedDateOfCustomer` is required
   - `followUpDate` cannot be earlier than `dateOfInquiry`
   - `visitedDateOfCustomer` cannot be earlier than `dateOfInquiry`
@@ -230,9 +272,13 @@ The current system does not auto-merge inquiries.
 - one `inquiry` can have many `followupInquiry` history rows
 - one `inquiry` can have many `inquiryInventoryLinks`
 - one inventory vehicle can be linked to many inquiries over time
-- `inquiryInventoryLinks.linkType` currently records durable states already used by the app:
+- `inquiryInventoryLinks.linkType` currently records durable inventory-backed states used by the app:
   - `matched`
   - `emailed`
+  - `shortlisted`
+  - `visited`
+  - `booked`
+  - `rejected`
 
 Important note:
 - durable inquiry-to-inventory links are a deliberate Next.js improvement beyond legacy parity
@@ -250,6 +296,13 @@ Important note:
 - successful automatic match-send persists:
   - `matched` links for discovered inventory
   - `emailed` links for successfully sent vehicles
+- inquiry detail allows operators to add richer lifecycle states for already linked inventory rows only:
+  - `shortlisted`
+  - `visited`
+  - `booked`
+  - `rejected`
+- this richer lifecycle tracking applies only to real inventory vehicles
+- non-inventory sourcing or partner/dealer handling remains in follow-up remarks/history, not inventory mapping
 - inquiry detail shows linked inventory history with inventory snapshots
 
 ## 9. Email Integration
@@ -261,6 +314,14 @@ Current practical behavior:
 - `sendInquiryEmail()` sends a generic inquiry-interest email from the first inquiry car row
 - `sendInquiryInventoryEmail()` sends one concrete inventory vehicle email
 - `sendInquiryInventoryEmails()` sends multiple selected inventory vehicles one by one
+- all inquiry email attempts now write durable `inquiryEmailHistory` rows with:
+  - email type
+  - recipient
+  - subject
+  - sent/failed status
+  - error text when failed
+  - attempted user
+  - attempted/sent timestamp
 - inventory email path creates tracked `vehicleEmailLink` rows
 - on successful inventory email, the inquiry gets durable `inquiryInventoryLinks` with `linkType = emailed`
 - on failed inventory email, the just-created tracked link is cleaned up
@@ -270,6 +331,9 @@ Current practical behavior:
   - open counts
   - first/last open
   - call / WhatsApp / email click counts
+- inquiry detail also shows durable email-attempt history for both:
+  - generic inquiry emails
+  - inventory vehicle emails
 
 Public email links:
 - vehicle email links point to `/vehicle/[slug]?t=<token>`
@@ -318,11 +382,21 @@ Current shared behavior:
 - inquiry create/update can append `followupInquiry`
 - follow-up module reads current queue state from `inquiry`
 - follow-up history modal reads `followupInquiry`
+- follow-up history now stores one normalized meaning for `followupDate` across both write paths:
+  - selected next follow-up date when status is `FollowUp`
+  - `null` when status is `Closed`
+- inquiry and follow-up actions now also append durable inquiry event rows for:
+  - inquiry create/update/delete
+  - vehicle-interest add/remove
+  - follow-up recorded
+  - assignment changed
+  - inventory linked/state-marked
+  - inquiry email sent
+  - inventory email sent
 - dashboard follow-up metrics should later be derived from these same durable tables rather than ad hoc UI state
 
 ## 13. Known Current Limits
 - no merge flow exists for duplicate inquiries
-- generic non-tracked `sendInquiryEmail()` history is still not persisted as a durable timeline
-- source is still suggestion-driven rather than strict canonical taxonomy
-- inquiry lifecycle still uses `FollowUp` / `Closed`; `Open` is not introduced yet
+- historic blank Website values are classified as `Unknown`; `Other` remains for a user-selected source that needs a detail
+- inquiry lifecycle now uses `Open` / `FollowUp` / `Closed`
 - inquiry child-row updates still use replace-all semantics instead of per-row diff updates

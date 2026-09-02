@@ -6,16 +6,21 @@ import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
-import { validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { isFollowupStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { sendEmail } from '@/lib/email/sendMail'
 import { noInventoryEnquiryEmail, vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
 import { normalizeWhatsAppRecipient, sendEnquiryTemplate, sendNoInventoryEnquiryTemplate } from '@/lib/whatsapp/meta'
+import { getInquiryActivityEvents, logInquiryEvent } from './eventLog'
+import { INQUIRY_INVENTORY_WORKFLOW_OPTIONS, type InquiryInventoryWorkflowType } from './workflow'
+import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
 
 export interface InquiryFormInput {
   inquiryNo: string
   dateOfInquiry: string
   website: string
+  sourceCode: string
+  sourceDetail: string
   customerId: number | null
   customerNameLegacy: string
   mobileno: string
@@ -302,20 +307,45 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
   }
 }
 
-function buildInquiryData(input: InquiryFormInput, resolvedContact: Awaited<ReturnType<typeof resolveInquiryContact>>) {
+async function resolveInquirySource(input: InquiryFormInput) {
+  const code = input.sourceCode.trim()
+  if (!code) return { source: null, error: 'Select a source before saving the inquiry.' }
+
+  await ensureInquirySourceMasterSeed()
+  const source = await prisma.inquirySourceMaster.findUnique({
+    where: { code },
+    select: { sourceId: true, code: true, displayName: true, requiresDetail: true, isActive: true },
+  })
+
+  if (!source || !source.isActive) return { source: null, error: 'Select an active source before saving the inquiry.' }
+  if (source.requiresDetail && !input.sourceDetail.trim()) {
+    return { source: null, error: `${source.displayName} detail is required.` }
+  }
+
+  return { source, error: null }
+}
+
+function buildInquiryData(
+  input: InquiryFormInput,
+  resolvedContact: Awaited<ReturnType<typeof resolveInquiryContact>>,
+  source: NonNullable<Awaited<ReturnType<typeof resolveInquirySource>>['source']>,
+) {
+  const normalizedStatus = normalizeOptionalText(input.status)
   return {
     inquiryNo: input.inquiryNo || null,
     dateOfInquiry: toDate(input.dateOfInquiry),
-    website: input.website || null,
+    website: source.displayName,
+    source: { connect: { sourceId: source.sourceId } },
+    sourceDetail: normalizeOptionalText(input.sourceDetail),
     customerNameLegacy: resolvedContact.customerNameLegacy,
     mobileno: resolvedContact.mobileno,
     email: resolvedContact.email,
     budgetOfCustomer: input.budgetOfCustomer,
     visitedDateOfCustomer: toDate(input.visitedDateOfCustomer),
     classification: input.classification || null,
-    status: input.status || null,
+    status: normalizedStatus,
     subStatus: input.subStatus || null,
-    followUpDate: toDate(input.followUpDate),
+    followUpDate: isFollowupStatus(normalizedStatus) ? toDate(input.followUpDate) : null,
     remark: input.remark || null,
   }
 }
@@ -332,11 +362,55 @@ function normalizeOptionalDate(value: string | Date | null | undefined) {
   return date.toISOString().slice(0, 10)
 }
 
+function summarizeInquiryCarForLog(car: {
+  makeLegacy: string | null
+  modelLegacy: string | null
+  variantLegacy: string | null
+  subVariant: string | null
+  year: number | null
+}) {
+  const parts = [
+    normalizeOptionalText(car.makeLegacy),
+    normalizeOptionalText(car.modelLegacy),
+    normalizeOptionalText(car.variantLegacy),
+    normalizeOptionalText(car.subVariant),
+  ].filter(Boolean)
+
+  return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}`.trim() || 'Vehicle requirement'
+}
+
+function summarizeFollowupLog(input: {
+  status: string
+  subStatus: string
+  classification: string
+  followUpDate: string
+  remark: string
+}) {
+  return [
+    normalizeOptionalText(input.status) ? `Status ${normalizeOptionalText(input.status)}` : '',
+    normalizeOptionalText(input.subStatus) ? `Sub-status ${normalizeOptionalText(input.subStatus)}` : '',
+    normalizeOptionalText(input.classification) ? `Class ${normalizeOptionalText(input.classification)}` : '',
+    normalizeOptionalText(input.followUpDate) ? `Next ${normalizeOptionalText(input.followUpDate)}` : '',
+    normalizeOptionalText(input.remark) ? normalizeOptionalText(input.remark) : '',
+  ].filter(Boolean).join(' · ')
+}
+
+function toPlainActionPayload<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (_key, currentValue) => {
+    if (typeof currentValue === 'bigint') {
+      return currentValue.toString()
+    }
+    return currentValue
+  })) as T
+}
+
 function hasMeaningfulFollowupState(input: InquiryFormInput) {
+  const normalizedStatus = normalizeOptionalText(input.status)
+  const normalizedClassification = normalizeOptionalText(input.classification)
   return Boolean(
-    normalizeOptionalText(input.status)
+    (normalizedStatus && normalizedStatus !== 'Open')
     || normalizeOptionalText(input.subStatus)
-    || normalizeOptionalText(input.classification)
+    || (normalizedClassification && normalizedClassification !== 'Warm')
     || normalizeOptionalText(input.remark)
     || normalizeOptionalDate(input.followUpDate),
   )
@@ -371,10 +445,10 @@ async function appendInquiryFollowupHistory({
   now: Date
 }) {
   const selectedFollowupDate = toDate(input.followUpDate)
-  await prisma.followupInquiry.create({
+  const followup = await prisma.followupInquiry.create({
     data: {
       fkInquiryId: inquiryId,
-      followupDate: selectedFollowupDate ?? now,
+      followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
       followupStatus: normalizeOptionalText(input.status),
       followupSubStatus: normalizeOptionalText(input.subStatus),
       followupClassification: normalizeOptionalText(input.classification),
@@ -383,6 +457,16 @@ async function appendInquiryFollowupHistory({
       updatedDt: now,
       ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
     },
+  })
+
+  await logInquiryEvent(prisma, {
+    inquiryId,
+    eventType: 'followup_recorded',
+    eventLabel: 'Follow-up recorded',
+    eventDetail: summarizeFollowupLog(input),
+    actorUserId: userId,
+    followupId: followup.pkFollowupId,
+    createdAt: now,
   })
 }
 
@@ -412,6 +496,22 @@ async function createInquiryInventoryLinks({
       ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
     })),
   })
+
+  for (const inventoryId of uniqueInventoryIds) {
+    await logInquiryEvent(prisma, {
+      inquiryId,
+      eventType: 'inventory_linked',
+      eventLabel: `Inventory ${linkType}`,
+      eventDetail: `Inventory #${inventoryId} marked as ${linkType}.`,
+      actorUserId: userId,
+      inventoryId,
+      createdAt: now,
+    })
+  }
+}
+
+function isSupportedInquiryInventoryWorkflowType(value: string): value is InquiryInventoryWorkflowType {
+  return INQUIRY_INVENTORY_WORKFLOW_OPTIONS.includes(value as InquiryInventoryWorkflowType)
 }
 
 async function getInquiryTrackedVehicleEmailHistory(inquiryId: number) {
@@ -502,7 +602,7 @@ async function getInquiryTrackedVehicleEmailHistory(inquiryId: number) {
     interactionsByLinkId.set(interaction.vehicleEmailLinkId, group)
   }
 
-  return links.map(link => {
+  const payload = links.map(link => {
     const inventory = inventoryById.get(link.inventory_id)
     return {
       vehicleEmailLinkId: link.vehicle_email_link_id,
@@ -559,6 +659,8 @@ async function getInquiryTrackedVehicleEmailHistory(inquiryId: number) {
       interactions: interactionsByLinkId.get(link.vehicle_email_link_id) ?? [],
     }
   })
+
+  return toPlainActionPayload(payload)
 }
 
 async function resolveInquiryCarDetails(input: InquiryFormInput) {
@@ -568,6 +670,7 @@ async function resolveInquiryCarDetails(input: InquiryFormInput) {
 
 async function sendInquiryCarEmail(inquiryId: number): Promise<ActionResult> {
   const session = await auth()
+  const attemptedBy = session?.user?.id ? Number(session.user.id) : null
 
   const inquiry = await prisma.inquiry.findUnique({
     where: { inquiryId },
@@ -603,7 +706,34 @@ async function sendInquiryCarEmail(inquiryId: number): Promise<ActionResult> {
     signedBy: session?.user?.name || 'Excel Cars Team',
   })
 
-  return sendEmail({ to: toEmail, subject, html })
+  const result = await sendEmail({ to: toEmail, subject, html })
+
+  await prisma.inquiryEmailHistory.create({
+    data: {
+      inquiryId,
+      emailType: 'generic_inquiry',
+      recipientEmail: toEmail,
+      recipientName: toName,
+      emailSubject: subject,
+      deliveryStatus: result.success ? 'Sent' : 'Failed',
+      errorMessage: result.success ? null : (result.error ?? 'Failed to send email.').slice(0, 1000),
+      sentAt: result.success ? new Date() : null,
+      attemptedBy,
+    },
+  }).catch(() => undefined)
+
+  if (result.success) {
+    await logInquiryEvent(prisma, {
+      inquiryId,
+      eventType: 'inquiry_email_sent',
+      eventLabel: 'Inquiry email sent',
+      eventDetail: `Sent to ${toEmail}.`,
+      actorUserId: attemptedBy,
+      createdAt: new Date(),
+    }).catch(() => undefined)
+  }
+
+  return result
 }
 
 export async function sendInquiryEmail(inquiryId: number): Promise<ActionResult> {
@@ -694,6 +824,34 @@ async function sendMatchedInventoryEmailToInquiryRecipient({
   })
 
   const result = await sendEmail({ to: recipient.toEmail, subject, html })
+
+  await prisma.inquiryEmailHistory.create({
+    data: {
+      inquiryId,
+      inventoryId,
+      emailType: 'inventory_vehicle',
+      recipientEmail: recipient.toEmail,
+      recipientName: recipient.toName,
+      emailSubject: subject,
+      deliveryStatus: result.success ? 'Sent' : 'Failed',
+      errorMessage: result.success ? null : (result.error ?? 'Failed to send email.').slice(0, 1000),
+      sentAt: result.success ? new Date() : null,
+      attemptedBy: userId,
+    },
+  }).catch(() => undefined)
+
+  if (result.success) {
+    await logInquiryEvent(prisma, {
+      inquiryId,
+      eventType: 'inventory_email_sent',
+      eventLabel: 'Inventory email sent',
+      eventDetail: `Inventory #${inventoryId} sent to ${recipient.toEmail}.`,
+      actorUserId: userId,
+      inventoryId,
+      createdAt: new Date(),
+    }).catch(() => undefined)
+  }
+
   if (!result.success) {
     await prisma.vehicleEmailLink.delete({ where: { vehicleEmailLinkId: trackedLink.vehicleEmailLinkId } }).catch(() => undefined)
     return result
@@ -1053,6 +1211,7 @@ export async function getInquiryDetail(inquiryId: number, options: { route?: str
     where: { inquiryId },
     include: {
       customer: true,
+      source: true,
       assignedToUser: {
         select: {
           userId: true,
@@ -1113,16 +1272,46 @@ export async function getInquiryDetail(inquiryId: number, options: { route?: str
           },
         },
       },
+      inquiryEmailHistories: {
+        orderBy: [{ createdAt: 'desc' }, { inquiryEmailHistoryId: 'desc' }],
+        include: {
+          attemptedByUser: {
+            select: {
+              userId: true,
+              userName: true,
+              displayName: true,
+            },
+          },
+          inventoryManagement: {
+            include: {
+              carVariantMaster: {
+                include: { carMakeMaster: true, carModelMaster: true },
+              },
+            },
+          },
+        },
+      },
     },
   })
 
   if (!detail) return null
 
-  const vehicleEmailLinks = await getInquiryTrackedVehicleEmailHistory(inquiryId)
+  const [vehicleEmailLinks, inquiryActivityEvents] = await Promise.all([
+    getInquiryTrackedVehicleEmailHistory(inquiryId),
+    getInquiryActivityEvents(inquiryId),
+  ])
 
-  return {
+  return toPlainActionPayload({
     ...detail,
     budgetOfCustomer: detail.budgetOfCustomer ? detail.budgetOfCustomer.toString() : null,
+    inquiryEmailHistories: detail.inquiryEmailHistories.map(history => ({
+      ...history,
+      inventoryManagement: history.inventoryManagement ? {
+        ...history.inventoryManagement,
+        kmsDriven: history.inventoryManagement.kmsDriven ? history.inventoryManagement.kmsDriven.toString() : null,
+        price: history.inventoryManagement.price ? history.inventoryManagement.price.toString() : null,
+      } : null,
+    })),
     inquiryInventoryLinks: detail.inquiryInventoryLinks.map(link => ({
       ...link,
       inventoryManagement: {
@@ -1132,7 +1321,8 @@ export async function getInquiryDetail(inquiryId: number, options: { route?: str
       },
     })),
     vehicleEmailLinks,
-  }
+    inquiryActivityEvents,
+  })
 }
 
 export async function sendInquiryInventoryEmail(inquiryId: number, inventoryId: number): Promise<ActionResult> {
@@ -1185,6 +1375,63 @@ export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds
   }
 }
 
+export async function setInquiryInventoryWorkflowState(
+  inquiryId: number,
+  inventoryId: number,
+  linkType: string,
+  options: { route?: string } = {},
+): Promise<ActionResult> {
+  const route = options.route ?? '/inquiry'
+  const userId = await currentUserId(route)
+  if (!userId) return { success: false, error: 'Not authorized.' }
+  if (!(await canAccessInquiryByOwnership(inquiryId, route))) {
+    return { success: false, error: 'You can only update inventory state for inquiries you can access.' }
+  }
+
+  const normalizedLinkType = normalizeOptionalText(linkType)?.toLowerCase() ?? ''
+  if (!isSupportedInquiryInventoryWorkflowType(normalizedLinkType)) {
+    return { success: false, error: 'Select a valid inventory state.' }
+  }
+
+  const inventory = await prisma.inventoryManagement.findUnique({
+    where: { inventoryId },
+    select: { inventoryId: true },
+  })
+
+  if (!inventory) {
+    return { success: false, error: 'Inventory vehicle not found.' }
+  }
+
+  const existingInquiryLink = await prisma.inquiryInventoryLink.findFirst({
+    where: { inquiryId, inventoryId },
+    select: { inquiryInventoryLinkId: true },
+  })
+  const existingEmailLink = await prisma.vehicleEmailLink.findFirst({
+    where: { inquiryId, inventoryId },
+    select: { vehicleEmailLinkId: true },
+  })
+
+  if (!existingInquiryLink && !existingEmailLink) {
+    return { success: false, error: 'Only stock already linked to this inquiry can be updated.' }
+  }
+
+  try {
+    await createInquiryInventoryLinks({
+      inquiryId,
+      inventoryIds: [inventoryId],
+      linkType: normalizedLinkType,
+      userId,
+    })
+  } catch (err) {
+    return { success: false, error: describeError(err) }
+  }
+
+  revalidatePath('/inquiry')
+  revalidatePath('/followup')
+  revalidatePath('/dashboard')
+  return { success: true, message: `Inventory marked as ${normalizedLinkType}.` }
+}
+
 export async function getNextInquiryNumber(): Promise<string> {
   const userId = await currentUserId()
   if (!userId) return 'Inquiry/1'
@@ -1224,6 +1471,10 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
 
   const userId = await currentUserId('/inquiry')
   if (!userId) return { success: false, error: 'Not authorized.' }
+  const resolvedSource = await resolveInquirySource(input)
+  if (resolvedSource.error || !resolvedSource.source) {
+    return { success: false, error: resolvedSource.error ?? 'Select a valid source before saving the inquiry.' }
+  }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -1239,7 +1490,7 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
       try {
         const created = await prisma.inquiry.create({
           data: {
-            ...buildInquiryData({ ...input, inquiryNo }, resolvedContact),
+            ...buildInquiryData({ ...input, inquiryNo }, resolvedContact, resolvedSource.source),
             ...(resolvedContact.customerId ? { customer: { connect: { custId: resolvedContact.customerId } } } : {}),
             createdDt: now,
             updatedDt: now,
@@ -1264,6 +1515,28 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
           },
         })
         newInquiryId = created.inquiryId
+        await logInquiryEvent(prisma, {
+          inquiryId: created.inquiryId,
+          eventType: 'inquiry_created',
+          eventLabel: 'Inquiry created',
+          eventDetail: [
+            inquiryNo ? `No ${inquiryNo}` : '',
+            `Source ${resolvedSource.source.displayName}${normalizeOptionalText(input.sourceDetail) ? ` (${normalizeOptionalText(input.sourceDetail)})` : ''}`,
+            resolvedContact.customerId ? `Linked customer #${resolvedContact.customerId}` : '',
+          ].filter(Boolean).join(' · '),
+          actorUserId: userId,
+          createdAt: now,
+        })
+        for (const car of resolvedCarDetails) {
+          await logInquiryEvent(prisma, {
+            inquiryId: created.inquiryId,
+            eventType: 'inquiry_car_added',
+            eventLabel: 'Inquiry car added',
+            eventDetail: summarizeInquiryCarForLog(car),
+            actorUserId: userId,
+            createdAt: now,
+          })
+        }
         if (hasMeaningfulFollowupState(input)) {
           await appendInquiryFollowupHistory({
             inquiryId: created.inquiryId,
@@ -1357,6 +1630,10 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
   if (!(await canAccessInquiryByOwnership(id, route))) {
     return { success: false, error: 'You can only update your own inquiries.' }
   }
+  const resolvedSource = await resolveInquirySource(input)
+  if (resolvedSource.error || !resolvedSource.source) {
+    return { success: false, error: resolvedSource.error ?? 'Select a valid source before saving the inquiry.' }
+  }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -1368,11 +1645,26 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
     const existing = await prisma.inquiry.findUnique({
       where: { inquiryId: id },
       select: {
+        inquiryNo: true,
+        customerId: true,
+        website: true,
+        sourceId: true,
+        sourceDetail: true,
         status: true,
         subStatus: true,
         classification: true,
         remark: true,
         followUpDate: true,
+        inquiryCarDetails: {
+          select: {
+            inquiryCarDetailsId: true,
+            makeLegacy: true,
+            modelLegacy: true,
+            variantLegacy: true,
+            subVariant: true,
+            year: true,
+          },
+        },
       },
     })
 
@@ -1384,10 +1676,15 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
     const selectedFollowupDate = toDate(input.followUpDate)
 
     await prisma.$transaction(async (tx) => {
+      const previousCars = existing.inquiryCarDetails.map(car => ({
+        inquiryCarDetailsId: car.inquiryCarDetailsId ?? null,
+        summary: summarizeInquiryCarForLog(car),
+      }))
+
       await tx.inquiry.update({
         where: { inquiryId: id },
         data: {
-          ...buildInquiryData(input, resolvedContact),
+          ...buildInquiryData(input, resolvedContact, resolvedSource.source),
           customer: resolvedContact.customerId ? { connect: { custId: resolvedContact.customerId } } : { disconnect: true },
           updatedDt: now,
           ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
@@ -1395,6 +1692,18 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
       })
 
       await tx.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
+
+      for (const previousCar of previousCars) {
+        await logInquiryEvent(tx, {
+          inquiryId: id,
+          eventType: 'inquiry_car_removed',
+          eventLabel: 'Inquiry car removed',
+          eventDetail: previousCar.summary,
+          actorUserId: userId,
+          inquiryCarDetailsId: previousCar.inquiryCarDetailsId,
+          createdAt: now,
+        })
+      }
 
       if (resolvedCarDetails.length > 0) {
         await tx.inquiryCarDetails.createMany({
@@ -1413,11 +1722,22 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
         })
       }
 
+      for (const car of resolvedCarDetails) {
+        await logInquiryEvent(tx, {
+          inquiryId: id,
+          eventType: 'inquiry_car_added',
+          eventLabel: 'Inquiry car added',
+          eventDetail: summarizeInquiryCarForLog(car),
+          actorUserId: userId,
+          createdAt: now,
+        })
+      }
+
       if (shouldAppendFollowup) {
-        await tx.followupInquiry.create({
+        const followup = await tx.followupInquiry.create({
           data: {
             fkInquiryId: id,
-            followupDate: selectedFollowupDate ?? now,
+            followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
             followupStatus: normalizeOptionalText(input.status),
             followupSubStatus: normalizeOptionalText(input.subStatus),
             followupClassification: normalizeOptionalText(input.classification),
@@ -1427,7 +1747,32 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
             ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
           },
         })
+        await logInquiryEvent(tx, {
+          inquiryId: id,
+          eventType: 'followup_recorded',
+          eventLabel: 'Follow-up recorded',
+          eventDetail: summarizeFollowupLog(input),
+          actorUserId: userId,
+          followupId: followup.pkFollowupId,
+          createdAt: now,
+        })
       }
+
+      await logInquiryEvent(tx, {
+        inquiryId: id,
+        eventType: 'inquiry_updated',
+        eventLabel: 'Inquiry updated',
+        eventDetail: [
+          existing.sourceId !== resolvedSource.source.sourceId || normalizeOptionalText(existing.sourceDetail) !== normalizeOptionalText(input.sourceDetail)
+            ? `Source ${normalizeOptionalText(existing.website) ?? 'blank'}${normalizeOptionalText(existing.sourceDetail) ? ` (${normalizeOptionalText(existing.sourceDetail)})` : ''} -> ${resolvedSource.source.displayName}${normalizeOptionalText(input.sourceDetail) ? ` (${normalizeOptionalText(input.sourceDetail)})` : ''}`
+            : '',
+          existing.customerId !== resolvedContact.customerId ? `Customer ${existing.customerId ?? 'none'} -> ${resolvedContact.customerId ?? 'none'}` : '',
+          existing.status !== normalizeOptionalText(input.status) ? `Status ${existing.status ?? 'blank'} -> ${normalizeOptionalText(input.status) ?? 'blank'}` : '',
+          existing.subStatus !== normalizeOptionalText(input.subStatus) ? `Sub-status ${existing.subStatus ?? 'blank'} -> ${normalizeOptionalText(input.subStatus) ?? 'blank'}` : '',
+        ].filter(Boolean).join(' · ') || 'Inquiry fields updated.',
+        actorUserId: userId,
+        createdAt: now,
+      })
     })
   } catch (err) {
     return { success: false, error: describeError(err) }
@@ -1465,15 +1810,32 @@ export async function assignInquiry(input: AssignInquiryInput): Promise<ActionRe
   }
 
   try {
-    await prisma.inquiry.update({
-      where: { inquiryId: input.inquiryId },
-      data: {
-        assignedToUser: assignedToUserId
-          ? { connect: { userId: assignedToUserId } }
-          : { disconnect: true },
-        updatedDt: new Date(),
-        ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
-      },
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.inquiry.findUnique({
+        where: { inquiryId: input.inquiryId },
+        select: { assignedTo: true },
+      })
+
+      const now = new Date()
+      await tx.inquiry.update({
+        where: { inquiryId: input.inquiryId },
+        data: {
+          assignedToUser: assignedToUserId
+            ? { connect: { userId: assignedToUserId } }
+            : { disconnect: true },
+          updatedDt: now,
+          ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
+        },
+      })
+
+      await logInquiryEvent(tx, {
+        inquiryId: input.inquiryId,
+        eventType: 'inquiry_assignment_changed',
+        eventLabel: assignedToUserId ? 'Inquiry assigned' : 'Inquiry assignment cleared',
+        eventDetail: `Assigned ${current?.assignedTo ?? 'none'} -> ${assignedToUserId ?? 'none'}.`,
+        actorUserId: userId,
+        createdAt: now,
+      })
     })
   } catch (err) {
     return { success: false, error: describeError(err) }
@@ -1494,6 +1856,15 @@ export async function deleteInquiry(id: number): Promise<ActionResult> {
     return { success: false, error: 'You can only delete inquiries you own.' }
   }
   try {
+    const existing = await prisma.inquiry.findUnique({
+      where: { inquiryId: id },
+      select: {
+        inquiryNo: true,
+        customerNameLegacy: true,
+        customer: { select: { custName: true } },
+      },
+    })
+
     await prisma.$transaction(async tx => {
       // These are non-cascading legacy relations and must be removed before
       // their parent inquiry. Notification logs and inventory links cascade.
@@ -1501,6 +1872,15 @@ export async function deleteInquiry(id: number): Promise<ActionResult> {
       await tx.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
       await tx.inquiry.delete({ where: { inquiryId: id } })
     })
+
+    await logInquiryEvent(prisma, {
+      inquiryId: id,
+      eventType: 'inquiry_deleted',
+      eventLabel: 'Inquiry deleted',
+      eventDetail: [existing?.inquiryNo ?? '', existing?.customer?.custName ?? existing?.customerNameLegacy ?? ''].filter(Boolean).join(' · '),
+      actorUserId: userId,
+      createdAt: new Date(),
+    }).catch(() => undefined)
   } catch (err) {
     return { success: false, error: describeError(err) }
   }

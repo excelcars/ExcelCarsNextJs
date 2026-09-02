@@ -10,6 +10,8 @@ import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
 import { assignInquiry, createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
 import { isValidYear } from '@/lib/validation'
 import { isFollowupStatus, isVisitedSubStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { formatInquiryInventoryWorkflowLabel } from './workflow'
+import type { InquirySourceOption } from './sourceMaster'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface CarMakeMaster { pkMakeId: number; make: string | null }
@@ -33,6 +35,7 @@ interface InquiryRow {
   inquiryNo: string | null
   dateOfInquiry: Date | string | null
   website: string | null
+  sourceDetail: string | null
   customerId: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -105,6 +108,9 @@ interface InventoryMatch {
   kmsDriven: string | null
   price: string | null
   status: string | null
+  matchReasons?: string[]
+  currentState?: string | null
+  currentStateAt?: string | null
   customer: CustomerOption | null
   _count: { inventoryPhotos: number }
   carVariantMaster: {
@@ -112,6 +118,25 @@ interface InventoryMatch {
     carMakeMaster: { pkMakeId: number; make: string | null } | null
     carModelMaster: { pkModelId: number; model: string | null } | null
   } | null
+}
+
+function buildInventoryWorkflowStateMap(
+  inquiryInventoryLinks: InquiryInventoryLinkRow[] | undefined,
+) {
+  const states = new Map<number, { currentState: string | null; currentStateAt: Date | string | null }>()
+
+  for (const link of inquiryInventoryLinks ?? []) {
+    const normalizedType = link.linkType.toLowerCase()
+    if (!['shortlisted', 'visited', 'booked', 'rejected'].includes(normalizedType)) continue
+    if (!states.has(link.inventoryManagement.inventoryId)) {
+      states.set(link.inventoryManagement.inventoryId, {
+        currentState: normalizedType,
+        currentStateAt: link.createdAt,
+      })
+    }
+  }
+
+  return states
 }
 
 interface InquiryInventoryLinkRow {
@@ -472,6 +497,7 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
     'Date of Inquiry',
     'Inquiry No',
     'WebSite',
+    'Source Detail',
     'Customer',
     'MobileNo',
     'Email',
@@ -496,6 +522,7 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
         fmtExportDate(row.dateOfInquiry),
         row.inquiryNo,
         row.website,
+        row.sourceDetail,
         row.customer?.custName ?? row.customerNameLegacy,
         row.mobileno,
         row.email,
@@ -537,20 +564,20 @@ function emptyInquiryCar(): InquiryCarInput {
 
 function emptyForm(): InquiryFormInput {
   return {
-    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '',
+    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '', sourceCode: '', sourceDetail: '',
     customerId: null, customerNameLegacy: '', mobileno: '', email: '',
     budgetOfCustomer: null, visitedDateOfCustomer: '',
-    classification: 'Warm', status: 'FollowUp', subStatus: '',
+    classification: 'Warm', status: 'Open', subStatus: '',
     followUpDate: '', remark: '', inquiryCars: [],
   }
 }
 
 export function InquiryClient({
-  initialData, makes, sourceSuggestions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
-  sourceSuggestions: string[]
+  sourceOptions: InquirySourceOption[]
   subStatusSuggestions: string[]
   inquiryAssistants: UserOption[]
   total: number
@@ -650,7 +677,11 @@ export function InquiryClient({
     const deduped = new Map<number, InventoryMatch>()
     for (const group of results) {
       for (const match of group) {
-        deduped.set(match.inventoryId, match)
+        const previous = deduped.get(match.inventoryId)
+        deduped.set(match.inventoryId, {
+          ...match,
+          matchReasons: [...new Set([...(previous?.matchReasons ?? []), ...(match.matchReasons ?? [])])],
+        })
       }
     }
     return [...deduped.values()]
@@ -681,7 +712,15 @@ export function InquiryClient({
     ])
       .then(([matches, detail]) => {
         if (emailInventoryRequestRef.current !== requestId) return
-        setEmailInventoryMatches(matches)
+        const workflowStateByInventoryId = buildInventoryWorkflowStateMap(detail?.inquiryInventoryLinks)
+        setEmailInventoryMatches(matches.map(match => {
+          const state = workflowStateByInventoryId.get(match.inventoryId)
+          return {
+            ...match,
+            currentState: state?.currentState ?? null,
+            currentStateAt: state?.currentStateAt ? fmtDateTime(state.currentStateAt) : null,
+          }
+        }))
         const history: Record<number, { emailed: boolean; emailedAt: string | null }> = {}
         for (const link of detail?.vehicleEmailLinks ?? []) {
           const inventoryId = link.inventoryManagement.inventoryId
@@ -1261,6 +1300,8 @@ export function InquiryClient({
         inquiryNo: detail.inquiryNo ?? '',
         dateOfInquiry: fmtDate(detail.dateOfInquiry),
         website: detail.website ?? '',
+        sourceCode: detail.source?.code ?? '',
+        sourceDetail: detail.sourceDetail ?? '',
         customerId: detail.customerId,
         customerNameLegacy: detail.customerNameLegacy ?? '',
         mobileno: detail.mobileno ?? '',
@@ -1268,7 +1309,7 @@ export function InquiryClient({
         budgetOfCustomer: detail.budgetOfCustomer ? Number(detail.budgetOfCustomer) : null,
         visitedDateOfCustomer: fmtDate(detail.visitedDateOfCustomer),
         classification: detail.classification ?? 'Warm',
-        status: detail.status ?? 'FollowUp',
+        status: detail.status ?? 'Open',
         subStatus: detail.subStatus ?? '',
         followUpDate: fmtDate(detail.followUpDate),
         remark: detail.remark ?? '',
@@ -1432,7 +1473,7 @@ export function InquiryClient({
           </div>
           <Select label="Source" value={source} onChange={e => pushQuery({ source: e.target.value })} disabled={isRoutePending}>
           <option value="All">All Sources</option>
-          {sourceSuggestions.map(item => <option key={item} value={item}>{item}</option>)}
+          {sourceOptions.map(item => <option key={item.code} value={item.code}>{item.displayName}</option>)}
           </Select>
           <Select label="Sub-status" value={subStatus} onChange={e => pushQuery({ subStatus: e.target.value })} disabled={isRoutePending}>
           <option value="All">All Sub-statuses</option>
@@ -1549,7 +1590,7 @@ export function InquiryClient({
                   <td className="px-4 py-3">
                     <div className="space-y-1 text-sm text-gray-700">
                       <div>Inquiry Date: {fmtDate(r.dateOfInquiry) || '—'}</div>
-                      <div>Ref.: {r.website ?? '—'}</div>
+                      <div>Ref.: {r.website ?? '—'}{r.sourceDetail ? ` (${r.sourceDetail})` : ''}</div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -1664,13 +1705,33 @@ export function InquiryClient({
           <div className="grid grid-cols-3 gap-4">
             <Input label="Inquiry No*" value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
             <Input label="Date of Inquiry*" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
-            <div>
-              <Input label="Reference Website" list="inquiry-source-suggestions" value={form.website} onChange={e => f('website', e.target.value)} placeholder="Type or pick a source" error={errors.website} />
-              <datalist id="inquiry-source-suggestions">
-                {sourceSuggestions.map(source => <option key={source} value={source} />)}
-              </datalist>
-            </div>
+            <Select
+              label="Reference Website / Source*"
+              value={form.sourceCode}
+              onChange={e => {
+                const selected = sourceOptions.find(source => source.code === e.target.value)
+                setForm(previous => ({
+                  ...previous,
+                  sourceCode: e.target.value,
+                  website: selected?.displayName ?? '',
+                  sourceDetail: selected?.requiresDetail ? previous.sourceDetail : '',
+                }))
+              }}
+              error={errors.website}
+            >
+              <option value="">Select source</option>
+              {sourceOptions.map(source => <option key={source.code} value={source.code}>{source.displayName}</option>)}
+            </Select>
           </div>
+
+          {sourceOptions.find(source => source.code === form.sourceCode)?.requiresDetail ? (
+            <Input
+              label={form.sourceCode === 'REFERENCE' ? 'Reference Details*' : 'Other Source Details*'}
+              value={form.sourceDetail}
+              onChange={e => f('sourceDetail', e.target.value)}
+              placeholder={form.sourceCode === 'REFERENCE' ? 'Customer, dealer, or referral person' : 'Describe the source'}
+            />
+          ) : null}
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Link Existing Customer</label>
@@ -1803,7 +1864,13 @@ export function InquiryClient({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Select label="Status*#" value={form.status} onChange={e => f('status', e.target.value)}>
+            <Select label="Status*#" value={form.status} onChange={e => {
+              const nextStatus = e.target.value
+              f('status', nextStatus)
+              if (!isFollowupStatus(nextStatus)) {
+                f('followUpDate', '')
+              }
+            }}>
               {INQUIRY_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
             <div>
@@ -1812,7 +1879,14 @@ export function InquiryClient({
                 {subStatusSuggestions.map(s => <option key={s} value={s} />)}
               </datalist>
             </div>
-            <Input label="FollowUp Date" type="date" value={form.followUpDate} onChange={e => f('followUpDate', e.target.value)} error={errors.followUpDate} />
+            <Input
+              label={followUpSelected ? 'FollowUp Date*' : 'FollowUp Date'}
+              type="date"
+              value={form.followUpDate}
+              onChange={e => f('followUpDate', e.target.value)}
+              error={errors.followUpDate}
+              disabled={!followUpSelected}
+            />
             <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} placeholder="Notes about this inquiry..." />
           </div>
 
@@ -1903,6 +1977,8 @@ export function InquiryClient({
                           <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}</div>
                           <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
                           <div><span className="font-medium text-gray-900">KM / Photos:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match._count.inventoryPhotos}</div>
+                          <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched Because:</span> {match.matchReasons?.join(' · ') || 'In stock match'}</div>
+                          <div><span className="font-medium text-gray-900">Current State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
                         </div>
                       </div>
                     )
@@ -2036,8 +2112,10 @@ export function InquiryClient({
                             <th className="px-3 py-3">Variant / Color</th>
                             <th className="px-3 py-3">Year</th>
                             <th className="px-3 py-3">Registration No</th>
+                            <th className="px-3 py-3">Match Reason</th>
                             <th className="px-3 py-3">Kms Driven</th>
                             <th className="px-3 py-3">Price / Status</th>
+                            <th className="px-3 py-3">Current State</th>
                             <th className="px-3 py-3">Email</th>
                           </tr>
                         </thead>
@@ -2075,10 +2153,17 @@ export function InquiryClient({
                                 </td>
                                 <td className="px-3 py-3 text-gray-700">{match.year ?? '—'}</td>
                                 <td className="px-3 py-3 text-gray-700">{match.registrationNo ?? '—'}</td>
+                                <td className="px-3 py-3 text-gray-700">
+                                  <div className="max-w-44 text-xs leading-5">{match.matchReasons?.join(' · ') || 'In stock match'}</div>
+                                </td>
                                 <td className="px-3 py-3 text-gray-700">{match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'}</td>
                                 <td className="px-3 py-3 text-gray-700">
                                   <div>{fmtMoney(match.price)}</div>
                                   <div className="text-xs text-gray-500">{match.status ?? '—'}</div>
+                                </td>
+                                <td className="px-3 py-3 text-gray-700">
+                                  <div className="font-medium text-gray-900">{match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
+                                  <div className="text-xs text-gray-500">{match.currentStateAt ?? '—'}</div>
                                 </td>
                                 <td className="px-3 py-3 text-gray-700">
                                   <div className="font-medium text-gray-900">{emailHistory?.emailed ? 'Yes' : 'No'}</div>

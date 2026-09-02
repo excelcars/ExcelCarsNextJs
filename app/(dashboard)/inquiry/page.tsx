@@ -1,4 +1,4 @@
-import { listInquiries, getInquirySourceSuggestions, getInquirySubStatusSuggestions, getMakes, getInquiryAssistants } from '@/features/inquiry/queries'
+import { listInquiries, getInquirySources, getInquirySubStatusSuggestions, getMakes, getInquiryAssistants } from '@/features/inquiry/queries'
 import { InquiryClient } from '@/features/inquiry/InquiryClient'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
@@ -26,10 +26,10 @@ export default async function InquiryPage({
   const page = Number(sp.page) || 1
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
-  const [{ rows, total, pageCount }, makes, sourceSuggestions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
+  const [{ rows, total, pageCount }, makes, sourceOptions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
     listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page, restrictToUserId: ownershipScope.restrictToUserId }),
     getMakes(),
-    getInquirySourceSuggestions(),
+    getInquirySources(),
     getInquirySubStatusSuggestions(),
     getInquiryAssistants(),
   ])
@@ -43,7 +43,7 @@ export default async function InquiryPage({
     <InquiryClient
       initialData={data}
       makes={makes}
-      sourceSuggestions={sourceSuggestions}
+      sourceOptions={sourceOptions}
       subStatusSuggestions={subStatusSuggestions}
       inquiryAssistants={inquiryAssistants}
       total={total}

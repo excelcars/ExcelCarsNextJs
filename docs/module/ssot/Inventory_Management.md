@@ -13,7 +13,7 @@ For the final Next.js workflow, Make, Model, and Variant are all compulsory. A n
 **Route:** `/inventory`  
 **Primary page:** `app/(dashboard)/inventory/page.tsx`
 
-Inventory Management maintains vehicle inventory records and provides listing/search, add, edit, view, and delete. Vehicle image upload/photo management is currently **On Hold**. The module also provides vehicle-email sending and read-only matching-inquiry lookup from each inventory row. It does not directly manage checklist, insurance, RTO, loan, or DSA records; those are related records and can block inventory deletion.
+Inventory Management maintains vehicle inventory records and provides listing/search, add, edit, view, and delete. Vehicle image upload/photo management is currently **On Hold**. The module also provides vehicle-email sending and an Inventory-to-Inquiry synchronization workflow, which is implemented and currently **Pending testing**. Delete cleanup and direct links to downstream modules are **On Hold**. The module does not directly manage checklist, insurance, RTO, loan, or DSA records.
 
 ## Source of truth
 
@@ -71,7 +71,7 @@ The table displays:
 - vehicle make/model and variant/colour, preferring catalog relation values over legacy text
 - Year, Fuel, KM, formatted rupee Price, Status badge
 - Customer name, Owner name
-- View, Search Inquiry, Manage Photos, Send Email, Edit, and Delete actions
+- View, Update Inquiry, Manage Photos, Send Email, Edit, and Delete actions
 
 The client additionally filters the loaded page in memory. Therefore the visible rows can be a subset of the server-returned page; the total/page count remain based on the server query.
 
@@ -82,18 +82,17 @@ There is no user-controlled sort. Pagination shows current page, page count, tot
 ### Quick controls
 
 - Search is debounced by 400 ms and is URL-backed.
-- Status options are `All`, `In Stock`, `Booked`, `Loan Process`, `Not Available`, and `Sold`.
-- Make, Model, and Fuel are select controls.
-- Make change clears Model.
-- More Filters expands the remaining controls.
+- Status options are `All`, `In Stock`, `Booked`, `Loan Process`, `Not Available`, `Sold`, and `RTO Process`.
+- The common text search covers Make, Model, Variant, Colour, Owner Name, Owner Mobile, and Registration No.
+- Fuel Type, Owner Type, and Status are dropdown filters.
 - Clear All routes to `/inventory` and resets filters.
 - Active filter chips can clear individual filters; clearing Make also clears Model.
 
 ### Advanced controls
 
-Inventory No, SKU, Registration No, Variant, Colour, Year, Month, No. of Owners, Tax, Car Registered, KM Min, KM Max, Insurance Type, Price Min, Price Max, Owner Type, Owned By, Owner Mobile, Owner Email, Customer / Source, Linked Customer, Internal Comments, and Remarks.
+The filter panel contains one common text search, a Fuel Type dropdown, an Owner Type dropdown, and a Status dropdown.
 
-Filter option lists are derived from the currently loaded client data. Owned By, Customer / Source, and Linked Customer also expose datalist suggestions. They are not independent all-database lookup lists.
+The common text search checks Make, Model, Variant, Colour, Owner Name, Owner Mobile, and Registration No. The Fuel Type, Owner Type, and Status dropdowns are applied together with the common text search. Empty filters are ignored.
 
 ### Server query semantics
 
@@ -103,8 +102,7 @@ Filter option lists are derived from the currently loaded client data. Owned By,
 - fuel, colour, month, tax, insurance type, and owner type: case-insensitive equality
 - make/model: case-insensitive equality against either legacy text or the related catalog make/model
 - variant: case-insensitive equality against either legacy variant or catalog variant
-- search: case-insensitive `contains` over inventory number, registration, SKU, customer/source name, owner name, legacy make/model/variant, and catalog make/model
-- inventory number, SKU, registration, owner name/mobile/email, customer/source name, linked customer name, internal comments, and remarks: case-insensitive `contains`
+- search: case-insensitive `contains` over registration, colour, owner name, owner mobile, legacy make/model/variant, and catalog make/model
 - year and owner count: numeric equality when the input parses as a finite number
 - registered: only `yes`/`no` are recognized, mapped to true/false
 - KM and price: inclusive `gte`/`lte` ranges for finite numeric bounds; invalid bounds are ignored
@@ -117,9 +115,9 @@ The client repeats equivalent filtering over the loaded rows using normalized te
 
 Add opens an empty modal with default year equal to the current year, default owner count 1, and status `In Stock`. Edit first loads detail data and hydrates the form. The form contains read-only Inventory No and SKU, required-marked Registration No, Status, catalog Make/Model/Variant selectors, Year, Month, Colour, Fuel Type, No. of Owners, Tax, Car Registered, KM Driven, Insurance Type, Price, Owner Type, Owned By, Owner Mobile, Owner Email, Linked Customer, Internal Comments, and Remarks. Legacy Make/Model/Variant columns are retained only as compatibility data and are not user-editable fields.
 
-Make, Model, and Variant are required searchable inputs using the shared `CatalogTextPicker` input/dropdown component also used by RTO. An exact Make match loads `/api/catalog/models?makeId=...`; an exact Model match loads `/api/catalog/variants?modelId=...`; changing a parent clears the dependent selection. Each picker offers `+ Add “…”` for a typed value. Adding a Make creates it immediately; adding a Model requires and links the selected Make; adding a Variant requires and links the selected Make and Model. A new or edited inventory record must have a linked Variant before it can be saved. The newly created value is selected in the picker before the inventory save. The selected catalog variant ID and vehicle text values are submitted. Customer selection uses `CustomerPicker`, which searches `/api/customers/search` after at least two characters with a 300 ms debounce and can create a new customer through `quickCreateCustomer` when allowed.
+Make, Model, and Variant are required searchable inputs using the shared `CatalogTextPicker` input/dropdown component also used by RTO. An exact Make match loads `/api/catalog/models?makeId=...`; an exact Model match loads `/api/catalog/variants?modelId=...`; changing a parent clears the dependent selection. The `+ Add` option is currently hidden in the Inventory form pending confirmation of where catalog creation should be managed. Users can select only existing linked catalog values from this form. A new or edited inventory record must have a linked Variant before it can be saved. The selected catalog variant ID and vehicle text values are submitted. Customer selection uses `CustomerPicker`, which searches `/api/customers/search` after at least two characters with a 300 ms debounce and can create a new customer through `quickCreateCustomer` when allowed.
 
-Colour is a required free-text input. Fuel Type is required and is selected from the dropdown options Petrol, Diesel, or CNG. If an existing historical value falls outside those options, it is temporarily retained as an edit option so the record remains editable. No. of Owners is required and accepts a whole number only; the minimum is 1. Tax is a dropdown with `Individual` and `Corporate`. Car Registered is a dropdown with `Select`, `Yes`, and `No`; when `Yes` is selected, Tax and KM Driven are required. KM Driven accepts decimal values, displays Indian-style comma grouping while typing, and cannot be negative.
+Colour is a required editable input-plus-dropdown. Its suggestions are distinct, trimmed Colour values already stored in `InventoryManagement`, shown from the current inventory database; the user may select an existing value or type a new value, and the entered value is saved with the inventory record. Fuel Type is required and is selected from the dropdown options Petrol, Diesel, or CNG. If an existing historical value falls outside those options, it is temporarily retained as an edit option so the record remains editable. No. of Owners is required and accepts a whole number only; the minimum is 1. Tax is a dropdown with `Individual` and `Corporate`. Car Registered is a dropdown with `Select`, `Yes`, and `No`; when `Yes` is selected, Tax and KM Driven are required. KM Driven accepts decimal values, displays Indian-style comma grouping while typing, and cannot be negative.
 
 Insurance Type remains free text and is required when Car Registered is checked. Price is required, numeric, and must be greater than zero. While typing, the Price input displays Indian-style comma grouping (for example, `12,50,000`) while the form stores a numeric value for validation and saving; up to two decimal places are supported. Owner Type is a dropdown with `Excel Cars`, `Dealer`, and `Individual`; historical values outside those options are retained as an edit option. Selecting `Excel Cars` fills Name of Owner with `Excel Cars` and clears dealer contact details. Selecting `Dealer` shows the shared input-plus-dropdown picker; selecting a dealer fills Name of Owner, Owner Mobile, and Owner Email from Dealer Master. Owner Mobile is optional numeric text capped at 11 characters, and Owner Email is optional but format-validated. The server also restricts Owner Type to the three supported values.
 
@@ -135,11 +133,11 @@ Make, Model, and Variant are passed into the save payload as compatibility text 
 
 ### Server save logic
 
-`createInventory` and `updateInventory` require a trimmed Registration No and vehicle identity, then require route authorization. They write empty strings as null, preserve nullable numeric values, optionally connect a catalog variant and customer, and write audit dates/user relations.
+`createInventory` and `updateInventory` require a trimmed Registration No and vehicle identity, then require route authorization. They normalize registration values to uppercase with spaces removed. For normalized values longer than five characters, both actions check for another Inventory record with the same registration; update excludes the current inventory ID. A duplicate blocks saving. Values of five or fewer characters follow the legacy exception and are not duplicate-checked. The actions write empty strings as null, preserve nullable numeric values, optionally connect a catalog variant and customer, and write audit dates/user relations.
 
 For a new record, the form previews the next legacy-style inventory number (`Inventory/<number>`) and keeps it read-only. On save, `createInventory` obtains the next number from the latest stored inventory number and saves it in the create operation. SKU is also read-only: after make, model, and colour are entered, the client requests `getInventorySku`. The server looks for the latest matching legacy make/model/colour SKU and increments its final numeric segment; when none exists it builds `<first 3 make>-<first 3 model>-<first 3 colour>-1` (using the full value when shorter than three characters). Catalog make/model names are used for SKU generation when legacy text is empty. Update preserves the existing inventory number and SKU unless other code changes them. Update explicitly connects or disconnects the customer and catalog variant. Neither action updates the Customer master from manually entered Customer / Source text nor upserts vehicle masters.
 
-After success, the client closes the form and reloads. New records or edits whose status becomes `Booked` or `Sold` open the read-only matching-inquiry modal before the final refresh; the user may close it without changing any inquiry.
+After success, the client closes the form and reloads. New records or edits whose status becomes `Booked` or `Sold` open the Update Inquiry modal before the final refresh; the user may skip synchronization.
 
 The edit modal tracks a serialized form/customer baseline and asks for confirmation before discarding dirty changes. Loading detail uses a request ID guard and a per-ID client cache.
 
@@ -147,7 +145,7 @@ The edit modal tracks a serialized form/customer baseline and asks for confirmat
 
 View calls `GET /api/inventory/{inventoryId}` lazily and displays catalog and legacy vehicle fields, ownership, customer, comments, price, status, and email-link tracking. The detail API rejects missing/invalid IDs with 400 and missing rows with 404.
 
-Delete opens a confirmation dialog stating the deletion is permanent. `deleteInventory` requires authorization and deletes the inventory row. A Prisma P2003 error is translated to a message saying related checklist, insurance, loan, RTO, or DSA entries prevent deletion. Other failures return a generic save/error message. Successful deletion revalidates `/inventory` and removes the row from the current client data.
+Delete cleanup is currently **On Hold**. The existing delete action opens a confirmation dialog stating the deletion is permanent, requires authorization, and attempts to delete the inventory row. Related-record failures are translated to a generic checklist/insurance/loan/RTO/DSA message. Photo and dependent-record cleanup is not currently expanded.
 
 ## Photo management — On Hold
 
@@ -167,21 +165,32 @@ Updating a recipient email lowercases and validates it (basic email format and m
 
 `sendInventoryEmail` rechecks authorization and vehicle existence, resolves each selected recipient from the database, ignores recipients without an email, deduplicates by lowercase email, creates a token-hashed tracked vehicle email link, renders personalized vehicle details, and calls `sendEmail`. Failed sends delete the newly created tracking link. `sendBulkInventoryEmail` is the server-authoritative bulk wrapper: it reads the environment limits, caps unique vehicles and recipients, rejects batches exceeding the total-message limit, then processes each vehicle and returns sent/failed inventory IDs. It returns a failure if no target has an email or all sends fail; partial sends return sent and failed recipients. Successful sends are shown in the modal.
 
-## Matching inquiries (read-only)
+## Inquiry synchronization — Testing pending
 
-The magnifying-glass `Search Inquiry` action is available on every inventory row. It opens a `Matching Inquiries` modal using that row's linked Variant ID. The API requires a valid Variant ID and only returns inquiries whose inquiry-car details contain that exact Variant. Inquiry status is not used as a restriction, matching the old Inventory inquiry search, so matching FollowUp, Closed, or other-status inquiries can be viewed without loading unrelated vehicles.
+The Inventory-to-Inquiry workflow is implemented, but **testing is pending**. The current code contains an `Update Inquiry` workflow; testing must confirm the search, linking, inquiry update, multiple-vehicle behavior, and follow-up result against the approved business rule.
 
-The modal displays the inventory vehicle, inquiry number, customer/contact details, the matching interested vehicle/year, classification, and status. For inquiries containing multiple vehicle rows, the UI displays the vehicle detail whose Variant ID matches the inventory row. The optional search field further filters the already variant-matched results by inquiry number, customer name, mobile, or email. The lookup is debounced by 250 ms when text is entered and returns all matching results, consistent with the old workflow.
+In the current code, Update Inquiry opens a modal for any inventory row. The search input is debounced by 250 ms when non-empty. `GET /api/inventory/inquiries` searches inquiry number, legacy customer name, mobile, email, or linked customer using case-insensitive contains. Empty search returns 10 `FollowUp` inquiries; non-empty search returns up to 20 newest inquiries. Results show customer/contact, inquiry number, interested vehicle/year, classification, and status.
 
-The modal is read-only. It has no selection, status editing, classification editing, follow-up editing, or save/update operation. Each result has an `Open Inquiry` button, which redirects to `/inquiry?edit={inquiryId}` so permitted edits occur on the Inquiry page. Closing the modal makes no database change. When the modal was opened automatically after saving a Booked/Sold inventory record, closing it refreshes the inventory list so the saved row is visible.
+The user must select an inquiry. Synchronization is transactional. It:
 
-The existing server-side `syncInventoryToInquiry` action remains available in the code for compatibility, but this Inventory row action does not call it.
+1. connects the inventory customer when present, otherwise retains an existing inquiry customer or disconnects it;
+2. copies inventory customer/source name, owner mobile/email as inquiry contact fallbacks, and appends an inventory-sync note;
+3. sets classification to `Hot`;
+4. sets `Closed` / `Sold Car` for Sold inventory, otherwise `FollowUp` / `Booked Vehicle`, clearing follow-up date only for Sold;
+5. updates the newest inquiry car-detail row, or creates one when none exists, using inventory catalog/legacy vehicle identity and year; and
+6. deletes other car-detail rows for that inquiry.
+
+Success revalidates `/inventory` and `/inquiry`. After a status-triggered synchronization, the client refreshes the page when the modal is completed or skipped. The user can also open the workflow manually for any row. These behaviors are implemented and remain pending testing.
+
+## Downstream module links — On Hold
+
+Direct row-level links from Inventory to Checklist, Insurance, RTO, DSA, and Financial are currently **On Hold**. The related modules remain separate and are not opened automatically from Inventory.
 
 ## Export
 
 The page offers `Export All (count)` or `Export Filtered (count)` depending on active filters. Export calls authenticated `GET /api/inventory/export` with the current filter set. The API rebuilds the same server filter predicates and returns all matching rows, without pagination, ordered by inventory ID descending. The client generates a CSV locally.
 
-CSV columns are Inventory No, Make, Model, Variant, Colour, SKU, Year, Month, Fuel Type, No Of Owners, Tax, Car Registered, Registration No, KM Driven, Insurance Type, Price, Remarks, Status, Owned Type, Owned By, Owner Mobile, Owner Email, Customer ID, Customer Name, and Internal Comments. Values are CSV-quoted with embedded quotes doubled. The filename includes `inventory`, selected status/make/model/fuel/year/month or filter markers, row count when unfiltered, and the current ISO date. This is a CSV export, not an Excel workbook.
+CSV columns now match the old Inventory export and use this order: Make, Model, Variant, Colour, Year, Month, Fuel Type, Kms Driven, No of owners, Registration No, Tax, Price, Insurance Type, Status, Owned Type, SKU, Name of Owner, Mobile No of Owner, Email ID of Owner, Other Remarks, Customer Name, Customer Address, Customer Mobile, and Customer Email. Values are CSV-quoted with embedded quotes doubled. The filename includes `inventory`, selected status/make/model/fuel/year/month or filter markers, row count when unfiltered, and the current ISO date. The column data matches the old export, but the current file format remains CSV rather than an Excel workbook.
 
 ## Calculations and normalization
 
@@ -201,7 +210,6 @@ CSV columns are Inventory No, Make, Model, Variant, Colour, SKU, Year, Month, Fu
 - Catalog model/variant request failures are not explicitly checked by the client before JSON parsing; customer search failures are surfaced in the picker.
 - `describeError` uses a generic “Something went wrong saving this record.” fallback for failures from save, email-recipient update, email sending, and inquiry synchronization unless a known Prisma error is mapped.
 - Client validation is stronger than server validation; direct server-action calls can bypass several client-only checks.
-- The status constant used by the page does not include `RTO Process`, although the legacy value may still exist in stored data and can be handled as an unlisted value.
 - Create inventory and assign its generated number/SKU are separate database operations; an error between them can leave a newly inserted row before finalization.
 - Photo file writing and database insertion are separate operations; a database failure after file write can leave an orphaned file.
 - Photo GET can return a row through either ID or legacy number, while POST requires both values and trusts the submitted inventory number for validation only as a required reference; it stores the database inventory number when available.
