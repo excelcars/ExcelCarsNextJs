@@ -139,7 +139,7 @@ export function Table({ headers, children, empty = false, emptyMessage = 'No rec
     <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full min-w-[1860px] table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal">
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
+          <tr className="bg-white-50 border-b border-gray-200">
             {headers.map(h => (
               <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
             ))}
