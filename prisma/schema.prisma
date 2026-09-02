@@ -335,6 +335,7 @@ model FollowupInquiry {
   pkFollowupId           Int        @id(map: "idx_16485_pk_followup_inquiry") @default(autoincrement()) @map("pk_followup_id")
   fkInquiryId            Int?       @map("fk_inquiry_id")
   followupDate           DateTime?  @map("followup_date") @db.Timestamptz(6)
+  contactOutcome         String?    @map("contact_outcome")
   followupStatus         String?    @map("followup_status")
   followupSubStatus      String?    @map("followup_sub_status")
   comments               String?
@@ -379,6 +380,8 @@ model Inquiry {
   inquiryNo             String?             @map("inquiry_no")
   dateOfInquiry         DateTime?           @map("date_of_inquiry") @db.Timestamptz(6)
   website               String?
+  sourceId              Int?                @map("source_id")
+  sourceDetail          String?             @map("source_detail")
   customerId            Int?                @map("customer_id")
   customerNameLegacy    String?             @map("customer_name_legacy")
   mobileno              String?
@@ -396,6 +399,7 @@ model Inquiry {
   updatedDt             DateTime?           @map("updated_dt") @db.Timestamptz(6)
   updatedBy             Int?                @map("updated_by")
   followupInquiry       FollowupInquiry[]
+  inquiryEmailHistories InquiryEmailHistory[]
   inquiryInventoryLinks InquiryInventoryLink[]
   vehicleEmailLinks     VehicleEmailLink[]
   assignedToUser        UserTable?          @relation("inquiry_assigned_toTouser_table", fields: [assignedTo], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_assigned_to_user")
@@ -403,10 +407,68 @@ model Inquiry {
   customer              Customer?           @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_customer_id")
   updatedByUser         UserTable?          @relation("inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_updated_by_user")
   inquiryCarDetails     InquiryCarDetails[]
+  source                InquirySourceMaster? @relation(fields: [sourceId], references: [sourceId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_source_id")
 
   @@index([assignedTo], map: "idx_16506_ix_inquiry_assigned_to")
   @@index([customerId], map: "idx_16506_ix_inquiry_customer_id")
+  @@index([sourceId], map: "idx_inquiry_source_id")
   @@map("inquiry")
+}
+
+model InquirySourceMaster {
+  sourceId        Int                          @id(map: "pk_inquiry_source_master") @default(autoincrement()) @map("source_id")
+  code            String                       @unique(map: "uq_inquiry_source_master_code")
+  displayName     String                       @map("display_name")
+  category        String
+  requiresDetail  Boolean                      @default(false) @map("requires_detail")
+  isActive        Boolean                      @default(true) @map("is_active")
+  reportingSort   Int                          @default(999) @map("reporting_sort")
+  createdAt       DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  inquiries       Inquiry[]
+  legacyMappings  LegacyInquirySourceMapping[]
+
+  @@unique([displayName], map: "uq_inquiry_source_master_display_name")
+  @@index([isActive, reportingSort], map: "idx_inquiry_source_master_active_sort")
+  @@map("inquiry_source_master")
+}
+
+model LegacyInquirySourceMapping {
+  legacyInquirySourceMappingId Int                  @id(map: "pk_legacy_inquiry_source_mapping") @default(autoincrement()) @map("legacy_inquiry_source_mapping_id")
+  legacySource                 String               @map("legacy_source")
+  normalizedSource             String               @unique(map: "uq_legacy_inquiry_source_mapping_normalized") @map("normalized_source")
+  sourceId                     Int                  @map("source_id")
+  mappingStatus                String               @default("approved") @map("mapping_status")
+  reviewNote                   String?              @map("review_note")
+  createdAt                    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  source                       InquirySourceMaster @relation(fields: [sourceId], references: [sourceId], onDelete: NoAction, onUpdate: NoAction, map: "fk_legacy_inquiry_source_mapping_source")
+
+  @@index([sourceId], map: "idx_legacy_inquiry_source_mapping_source_id")
+  @@map("legacy_inquiry_source_mapping")
+}
+
+model InquiryEmailHistory {
+  inquiryEmailHistoryId Int                  @id(map: "idx_inquiry_email_history_pk") @default(autoincrement()) @map("inquiry_email_history_id")
+  inquiryId             Int                  @map("inquiry_id")
+  inventoryId           Int?                 @map("inventory_id")
+  emailType             String               @map("email_type")
+  recipientEmail        String               @map("recipient_email")
+  recipientName         String?              @map("recipient_name")
+  emailSubject          String               @map("email_subject")
+  deliveryStatus        String               @map("delivery_status")
+  errorMessage          String?              @map("error_message")
+  sentAt                DateTime?            @map("sent_at") @db.Timestamptz(6)
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedBy           Int?                 @map("attempted_by")
+  attemptedByUser       UserTable?           @relation("inquiry_email_history_attempted_byTouser_table", fields: [attemptedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_email_history_attempted_by_user")
+  inquiry               Inquiry              @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_email_history_inquiry")
+  inventoryManagement   InventoryManagement? @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_email_history_inventory")
+
+  @@index([inquiryId, createdAt], map: "idx_inquiry_email_history_inquiry_created_at")
+  @@index([inventoryId], map: "idx_inquiry_email_history_inventory_id")
+  @@index([attemptedBy, createdAt], map: "idx_inquiry_email_history_attempted_by_created_at")
+  @@map("inquiry_email_history")
 }
 
 model InquiryInventoryLink {
@@ -583,6 +645,7 @@ model InventoryManagement {
   carVariantMaster CarVariantMaster?  @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
   inventoryPhotos  InventoryPhotos[]
   inquiryInventoryLinks InquiryInventoryLink[]
+  inquiryEmailHistories InquiryEmailHistory[]
   vehicleEmailLinks VehicleEmailLink[]
   feedbackInvitations FeedbackInvitation[]
   loanManagement   LoanManagement[]
@@ -985,6 +1048,7 @@ model UserTable {
   updatedFollowupInquiries          FollowupInquiry[]          @relation("followup_inquiry_updated_byTouser_table")
   assignedInquiries                 Inquiry[]                  @relation("inquiry_assigned_toTouser_table")
   createdInquiries                  Inquiry[]                  @relation("inquiry_created_byTouser_table")
+  attemptedInquiryEmailHistories    InquiryEmailHistory[]      @relation("inquiry_email_history_attempted_byTouser_table")
   updatedInquiries                  Inquiry[]                  @relation("inquiry_updated_byTouser_table")
   createdInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_created_byTouser_table")
   updatedInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_updated_byTouser_table")

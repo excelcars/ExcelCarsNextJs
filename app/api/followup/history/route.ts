@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     inquiryId,
     Number.isFinite(limit) && limit && limit > 0 ? limit : rawLimit === 'all' ? undefined : 5,
     ownershipScope.restrictToUserId,
+    ownershipScope.ownershipMode,
   )
   return NextResponse.json(history)
 }

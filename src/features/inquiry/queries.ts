@@ -1,28 +1,11 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
+import { getActiveInquirySources } from './sourceMaster.server'
 
-export const INQUIRY_STATUSES = ['FollowUp', 'Closed'] as const
+export const INQUIRY_STATUSES = ['Open', 'FollowUp', 'Closed'] as const
 export const INQUIRY_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 export const PAGE_SIZE = 25
-const PREFERRED_INQUIRY_SOURCES = [
-  'Walk In',
-  'Website',
-  'Reference',
-  'JustDial',
-  'CarDekho',
-  'CarWale',
-  'CarTrade',
-  'OLX',
-  'Facebook',
-  'Instagram',
-  'Google',
-  'WhatsApp',
-  'Phone',
-  'IndiaMart',
-  'Other',
-] as const
-
 export interface ListInquiriesParams {
   search: string
   status: string
@@ -53,7 +36,7 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
     where.classification = classification
   }
   if (source !== 'All') {
-    where.website = source
+    where.source = { code: source }
   }
   if (subStatus !== 'All') {
     where.subStatus = subStatus
@@ -111,6 +94,7 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
       { mobileno: { contains: q, mode: 'insensitive' } },
       { email: { contains: q, mode: 'insensitive' } },
       { website: { contains: q, mode: 'insensitive' } },
+      { source: { displayName: { contains: q, mode: 'insensitive' } } },
       { customerNameLegacy: { contains: q, mode: 'insensitive' } },
       { customer: { custName: { contains: q, mode: 'insensitive' } } },
       {
@@ -141,6 +125,7 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
 function inquiryDetailInclude() {
   return {
     customer: true,
+    source: true,
     assignedToUser: {
       select: {
         userId: true,
@@ -161,6 +146,15 @@ function inquiryListSelect() {
     inquiryNo: true,
     dateOfInquiry: true,
     website: true,
+    sourceId: true,
+    sourceDetail: true,
+    source: {
+      select: {
+        code: true,
+        displayName: true,
+        requiresDetail: true,
+      },
+    },
     customerId: true,
     customerNameLegacy: true,
     mobileno: true,
@@ -262,30 +256,7 @@ export async function getMakes() {
   })
 }
 
-export async function getInquirySourceSuggestions() {
-  const rows = await prisma.inquiry.findMany({
-    distinct: ['website'],
-    where: { website: { not: null } },
-    select: { website: true },
-    orderBy: { website: 'asc' },
-    take: 500,
-  })
-
-  const preferred: string[] = [...PREFERRED_INQUIRY_SOURCES]
-  const seen = new Set(preferred.map(value => value.toLowerCase()))
-  const suggestions = [...preferred]
-
-  for (const row of rows) {
-    const value = row.website?.trim()
-    if (!value) continue
-    const key = value.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    suggestions.push(value)
-  }
-
-  return suggestions
-}
+export const getInquirySources = getActiveInquirySources
 
 export async function getInquirySubStatusSuggestions() {
   const rows = await prisma.inquiry.findMany({

@@ -10,17 +10,64 @@ import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
 import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES } from '@/features/inquiry/queries'
 import { getInquiryDetail, updateInquiry, type InquiryCarInput, type InquiryFormInput } from '@/features/inquiry/actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
-import { isFollowupStatus, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { FOLLOWUP_CONTACT_OUTCOMES, FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
 
 const CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
-const STATUSES = ['FollowUp', 'Closed'] as const
-const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car Not In Stock', 'Not connected', 'Already Bought Car', 'Visited', 'Gave Details', 'Sold Car']
+const STATUSES = ['Open', 'FollowUp', 'Closed'] as const
+const SUB_STATUS_SUGGESTIONS = [...FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS]
+const FOLLOWUP_OTHER_SUB_STATUS_VALUE = '__OTHER__'
+const FRIENDLY_STATUS_OPTIONS = [
+  { key: 'open-new', status: 'Open', subStatus: '', label: 'Open — fresh lead / no date fixed' },
+  { key: 'followup-working', status: 'FollowUp', subStatus: '', label: 'Follow-up — still working it' },
+  { key: 'followup-negotiation', status: 'FollowUp', subStatus: 'Negotiation', label: 'Negotiation — discussing price' },
+  { key: 'followup-visit', status: 'FollowUp', subStatus: 'Visit scheduled', label: 'Visit scheduled' },
+  { key: 'closed-done', status: 'Closed', subStatus: 'Deal done', label: 'Closed — deal done' },
+  { key: 'closed-lost', status: 'Closed', subStatus: 'Lost', label: 'Closed — lost' },
+  { key: 'closed-unreachable', status: 'Closed', subStatus: 'Unreachable', label: 'Unreachable' },
+] as const
+const CONTACT_OUTCOME_OPTIONS = [
+  { key: 'spoke', value: 'spoke_to_customer', title: 'Spoke to customer', hint: 'Had a conversation', statusKey: 'followup-working', subStatus: 'Gave Details' },
+  { key: 'no-answer', value: 'no_answer', title: 'No answer', hint: 'Rang, nobody picked', statusKey: 'followup-working', subStatus: 'Ringing' },
+  { key: 'call-back', value: 'asked_to_call_back', title: 'Asked to call back', hint: 'Bad time', statusKey: 'followup-working', subStatus: 'Asked to call back' },
+  { key: 'number-issue', value: 'number_not_working', title: 'Number not working', hint: 'Wrong or disconnected', statusKey: 'closed-unreachable', subStatus: 'Number not working' },
+] as const
+
+function formatFriendlyStatus(status: string, subStatus: string) {
+  const matched = FRIENDLY_STATUS_OPTIONS.find(option => option.status === status && option.subStatus === subStatus)
+  if (matched) return matched.label
+  if (status === 'Open' && !subStatus) return 'Open — fresh lead / no date fixed'
+  if (status === 'FollowUp' && !subStatus) return 'Follow-up — still working it'
+  if (subStatus) return `${status} — ${subStatus}`
+  return status || '—'
+}
+
+function usesOtherSubStatus(subStatus: string | null | undefined) {
+  const value = clean(subStatus)
+  return !!value && !(SUB_STATUS_SUGGESTIONS as readonly string[]).includes(value)
+}
+
+function getFriendlyStatusKey(status: string, subStatus: string) {
+  return FRIENDLY_STATUS_OPTIONS.find(option => option.status === status && option.subStatus === subStatus)?.key ?? ''
+}
+
+function addDays(base: Date, days: number) {
+  const next = new Date(base)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function contactOutcomeLabel(value: string | null | undefined) {
+  const matched = CONTACT_OUTCOME_OPTIONS.find(option => option.value === value)
+  return matched?.title ?? 'Not recorded'
+}
 
 interface FollowupRow {
   inquiryId: number
   inquiryNo: string | null
   dateOfInquiry: Date | string | null
   website: string | null
+  sourceDetail?: string | null
   customerId?: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -56,6 +103,7 @@ interface HistoryEntry {
   pkFollowupId: number
   createdDt?: string | null
   followupDate: string | null
+  contactOutcome?: string | null
   followupStatus: string | null
   followupSubStatus: string | null
   followupClassification: string | null
@@ -379,6 +427,7 @@ function exportFollowupCsv(rows: FollowupRow[], status: string, classification: 
     'Inquiry_No',
     'Date_of_Inquiry',
     'WebSite',
+    'Source Detail',
     'Inquiry Made By',
     'Inquiry Made By User ID',
     'Linked_Customer_ID',
@@ -419,6 +468,7 @@ function exportFollowupCsv(rows: FollowupRow[], status: string, classification: 
           row.inquiryNo,
           fmtDate(row.dateOfInquiry),
           row.website,
+          row.sourceDetail,
           auditUserLabel(row.createdByUser, row.createdBy),
           row.createdBy ?? null,
           row.customer?.custId ?? row.customerId,
@@ -457,7 +507,16 @@ function exportFollowupCsv(rows: FollowupRow[], status: string, classification: 
 }
 
 function emptyForm(): LogFollowupInput {
-  return { status: 'FollowUp', subStatus: '', classification: 'Warm', comments: '', nextFollowUpDate: '' }
+  return {
+    contactOutcome: FOLLOWUP_CONTACT_OUTCOMES[0],
+    status: 'FollowUp',
+    subStatus: '',
+    useOtherSubStatus: false,
+    otherSubStatus: '',
+    classification: 'Warm',
+    comments: '',
+    nextFollowUpDate: '',
+  }
 }
 
 function emptyInquiryCar(): InquiryCarInput {
@@ -476,6 +535,8 @@ function emptyInquiryForm(): InquiryFormInput {
     inquiryNo: '',
     dateOfInquiry: '',
     website: '',
+    sourceCode: '',
+    sourceDetail: '',
     customerId: null,
     customerNameLegacy: '',
     mobileno: '',
@@ -483,7 +544,7 @@ function emptyInquiryForm(): InquiryFormInput {
     budgetOfCustomer: null,
     visitedDateOfCustomer: '',
     classification: 'Warm',
-    status: 'FollowUp',
+    status: 'Open',
     subStatus: '',
     followUpDate: '',
     remark: '',
@@ -496,8 +557,11 @@ export function FollowupClient({
   search: initialSearch,
   classification,
   status: initialStatus,
+  contactOutcome: initialContactOutcome,
+  customerName: initialCustomerName,
   subStatus: initialSubStatus,
   website: initialWebsite,
+  sourceOptions,
   customerMobile: initialCustomerMobile,
   users,
   userId: initialUserId,
@@ -507,6 +571,9 @@ export function FollowupClient({
   makeId,
   modelId,
   variantId,
+  legacyMake: initialLegacyMake,
+  legacyModel: initialLegacyModel,
+  legacyVariant: initialLegacyVariant,
   total,
   page,
   pageCount,
@@ -523,8 +590,11 @@ export function FollowupClient({
   search: string
   classification: string
   status: string
+  contactOutcome: string
+  customerName: string
   subStatus: string
   website: string
+  sourceOptions: InquirySourceOption[]
   customerMobile: string
   users: UserOption[]
   userId: string
@@ -534,6 +604,9 @@ export function FollowupClient({
   makeId: string
   modelId: string
   variantId: string
+  legacyMake: string
+  legacyModel: string
+  legacyVariant: string
   total: number
   page: number
   pageCount: number
@@ -549,10 +622,15 @@ export function FollowupClient({
   const router = useRouter()
   const [search, setSearch] = useState(initialSearch)
   const [status, setStatus] = useState(initialStatus)
+  const [contactOutcome, setContactOutcome] = useState(initialContactOutcome)
+  const [customerName, setCustomerName] = useState(initialCustomerName)
   const [subStatus, setSubStatus] = useState(initialSubStatus)
   const [website, setWebsite] = useState(initialWebsite)
   const [customerMobile, setCustomerMobile] = useState(initialCustomerMobile)
   const [userId, setUserId] = useState(initialUserId)
+  const [legacyMake, setLegacyMake] = useState(initialLegacyMake)
+  const [legacyModel, setLegacyModel] = useState(initialLegacyModel)
+  const [legacyVariant, setLegacyVariant] = useState(initialLegacyVariant)
   const [inquiryDateFrom, setInquiryDateFrom] = useState(initialInquiryDateFrom)
   const [inquiryDateTo, setInquiryDateTo] = useState(initialInquiryDateTo)
   const [followUpDateFrom, setFollowUpDateFrom] = useState(initialFollowUpDateFrom)
@@ -586,6 +664,7 @@ export function FollowupClient({
   const [modelNameCache, setModelNameCache] = useState<Record<number, string>>({})
   const [variantNameCache, setVariantNameCache] = useState<Record<number, string>>({})
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [exportError, setExportError] = useState('')
   const [isRoutePending, startRouteTransition] = useTransition()
@@ -599,6 +678,8 @@ export function FollowupClient({
   const activeFilterCount = [
     search.trim() ? 1 : 0,
     status !== 'FollowUp' ? 1 : 0,
+    contactOutcome ? 1 : 0,
+    customerName.trim() ? 1 : 0,
     subStatus.trim() ? 1 : 0,
     website.trim() ? 1 : 0,
     customerMobile.trim() ? 1 : 0,
@@ -606,6 +687,9 @@ export function FollowupClient({
     makeId ? 1 : 0,
     modelId ? 1 : 0,
     variantId ? 1 : 0,
+    legacyMake.trim() ? 1 : 0,
+    legacyModel.trim() ? 1 : 0,
+    legacyVariant.trim() ? 1 : 0,
     classification !== 'All' ? 1 : 0,
     inquiryDateFrom ? 1 : 0,
     inquiryDateTo ? 1 : 0,
@@ -617,6 +701,8 @@ export function FollowupClient({
   const hasActiveFilters = Boolean(
     search.trim() ||
     status !== 'FollowUp' ||
+    contactOutcome ||
+    customerName.trim() ||
     subStatus.trim() ||
     website.trim() ||
     customerMobile.trim() ||
@@ -624,6 +710,9 @@ export function FollowupClient({
     makeId ||
     modelId ||
     variantId ||
+    legacyMake.trim() ||
+    legacyModel.trim() ||
+    legacyVariant.trim() ||
     classification !== 'All' ||
     inquiryDateFrom ||
     inquiryDateTo ||
@@ -637,10 +726,15 @@ export function FollowupClient({
   useEffect(() => {
     setSearch(initialSearch)
     setStatus(initialStatus)
+    setContactOutcome(initialContactOutcome)
+    setCustomerName(initialCustomerName)
     setSubStatus(initialSubStatus)
     setWebsite(initialWebsite)
     setCustomerMobile(initialCustomerMobile)
     setUserId(initialUserId)
+    setLegacyMake(initialLegacyMake)
+    setLegacyModel(initialLegacyModel)
+    setLegacyVariant(initialLegacyVariant)
     setInquiryDateFrom(initialInquiryDateFrom)
     setInquiryDateTo(initialInquiryDateTo)
     setFollowUpDateFrom(initialFollowUpDateFrom)
@@ -650,13 +744,15 @@ export function FollowupClient({
     if (restricted && currentUserId) {
       setUserId(currentUserId)
     }
-  }, [initialCustomerMobile, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite])
+  }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialLegacyMake, initialLegacyModel, initialLegacyVariant, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
 
   const pushQuery = (params: Record<string, string>) => {
     const q = new URLSearchParams({
       search: initialSearch,
       classification,
       status: initialStatus,
+      contactOutcome: initialContactOutcome,
+      customerName: initialCustomerName,
       subStatus: initialSubStatus,
       website: initialWebsite,
       customerMobile: initialCustomerMobile,
@@ -664,6 +760,9 @@ export function FollowupClient({
       makeId,
       modelId,
       variantId,
+      legacyMake: initialLegacyMake,
+      legacyModel: initialLegacyModel,
+      legacyVariant: initialLegacyVariant,
       page: String(page),
       inquiryDateFrom: initialInquiryDateFrom,
       inquiryDateTo: initialInquiryDateTo,
@@ -674,7 +773,7 @@ export function FollowupClient({
       ...params,
     })
     for (const [k, v] of [...q.entries()]) {
-      if (!v || v === 'All') q.delete(k)
+      if (!v) q.delete(k)
     }
     startRouteTransition(() => {
       router.push(`/followup${q.toString() ? `?${q.toString()}` : ''}`)
@@ -686,17 +785,22 @@ export function FollowupClient({
       if (
         search !== initialSearch ||
         status !== initialStatus ||
+        contactOutcome !== initialContactOutcome ||
+        customerName !== initialCustomerName ||
         subStatus !== initialSubStatus ||
         website !== initialWebsite ||
         customerMobile !== initialCustomerMobile ||
-        userId !== initialUserId
+        userId !== initialUserId ||
+        legacyMake !== initialLegacyMake ||
+        legacyModel !== initialLegacyModel ||
+        legacyVariant !== initialLegacyVariant
       ) {
-        pushQuery({ search, status, subStatus, website, customerMobile, userId, page: '1' })
+        pushQuery({ search, status, contactOutcome, customerName, subStatus, website, customerMobile, userId, legacyMake, legacyModel, legacyVariant, page: '1' })
       }
     }, 400)
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerMobile, initialCustomerMobile, initialSearch, initialStatus, initialSubStatus, initialUserId, initialWebsite, search, status, subStatus, userId, website])
+  }, [contactOutcome, customerMobile, customerName, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialLegacyMake, initialLegacyModel, initialLegacyVariant, initialSearch, initialStatus, initialSubStatus, initialUserId, initialWebsite, legacyMake, legacyModel, legacyVariant, search, status, subStatus, userId, website])
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -893,7 +997,13 @@ export function FollowupClient({
     const requestId = historyRequestRef.current + 1
     historyRequestRef.current = requestId
     setLogRow(r)
-    setForm({ ...emptyForm(), classification: r.classification ?? 'Warm' })
+    setForm({
+      ...emptyForm(),
+      classification: r.classification ?? 'Warm',
+      subStatus: usesOtherSubStatus(r.subStatus) ? '' : (r.subStatus ?? ''),
+      useOtherSubStatus: usesOtherSubStatus(r.subStatus),
+      otherSubStatus: usesOtherSubStatus(r.subStatus) ? (r.subStatus ?? '') : '',
+    })
     setError('')
     setErrors({})
     setHistory([])
@@ -935,6 +1045,7 @@ export function FollowupClient({
         setError(result.error ?? 'Something went wrong.')
         return
       }
+      setSuccessMessage('Follow-up saved successfully.')
       setLogRow(null)
       router.refresh()
     })
@@ -1027,6 +1138,8 @@ export function FollowupClient({
           inquiryNo: detail.inquiryNo ?? '',
           dateOfInquiry: fmtDate(detail.dateOfInquiry),
           website: detail.website ?? '',
+          sourceCode: detail.source?.code ?? '',
+          sourceDetail: detail.sourceDetail ?? '',
           customerId: detail.customerId,
           customerNameLegacy: detail.customerNameLegacy ?? '',
           mobileno: detail.mobileno ?? '',
@@ -1034,7 +1147,7 @@ export function FollowupClient({
           budgetOfCustomer: detail.budgetOfCustomer ? Number(detail.budgetOfCustomer) : null,
           visitedDateOfCustomer: fmtDate(detail.visitedDateOfCustomer),
           classification: detail.classification ?? 'Warm',
-          status: detail.status ?? 'FollowUp',
+          status: detail.status ?? 'Open',
           subStatus: detail.subStatus ?? '',
           followUpDate: fmtDate(detail.followUpDate),
           remark: detail.remark ?? '',
@@ -1098,6 +1211,16 @@ export function FollowupClient({
   }
 
   const updateInquiryField = <K extends keyof InquiryFormInput>(key: K, value: InquiryFormInput[K]) => {
+    if (key === 'status') {
+      const nextStatus = String(value)
+      setEditInquiryForm(prev => ({
+        ...prev,
+        status: nextStatus,
+        followUpDate: isFollowupStatus(nextStatus) ? prev.followUpDate : '',
+      }))
+      return
+    }
+
     setEditInquiryForm(prev => ({ ...prev, [key]: value }))
   }
 
@@ -1132,6 +1255,7 @@ export function FollowupClient({
         if (search.trim()) params.set('search', search)
         if (classification !== 'All') params.set('classification', classification)
         if (status !== 'FollowUp') params.set('status', status)
+        if (contactOutcome) params.set('contactOutcome', contactOutcome)
         if (subStatus.trim()) params.set('subStatus', subStatus)
         if (website.trim()) params.set('website', website)
         if (customerMobile.trim()) params.set('customerMobile', customerMobile)
@@ -1139,6 +1263,9 @@ export function FollowupClient({
         if (makeId) params.set('makeId', makeId)
         if (modelId) params.set('modelId', modelId)
         if (variantId) params.set('variantId', variantId)
+        if (legacyMake.trim()) params.set('legacyMake', legacyMake)
+        if (legacyModel.trim()) params.set('legacyModel', legacyModel)
+        if (legacyVariant.trim()) params.set('legacyVariant', legacyVariant)
         if (inquiryDateFrom) params.set('inquiryDateFrom', inquiryDateFrom)
         if (inquiryDateTo) params.set('inquiryDateTo', inquiryDateTo)
         if (followUpDateFrom) params.set('followUpDateFrom', followUpDateFrom)
@@ -1161,10 +1288,14 @@ export function FollowupClient({
   const resetFilters = () => {
     setSearch('')
     setStatus('FollowUp')
+    setContactOutcome('')
     setSubStatus('')
     setWebsite('')
     setCustomerMobile('')
     setUserId('')
+    setLegacyMake('')
+    setLegacyModel('')
+    setLegacyVariant('')
     setInquiryDateFrom('')
     setInquiryDateTo('')
     setFollowUpDateFrom('')
@@ -1174,6 +1305,7 @@ export function FollowupClient({
     pushQuery({
       search: '',
       status: 'FollowUp',
+      contactOutcome: '',
       subStatus: '',
       website: '',
       customerMobile: '',
@@ -1181,6 +1313,9 @@ export function FollowupClient({
       makeId: '',
       modelId: '',
       variantId: '',
+      legacyMake: '',
+      legacyModel: '',
+      legacyVariant: '',
       classification: 'All',
       inquiryDateFrom: '',
       inquiryDateTo: '',
@@ -1207,6 +1342,9 @@ export function FollowupClient({
       {exportError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
+      {successMessage ? (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
+      ) : null}
 
       <div className="flex flex-wrap gap-3 mb-4">
         <SearchBar value={search} onChange={setSearch} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
@@ -1216,10 +1354,29 @@ export function FollowupClient({
           disabled={isRoutePending}
           className="min-w-[160px]"
         >
-          <option value="FollowUp">Follow-up Only</option>
-          <option value="Closed">Closed</option>
+          {STATUSES.map(option => (
+            <option key={option} value={option}>
+              {option === 'FollowUp' ? 'Follow-up Only' : option}
+            </option>
+          ))}
           <option value="All">All Status</option>
         </Select>
+        <Select
+          value={contactOutcome}
+          onChange={e => setContactOutcome(e.target.value)}
+          disabled={isRoutePending}
+          className="min-w-[210px]"
+        >
+          <option value="">All reached outcomes</option>
+          {CONTACT_OUTCOME_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.title}</option>)}
+        </Select>
+        <Input
+          value={customerName}
+          onChange={e => setCustomerName(e.target.value)}
+          placeholder="Customer name..."
+          disabled={isRoutePending}
+          className="min-w-[220px]"
+        />
         <Input
           value={subStatus}
           onChange={e => setSubStatus(e.target.value)}
@@ -1227,13 +1384,15 @@ export function FollowupClient({
           disabled={isRoutePending}
           className="min-w-[220px]"
         />
-        <Input
+        <Select
           value={website}
           onChange={e => setWebsite(e.target.value)}
-          placeholder="Source / website..."
           disabled={isRoutePending}
           className="min-w-[220px]"
-        />
+        >
+          <option value="">All Sources</option>
+          {sourceOptions.map(item => <option key={item.code} value={item.code}>{item.displayName}</option>)}
+        </Select>
         <Input
           value={customerMobile}
           onChange={e => setCustomerMobile(e.target.value)}
@@ -1257,6 +1416,27 @@ export function FollowupClient({
           <option value="">All Variants</option>
           {variants.map(item => <option key={item.pkVariantId} value={String(item.pkVariantId)}>{item.variant ?? '—'}</option>)}
         </Select>
+        <Input
+          value={legacyMake}
+          onChange={e => setLegacyMake(e.target.value)}
+          placeholder="Vehicle make text..."
+          disabled={isRoutePending}
+          className="min-w-[180px]"
+        />
+        <Input
+          value={legacyModel}
+          onChange={e => setLegacyModel(e.target.value)}
+          placeholder="Vehicle model text..."
+          disabled={isRoutePending}
+          className="min-w-[180px]"
+        />
+        <Input
+          value={legacyVariant}
+          onChange={e => setLegacyVariant(e.target.value)}
+          placeholder="Vehicle variant text..."
+          disabled={isRoutePending}
+          className="min-w-[180px]"
+        />
         <div className="flex flex-wrap gap-1.5">
           {['All', ...CLASSIFICATIONS].map(c => (
             <button key={c} onClick={() => pushQuery({ classification: c })}
@@ -1331,7 +1511,7 @@ export function FollowupClient({
       </div>
 
       <div className="mb-4 flex justify-end">
-        <Btn variant="outline" size="sm" onClick={resetFilters} disabled={isRoutePending || !hasActiveFilters}>
+        <Btn variant="outline" size="sm" onClick={() => { setSuccessMessage(''); resetFilters() }} disabled={isRoutePending || !hasActiveFilters}>
           Reset Filters
         </Btn>
       </div>
@@ -1366,7 +1546,7 @@ export function FollowupClient({
                   <td className="px-4 py-3">
                     <div className="space-y-1 text-sm text-gray-700 min-w-[160px]">
                       <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(r.dateOfInquiry) || '—'}</div>
-                      <div className="break-words"><span className="font-medium text-gray-900">Website:</span> {r.website ?? '—'}</div>
+                      <div className="break-words"><span className="font-medium text-gray-900">Website:</span> {r.website ?? '—'}{r.sourceDetail ? ` (${r.sourceDetail})` : ''}</div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
@@ -1477,86 +1657,315 @@ export function FollowupClient({
         </div>
       )}
 
-      <Modal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={!!logRow} onClose={() => setLogRow(null)}>
+      <Modal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={!!logRow} width="max-w-5xl" onClose={() => setLogRow(null)}>
         {logRow && (
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inquiry Context</div>
-                <div className="mt-3 space-y-2 text-sm text-gray-700">
-                  <div><span className="font-medium text-gray-900">Inquiry ID:</span> {logRow.inquiryId}</div>
-                  <div><span className="font-medium text-gray-900">Inquiry No:</span> {logRow.inquiryNo ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(logRow.dateOfInquiry) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Source:</span> {logRow.website ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Budget:</span> {logRow.budgetOfCustomer ? `₹${Number(logRow.budgetOfCustomer).toLocaleString('en-IN')}` : '—'}</div>
-                  <div><span className="font-medium text-gray-900">Visited Date:</span> {fmtDate(logRow.visitedDateOfCustomer ?? null) || '—'}</div>
-                </div>
-              </div>
+          (() => {
+            const today = new Date()
+            const effectiveSubStatus = resolveFollowupSubStatusInput(form)
+            const friendlyStatusKey = getFriendlyStatusKey(form.status, effectiveSubStatus)
+            const daysLate = logRow.followUpDate ? daysFromToday(logRow.followUpDate) : null
+            const nextDateRequired = isFollowupStatus(form.status)
+            const lastEntry = history[0] ?? null
 
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer & Vehicle</div>
-                <div className="mt-3 space-y-2 text-sm text-gray-700">
-                  <div><span className="font-medium text-gray-900">Linked Customer ID:</span> {logRow.customer?.custId ?? logRow.customerId ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Customer:</span> {logRow.customer?.custName ?? logRow.customerNameLegacy ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Mobile:</span> {logRow.customer?.custMobile ?? logRow.mobileno ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Email:</span> {logRow.customer?.custEmail ?? logRow.email ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Car of Interest:</span> {getInquiryCarSummary(logRow.inquiryCarDetails[0])}</div>
-                  <div><span className="font-medium text-gray-900">Current Follow-up Date:</span> {fmtDate(logRow.followUpDate) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Last Remark:</span> {logRow.remark?.trim() ? logRow.remark : '—'}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Select label="Status *" value={form.status} onChange={e => f('status', e.target.value)}>
-                {STATUSES.map(s => <option key={s}>{s}</option>)}
-              </Select>
-              <Select label="Classification" value={form.classification} onChange={e => f('classification', e.target.value)}>
-                {CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
-              </Select>
-              <div>
-                <Input label="Sub-status" list="followup-sub-status-suggestions" value={form.subStatus} onChange={e => f('subStatus', e.target.value)} />
-                <datalist id="followup-sub-status-suggestions">
-                  {SUB_STATUS_SUGGESTIONS.map(s => <option key={s} value={s} />)}
-                </datalist>
-              </div>
-              {isFollowupStatus(form.status) && (
-                <Input label="Next Follow-up Date *" type="date" value={form.nextFollowUpDate} onChange={e => f('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
-              )}
-            </div>
-            <Textarea label="Remark" value={form.comments} onChange={e => f('comments', e.target.value)} placeholder="What was discussed on this call..." error={errors.comments} />
-
-            {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
-
-            <div>
-              <div className="text-xs font-medium text-gray-600 mb-1.5">Recent activity</div>
-              {historyLoading ? (
-                <div className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <div>Loading follow-up history...</div>
-                </div>
-              ) : historyError ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{historyError}</div>
-              ) : history.length === 0 ? (
-                <div className="text-xs text-gray-400">No prior follow-ups logged.</div>
-              ) : (
-                <div className="space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
-                  {history.map(h => (
-                    <div key={h.pkFollowupId} className="text-xs text-gray-600 flex gap-2">
-                      <span className="text-gray-400 whitespace-nowrap">{fmtDate(h.followupDate)}</span>
-                      {h.followupStatus && <Badge label={h.followupStatus} />}
-                      <span className="truncate">{h.followupSubStatus ?? h.comments ?? ''}</span>
+            return (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-gray-200 bg-white">
+                  <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{logRow.inquiryNo ?? `Inquiry/${logRow.inquiryId}`}</span>
+                        {logRow.website ? <span className="rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-[#1B2A6B]">{logRow.website}</span> : null}
+                      </div>
+                      <h2 className="mt-3 text-3xl font-bold text-gray-900">{logRow.customer?.custName ?? logRow.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <span>Customer #{logRow.customer?.custId ?? logRow.customerId ?? '—'}</span>
+                        <span>·</span>
+                        <span>{getInquiryCarsSummary(logRow.inquiryCarDetails)}</span>
+                        <span>·</span>
+                        <span>{formatFriendlyStatus(form.status, effectiveSubStatus)}</span>
+                      </div>
                     </div>
-                  ))}
+                    <div className="grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
+                      <div><span className="font-medium text-gray-900">Mobile:</span> {logRow.customer?.custMobile ?? logRow.mobileno ?? '—'}</div>
+                      <div><span className="font-medium text-gray-900">Email:</span> {logRow.customer?.custEmail ?? logRow.email ?? '—'}</div>
+                      <div><span className="font-medium text-gray-900">Current follow-up:</span> {fmtDate(logRow.followUpDate) || '—'}</div>
+                      <div><span className="font-medium text-gray-900">Classification:</span> {form.classification || '—'}</div>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div className="flex gap-3 justify-end pt-2">
-              <Btn variant="outline" onClick={() => setLogRow(null)}>Cancel</Btn>
-              <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Follow-up'}</Btn>
-            </div>
-          </div>
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded border border-[#1B2A6B]/20 bg-blue-50 text-xs font-semibold text-[#1B2A6B]">1</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold text-gray-900">Did you reach them?</div>
+                      <div className="text-sm text-gray-500">This can prefill the follow-up outcome.</div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {CONTACT_OUTCOME_OPTIONS.map(option => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => {
+                              const target = FRIENDLY_STATUS_OPTIONS.find(item => item.key === option.statusKey)
+                              f('contactOutcome', option.value)
+                              if (target) {
+                                f('status', target.status)
+                                f('subStatus', option.subStatus || target.subStatus)
+                                f('useOtherSubStatus', false)
+                                f('otherSubStatus', '')
+                                if (target.status === 'Closed') {
+                                  f('nextFollowUpDate', '')
+                                }
+                              } else {
+                                f('subStatus', option.subStatus)
+                                f('useOtherSubStatus', false)
+                                f('otherSubStatus', '')
+                              }
+                            }}
+                            className={`rounded-xl border px-4 py-3 text-left transition ${form.contactOutcome === option.value ? 'border-[#1B2A6B] bg-blue-50' : 'border-gray-200 bg-white hover:border-[#1B2A6B]/35 hover:bg-gray-50'}`}
+                          >
+                            <div className="text-sm font-semibold text-gray-900">{option.title}</div>
+                            <div className="mt-1 text-xs text-gray-500">{option.hint}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded border border-[#1B2A6B]/20 bg-blue-50 text-xs font-semibold text-[#1B2A6B]">2</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold text-gray-900">What was said?</div>
+                      <div className="text-sm text-gray-500">Write the practical note the next person needs.</div>
+                      {logRow.remark?.trim() ? (
+                        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                          <span className="font-medium text-gray-900">Last remark:</span> {logRow.remark}
+                        </div>
+                      ) : null}
+                      <div className="mt-4">
+                        <Textarea
+                          label="Remark"
+                          value={form.comments}
+                          onChange={e => f('comments', e.target.value)}
+                          placeholder="Asking price, condition, kms, whether they spoke to anyone else, next expectation..."
+                          error={errors.comments}
+                          className="min-h-[120px]"
+                        />
+                        <div className="mt-1 text-xs text-gray-500">This is the main human note. Everything else is structured status.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded border border-[#1B2A6B]/20 bg-blue-50 text-xs font-semibold text-[#1B2A6B]">3</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold text-gray-900">Where does that leave the lead?</div>
+                      <div className="text-sm text-gray-500">Business status on screen, current status fields underneath.</div>
+                      <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                        <span className="font-medium text-gray-900">Reached outcome:</span> {contactOutcomeLabel(form.contactOutcome)}
+                      </div>
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <Select
+                          label="Status *"
+                          value={friendlyStatusKey}
+                          onChange={e => {
+                            const selected = FRIENDLY_STATUS_OPTIONS.find(option => option.key === e.target.value)
+                            if (!selected) return
+                            f('status', selected.status)
+                            f('subStatus', selected.subStatus)
+                            f('useOtherSubStatus', false)
+                            f('otherSubStatus', '')
+                            if (selected.status === 'Closed') {
+                              f('nextFollowUpDate', '')
+                            }
+                          }}
+                          error={errors.status}
+                        >
+                          {FRIENDLY_STATUS_OPTIONS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
+                        </Select>
+                        <Select label="Classification" value={form.classification} onChange={e => f('classification', e.target.value)}>
+                          {CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
+                        </Select>
+                      </div>
+                      <div className="mt-4">
+                        <Select
+                          label="Sub-status"
+                          value={form.useOtherSubStatus ? FOLLOWUP_OTHER_SUB_STATUS_VALUE : form.subStatus}
+                          onChange={e => {
+                            if (e.target.value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) {
+                              f('useOtherSubStatus', true)
+                              f('subStatus', '')
+                              return
+                            }
+                            f('useOtherSubStatus', false)
+                            f('otherSubStatus', '')
+                            f('subStatus', e.target.value)
+                          }}
+                        >
+                          <option value="">-- none --</option>
+                          {SUB_STATUS_SUGGESTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          <option value={FOLLOWUP_OTHER_SUB_STATUS_VALUE}>OTHER</option>
+                        </Select>
+                        {form.useOtherSubStatus ? (
+                          <div className="mt-3">
+                            <Input
+                              label="Other Sub-status *"
+                              value={form.otherSubStatus ?? ''}
+                              onChange={e => f('otherSubStatus', e.target.value)}
+                              error={errors.otherSubStatus}
+                              placeholder="Enter the real sub-status"
+                            />
+                          </div>
+                        ) : null}
+                        <div className="mt-1 text-xs text-gray-500">Choose a standard sub-status, or select OTHER and enter the actual value.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded border border-[#1B2A6B]/20 bg-blue-50 text-xs font-semibold text-[#1B2A6B]">4</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold text-gray-900">When next?</div>
+                      <div className="text-sm text-gray-500">Shortcuts help schedule the next follow-up faster.</div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {[
+                          { label: 'In 2 days', value: addDays(today, 2).toISOString().slice(0, 10) },
+                          { label: 'In a week', value: addDays(today, 7).toISOString().slice(0, 10) },
+                          { label: 'In 2 weeks', value: addDays(today, 14).toISOString().slice(0, 10) },
+                        ].map(preset => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => {
+                              f('status', 'FollowUp')
+                              f('nextFollowUpDate', preset.value)
+                              if (!effectiveSubStatus) {
+                                f('useOtherSubStatus', false)
+                                f('otherSubStatus', '')
+                                f('subStatus', 'Ringing')
+                              }
+                            }}
+                            className={`rounded-full border px-3 py-1.5 text-sm transition ${form.nextFollowUpDate === preset.value ? 'border-[#1B2A6B] bg-blue-50 text-[#1B2A6B]' : 'border-gray-200 bg-white text-gray-600 hover:border-[#1B2A6B]/35 hover:bg-gray-50'}`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            f('status', 'Closed')
+                            f('nextFollowUpDate', '')
+                          }}
+                          className={`rounded-full border px-3 py-1.5 text-sm transition ${!nextDateRequired ? 'border-[#1B2A6B] bg-blue-50 text-[#1B2A6B]' : 'border-gray-200 bg-white text-gray-600 hover:border-[#1B2A6B]/35 hover:bg-gray-50'}`}
+                        >
+                          No follow-up needed
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <Input
+                          label={nextDateRequired ? 'Next Follow-up Date *' : 'Next Follow-up Date'}
+                          type="date"
+                          value={form.nextFollowUpDate}
+                          onChange={e => f('nextFollowUpDate', e.target.value)}
+                          error={errors.nextFollowUpDate}
+                          disabled={!nextDateRequired}
+                        />
+                        <Input label="Who's calling next" value="Me" readOnly />
+                      </div>
+
+                      {daysLate !== null && daysLate > 0 ? (
+                        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                          Follow-up was due {daysLate} day{daysLate === 1 ? '' : 's'} ago on {fmtLongDate(logRow.followUpDate)}.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Recent Activity</div>
+                    <button
+                      type="button"
+                      className="text-sm font-medium text-[#1B2A6B]"
+                      onClick={() => {
+                        setLogRow(null)
+                        openFollowupView(logRow.inquiryId)
+                      }}
+                    >
+                      View full log
+                    </button>
+                  </div>
+                  {historyLoading ? (
+                    <div className="mt-4 flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <div>Loading follow-up history...</div>
+                    </div>
+                  ) : historyError ? (
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{historyError}</div>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {daysLate !== null && daysLate > 0 ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                          {daysLate} day{daysLate === 1 ? '' : 's'} with nothing logged. Last scheduled follow-up was {fmtLongDate(logRow.followUpDate)}.
+                        </div>
+                      ) : null}
+                      {history.length === 0 ? (
+                        <div className="text-sm text-gray-500">No prior follow-ups logged.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {history.map(h => (
+                            <div key={h.pkFollowupId} className="grid gap-2 rounded-lg border border-gray-200 px-3 py-3 md:grid-cols-[140px_1fr]">
+                              <div className="text-sm text-gray-500">{fmtLongDate(h.createdDt ?? h.followupDate)}</div>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-900">{contactOutcomeLabel(h.contactOutcome)}</span>
+                                  {h.followupStatus ? <Badge label={h.followupStatus} /> : null}
+                                  {h.followupSubStatus ? <span className="text-sm font-medium text-[#1B2A6B]">{h.followupSubStatus}</span> : null}
+                                  {h.followupClassification ? <span className="text-sm text-gray-500">{h.followupClassification}</span> : null}
+                                </div>
+                                <div className="mt-1 text-sm text-gray-700">{clean(h.comments) || 'No remark recorded.'}</div>
+                                {h.followupDate ? <div className="mt-1 text-xs text-gray-500">Next follow-up set for {fmtLongDate(h.followupDate)}</div> : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {lastEntry ? (
+                  <details className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Record Details</summary>
+                    <div className="mt-4 grid gap-3 text-sm text-gray-600 md:grid-cols-2">
+                      <div><span className="font-medium text-gray-900">Inquiry ID:</span> {logRow.inquiryId}</div>
+                      <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtLongDate(logRow.dateOfInquiry)}</div>
+                      <div><span className="font-medium text-gray-900">Last entry date:</span> {fmtLongDate(lastEntry.createdDt ?? lastEntry.followupDate)}</div>
+                      <div><span className="font-medium text-gray-900">Last status:</span> {formatFriendlyStatus(lastEntry.followupStatus ?? '', lastEntry.followupSubStatus ?? '')}</div>
+                    </div>
+                  </details>
+                ) : null}
+
+                <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-1 pt-4">
+                  <div className="text-sm text-gray-500">{form.comments.trim() ? 'Ready to save this follow-up.' : 'Add the key follow-up note before saving.'}</div>
+                  <div className="flex gap-3">
+                    <Btn variant="outline" onClick={() => setLogRow(null)}>Cancel</Btn>
+                    <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save follow-up'}</Btn>
+                  </div>
+                </div>
+              </div>
+            )
+          })()
         )}
       </Modal>
 
@@ -1830,6 +2239,7 @@ export function FollowupClient({
           ) : viewInquiry ? (
             <InquiryDetailView
               inquiry={viewInquiry}
+              detailRoute="/followup"
               onClose={closeInquiryView}
               onEdit={() => {
                 closeInquiryView()
@@ -1855,8 +2265,33 @@ export function FollowupClient({
             <div className="grid gap-4 md:grid-cols-3">
               <Input label="Inquiry No*" value={editInquiryForm.inquiryNo} readOnly />
               <Input label="Date of Inquiry*" type="date" value={editInquiryForm.dateOfInquiry} onChange={e => updateInquiryField('dateOfInquiry', e.target.value)} error={editInquiryErrors.dateOfInquiry} />
-              <Input label="Reference Website" value={editInquiryForm.website} onChange={e => updateInquiryField('website', e.target.value)} error={editInquiryErrors.website} />
+              <Select
+                label="Reference Website / Source*"
+                value={editInquiryForm.sourceCode}
+                onChange={e => {
+                  const selected = sourceOptions.find(source => source.code === e.target.value)
+                  setEditInquiryForm(previous => ({
+                    ...previous,
+                    sourceCode: e.target.value,
+                    website: selected?.displayName ?? '',
+                    sourceDetail: selected?.requiresDetail ? previous.sourceDetail : '',
+                  }))
+                }}
+                error={editInquiryErrors.website}
+              >
+                <option value="">Select source</option>
+                {sourceOptions.map(source => <option key={source.code} value={source.code}>{source.displayName}</option>)}
+              </Select>
             </div>
+
+            {sourceOptions.find(source => source.code === editInquiryForm.sourceCode)?.requiresDetail ? (
+              <Input
+                label={editInquiryForm.sourceCode === 'REFERENCE' ? 'Reference Details*' : 'Other Source Details*'}
+                value={editInquiryForm.sourceDetail}
+                onChange={e => updateInquiryField('sourceDetail', e.target.value)}
+                placeholder={editInquiryForm.sourceCode === 'REFERENCE' ? 'Customer, dealer, or referral person' : 'Describe the source'}
+              />
+            ) : null}
 
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Link Existing Customer</label>
@@ -1976,7 +2411,14 @@ export function FollowupClient({
                   {SUB_STATUS_SUGGESTIONS.map(item => <option key={item} value={item} />)}
                 </datalist>
               </div>
-              <Input label="FollowUp Date" type="date" value={editInquiryForm.followUpDate} onChange={e => updateInquiryField('followUpDate', e.target.value)} error={editInquiryErrors.followUpDate} />
+              <Input
+                label={isFollowupStatus(editInquiryForm.status) ? 'FollowUp Date*' : 'FollowUp Date'}
+                type="date"
+                value={editInquiryForm.followUpDate}
+                onChange={e => updateInquiryField('followUpDate', e.target.value)}
+                error={editInquiryErrors.followUpDate}
+                disabled={!isFollowupStatus(editInquiryForm.status)}
+              />
             </div>
 
             <Textarea label="Remark" value={editInquiryForm.remark} onChange={e => updateInquiryField('remark', e.target.value)} placeholder="Notes about this inquiry..." />

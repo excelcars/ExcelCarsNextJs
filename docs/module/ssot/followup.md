@@ -34,9 +34,10 @@ It depends on, but does not own:
 - middleware redirects unauthenticated browser access to `/login`
 - the page is server-rendered from URL search params, then hydrated into a client filter and modal workflow
 - the queue is built from `inquiry` rows, not directly from `followupInquiry`
-- the list shows one summary car per inquiry even when multiple `inquiryCarDetails` rows exist
+- the list shows all vehicle-interest rows inline inside each inquiry row
 - follow-up logging creates a new `followupInquiry` history row and updates the parent `inquiry`
-- history modal shows only the five most recent follow-up records
+- quick log modal loads the five most recent follow-up records
+- follow-up history view can load the full inquiry history
 - CSV export returns all matching rows, not just the current page
 - current screen supports browsing and logging only; it does not create or delete inquiries itself
 - queue queries can be ownership-restricted through `getInquiryOwnershipScopeForRoute('/followup')`
@@ -133,8 +134,8 @@ Required UI actions:
 - `/followup` is therefore route-protected at the browser layer
 - `/followup` also checks `canCurrentUserAccessRoute('/followup')` and redirects unauthorized users to `/dashboard`
 - `GET /api/followup/history` and `GET /api/followup/export` explicitly require `auth()`
-- `logFollowup()` uses `auth()` only to populate audit fields; it does not perform a separate explicit permission or role check beyond current session presence
-- no follow-up-specific RBAC equivalent to legacy `DatabaseFunctionname = "FollowUp_Management"` exists in the current implementation
+- `logFollowup()` checks route authorization through `getAuthorizedUserIdForRoute('/followup')` and ownership access through `canAccessInquiryByOwnership(...)`
+- follow-up route/API access is permission-gated through the app access catalog, which is the current RBAC equivalent of legacy function-level authorization
 - creator/ownership restriction can be applied through shared inquiry ownership rules
 
 ## 6. Default State And URL Contract
@@ -183,6 +184,8 @@ Result paging:
 Supported filters in the current UI:
 
 - free-text search
+- reached outcome
+- customer name
 - classification
 - status
 - sub-status
@@ -209,7 +212,8 @@ Search matching:
   - `email`
   - `customerNameLegacy`
   - linked `customer.custName`
-- `subStatus`, `website`, and `customerMobile` use case-insensitive substring matching
+- `subStatus` and `customerMobile` use case-insensitive substring matching
+- source filter uses the controlled source master by exact source code, including `Unknown` for historic blank Website values
 - classification is exact unless `All`
 - status is exact unless `All`
 - date ranges are inclusive day-bounded filters
@@ -236,7 +240,7 @@ Each row displays:
 - inquiry made by user display name or user name
 - customer name
 - mobile
-- one summarized car of interest
+- all linked cars of interest
 - budget
 - visited date
 - classification badge
@@ -247,10 +251,8 @@ Each row displays:
 
 Important display rules:
 
-- the queue only selects one car detail per inquiry:
-  - newest by `updatedDt desc`, then `inquiryCarDetailsId desc`
-- if an inquiry has multiple vehicle-interest rows, only the selected first row is visible in the follow-up table and export summary
-- exported follow-up rows still include follow-up history entries plus inquiry car rows, which is better for reporting than the visible table summary
+- queue rows render all linked `inquiryCarDetails` blocks inline
+- exported follow-up rows expand by inquiry car row and follow-up history row combination
 - overdue rows are computed client-side as `followUpDate < today`
 - overdue rows get a red-tinted background and warning icon
 - page header subtitle includes total count, overdue count on the current page, and page count when applicable
@@ -305,17 +307,24 @@ History behavior:
 
 Form fields:
 
+- reached outcome
 - status
 - classification
 - sub-status
+  - standard option
+  - or explicit `OTHER`
+- other sub-status text, required when `OTHER` is selected
 - next follow-up date, only when status is `FollowUp`
 - comments
 
 Default form state when the modal opens:
 
+- `reachedOutcome = spoke_to_customer`
 - `status = FollowUp`
 - `classification = current inquiry classification or Warm`
 - `subStatus = ""`
+- `useOtherSubStatus = false`
+- `otherSubStatus = ""`
 - `comments = ""`
 - `nextFollowUpDate = ""`
 
@@ -323,16 +332,19 @@ Default form state when the modal opens:
 Client validation before submit:
 
 - comments are required
+- if `OTHER` is selected, custom sub-status text is required
 - if status is `FollowUp`, next follow-up date is required
 - if status is `FollowUp`, next follow-up date cannot be before today
 
 Server validation in `logFollowup()`:
 
+- reached outcome is required
 - status is required
+- if `OTHER` is selected, custom sub-status text is required
+- comments are required
 - if status is `FollowUp`, next follow-up date is required
-- there is no server-side enforcement that comments are non-empty
-- there is no server-side validation that next follow-up date is today-or-future
-- there is no explicit validation for allowed status/classification values
+- if status is `FollowUp`, next follow-up date cannot be before today
+- status, classification, and reached outcome are validated against allowed values
 
 ## 12. Log Save Business Logic
 `logFollowup(inquiryId, input)` performs two writes:
@@ -342,11 +354,17 @@ Server validation in `logFollowup()`:
 
 History row behavior:
 
-- `followupDate` is set to `now`, not to the chosen next follow-up date
+- `followupDate` is `null` when status is `Open`
+- `followupDate` stores the selected scheduled next follow-up date when status is `FollowUp`
+- `followupDate` is `null` when status is `Closed`
+- `contactOutcome` stores the selected reached outcome
 - `followupStatus` comes from the modal status
-- `followupSubStatus` comes from the modal sub-status
+- `followupSubStatus` stores the resolved real sub-status value
+  - standard option directly when selected
+  - custom text value when `OTHER` is selected
 - `followupClassification` comes from the modal classification
 - `comments` comes from the modal comments
+- `createdDt` remains the real log-entry timestamp
 - audit fields use the current logged-in user id when available
 
 Parent inquiry update behavior:
@@ -356,6 +374,7 @@ Parent inquiry update behavior:
 - `classification` becomes the modal classification
 - `remark` becomes the modal comments
 - `followUpDate` becomes:
+  - `null` when status is `Open`
   - selected next date when status is `FollowUp`
   - `null` when status is `Closed`
 - `updatedDt` is refreshed
@@ -373,7 +392,7 @@ The `/followup` module is not the only source of `followupInquiry` rows.
 Inquiry create behavior:
 
 - `createInquiry()` appends a `followupInquiry` row when the form contains meaningful follow-up state
-- history `followupDate` is the selected inquiry `followUpDate`, or `now` if absent
+- history `followupDate` is the selected inquiry `followUpDate` when status is `FollowUp`, else `null`
 
 Inquiry update behavior:
 
@@ -388,6 +407,7 @@ Inquiry update behavior:
 Implication:
 
 - current follow-up history is a shared concern between inquiry editing and the follow-up queue modal
+- both writers now use the same follow-up-date meaning
 - not every parent inquiry update creates history
 
 ## 14. Export Behavior
@@ -447,20 +467,21 @@ Current dashboard integration is narrower than legacy:
 - the UI does not expose row-level retry or optimistic recovery beyond reopening the modal and saving again
 
 ## 17. Known Current Constraints
-- no follow-up-specific authorization matrix beyond login
-- no automatic “own rows only” restriction for any role
-- queue and export collapse multiple cars down to one displayed row summary
-- current queue does not expose customer-name-specific field, reference-website autocomplete, or free-text make/model/variant autocomplete
-- history modal shows only five recent entries
-- `/followup` logging uses `followupInquiry.followupDate = now`, while inquiry create/update history uses the selected scheduled follow-up date
-- client and server validation are not fully aligned for comments and past-date enforcement
+- restricted users are limited to their owned inquiries; dashboard Own drill-down presets remain future dashboard work
+- queue paginates at 25 rows while export returns all matching rows
+- catalog dropdowns and text Make/Model/Variant filters are both supported; text filters cover historic records without normalized vehicle links
+- quick log shows recent history, while the dedicated inquiry/follow-up history view shows the full timeline
+- current client and server validation share the same required outcome, status, classification, remark, custom `OTHER` sub-status, and next-date rules
+- historic blank Website values are classified as `Unknown`; `Other` remains for a user-selected source that needs a detail
 
 ## 18. Tests Required
 - unauthenticated route access is redirected to `/login`
 - unauthenticated `/api/followup/history` and `/api/followup/export` return `401`
 - queue defaults to `status = FollowUp` and page size `25`
+- status filter supports `Open`, `FollowUp`, `Closed`, and `All`
 - all filters map correctly into Prisma where clauses
 - make/model/variant filters respect variant > model > make priority
+- text make/model/variant filters match both historic text and normalized vehicle master values on the same inquiry-car row
 - export returns all matching rows, not only the current page
 - log modal loads recent history for the selected inquiry
 - client blocks follow-up save with missing comments
@@ -470,6 +491,7 @@ Current dashboard integration is narrower than legacy:
 - save inserts a `followupInquiry` row and updates parent inquiry fields
 - closing an inquiry from the modal nulls the parent `followUpDate`
 - inquiry create/update append follow-up history only under the documented conditions
+- source-master codes are unique and `Reference` / `Other` require a detail value
 
 ## 19. SSOT Rule
 Any change to follow-up filtering, follow-up history writing, dashboard entry links, creator-based access behavior, or the “single visible car per inquiry” presentation rule must update this SSOT in the same change.
