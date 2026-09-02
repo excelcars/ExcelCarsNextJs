@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { ensureInquiryNumberUnique } from "./ensure-inquiry-number-unique.mjs";
 import { ensureVehicleEmailLinkInquiry } from "./ensure-vehicle-email-link-inquiry.mjs";
+import { ensureInquiryStatusConstraint } from "./ensure-inquiry-status-constraint.mjs";
 
 const envFile = join(process.cwd(), ".env.staging.local");
 const prismaCli = join(process.cwd(), "node_modules", "prisma", "build", "index.js");
@@ -82,6 +83,7 @@ async function main() {
   await run(process.execPath, [prismaCli, "db", "push", ...process.argv.slice(2)], { env });
   await ensureInquiryNumberUnique(env);
   await ensureVehicleEmailLinkInquiry(env);
+  await ensureInquiryStatusConstraint(env);
 }
 
 main().catch((error) => {
