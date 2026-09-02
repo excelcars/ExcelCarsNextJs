@@ -1,4 +1,4 @@
-import { listInventory, getMakes, getDealers } from '@/features/inventory/queries'
+import { listInventory, getMakes, getDealers, getInventoryColours } from '@/features/inventory/queries'
 import { InventoryClient } from '@/features/inventory/InventoryClient'
 import { isEmailConfigured } from '@/lib/email/sendMail'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
@@ -73,7 +73,7 @@ export default async function InventoryPage({
   const page = Number(sp.page) || 1
   const pageSize = Number(sp.pageSize) || 25
 
-  const [{ rows, total, pageCount }, makes, dealers] = await Promise.all([
+  const [{ rows, total, pageCount }, makes, dealers, inventoryColours] = await Promise.all([
     listInventory({
       search,
       status,
@@ -108,6 +108,7 @@ export default async function InventoryPage({
     }),
     getMakes(),
     getDealers(),
+    getInventoryColours(),
   ])
 
   const data = rows.map((r) => ({
@@ -121,6 +122,7 @@ export default async function InventoryPage({
       initialData={data}
       makes={makes}
       dealers={dealers}
+      inventoryColours={inventoryColours}
       emailConfigured={isEmailConfigured()}
       initialSearch={search}
       initialStatus={status}

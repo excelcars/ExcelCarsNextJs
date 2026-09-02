@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:ensure-inquiry-no-unique": "node scripts/ensure-inquiry-number-unique.mjs",
     "build": "prisma generate && next build",
+    "build:only": "next build",
     "dev:only": "next dev",
     "start": "next start",
     "lint": "eslint .",

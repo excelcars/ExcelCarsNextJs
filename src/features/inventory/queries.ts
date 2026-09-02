@@ -100,11 +100,10 @@ function buildInventoryWhere({
     const q = search.trim()
     andConditions.push({
       OR: [
-        { inventoryNumber: { contains: q, mode: 'insensitive' } },
         { registrationNo: { contains: q, mode: 'insensitive' } },
-        { sku: { contains: q, mode: 'insensitive' } },
-        { customerName: { contains: q, mode: 'insensitive' } },
         { ownedBy: { contains: q, mode: 'insensitive' } },
+        { mobileNoOwnedBy: { contains: q, mode: 'insensitive' } },
+        { colour: { contains: q, mode: 'insensitive' } },
         { makeLegacy: { contains: q, mode: 'insensitive' } },
         { modelLegacy: { contains: q, mode: 'insensitive' } },
         { variantLegacy: { contains: q, mode: 'insensitive' } },
@@ -225,7 +224,7 @@ function buildInventoryWhere({
 function inventoryListInclude() {
   return {
     customer: {
-      select: { custId: true, custName: true, custMobile: true, custEmail: true },
+      select: { custId: true, custName: true, custAddress: true, custMobile: true, custEmail: true },
     },
     carVariantMaster: {
       include: { carMakeMaster: true, carModelMaster: true },
@@ -330,6 +329,26 @@ export async function getMakes() {
     where: { make: { not: null } },
     orderBy: { make: 'asc' },
   })
+}
+
+export async function getInventoryColours() {
+  const rows = await prisma.inventoryManagement.findMany({
+    where: { colour: { not: null } },
+    select: { colour: true },
+    orderBy: { colour: 'asc' },
+  })
+
+  const colours: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const colour = row.colour?.trim()
+    if (!colour) continue
+    const key = colour.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    colours.push(colour)
+  }
+  return colours
 }
 
 export async function getModelsByMake(makeId: number) {

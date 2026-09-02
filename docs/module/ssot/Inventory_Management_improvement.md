@@ -25,9 +25,9 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** `RTO Process` inventory status
 2. **Existing System Behavior:** The legacy status list includes `In Stock`, `Booked`, `Sold`, and `RTO Process`; the value is stored, displayed, searchable, and exportable.
-3. **Current Next.js Status:** The current status options contain `In Stock`, `Booked`, and `Sold`; `RTO Process` is not an available form/filter option.
-4. **Missing Functionality or Logic:** Existing RTO Process records cannot be selected through the normal status control and may be difficult to manage consistently.
-5. **Required Improvement:** Add `RTO Process` to the shared status options, filter options, validation, display mapping, and any status-transition logic.
+3. **Current Next.js Status:** `RTO Process` is present in the shared Next.js status options and is available in the Inventory status dropdown/filter.
+4. **Missing Functionality or Logic:** No status-option gap remains. The separate RTO record workflow is outside this item.
+5. **Required Improvement:** No code change is required for the status option; keep it available when the RTO workflow is resumed.
 6. **Relevant Existing Code Location:** Legacy `ExcelCars/ExcelCars/Views/Admin/Inventory_Management_View.cshtml`; Next `src/features/inventory/InventoryClient.tsx` and `src/features/inventory/queries.ts`.
 7. **Priority / Impact:** P1 — business workflow parity.
 
@@ -45,18 +45,18 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** Registration-number duplicate validation
 2. **Existing System Behavior:** Before save, legacy checks exact registration equality against another inventory record only when the trimmed registration length is greater than five. Short values can repeat; the current record is excluded during update.
-3. **Current Next.js Status:** Next server actions require a non-empty registration but do not implement the legacy duplicate query or short-value exception. Prisma marks `inventoryNumber` unique, but `registrationNo` is nullable and not unique in `prisma/schema.prisma`; `P2002` is generically described as a registration duplicate.
-4. **Missing Functionality or Logic:** Duplicate registrations can be stored, and a database error may be reported as a registration conflict even when another unique constraint caused it.
-5. **Required Improvement:** Implement an explicit normalized/exact duplicate check with the approved legacy length rule, exclude the edited row, define case/whitespace behavior, and report actual constraint failures accurately.
+3. **Current Next.js Status:** Implemented in both `createInventory` and `updateInventory`. Registration values are normalized to uppercase with spaces removed; values longer than five characters are checked against other Inventory records, and update excludes the current row.
+4. **Missing Functionality or Logic:** None for the approved legacy duplicate rule. The database column remains nullable and non-unique, so the server-side check remains the enforcement point.
+5. **Required Improvement:** None for the approved rule. Keep the server-side check and improve the error wording or add a database constraint only if a stricter rule is approved later.
 6. **Relevant Existing Code Location:** Legacy `Inventory_Management.cs`; Next `src/features/inventory/actions.ts`, `prisma/schema.prisma` (`InventoryManagement.registrationNo`).
-7. **Priority / Impact:** P0/P1 — data integrity.
+7. **Priority / Impact:** Completed — data integrity rule implemented.
 
 ## 5. Vehicle master/autocomplete workflow
 
 1. **Feature / Business Logic Name:** Free-text vehicle master maintenance
 2. **Existing System Behavior:** Make, model, variant, colour, and fuel type are editable text fields with autocomplete. Legacy save upserts vehicle master records using exact text values. Make/model/variant/colour suggestions are available from the legacy endpoints; vehicle suggestions are not parent-scoped.
-3. **Current Next.js Status:** The form provides searchable Make/Model/Variant picker inputs with explicit `+ Add` actions. New Models require the selected Make, and new Variants require the selected Make and Model; created values are selected immediately. Colour and fuel master/autocomplete behavior is not reproduced.
-4. **Missing Functionality or Logic:** The core make/model/variant master workflow is now present, but colour/fuel autocomplete and a single transaction covering picker creation plus inventory save are not present.
+3. **Current Next.js Status:** The form provides searchable Make/Model/Variant picker inputs, but the `+ Add` actions are currently hidden pending an approved catalog-creation workflow. Users can select existing values only. Colour and fuel master/autocomplete behavior is not reproduced.
+4. **Missing Functionality or Logic:** The core make/model/variant selection workflow is present, but catalog creation from Inventory is intentionally unavailable. Colour/fuel autocomplete and a single transaction covering catalog creation plus inventory save are also not present.
 5. **Required Improvement:** If full legacy parity is required, add verified colour/fuel suggestions and make picker creation plus inventory persistence atomic or compensating. Preserve the ability to manage historical/unmapped values.
 6. **Relevant Existing Code Location:** Legacy `CommonFor_Model_Color_Variant.cs`, `Inventory_Management.cs`, and `Inventory_Management_View.cshtml`; Next `src/features/inventory/actions.ts`, `InventoryClient.tsx`, and `app/api/catalog/**`.
 7. **Priority / Impact:** P1 — master-data consistency.
@@ -115,8 +115,8 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** Inventory inquiry search and follow-up update
 2. **Existing System Behavior:** Legacy Search Inquiry searches by Make/Model/Variant, shows inquiry/follow-up fields, and lets the user save follow-up status, classification, date, and remarks. Save inserts a `Followup_Inquiry` record and updates the inquiry record.
-3. **Current Next.js Status:** Next searches inquiries and syncs a selected inquiry into inventory. Sync copies selected customer/vehicle data, appends an internal note, sets fixed inquiry/follow-up values based on inventory status, and deletes other inquiry car-detail rows. It does not expose the legacy follow-up editor or insert the legacy follow-up record from this inventory workflow.
-4. **Missing Functionality or Logic:** Manual follow-up status/classification/date/remarks and the legacy update history behavior are absent; Next’s fixed mapping and deletion of other car details is materially different.
+3. **Current Next.js Status:** The existing Next.js code contains an Update Inquiry workflow that searches inquiries and syncs a selected inquiry with inventory. The workflow is implemented and **pending testing**. It copies selected customer/vehicle data, appends an internal note, sets fixed inquiry/follow-up values based on inventory status, and deletes other inquiry car-detail rows. It does not expose the legacy follow-up editor or insert the legacy follow-up record from this inventory workflow.
+4. **Missing Functionality or Logic:** Manual follow-up status/classification/date/remarks and the legacy update history behavior are absent; Next’s fixed mapping and deletion of other car details is materially different. The final Inventory-to-Inquiry workflow and whether a permanent inventory-inquiry link is required still need approval.
 5. **Required Improvement:** Add the follow-up fields and transaction that creates the follow-up history row and updates the inquiry. Preserve all existing car details unless a deliberate replacement rule is approved; document status mapping and avoid hard-coded destructive behavior without confirmation.
 6. **Relevant Existing Code Location:** Legacy `AdminController.cs`, inventory view, inquiry model; Next `src/features/inventory/actions.ts`, `app/api/inventory/inquiries/route.ts`, and `InventoryClient.tsx`.
 7. **Priority / Impact:** P1 — inquiry history and sales pipeline integrity.
@@ -135,9 +135,9 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** Legacy Excel export
 2. **Existing System Behavior:** Legacy export produces an Excel file using the current search result and includes the legacy inventory, vehicle, ownership, customer-contact, registration, tax, insurance, comments, and remarks fields.
-3. **Current Next.js Status:** Next export re-queries all rows matching the current filter predicate and downloads a client-generated CSV with a different 25-column shape. It is not an Excel workbook and does not include the complete legacy customer-contact/address set.
-4. **Missing Functionality or Logic:** Excel format and legacy column coverage are missing; export semantics are broader because Next exports all matching records rather than the visible selected rows.
-5. **Required Improvement:** Confirm the required export contract. If legacy parity is required, implement an XLSX export with the legacy column set and approved scope (visible rows, selected rows, or all filtered rows), including numeric/date formatting and authorization.
+3. **Current Next.js Status:** Next export re-queries all rows matching the current filter predicate and downloads a client-generated CSV. The 24 columns and their order now match the old Inventory export. CSV format is accepted for the current scope.
+4. **Missing Functionality or Logic:** No approved column gap remains. The file format differs from the legacy Excel file, but conversion to XLSX is not currently required.
+5. **Required Improvement:** No immediate change; keep the CSV export unless XLSX becomes a separate approved requirement.
 6. **Relevant Existing Code Location:** Legacy export action in `AdminController.cs`; Next `app/api/inventory/export/route.ts` and CSV logic in `InventoryClient.tsx`.
 7. **Priority / Impact:** P1/P2 — reporting and downstream operations.
 
@@ -145,9 +145,9 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** Inventory deletion cleanup
 2. **Existing System Behavior:** Legacy delete removes the inventory and performs physical/database photo cleanup through the legacy cleanup path; errors are surfaced through the legacy admin response.
-3. **Current Next.js Status:** Next deletes only the `InventoryManagement` row. Related-record failures are mapped to a generic checklist/insurance/loan/RTO/DSA message, and photo references are not explicitly cleaned up.
-4. **Missing Functionality or Logic:** Photo cleanup and a complete dependency-aware deletion workflow are absent. The error message does not identify photo references and may not identify the actual blocking relation.
-5. **Required Improvement:** Enumerate dependent records, delete only approved owned artifacts, return relation-specific errors, and make the operation transactional/compensating where physical files are involved.
+3. **Current Next.js Status:** Delete cleanup is **On Hold**. The current action deletes only the `InventoryManagement` row; related-record failures are mapped to a generic checklist/insurance/loan/RTO/DSA message, and photo references are not explicitly cleaned up.
+4. **Missing Functionality or Logic:** Photo cleanup and a complete dependency-aware deletion workflow remain undefined and intentionally deferred.
+5. **Required Improvement:** Resume only after approval of the dependency and photo-cleanup rules; then enumerate dependent records, delete only approved owned artifacts, and return relation-specific errors.
 6. **Relevant Existing Code Location:** Legacy controller/model cleanup; Next `src/features/inventory/actions.ts`, `prisma/schema.prisma`, and `InventoryClient.tsx`.
 7. **Priority / Impact:** P0/P1 — deletion reliability and orphaned data.
 
@@ -155,9 +155,9 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** Result-set filtering semantics
 2. **Existing System Behavior:** Legacy search uses ten exact-equality fields: Make, Model, Variant, Colour, Fuel Type, Owned Type, Owned By, owner mobile, Registration No, and Status. Empty inputs are ignored; there is no pagination, sort, or result limit.
-3. **Current Next.js Status:** Next provides broader contains/range filters, URL state, pagination, and a debounced global search. The server filters one page, then the client applies another filter pass to the loaded page. Filter options are derived from currently loaded rows; no explicit sort control exists.
-4. **Missing Functionality or Logic:** Results, option lists, and visible counts can diverge because client filtering is applied after server pagination. This is not equivalent to either the legacy exact search or a fully server-side paged search.
-5. **Required Improvement:** Make one server-side predicate authoritative for filtering, counts, options, and export. Preserve the broader Next filters only if desired, but define exact/contains semantics and add explicit sorting if operationally required.
+3. **Current Next.js Status:** The Inventory filter panel now has one common text search plus Fuel Type, Owner Type, and Status dropdowns. The common search checks Make, Model, Variant, Colour, Owner Name, Owner Mobile, and Registration Number. The text search uses partial matching; dropdown filters are combined with it. The server uses the same allowed fields for the common search.
+4. **Missing Functionality or Logic:** The current common search intentionally differs from the legacy ten separate exact-match fields: it uses one text box and partial matching. Pagination still means the client applies a final display filter to the loaded page.
+5. **Required Improvement:** No further UI filter expansion is required. If exact legacy matching or fully server-authoritative counts are later required, revise the search semantics separately.
 6. **Relevant Existing Code Location:** Legacy inventory view/controller; Next `src/features/inventory/queries.ts` and `InventoryClient.tsx`.
 7. **Priority / Impact:** P1 — users can miss records or see misleading counts.
 
@@ -185,9 +185,9 @@ Priority meanings: **P0** blocks core correctness or creates a material security
 
 1. **Feature / Business Logic Name:** Inventory-to-operations links
 2. **Existing System Behavior:** Each legacy inventory row exposes links/actions to Checklist, Insurance, RTO, DSA, Financial, and related inquiry/customer workflows, with the inventory/registration context passed forward.
-3. **Current Next.js Status:** The current Inventory table exposes edit, delete, photos, email, and inquiry actions. The documented implementation does not expose equivalent row-level links to all of those downstream modules.
-4. **Missing Functionality or Logic:** Users must leave Inventory and manually locate the vehicle in downstream modules, or the navigation is unavailable.
-5. **Required Improvement:** Add verified links with the correct inventory ID/registration query parameters and preserve downstream permission checks. Do not add links to modules that cannot consume the context safely.
+3. **Current Next.js Status:** Downstream module links are **On Hold**. The current Inventory table exposes edit, delete, photos, email, and inquiry actions, but not direct links to all downstream modules.
+4. **Missing Functionality or Logic:** Direct links remain unavailable by decision, not because of an unreviewed implementation gap.
+5. **Required Improvement:** Revisit only after the RTO and related-module business rules are finalized; then add verified links with the correct inventory context and permission checks.
 6. **Relevant Existing Code Location:** Legacy inventory view; Next `src/features/inventory/InventoryClient.tsx` and downstream routes under `app/(dashboard)`.
 7. **Priority / Impact:** P1/P2 — operational workflow continuity.
 

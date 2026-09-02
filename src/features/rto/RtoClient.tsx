@@ -1117,7 +1117,7 @@ export function RtoClient({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">From Inventory (optional)</label>
             {selectedVehicle ? (
               <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
                 <div className="flex items-center gap-2 text-sm text-gray-800">
@@ -1130,7 +1130,7 @@ export function RtoClient({
             ) : (
               <div ref={vehiclePickerRef} className="relative">
                 <Input
-                  placeholder="Search our stock by reg no, make, model..."
+                  placeholder="Search inventory by reg no, make, model..."
                   value={vehicleQuery}
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}

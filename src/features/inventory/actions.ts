@@ -216,7 +216,7 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
         where: { registrationNo: normalizedRegistrationNo },
         select: { inventoryId: true },
       })
-      if (duplicate) return { success: false, error: 'This registration number is already active on another vehicle in stock.' }
+      if (duplicate) return { success: false, error: 'This registration number already exists on another vehicle in Inventory.' }
     }
 
     let skuMake = input.makeLegacy
@@ -272,7 +272,7 @@ export async function updateInventory(id: number, input: InventoryFormInput): Pr
         where: { registrationNo: normalizedRegistrationNo, NOT: { inventoryId: id } },
         select: { inventoryId: true },
       })
-      if (duplicate) return { success: false, error: 'This registration number is already active on another vehicle in stock.' }
+      if (duplicate) return { success: false, error: 'This registration number already exists on another vehicle in Inventory.' }
     }
 
     const updated = await prisma.inventoryManagement.update({

@@ -4,20 +4,20 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Eye, Mail, X, Images, Upload, Loader2, Download, SlidersHorizontal, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, Mail, X, Images, Upload, Loader2, Download, Link2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import { createMake, createModel, createVariant } from '@/features/catalog/adminActions'
 import { INVENTORY_STATUSES } from './queries'
-import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, getInventoryBulkEmailConfig, updateInventoryEmailRecipient, getInventorySku, getNextInventoryNumber, type InventoryFormInput } from './actions'
+import { createInventory, updateInventory, deleteInventory, sendInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryEmailRecipient, getInventorySku, getNextInventoryNumber, type InventoryFormInput } from './actions'
 import { isValidEmail, isValidInventoryOwnerMobile, isValidYear, normalizeRegistrationNo } from '@/lib/validation'
 
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
 interface CarVariantMaster { pkVariantId: number; variant: string | null }
 interface Dealer { dealerId: number; dealerName: string | null; dealerMobileNo: string | null; dealerEmail: string | null }
-interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
+interface CustomerOption { custId: number; custName: string; custAddress?: string | null; custMobile: string | null; custEmail: string | null }
 interface EmailProgressItem { inventoryId: number; label: string; status: 'pending' | 'sending' | 'sent' | 'failed'; error?: string }
 
 interface InventoryRow {
@@ -305,31 +305,30 @@ async function readJsonResponse<T>(res: Response): Promise<T | null> {
 
 function exportInventoryCsv(rows: InventoryRow[], filters: InventoryFilters) {
   const headers = [
-    'Inventory No',
     'Make',
     'Model',
     'Variant',
     'Colour',
-    'SKU',
     'Year',
     'Month',
     'Fuel Type',
-    'No Of Owners',
-    'Tax',
-    'Car Registered',
-    'Registration No',
     'KM Driven',
-    'Insurance Type',
+    'No Of Owners',
+    'Registration No',
+    'Tax',
     'Price',
-    'Remarks',
+    'Insurance Type',
     'Status',
     'Owned Type',
+    'SKU',
     'Owned By',
     'Owner Mobile',
     'Owner Email',
-    'Customer ID',
+    'Other Remarks',
     'Customer Name',
-    'Internal Comments',
+    'Customer Address',
+    'Customer Mobile',
+    'Customer Email',
   ]
 
   const lines = [headers.map(csvValue).join(',')]
@@ -338,31 +337,30 @@ function exportInventoryCsv(rows: InventoryRow[], filters: InventoryFilters) {
     const model = clean(row.modelLegacy ?? row.carVariantMaster?.carModelMaster?.model)
     const variant = clean(row.variantLegacy ?? row.carVariantMaster?.variant)
     const line = [
-      row.inventoryNumber,
       make,
       model,
       variant,
       row.colour,
-      row.sku,
       row.year,
       row.month,
       row.fuelType,
-      row.noOfOwners,
-      row.tax,
-      row.isCarRegistered === null ? '' : row.isCarRegistered ? 'Yes' : 'No',
-      row.registrationNo,
       row.kmsDriven,
-      row.insuranceType,
+      row.noOfOwners,
+      row.registrationNo,
+      row.tax,
       row.price,
-      row.otherRemarks,
+      row.insuranceType,
       row.status,
       row.ownedType,
+      row.sku,
       row.ownedBy,
       row.mobileNoOwnedBy,
       row.emailIdOwnedBy,
-      row.customerId,
+      row.otherRemarks,
       row.customerName,
-      row.internalComments,
+      row.customer?.custAddress,
+      row.customer?.custMobile,
+      row.customer?.custEmail,
     ]
     lines.push(line.map(csvValue).join(','))
   }
@@ -411,6 +409,7 @@ export function InventoryClient({
   initialData,
   makes,
   dealers,
+  inventoryColours,
   emailConfigured,
   initialSearch,
   initialStatus,
@@ -448,6 +447,7 @@ export function InventoryClient({
   initialData: InventoryRow[]
   makes: CarMakeMaster[]
   dealers: Dealer[]
+  inventoryColours: string[]
   emailConfigured: boolean
   initialSearch: string
   initialStatus: string
@@ -516,7 +516,6 @@ export function InventoryClient({
     internalComments: initialInternalComments,
     otherRemarks: initialOtherRemarks,
   }))
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [modal, setModal] = useState<null | 'add' | 'edit' | 'view'>(null)
   const [form, setForm] = useState<InventoryFormInput>(emptyForm())
   const [editId, setEditId] = useState<number | null>(null)
@@ -576,9 +575,11 @@ export function InventoryClient({
   const [inquiryRow, setInquiryRow] = useState<InventoryRow | null>(null)
   const [inquiryQuery, setInquiryQuery] = useState('')
   const [inquiryMatches, setInquiryMatches] = useState<InquiryOption[]>([])
+  const [selectedInquiry, setSelectedInquiry] = useState<InquiryOption | null>(null)
   const [inquiryLoading, setInquiryLoading] = useState(false)
   const [inquiryError, setInquiryError] = useState('')
-  const [refreshAfterInquiryClose, setRefreshAfterInquiryClose] = useState(false)
+  const [isSyncingInquiry, startSyncInquiryTransition] = useTransition()
+  const [pendingInventoryRefresh, setPendingInventoryRefresh] = useState(false)
   const inquiryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inquiryRequestRef = useRef(0)
   const listDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -705,81 +706,24 @@ export function InventoryClient({
     return withEmail.filter(d => (d.dealerName ?? '').toLowerCase().includes(q)).slice(0, 20)
   }, [dealers, dealerQuery])
 
-  const filterOptions = useMemo(() => {
-    const getDistinct = (values: Array<string | null | undefined>) =>
-      Array.from(new Set(values.map(clean).filter(Boolean))).sort((a, b) => a.localeCompare(b))
-
-    const makeOptions = getDistinct(data.map(r => r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy))
-    const modelOptions = getDistinct(
-      data
-        .filter(r => !filters.make || clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy) === filters.make)
-        .map(r => r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy),
-    )
-
-    return {
-      makeOptions,
-      modelOptions,
-      fuelOptions: getDistinct(data.map(r => r.fuelType)),
-      variantOptions: getDistinct(data.map(r => r.carVariantMaster?.variant ?? r.variantLegacy)),
-      colourOptions: getDistinct(data.map(r => r.colour)),
-      yearOptions: getDistinct(data.map(r => (r.year != null ? String(r.year) : null))),
-      monthOptions: getDistinct(data.map(r => r.month)),
-      ownerOptions: getDistinct(data.map(r => r.ownedBy)),
-      ownerTypeOptions: getDistinct(data.map(r => r.ownedType)),
-      insuranceOptions: getDistinct(data.map(r => r.insuranceType)),
-      customerOptions: getDistinct(data.map(r => r.customerName)),
-      linkedCustomerOptions: getDistinct(data.map(r => r.customer?.custName)),
-    }
-  }, [data, filters.make])
-
   const filtered = useMemo(() => {
     const q = filters.search.toLowerCase()
     return data.filter(r => {
       const make = clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy)
       const model = clean(r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy)
       const variant = clean(r.carVariantMaster?.variant ?? r.variantLegacy)
-      const kmsDriven = num(r.kmsDriven)
-      const price = num(r.price)
       const matches = !q
-        || (r.inventoryNumber ?? '').toLowerCase().includes(q)
         || (r.registrationNo ?? '').toLowerCase().includes(q)
-        || (r.sku ?? '').toLowerCase().includes(q)
         || make.toLowerCase().includes(q)
         || model.toLowerCase().includes(q)
         || variant.toLowerCase().includes(q)
-        || (r.customerName ?? '').toLowerCase().includes(q)
+        || (r.colour ?? '').toLowerCase().includes(q)
         || (r.ownedBy ?? '').toLowerCase().includes(q)
+        || (r.mobileNoOwnedBy ?? '').toLowerCase().includes(q)
       if (!matches) return false
       if (filters.status !== 'All' && r.status !== filters.status) return false
-      if (filters.make && make !== filters.make) return false
-      if (filters.model && model !== filters.model) return false
       if (filters.fuelType && clean(r.fuelType) !== filters.fuelType) return false
-      if (filters.inventoryNumber && !text(r.inventoryNumber).includes(filters.inventoryNumber.toLowerCase())) return false
-      if (filters.sku && !text(r.sku).includes(filters.sku.toLowerCase())) return false
-      if (filters.registrationNo && !text(r.registrationNo).includes(filters.registrationNo.toLowerCase())) return false
-      if (filters.variant && variant !== filters.variant) return false
-      if (filters.colour && clean(r.colour) !== filters.colour) return false
-      if (filters.year && String(r.year ?? '') !== filters.year) return false
-      if (filters.month && clean(r.month) !== filters.month) return false
-      if (filters.noOfOwners && String(r.noOfOwners ?? '') !== filters.noOfOwners) return false
-      if (filters.tax && clean(r.tax) !== filters.tax) return false
-      if (filters.isCarRegistered) {
-        const wanted = filters.isCarRegistered === 'yes'
-        if (r.isCarRegistered !== wanted) return false
-      }
-      if (filters.kmsMin && (kmsDriven === null || kmsDriven < Number(filters.kmsMin))) return false
-      if (filters.kmsMax && (kmsDriven === null || kmsDriven > Number(filters.kmsMax))) return false
-      if (filters.insuranceType && clean(r.insuranceType) !== filters.insuranceType) return false
-      if (filters.priceMin && (price === null || price < Number(filters.priceMin))) return false
-      if (filters.priceMax && (price === null || price > Number(filters.priceMax))) return false
       if (filters.ownedType && text(r.ownedType) !== filters.ownedType.toLowerCase()) return false
-      if (filters.ownedBy && !text(r.ownedBy).includes(filters.ownedBy.toLowerCase())) return false
-      if (filters.mobileNoOwnedBy && !text(r.mobileNoOwnedBy).includes(filters.mobileNoOwnedBy.toLowerCase())) return false
-      if (filters.emailIdOwnedBy && !text(r.emailIdOwnedBy).includes(filters.emailIdOwnedBy.toLowerCase())) return false
-      if (filters.customerName && !text(r.customerName).includes(filters.customerName.toLowerCase())) return false
-      if (filters.linkedCustomer && !text(r.customer?.custName).includes(filters.linkedCustomer.toLowerCase())) return false
-      if (filters.internalComments && !text(r.internalComments).includes(filters.internalComments.toLowerCase())) return false
-      if (filters.otherRemarks && !text(r.otherRemarks).includes(filters.otherRemarks.toLowerCase())) return false
       return true
     })
   }, [data, filters])
@@ -792,32 +736,8 @@ export function InventoryClient({
     }
     push('search', 'Search', filters.search)
     push('status', 'Status', filters.status)
-    push('make', 'Make', filters.make)
-    push('model', 'Model', filters.model)
     push('fuelType', 'Fuel', filters.fuelType)
-    push('inventoryNumber', 'Inv No', filters.inventoryNumber)
-    push('sku', 'SKU', filters.sku)
-    push('registrationNo', 'Reg No', filters.registrationNo)
-    push('variant', 'Variant', filters.variant)
-    push('colour', 'Colour', filters.colour)
-    push('year', 'Year', filters.year)
-    push('month', 'Month', filters.month)
-    push('noOfOwners', 'Owners', filters.noOfOwners)
-    push('tax', 'Tax', filters.tax)
-    push('isCarRegistered', 'Registered', filters.isCarRegistered === 'yes' ? 'Yes' : filters.isCarRegistered === 'no' ? 'No' : '')
-    push('kmsMin', 'KM Min', filters.kmsMin)
-    push('kmsMax', 'KM Max', filters.kmsMax)
-    push('insuranceType', 'Insurance', filters.insuranceType)
-    push('priceMin', 'Price Min', filters.priceMin)
-    push('priceMax', 'Price Max', filters.priceMax)
     push('ownedType', 'Owner Type', filters.ownedType)
-    push('ownedBy', 'Owned By', filters.ownedBy)
-    push('mobileNoOwnedBy', 'Owner Mobile', filters.mobileNoOwnedBy)
-    push('emailIdOwnedBy', 'Owner Email', filters.emailIdOwnedBy)
-    push('customerName', 'Customer / Source', filters.customerName)
-    push('linkedCustomer', 'Linked Customer', filters.linkedCustomer)
-    push('internalComments', 'Internal Comments', filters.internalComments)
-    push('otherRemarks', 'Remarks', filters.otherRemarks)
     return items
   }, [filters])
 
@@ -842,14 +762,7 @@ export function InventoryClient({
       setInquiryLoading(true)
       setInquiryError('')
       try {
-        const variantId = inquiryRow.fkVariantId
-        if (!variantId) {
-          setInquiryMatches([])
-          setInquiryError('This inventory does not have a linked Variant.')
-          setInquiryLoading(false)
-          return
-        }
-        const res = await fetch(`/api/inventory/inquiries?variantId=${variantId}&q=${encodeURIComponent(inquiryQuery)}`)
+        const res = await fetch(`/api/inventory/inquiries?q=${encodeURIComponent(inquiryQuery)}`)
         const payload = await res.json()
         if (inquiryRequestRef.current !== requestId) return
         if (!res.ok) {
@@ -1360,24 +1273,33 @@ export function InventoryClient({
     })
   }
 
-  const openInquiryView = (r: InventoryRow) => {
+  const openInquirySync = (r: InventoryRow) => {
     setInquiryRow(r)
-    setRefreshAfterInquiryClose(false)
     setInquiryQuery('')
     setInquiryMatches([])
+    setSelectedInquiry(null)
     setInquiryError('')
     inquiryRequestRef.current += 1
   }
 
-  const closeInquiryView = () => {
-    setInquiryRow(null)
-    setInquiryMatches([])
-    setInquiryQuery('')
-    setInquiryError('')
-    if (refreshAfterInquiryClose) {
-      setRefreshAfterInquiryClose(false)
-      window.location.reload()
+  const syncInquiry = () => {
+    if (!inquiryRow || !selectedInquiry) {
+      setInquiryError('Select an inquiry to update.')
+      return
     }
+    setInquiryError('')
+    startSyncInquiryTransition(async () => {
+      const result = await syncInventoryToInquiry(inquiryRow.inventoryId, { inquiryId: selectedInquiry.inquiryId })
+      if (!result.success) {
+        setInquiryError(result.error ?? 'Could not update inquiry.')
+        return
+      }
+      setInquiryRow(null)
+      setSelectedInquiry(null)
+      setInquiryMatches([])
+      setInquiryQuery('')
+      if (pendingInventoryRefresh) window.location.reload()
+    })
   }
 
   const buildInventoryRowFromForm = (inventoryId: number, inventoryNumber: string | null): InventoryRow => ({
@@ -1661,8 +1583,8 @@ export function InventoryClient({
           : (form.status === 'Booked' || form.status === 'Sold')
       )
       if (shouldPromptInquiry) {
-        openInquiryView(buildInventoryRowFromForm(savedInventoryId, result.inventoryNumber ?? currentInventoryNumber))
-        setRefreshAfterInquiryClose(true)
+        setPendingInventoryRefresh(true)
+        openInquirySync(buildInventoryRowFromForm(savedInventoryId, result.inventoryNumber ?? currentInventoryNumber))
         return
       }
       window.location.reload()
@@ -1716,8 +1638,8 @@ export function InventoryClient({
       ) : null}
 
       <div className="mb-4 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto_auto]">
-          <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Search inv no, reg no, make, model, customer..." disabled={isListLoading} />
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto]">
+          <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Search make, model, variant, colour, owner, mobile or registration..." disabled={isListLoading} />
           <Select disabled={isListLoading} value={filters.status} onChange={e => {
             const nextStatus = e.target.value
             setFilter('status', nextStatus)
@@ -1725,96 +1647,21 @@ export function InventoryClient({
             <option value="All">All Statuses</option>
             {INVENTORY_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </Select>
-          <Select disabled={isListLoading} value={filters.make} onChange={e => {
-            const nextMake = e.target.value
-            setFilter('make', nextMake)
-            setFilter('model', '')
-          }}>
-            <option value="">All Makes</option>
-            {filterOptions.makeOptions.map(option => <option key={option} value={option}>{option}</option>)}
-          </Select>
-          <Select disabled={isListLoading} value={filters.model} onChange={e => {
-            const nextModel = e.target.value
-            setFilter('model', nextModel)
-          }}>
-            <option value="">All Models</option>
-            {filterOptions.modelOptions.map(option => <option key={option} value={option}>{option}</option>)}
-          </Select>
           <Select disabled={isListLoading} value={filters.fuelType} onChange={e => {
             const nextFuelType = e.target.value
             setFilter('fuelType', nextFuelType)
           }}>
             <option value="">All Fuels</option>
-            {filterOptions.fuelOptions.map(option => <option key={option} value={option}>{option}</option>)}
+            {INVENTORY_FUEL_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
           </Select>
-          <Btn variant="outline" onClick={() => setShowAdvancedFilters(v => !v)} disabled={isListLoading}>
-            <SlidersHorizontal className="w-4 h-4" />{showAdvancedFilters ? 'Hide Filters' : 'More Filters'}
-          </Btn>
-          {hasActiveFilters ? <Btn variant="ghost" onClick={clearAllFilters} disabled={isListLoading}>Clear All</Btn> : <div />}
+          <Select disabled={isListLoading} value={filters.ownedType} onChange={e => setFilter('ownedType', e.target.value)}>
+            <option value="">All Owner Types</option>
+            <option value="Excel Cars">Excel Cars</option>
+            <option value="Dealer">Dealer</option>
+            <option value="Individual">Individual</option>
+          </Select>
+          {hasActiveFilters ? <Btn variant="ghost" onClick={clearAllFilters} disabled={isListLoading}>Clear All</Btn> : null}
         </div>
-
-        {showAdvancedFilters ? (
-          <div className="grid gap-3 border-t border-gray-100 pt-4 md:grid-cols-2 xl:grid-cols-4">
-            <Input disabled={isListLoading} label="Inventory No" value={filters.inventoryNumber} onChange={e => setFilter('inventoryNumber', e.target.value)} />
-            <Input disabled={isListLoading} label="SKU" value={filters.sku} onChange={e => setFilter('sku', e.target.value)} />
-            <Input disabled={isListLoading} label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
-            <Select disabled={isListLoading} label="Variant" value={filters.variant} onChange={e => setFilter('variant', e.target.value)}>
-              <option value="">All Variants</option>
-              {filterOptions.variantOptions.map(option => <option key={option} value={option}>{option}</option>)}
-            </Select>
-            <Select disabled={isListLoading} label="Colour" value={filters.colour} onChange={e => setFilter('colour', e.target.value)}>
-              <option value="">All Colours</option>
-              {filterOptions.colourOptions.map(option => <option key={option} value={option}>{option}</option>)}
-            </Select>
-            <Select disabled={isListLoading} label="Year" value={filters.year} onChange={e => setFilter('year', e.target.value)}>
-              <option value="">All Years</option>
-              {filterOptions.yearOptions.map(option => <option key={option} value={option}>{option}</option>)}
-            </Select>
-            <Select disabled={isListLoading} label="Month" value={filters.month} onChange={e => setFilter('month', e.target.value)}>
-              <option value="">All Months</option>
-              {filterOptions.monthOptions.map(option => <option key={option} value={option}>{option}</option>)}
-            </Select>
-            <Input disabled={isListLoading} label="No. of Owners" type="number" value={filters.noOfOwners} onChange={e => setFilter('noOfOwners', e.target.value)} />
-            <Select disabled={isListLoading} label="Tax" value={filters.tax} onChange={e => setFilter('tax', e.target.value)}>
-              <option value="">All Tax Types</option>
-              <option value="Individual">Individual</option>
-              <option value="Corporate">Corporate</option>
-            </Select>
-            <Select disabled={isListLoading} label="Car Registered" value={filters.isCarRegistered} onChange={e => setFilter('isCarRegistered', e.target.value)}>
-              <option value="">All</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </Select>
-            <Input disabled={isListLoading} label="KM Min" type="number" value={filters.kmsMin} onChange={e => setFilter('kmsMin', e.target.value)} />
-            <Input disabled={isListLoading} label="KM Max" type="number" value={filters.kmsMax} onChange={e => setFilter('kmsMax', e.target.value)} />
-            <Select disabled={isListLoading} label="Insurance Type" value={filters.insuranceType} onChange={e => setFilter('insuranceType', e.target.value)}>
-              <option value="">All Insurance Types</option>
-              {filterOptions.insuranceOptions.map(option => <option key={option} value={option}>{option}</option>)}
-            </Select>
-            <Input disabled={isListLoading} label="Price Min" type="number" value={filters.priceMin} onChange={e => setFilter('priceMin', e.target.value)} />
-            <Input disabled={isListLoading} label="Price Max" type="number" value={filters.priceMax} onChange={e => setFilter('priceMax', e.target.value)} />
-            <Select disabled={isListLoading} label="Owner Type" value={filters.ownedType} onChange={e => setFilter('ownedType', e.target.value)}>
-              <option value="">All Owner Types</option>
-              {filterOptions.ownerTypeOptions.map(option => <option key={option} value={option}>{option}</option>)}
-            </Select>
-            <Input disabled={isListLoading} label="Owned By" value={filters.ownedBy} onChange={e => setFilter('ownedBy', e.target.value)} list="inventory-owner-options" />
-            <datalist id="inventory-owner-options">
-              {filterOptions.ownerOptions.map(option => <option key={option} value={option} />)}
-            </datalist>
-            <Input disabled={isListLoading} label="Owner Mobile" value={filters.mobileNoOwnedBy} onChange={e => setFilter('mobileNoOwnedBy', e.target.value)} />
-            <Input disabled={isListLoading} label="Owner Email" value={filters.emailIdOwnedBy} onChange={e => setFilter('emailIdOwnedBy', e.target.value)} />
-            <Input disabled={isListLoading} label="Customer / Source" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} list="inventory-customer-options" />
-            <datalist id="inventory-customer-options">
-              {filterOptions.customerOptions.map(option => <option key={option} value={option} />)}
-            </datalist>
-            <Input disabled={isListLoading} label="Linked Customer" value={filters.linkedCustomer} onChange={e => setFilter('linkedCustomer', e.target.value)} list="inventory-linked-customer-options" />
-            <datalist id="inventory-linked-customer-options">
-              {filterOptions.linkedCustomerOptions.map(option => <option key={option} value={option} />)}
-            </datalist>
-            <Input disabled={isListLoading} label="Internal Comments" value={filters.internalComments} onChange={e => setFilter('internalComments', e.target.value)} />
-            <Input disabled={isListLoading} label="Remarks" value={filters.otherRemarks} onChange={e => setFilter('otherRemarks', e.target.value)} />
-          </div>
-        ) : null}
 
         {activeFilterChips.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -1928,7 +1775,7 @@ export function InventoryClient({
             <td className="px-4 py-3">
               <div className="flex items-center flex-wrap gap-1">
                 <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openInquiryView(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Search Inquiry"><Search className="w-3.5 h-3.5" /></button>
+                <button onClick={() => openInquirySync(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Update Inquiry"><Link2 className="w-3.5 h-3.5" /></button>
                 <button onClick={() => openPhotos(r)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition" title="Manage Photos">
                   <span className="relative inline-flex">
                     <Images className="w-3.5 h-3.5" />
@@ -2085,12 +1932,12 @@ export function InventoryClient({
               <Select label="Status" value={form.status} onChange={e => f('status', e.target.value)}>
                 {INVENTORY_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <CatalogTextPicker label="Make *" value={catalogMakeText} onChange={value => void onCatalogMakeChange(value)} onAdd={value => openCatalogAdd('make', value)} placeholder="Search make..." options={makes.map(make => make.make ?? '').filter(Boolean)} error={errors.fkVariantId} />
-              <CatalogTextPicker label="Model *" value={catalogModelText} onChange={value => void onCatalogModelChange(value)} onAdd={value => openCatalogAdd('model', value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={models.map(model => model.model ?? '').filter(Boolean)} error={errors.fkVariantId} />
-              <CatalogTextPicker label="Variant *" value={catalogVariantText} onChange={value => { setCatalogVariantText(value); const match = variants.find(item => item.variant?.trim().toLowerCase() === value.trim().toLowerCase()); f('fkVariantId', match?.pkVariantId ?? null) }} onAdd={value => openCatalogAdd('variant', value)} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={variants.map(variant => variant.variant ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label="Make *" value={catalogMakeText} onChange={value => void onCatalogMakeChange(value)} placeholder="Search make..." options={makes.map(make => make.make ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label="Model *" value={catalogModelText} onChange={value => void onCatalogModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={models.map(model => model.model ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label="Variant *" value={catalogVariantText} onChange={value => { setCatalogVariantText(value); const match = variants.find(item => item.variant?.trim().toLowerCase() === value.trim().toLowerCase()); f('fkVariantId', match?.pkVariantId ?? null) }} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={variants.map(variant => variant.variant ?? '').filter(Boolean)} error={errors.fkVariantId} />
               <Input label="Year *" type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} error={errors.year} />
               <Input label="Month" value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
-              <Input label="Colour *" value={form.colour} onChange={e => f('colour', e.target.value)} onBlur={() => void refreshSku(catalogMakeText || form.makeLegacy, catalogModelText || form.modelLegacy, form.colour)} error={errors.colour} />
+              <CatalogTextPicker label="Colour *" value={form.colour} onChange={value => f('colour', value)} placeholder="Search or enter colour..." options={inventoryColours} error={errors.colour} />
               <Select label="Fuel Type *" value={form.fuelType} onChange={e => f('fuelType', e.target.value)} error={errors.fuelType}>
                 <option value="">Select Fuel Type</option>
                 {form.fuelType && !INVENTORY_FUEL_TYPES.includes(form.fuelType) ? <option value={form.fuelType}>{form.fuelType}</option> : null}
@@ -2506,14 +2353,21 @@ export function InventoryClient({
         ) : null}
       </Modal>
 
-      <Modal title={`Matching Inquiries${inquiryRow ? ` — ${inquiryRow.registrationNo ?? inquiryRow.inventoryNumber ?? ''}` : ''}`} open={!!inquiryRow} onClose={closeInquiryView} width="max-w-4xl">
+      <Modal title={`Update Inquiry${inquiryRow ? ` — ${inquiryRow.registrationNo ?? inquiryRow.inventoryNumber ?? ''}` : ''}`} open={!!inquiryRow} onClose={() => {
+        setInquiryRow(null)
+        setSelectedInquiry(null)
+        setInquiryMatches([])
+        setInquiryQuery('')
+        setInquiryError('')
+        if (pendingInventoryRefresh) window.location.reload()
+      }} width="max-w-4xl">
         {inquiryRow ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
               <div><span className="font-medium text-gray-800">Vehicle:</span> {vehicleLabel(inquiryRow)}</div>
               <div><span className="font-medium text-gray-800">Inventory Status:</span> {inquiryRow.status ?? '—'}</div>
-              <div><span className="font-medium text-gray-800">Purpose:</span> view customers who have shown interest in this vehicle.</div>
-              <div><span className="font-medium text-gray-800">Editing:</span> open the inquiry to edit it on the Inquiry page.</div>
+              <div><span className="font-medium text-gray-800">What this will do:</span> update the selected inquiry with this vehicle and move the lead to {inquiryRow.status === 'Sold' ? 'Closed / Sold Car' : 'FollowUp / Booked Vehicle'}.</div>
+              <div><span className="font-medium text-gray-800">No inquiry exists?</span> You can skip this step and keep the inventory save as-is.</div>
             </div>
 
             <Input
@@ -2533,11 +2387,14 @@ export function InventoryClient({
               ) : (
                 <div className="divide-y divide-gray-100">
                   {inquiryMatches.map(inquiry => {
-                    const car = inquiry.inquiryCarDetails.find(item => item.fkVariantId === inquiryRow.fkVariantId)
+                    const car = inquiry.inquiryCarDetails[0]
+                    const isSelected = selectedInquiry?.inquiryId === inquiry.inquiryId
                     return (
-                      <div
+                      <button
                         key={inquiry.inquiryId}
-                        className="w-full px-4 py-3 text-left transition hover:bg-gray-50"
+                        type="button"
+                        onClick={() => setSelectedInquiry(inquiry)}
+                        className={`w-full px-4 py-3 text-left transition ${isSelected ? 'bg-violet-50' : 'hover:bg-gray-50'}`}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
@@ -2556,7 +2413,7 @@ export function InventoryClient({
                             </button>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -2564,7 +2421,17 @@ export function InventoryClient({
             </div>
 
             <div className="flex justify-end gap-3">
-              <Btn variant="outline" onClick={closeInquiryView}>Close</Btn>
+              <Btn variant="outline" onClick={() => {
+                setInquiryRow(null)
+                setSelectedInquiry(null)
+                setInquiryMatches([])
+                setInquiryQuery('')
+                setInquiryError('')
+                if (pendingInventoryRefresh) window.location.reload()
+              }}>Skip for now</Btn>
+              <Btn onClick={syncInquiry} disabled={isSyncingInquiry || !selectedInquiry}>
+                {isSyncingInquiry ? 'Updating...' : 'Update Inquiry'}
+              </Btn>
             </div>
           </div>
         ) : null}
