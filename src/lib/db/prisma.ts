@@ -12,28 +12,13 @@ function hasRequiredDelegates(client: PrismaClient) {
   return typeof (client as PrismaClient & { vehicleEmailLink?: unknown }).vehicleEmailLink !== "undefined";
 }
 
-function getPrismaClient() {
-  const existingPrisma = globalForPrisma.prisma;
+const existingPrisma = globalForPrisma.prisma;
 
-  if (existingPrisma && hasRequiredDelegates(existingPrisma)) {
-    return existingPrisma;
-  }
-
-  const nextPrisma = createPrismaClient();
-
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = nextPrisma;
-  }
-
-  return nextPrisma;
-}
-
-export const prisma = new Proxy({} as PrismaClient, {
-  get(_target, property, receiver) {
-    return Reflect.get(getPrismaClient(), property, receiver);
-  },
-});
+export const prisma =
+  existingPrisma && hasRequiredDelegates(existingPrisma)
+    ? existingPrisma
+    : createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = getPrismaClient();
+  globalForPrisma.prisma = prisma;
 }
