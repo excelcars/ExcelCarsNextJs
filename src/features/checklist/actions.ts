@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface DocRow {
   documentName: string
@@ -38,9 +38,7 @@ function normalizeRegistration(value: string | null | undefined) {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/checklist')
 }
 
 function buildMainData(input: ChecklistFormInput) {
@@ -114,6 +112,7 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.checkListDocMain.create({
@@ -155,6 +154,7 @@ export async function updateChecklist(id: number, input: ChecklistFormInput): Pr
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
@@ -189,6 +189,8 @@ export async function updateChecklist(id: number, input: ChecklistFormInput): Pr
 }
 
 export async function deleteChecklist(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
     await prisma.checkListDocMain.delete({ where: { documentId: id } })

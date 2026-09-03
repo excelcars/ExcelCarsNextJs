@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 import { summarizeVehicleEmailInteractions } from '@/features/vehicleEmailLinks/service'
 
-export const INVENTORY_STATUSES = ['In Stock', 'Booked', 'Loan Process', 'Not Available', 'Sold'] as const
+export const INVENTORY_STATUSES = ['In Stock', 'Booked', 'Loan Process', 'Not Available', 'Sold', 'RTO Process'] as const
 
 export interface InventoryListParams {
   search?: string
@@ -97,21 +97,22 @@ function buildInventoryWhere({
   }
 
   if (search.trim()) {
-    const q = search.trim()
-    andConditions.push({
-      OR: [
-        { inventoryNumber: { contains: q, mode: 'insensitive' } },
-        { registrationNo: { contains: q, mode: 'insensitive' } },
-        { sku: { contains: q, mode: 'insensitive' } },
-        { customerName: { contains: q, mode: 'insensitive' } },
-        { ownedBy: { contains: q, mode: 'insensitive' } },
-        { makeLegacy: { contains: q, mode: 'insensitive' } },
-        { modelLegacy: { contains: q, mode: 'insensitive' } },
-        { variantLegacy: { contains: q, mode: 'insensitive' } },
-        { carVariantMaster: { carMakeMaster: { make: { contains: q, mode: 'insensitive' } } } },
-        { carVariantMaster: { carModelMaster: { model: { contains: q, mode: 'insensitive' } } } },
-      ],
-    })
+    const searchTerms = search.trim().split(/\s+/).filter(Boolean)
+    for (const term of searchTerms) {
+      andConditions.push({
+        OR: [
+          { registrationNo: { contains: term, mode: 'insensitive' } },
+          { ownedBy: { contains: term, mode: 'insensitive' } },
+          { mobileNoOwnedBy: { contains: term, mode: 'insensitive' } },
+          { colour: { contains: term, mode: 'insensitive' } },
+          { makeLegacy: { contains: term, mode: 'insensitive' } },
+          { modelLegacy: { contains: term, mode: 'insensitive' } },
+          { variantLegacy: { contains: term, mode: 'insensitive' } },
+          { carVariantMaster: { carMakeMaster: { make: { contains: term, mode: 'insensitive' } } } },
+          { carVariantMaster: { carModelMaster: { model: { contains: term, mode: 'insensitive' } } } },
+        ],
+      })
+    }
   }
 
   if (inventoryNumber.trim()) {
@@ -225,7 +226,7 @@ function buildInventoryWhere({
 function inventoryListInclude() {
   return {
     customer: {
-      select: { custId: true, custName: true, custMobile: true, custEmail: true },
+      select: { custId: true, custName: true, custAddress: true, custMobile: true, custEmail: true },
     },
     carVariantMaster: {
       include: { carMakeMaster: true, carModelMaster: true },
@@ -332,6 +333,26 @@ export async function getMakes() {
   })
 }
 
+export async function getInventoryColours() {
+  const rows = await prisma.inventoryManagement.findMany({
+    where: { colour: { not: null } },
+    select: { colour: true },
+    orderBy: { colour: 'asc' },
+  })
+
+  const colours: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const colour = row.colour?.trim()
+    if (!colour) continue
+    const key = colour.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    colours.push(colour)
+  }
+  return colours
+}
+
 export async function getModelsByMake(makeId: number) {
   return prisma.carModelMaster.findMany({
     where: { fkMakeId: makeId, model: { not: null } },
@@ -348,7 +369,7 @@ export async function getVariantsByModel(modelId: number) {
 
 export async function getDealers() {
   return prisma.dealerMaster.findMany({
-    select: { dealerId: true, dealerName: true, dealerEmail: true },
+    select: { dealerId: true, dealerName: true, dealerMobileNo: true, dealerEmail: true },
     orderBy: { dealerName: 'asc' },
   })
 }

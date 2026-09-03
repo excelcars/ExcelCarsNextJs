@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   const where = q
@@ -27,7 +26,6 @@ export async function GET(req: NextRequest) {
         include: {
           carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } },
         },
-        take: 1,
         orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
       },
     },

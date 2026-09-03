@@ -1,27 +1,11 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
+import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
+import { getActiveInquirySources } from './sourceMaster.server'
 
-export const INQUIRY_STATUSES = ['FollowUp', 'Closed'] as const
+export const INQUIRY_STATUSES = ['Open', 'FollowUp', 'Closed'] as const
 export const INQUIRY_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 export const PAGE_SIZE = 25
-const PREFERRED_INQUIRY_SOURCES = [
-  'Walk In',
-  'Website',
-  'Reference',
-  'JustDial',
-  'CarDekho',
-  'CarWale',
-  'CarTrade',
-  'OLX',
-  'Facebook',
-  'Instagram',
-  'Google',
-  'WhatsApp',
-  'Phone',
-  'IndiaMart',
-  'Other',
-] as const
-
 export interface ListInquiriesParams {
   search: string
   status: string
@@ -34,11 +18,16 @@ export interface ListInquiriesParams {
   modelId: string
   variantId: string
   page: number
+  restrictToUserId?: number | null
 }
 
-function buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId'>) {
+function buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'restrictToUserId'>) {
   const where: Prisma.InquiryWhereInput = {}
   const andConditions: Prisma.InquiryWhereInput[] = []
+
+  if (restrictToUserId) {
+    andConditions.push(buildInquiryOwnershipWhere(restrictToUserId))
+  }
 
   if (status !== 'All') {
     where.status = status
@@ -47,7 +36,7 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
     where.classification = classification
   }
   if (source !== 'All') {
-    where.website = source
+    where.source = { code: source }
   }
   if (subStatus !== 'All') {
     where.subStatus = subStatus
@@ -104,8 +93,25 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
       { inquiryNo: { contains: q, mode: 'insensitive' } },
       { mobileno: { contains: q, mode: 'insensitive' } },
       { email: { contains: q, mode: 'insensitive' } },
+      { website: { contains: q, mode: 'insensitive' } },
+      { source: { displayName: { contains: q, mode: 'insensitive' } } },
       { customerNameLegacy: { contains: q, mode: 'insensitive' } },
       { customer: { custName: { contains: q, mode: 'insensitive' } } },
+      {
+        inquiryCarDetails: {
+          some: {
+            OR: [
+              { makeLegacy: { contains: q, mode: 'insensitive' } },
+              { modelLegacy: { contains: q, mode: 'insensitive' } },
+              { variantLegacy: { contains: q, mode: 'insensitive' } },
+              { subVariant: { contains: q, mode: 'insensitive' } },
+              { carVariantMaster: { variant: { contains: q, mode: 'insensitive' } } },
+              { carVariantMaster: { carMakeMaster: { make: { contains: q, mode: 'insensitive' } } } },
+              { carVariantMaster: { carModelMaster: { model: { contains: q, mode: 'insensitive' } } } },
+            ],
+          },
+        },
+      },
     ]
   }
 
@@ -119,6 +125,14 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
 function inquiryDetailInclude() {
   return {
     customer: true,
+    source: true,
+    assignedToUser: {
+      select: {
+        userId: true,
+        userName: true,
+        displayName: true,
+      },
+    },
     inquiryCarDetails: {
       orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
       include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } },
@@ -132,6 +146,15 @@ function inquiryListSelect() {
     inquiryNo: true,
     dateOfInquiry: true,
     website: true,
+    sourceId: true,
+    sourceDetail: true,
+    source: {
+      select: {
+        code: true,
+        displayName: true,
+        requiresDetail: true,
+      },
+    },
     customerId: true,
     customerNameLegacy: true,
     mobileno: true,
@@ -143,6 +166,14 @@ function inquiryListSelect() {
     subStatus: true,
     followUpDate: true,
     remark: true,
+    assignedTo: true,
+    assignedToUser: {
+      select: {
+        userId: true,
+        userName: true,
+        displayName: true,
+      },
+    },
     customer: {
       select: {
         custId: true,
@@ -152,7 +183,6 @@ function inquiryListSelect() {
       },
     },
     inquiryCarDetails: {
-      take: 1,
       orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }],
       select: {
         fkVariantId: true,
@@ -184,8 +214,8 @@ function inquiryListSelect() {
   } satisfies Prisma.InquirySelect
 }
 
-export async function listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page }: ListInquiriesParams) {
-  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId })
+export async function listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page, restrictToUserId = null }: ListInquiriesParams) {
+  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId })
 
   const skip = Math.max(0, (page - 1) * PAGE_SIZE)
 
@@ -210,8 +240,8 @@ export async function getInquiryById(id: number) {
   })
 }
 
-export async function listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId'>) {
-  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId })
+export async function listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'restrictToUserId'>) {
+  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId })
   return prisma.inquiry.findMany({
     where,
     include: inquiryDetailInclude(),
@@ -226,21 +256,22 @@ export async function getMakes() {
   })
 }
 
-export async function getInquirySourceSuggestions() {
+export const getInquirySources = getActiveInquirySources
+
+export async function getInquirySubStatusSuggestions() {
   const rows = await prisma.inquiry.findMany({
-    distinct: ['website'],
-    where: { website: { not: null } },
-    select: { website: true },
-    orderBy: { website: 'asc' },
-    take: 500,
+    distinct: ['subStatus'],
+    where: { subStatus: { not: null } },
+    select: { subStatus: true },
+    orderBy: { subStatus: 'asc' },
+    take: 1000,
   })
 
-  const preferred: string[] = [...PREFERRED_INQUIRY_SOURCES]
-  const seen = new Set(preferred.map(value => value.toLowerCase()))
-  const suggestions = [...preferred]
+  const seen = new Set<string>()
+  const suggestions: string[] = []
 
   for (const row of rows) {
-    const value = row.website?.trim()
+    const value = row.subStatus?.trim()
     if (!value) continue
     const key = value.toLowerCase()
     if (seen.has(key)) continue
@@ -249,4 +280,33 @@ export async function getInquirySourceSuggestions() {
   }
 
   return suggestions
+}
+
+export async function getInquiryAssistants() {
+  return prisma.userTable.findMany({
+    where: {
+      status: 'Active',
+      roleName: 'InquiryAssistant',
+      empId: { not: null },
+    },
+    select: {
+      userId: true,
+      userName: true,
+      displayName: true,
+      employee: {
+        select: {
+          empId: true,
+          empFirstName: true,
+          empLastName: true,
+          empMobileNo: true,
+          empEmailId: true,
+        },
+      },
+    },
+    orderBy: [
+      { displayName: 'asc' },
+      { userName: 'asc' },
+      { userId: 'asc' },
+    ],
+  })
 }

@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../auth'
 import { listFollowupsForExport } from '@/features/followup/queries'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await canCurrentUserAccessRoute('/followup'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const search = req.nextUrl.searchParams.get('search')?.trim() ?? ''
   const classification = req.nextUrl.searchParams.get('classification')?.trim() ?? 'All'
+  const contactOutcome = req.nextUrl.searchParams.get('contactOutcome')?.trim() ?? ''
+  const customerName = req.nextUrl.searchParams.get('customerName')?.trim() ?? ''
   const inquiryDateFrom = req.nextUrl.searchParams.get('inquiryDateFrom')?.trim() ?? ''
   const inquiryDateTo = req.nextUrl.searchParams.get('inquiryDateTo')?.trim() ?? ''
   const followUpDateFrom = req.nextUrl.searchParams.get('followUpDateFrom')?.trim() ?? ''
@@ -22,10 +29,13 @@ export async function GET(req: NextRequest) {
   const makeId = req.nextUrl.searchParams.get('makeId')?.trim() ?? ''
   const modelId = req.nextUrl.searchParams.get('modelId')?.trim() ?? ''
   const variantId = req.nextUrl.searchParams.get('variantId')?.trim() ?? ''
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
 
   const rows = await listFollowupsForExport({
     search,
     classification,
+    contactOutcome,
+    customerName,
     inquiryDateFrom,
     inquiryDateTo,
     followUpDateFrom,
@@ -40,6 +50,8 @@ export async function GET(req: NextRequest) {
     makeId,
     modelId,
     variantId,
+    restrictToUserId: ownershipScope.restrictToUserId,
+    ownershipMode: ownershipScope.ownershipMode,
   })
 
   return NextResponse.json(rows.map(row => ({

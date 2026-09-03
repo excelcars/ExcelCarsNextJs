@@ -1,0 +1,117 @@
+'use client'
+
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { createAgent, updateAgent, deleteAgent, type AgentFormInput } from './adminActions'
+import { AGENT_TYPES } from './adminQueries'
+
+interface AgentRow {
+  partnerId: number
+  partnerType: string
+  name: string
+  mobile: string | null
+  email: string | null
+}
+
+function emptyForm(): AgentFormInput {
+  return { partnerType: AGENT_TYPES[0], name: '', mobile: '', email: '' }
+}
+
+export function AgentsClient({ initialData, total, page, pageCount, search, type }: {
+  initialData: AgentRow[]
+  total: number
+  page: number
+  pageCount: number
+  search: string
+  type: string
+}) {
+  const router = useRouter()
+  const [searchInput, setSearchInput] = useState(search)
+  const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
+  const [form, setForm] = useState<AgentFormInput>(emptyForm())
+  const [editId, setEditId] = useState<number | null>(null)
+  const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [isPending, startTransition] = useTransition()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const pushQuery = (params: Record<string, string>) => {
+    const q = new URLSearchParams({ search, type, page: '1', ...params })
+    for (const [key, value] of [...q.entries()]) if (!value || value === 'All') q.delete(key)
+    router.push(`/config/agents${q.toString() ? `?${q.toString()}` : ''}`)
+  }
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (searchInput === search) return
+    debounceRef.current = setTimeout(() => pushQuery({ search: searchInput }), 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput])
+
+  const openAdd = () => { setForm(emptyForm()); setEditId(null); setError(''); setModal('add') }
+  const openEdit = (row: AgentRow) => {
+    setForm({ partnerType: row.partnerType, name: row.name, mobile: row.mobile ?? '', email: row.email ?? '' })
+    setEditId(row.partnerId); setError(''); setModal('edit')
+  }
+  const f = <K extends keyof AgentFormInput>(key: K, value: AgentFormInput[K]) => setForm(prev => ({ ...prev, [key]: value }))
+
+  const save = () => {
+    setError('')
+    startTransition(async () => {
+      const result = editId ? await updateAgent(editId, form) : await createAgent(form)
+      if (!result.success) { setError(result.error ?? 'Something went wrong.'); return }
+      setModal(null); router.refresh()
+    })
+  }
+
+  const del = () => {
+    if (!deleteId) return
+    startTransition(async () => {
+      const result = await deleteAgent(deleteId)
+      if (!result.success) setError(result.error ?? 'Could not delete this record.')
+      setDeleteId(null); router.refresh()
+    })
+  }
+
+  return <div>
+    <PageHeader title="Agents" subtitle={`${total.toLocaleString('en-IN')} agents`} action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Agent</Btn>} />
+
+    <div className="flex flex-wrap gap-3 mb-4">
+      <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email..." />
+      <div className="flex flex-wrap gap-1.5">
+        {['All', ...AGENT_TYPES].map(agentType => <button key={agentType} onClick={() => pushQuery({ type: agentType })}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${type === agentType || (type === 'All' && agentType === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          style={type === agentType || (type === 'All' && agentType === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>{agentType}</button>)}
+      </div>
+    </div>
+
+    <Table headers={['Name', 'Type', 'Mobile', 'Email', 'Actions']} empty={initialData.length === 0}>
+      {initialData.map(row => <tr key={row.partnerId} className="hover:bg-gray-50 transition">
+        <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
+        <td className="px-4 py-3 text-sm text-gray-600">{row.partnerType}</td>
+        <td className="px-4 py-3 text-sm text-gray-700 font-mono">{row.mobile ?? '—'}</td>
+        <td className="px-4 py-3 text-sm text-gray-600">{row.email ?? '—'}</td>
+        <td className="px-4 py-3"><div className="flex items-center gap-1">
+          <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setDeleteId(row.partnerId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
+        </div></td>
+      </tr>)}
+    </Table>
+
+    {pageCount > 1 && <div className="flex items-center justify-between mt-4"><div className="text-xs text-gray-500">Page {page} of {pageCount}</div><div className="flex gap-1.5">
+      <Btn variant="outline" size="sm" disabled={page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}><ChevronLeft className="w-3.5 h-3.5" />Prev</Btn>
+      <Btn variant="outline" size="sm" disabled={page >= pageCount} onClick={() => pushQuery({ page: String(page + 1) })}>Next<ChevronRight className="w-3.5 h-3.5" /></Btn>
+    </div></div>}
+
+    <Modal title={editId ? 'Edit Agent' : 'Add Agent'} open={!!modal} onClose={() => setModal(null)}><div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4"><Select label="Type" value={form.partnerType} onChange={e => f('partnerType', e.target.value)}>{AGENT_TYPES.map(agentType => <option key={agentType}>{agentType}</option>)}</Select>
+        <Input label="Name *" value={form.name} onChange={e => f('name', e.target.value)} /><Input label="Mobile" value={form.mobile} onChange={e => f('mobile', e.target.value)} /><Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} /></div>
+      {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
+      <div className="flex gap-3 justify-end pt-2"><Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Agent'}</Btn></div>
+    </div></Modal>
+    <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del} message="Delete this agent? This cannot be undone." />
+  </div>
+}

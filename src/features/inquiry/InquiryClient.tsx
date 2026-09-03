@@ -2,25 +2,58 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Pencil, Trash2, Phone, ChevronLeft, ChevronRight, Mail, Download, Loader2, Eye } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Download, Loader2, Eye, UserPlus } from 'lucide-react'
+import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
+import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
-import { createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmail, getInquiryDetail, type InquiryFormInput } from './actions'
-
-const SUB_STATUS_SUGGESTIONS = ['Ringing', 'Not Intrested', 'Busy', 'Desired Car Not In Stock', 'Not connected', 'Already Bought Car', 'Visited', 'Fresh Lead', 'Sold Car']
+import { assignInquiry, createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
+import { isValidYear } from '@/lib/validation'
+import { isFollowupStatus, isVisitedSubStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { formatInquiryInventoryWorkflowLabel } from './workflow'
+import type { InquirySourceOption } from './sourceMaster'
+import { InquiryFilters } from './InquiryFilters'
+import { InquiryRowActions } from './InquiryRowActions'
+import { InquiryTable } from './InquiryTable'
+import { InquiryTableRows } from './InquiryTableRows'
+import { AssignInquiryModal } from './AssignInquiryModal'
+import { InquiryViewModal } from './InquiryViewModal'
+import { InquiryFormModal } from './InquiryFormModal'
+import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime, formatListMoney as fmtMoney } from '@/lib/listFormatters'
+import { buildListQueryString } from '@/lib/listQueryParams'
+import { summarizeVehicleEmailEngagement } from '@/lib/vehicleEmailEngagement'
+import { EmailVehicleModal } from './EmailVehicleModal'
+import { EmailVehicleContent } from './EmailVehicleContent'
+import { InquiryCarTable } from './InquiryCarTable'
+import { InquiryTableDataCells } from './InquiryTableDataCells'
+import { ListPagination } from '@/components/ListPagination'
+import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
 interface CarVariantMaster { pkVariantId: number; variant: string | null }
-interface UserOption { userId: number; userName: string | null; displayName: string | null }
+interface UserOption {
+  userId: number
+  userName: string | null
+  displayName: string | null
+  employee?: {
+    empId: number
+    empFirstName: string | null
+    empLastName: string | null
+    empMobileNo: string | null
+    empEmailId: string | null
+  } | null
+}
 
 interface InquiryRow {
   inquiryId: number
   inquiryNo: string | null
   dateOfInquiry: Date | string | null
   website: string | null
+  sourceDetail: string | null
   customerId: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -32,24 +65,43 @@ interface InquiryRow {
   subStatus: string | null
   followUpDate: Date | string | null
   remark: string | null
+  assignedTo?: number | null
   createdDt?: Date | string | null
   updatedDt?: Date | string | null
+  assignedToUser?: UserOption | null
   createdByUser?: UserOption | null
   updatedByUser?: UserOption | null
   customer: CustomerOption | null
-  inquiryCarDetails: {
-    fkVariantId: number | null
-    makeLegacy?: string | null
-    modelLegacy?: string | null
-    variantLegacy?: string | null
-    subVariant?: string | null
-    year: number | null
-    carVariantMaster: {
-      variant: string | null
-      carMakeMaster: { pkMakeId: number; make: string | null } | null
-      carModelMaster: { pkModelId: number; model: string | null } | null
-    } | null
-  }[]
+  inquiryCarDetails: InquiryCarDetailRow[]
+  followupInquiry?: FollowupHistoryEntry[]
+  inquiryInventoryLinks?: InquiryInventoryLinkRow[]
+  vehicleEmailLinks?: VehicleEmailLinkRow[]
+}
+
+interface FollowupHistoryEntry {
+  pkFollowupId: number
+  followupDate: Date | string | null
+  followupStatus: string | null
+  followupSubStatus: string | null
+  followupClassification: string | null
+  comments: string | null
+  createdDt: Date | string | null
+  createdByUser?: UserOption | null
+}
+
+interface InquiryCarDetailRow {
+  inquiryCarDetailsId?: number | null
+  fkVariantId: number | null
+  makeLegacy?: string | null
+  modelLegacy?: string | null
+  variantLegacy?: string | null
+  subVariant?: string | null
+  year: number | null
+  carVariantMaster: {
+    variant: string | null
+    carMakeMaster: { pkMakeId: number; make: string | null } | null
+    carModelMaster: { pkModelId: number; model: string | null } | null
+  } | null
 }
 
 interface PreviousInquiryMatch {
@@ -63,6 +115,7 @@ interface PreviousInquiryMatch {
   followUpDate: Date | string | null
   customer: CustomerOption | null
   inquiryCarDetails: InquiryRow['inquiryCarDetails']
+  matchReasons?: string[]
 }
 
 interface InventoryMatch {
@@ -73,6 +126,9 @@ interface InventoryMatch {
   kmsDriven: string | null
   price: string | null
   status: string | null
+  matchReasons?: string[]
+  currentState?: string | null
+  currentStateAt?: string | null
   customer: CustomerOption | null
   _count: { inventoryPhotos: number }
   carVariantMaster: {
@@ -82,23 +138,102 @@ interface InventoryMatch {
   } | null
 }
 
-const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
-const fmtDateTime = (d: Date | string | null | undefined) => {
-  if (!d) return ''
-  const value = new Date(d)
-  if (Number.isNaN(value.getTime())) return ''
-  return value.toLocaleString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+function buildInventoryWorkflowStateMap(
+  inquiryInventoryLinks: InquiryInventoryLinkRow[] | undefined,
+) {
+  const states = new Map<number, { currentState: string | null; currentStateAt: Date | string | null }>()
+
+  for (const link of inquiryInventoryLinks ?? []) {
+    const normalizedType = link.linkType.toLowerCase()
+    if (!['shortlisted', 'visited', 'booked', 'rejected'].includes(normalizedType)) continue
+    if (!states.has(link.inventoryManagement.inventoryId)) {
+      states.set(link.inventoryManagement.inventoryId, {
+        currentState: normalizedType,
+        currentStateAt: link.createdAt,
+      })
+    }
+  }
+
+  return states
 }
-const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+
+interface InquiryInventoryLinkRow {
+  inquiryInventoryLinkId: number
+  linkType: string
+  isActive: boolean
+  createdAt: Date | string | null
+  createdByUser?: UserOption | null
+  inventoryManagement: {
+    inventoryId: number
+    inventoryNumber: string | null
+    registrationNo: string | null
+    year: number | null
+    status: string | null
+    price: string | number | null
+    carVariantMaster: {
+      variant: string | null
+      carMakeMaster: { pkMakeId: number; make: string | null } | null
+      carModelMaster: { pkModelId: number; model: string | null } | null
+    } | null
+  }
+}
+
+interface VehicleEmailLinkRow {
+  vehicleEmailLinkId: number
+  recipientEmail: string
+  recipientName: string | null
+  emailSentAt: Date | string | null
+  createdAt?: Date | string | null
+  firstRequestedAt: Date | string | null
+  firstHumanViewAt: Date | string | null
+  lastRequestedAt: Date | string | null
+  requestCount: number
+  humanViewCount: number
+  isActive: boolean
+  inventoryManagement: {
+    inventoryId: number
+    inventoryNumber: string | null
+    makeLegacy?: string | null
+    modelLegacy?: string | null
+    variantLegacy?: string | null
+    registrationNo: string | null
+    year: number | null
+    kmsDriven: string | number | null
+    price: string | number | null
+    status: string | null
+    carVariantMaster: {
+      variant: string | null
+      carMakeMaster: { pkMakeId?: number; make: string | null } | null
+      carModelMaster: { pkModelId?: number; model: string | null } | null
+    } | null
+  }
+  visits: Array<{
+    vehicleEmailLinkVisitId: number
+    visitedAt: Date | string
+    visitKind: string
+  }>
+  interactions: Array<{
+    vehicleEmailLinkInteractionId: number
+    interactionAt: Date | string
+    interactionType: string
+    interactionLabel: string | null
+  }>
+}
+
 // some legacy catalog rows carry placeholder text ("null", "na") instead of a real SQL NULL
-const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
-const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
+
+function userOptionLabel(user: UserOption | null | undefined) {
+  if (!user) return '—'
+  const employeeName = `${user.employee?.empFirstName ?? ''} ${user.employee?.empLastName ?? ''}`.trim()
+  const userName = user.userName?.trim()
+  const name = user.displayName?.trim() || employeeName
+
+  if (userName && name && userName.toLowerCase() !== name.toLowerCase()) {
+    return `${userName} · ${name}`
+  }
+
+  return userName || name || `User #${user.userId}`
+}
 
 function inquiryVehicleLabel(car: InquiryRow['inquiryCarDetails'][0] | undefined | null) {
   if (!car) return '—'
@@ -113,34 +248,218 @@ function inquiryVehicleLabel(car: InquiryRow['inquiryCarDetails'][0] | undefined
   return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}`.trim()
 }
 
-function validateInquiryWorkflow(input: InquiryFormInput) {
-  const status = input.status.trim()
-  const subStatus = input.subStatus.trim().toLowerCase()
-  const inquiryDate = input.dateOfInquiry.trim()
-  const followUpDate = input.followUpDate.trim()
-  const visitedDate = input.visitedDateOfCustomer.trim()
+function summarizeInquiryVehicles(cars: InquiryCarDetailRow[] | undefined | null) {
+  if (!cars || cars.length === 0) return '—'
+  const labels = cars.map(car => inquiryVehicleLabel(car)).filter(label => label !== '—')
+  if (labels.length === 0) return '—'
+  if (labels.length === 1) return labels[0]
+  return `${labels[0]} +${labels.length - 1} more`
+}
 
-  if (status === 'FollowUp' && !followUpDate) {
-    return 'Follow-up date is required when status is FollowUp.'
+function buildVehicleHistoryRows(
+  inquiryInventoryLinks: InquiryInventoryLinkRow[] | undefined,
+  vehicleEmailLinks: VehicleEmailLinkRow[] | undefined,
+) {
+  const rows = new Map<number, {
+    inventoryId: number
+    inventoryNumber: string | null
+    registrationNo: string | null
+    vehicle: string
+    year: number | null
+    status: string | null
+    price: string | number | null
+    matchedAt: Date | string | null
+    emailedAt: Date | string | null
+    emailCount: number
+    humanViewCount: number
+    requestCount: number
+    callClicks: number
+    whatsappClicks: number
+    emailClicks: number
+  }>()
+
+  for (const link of inquiryInventoryLinks ?? []) {
+    const inventoryId = link.inventoryManagement.inventoryId
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(link.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean).join(' ') || '—'
+
+    const existing = rows.get(inventoryId)
+    const next = existing ?? {
+      inventoryId,
+      inventoryNumber: link.inventoryManagement.inventoryNumber,
+      registrationNo: link.inventoryManagement.registrationNo,
+      vehicle,
+      year: link.inventoryManagement.year,
+      status: link.inventoryManagement.status,
+      price: link.inventoryManagement.price,
+      matchedAt: null,
+      emailedAt: null,
+      emailCount: 0,
+      humanViewCount: 0,
+      requestCount: 0,
+      callClicks: 0,
+      whatsappClicks: 0,
+      emailClicks: 0,
+    }
+
+    if (link.linkType.toLowerCase() === 'matched' && !next.matchedAt) {
+      next.matchedAt = link.createdAt
+    }
+    if (link.linkType.toLowerCase() === 'emailed' && !next.emailedAt) {
+      next.emailedAt = link.createdAt
+    }
+
+    rows.set(inventoryId, next)
   }
 
-  if (subStatus === 'visited' && !visitedDate) {
-    return 'Visited date is required when sub-status is Visited.'
+  for (const link of vehicleEmailLinks ?? []) {
+    const inventoryId = link.inventoryManagement.inventoryId
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model),
+      clean(link.inventoryManagement.carVariantMaster?.variant),
+    ].filter(Boolean).join(' ') || '—'
+    const engagement = summarizeVehicleEmailEngagement(link)
+
+    const existing = rows.get(inventoryId)
+    const next = existing ?? {
+      inventoryId,
+      inventoryNumber: link.inventoryManagement.inventoryNumber,
+      registrationNo: link.inventoryManagement.registrationNo,
+      vehicle,
+      year: link.inventoryManagement.year,
+      status: link.inventoryManagement.status,
+      price: link.inventoryManagement.price,
+      matchedAt: null,
+      emailedAt: null,
+      emailCount: 0,
+      humanViewCount: 0,
+      requestCount: 0,
+      callClicks: 0,
+      whatsappClicks: 0,
+      emailClicks: 0,
+    }
+
+    if (!next.emailedAt) {
+      next.emailedAt = link.emailSentAt ?? link.createdAt ?? null
+    }
+
+    next.emailCount += 1
+    next.humanViewCount += link.humanViewCount
+    next.requestCount += link.requestCount
+    next.callClicks += engagement.callClicks
+    next.whatsappClicks += engagement.whatsappClicks
+    next.emailClicks += engagement.emailClicks
+
+    rows.set(inventoryId, next)
   }
 
-  if (inquiryDate && followUpDate && followUpDate < inquiryDate) {
-    return 'Follow-up date cannot be before inquiry date.'
+  return [...rows.values()].sort((a, b) => {
+    const aTime = a.emailedAt ? new Date(a.emailedAt).getTime() : a.matchedAt ? new Date(a.matchedAt).getTime() : 0
+    const bTime = b.emailedAt ? new Date(b.emailedAt).getTime() : b.matchedAt ? new Date(b.matchedAt).getTime() : 0
+    return bTime - aTime
+  })
+}
+
+function buildInquiryActivityItems(inquiry: InquiryRow) {
+  const items: Array<{
+    key: string
+    at: Date | string | null
+    title: string
+    detail: string
+    tone: 'danger' | 'info' | 'neutral' | 'success'
+  }> = []
+
+  if (inquiry.followUpDate && inquiry.status === 'FollowUp') {
+    const today = new Date(new Date().toDateString())
+    const followUpDate = new Date(inquiry.followUpDate)
+    const diffDays = Math.floor((today.getTime() - new Date(followUpDate.toDateString()).getTime()) / (1000 * 60 * 60 * 24))
+    const overdue = diffDays > 0
+    items.push({
+      key: `current-followup-${inquiry.inquiryId}`,
+      at: inquiry.followUpDate,
+      title: overdue ? 'Follow-up call due' : 'Follow-up scheduled',
+      detail: overdue
+        ? `Current follow-up is overdue by ${diffDays} day${diffDays === 1 ? '' : 's'}`
+        : `Current follow-up is scheduled for ${fmtDate(inquiry.followUpDate)}`,
+      tone: overdue ? 'danger' : 'info',
+    })
   }
 
-  if (inquiryDate && visitedDate && visitedDate < inquiryDate) {
-    return 'Visited date cannot be before inquiry date.'
+  for (const followup of inquiry.followupInquiry ?? []) {
+    items.push({
+      key: `followup-${followup.pkFollowupId}`,
+      at: followup.createdDt ?? followup.followupDate,
+      title: `Status set to ${followup.followupStatus ?? '—'}`,
+      detail: [
+        followup.followupSubStatus ? `Sub-status: ${followup.followupSubStatus}` : '',
+        followup.followupClassification ? `Class: ${followup.followupClassification}` : '',
+        followup.comments?.trim() ? followup.comments.trim() : '',
+        followup.createdByUser ? `By ${userOptionLabel(followup.createdByUser)}` : '',
+      ].filter(Boolean).join(' · ') || 'Follow-up logged',
+      tone: followup.followupStatus === 'Closed' ? 'success' : 'info',
+    })
   }
 
-  return ''
+  for (const link of inquiry.vehicleEmailLinks ?? []) {
+    const vehicle = [
+      clean(link.inventoryManagement.carVariantMaster?.carMakeMaster?.make) || clean(link.inventoryManagement.makeLegacy),
+      clean(link.inventoryManagement.carVariantMaster?.carModelMaster?.model) || clean(link.inventoryManagement.modelLegacy),
+      clean(link.inventoryManagement.carVariantMaster?.variant) || clean(link.inventoryManagement.variantLegacy),
+    ].filter(Boolean).join(' ') || (link.inventoryManagement.inventoryNumber ?? `Inventory #${link.inventoryManagement.inventoryId}`)
+    const engagement = summarizeVehicleEmailEngagement(link)
+
+    items.push({
+      key: `email-${link.vehicleEmailLinkId}`,
+      at: link.emailSentAt ?? link.createdAt ?? null,
+      title: `Vehicle email sent`,
+      detail: [
+        vehicle,
+        link.recipientEmail,
+        link.humanViewCount > 0 || link.requestCount > 0 ? `Opened ${link.humanViewCount}/${link.requestCount}` : '',
+        engagement.callClicks || engagement.whatsappClicks || engagement.emailClicks
+          ? `Clicks C${engagement.callClicks} W${engagement.whatsappClicks} E${engagement.emailClicks}`
+          : '',
+      ].filter(Boolean).join(' · '),
+      tone: 'success',
+    })
+  }
+
+  if (inquiry.createdDt) {
+    items.push({
+      key: `created-${inquiry.inquiryId}`,
+      at: inquiry.createdDt,
+      title: `Inquiry created from ${inquiry.website ?? 'unknown source'}`,
+      detail: [
+        inquiry.createdByUser ? userOptionLabel(inquiry.createdByUser) : '',
+        inquiry.customer?.custId || inquiry.customerId ? `Linked to customer #${inquiry.customer?.custId ?? inquiry.customerId}` : '',
+      ].filter(Boolean).join(' · ') || 'Inquiry created',
+      tone: 'neutral',
+    })
+  }
+
+  return items.sort((a, b) => {
+    const aTime = a.at ? new Date(a.at).getTime() : 0
+    const bTime = b.at ? new Date(b.at).getTime() : 0
+    return bTime - aTime
+  })
 }
 
 function csvValue(value: string | number | boolean | null | undefined) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+function fmtExportDate(d: Date | string | null | undefined) {
+  if (!d) return ''
+  const value = new Date(d)
+  if (Number.isNaN(value.getTime())) return ''
+  const day = String(value.getDate()).padStart(2, '0')
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const year = value.getFullYear()
+  return `${day}-${month}-${year}`
 }
 
 function slugify(value: string) {
@@ -163,57 +482,52 @@ function buildInquiryExportFileName(rows: InquiryRow[], search: string, status: 
 
 function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, classification: string) {
   const headers = [
-    'Inquiry ID',
+    'Date of Inquiry',
     'Inquiry No',
-    'Inquiry Date',
-    'Source',
-    'Linked Customer ID',
-    'Customer Name',
-    'Mobile',
+    'WebSite',
+    'Source Detail',
+    'Customer',
+    'MobileNo',
     'Email',
-    'Make',
     'Model',
     'Variant',
     'Sub Variant',
-    'Car Year',
-    'Budget',
+    'Year',
+    'Budget of Customer',
+    'Visited Date of Customer',
     'Classification',
     'Status',
-    'Sub-status',
-    'Follow-up Date',
-    'Visited Date',
-    'Remarks',
+    'Sub Status',
+    'Follow Up Date',
+    'Remark',
   ]
 
   const lines = [headers.map(csvValue).join(',')]
   for (const row of rows) {
-    const car = row.inquiryCarDetails[0]
-    const make = clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy)
-    const model = clean(car?.carVariantMaster?.carModelMaster?.model) || clean(car?.modelLegacy)
-    const variant = clean(car?.carVariantMaster?.variant) || clean(car?.variantLegacy)
-    const line = [
-      row.inquiryId,
-      row.inquiryNo,
-      fmtDate(row.dateOfInquiry),
-      row.website,
-      row.customer?.custId ?? row.customerId,
-      row.customer?.custName ?? row.customerNameLegacy,
-      row.mobileno,
-      row.email,
-      make,
-      model,
-      variant,
-      clean(car?.subVariant),
-      car?.year ?? null,
-      row.budgetOfCustomer,
-      row.classification,
-      row.status,
-      row.subStatus,
-      fmtDate(row.followUpDate),
-      fmtDate(row.visitedDateOfCustomer),
-      row.remark,
-    ]
-    lines.push(line.map(csvValue).join(','))
+    const carRows = row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails : [null]
+    for (const car of carRows) {
+      const line = [
+        fmtExportDate(row.dateOfInquiry),
+        row.inquiryNo,
+        row.website,
+        row.sourceDetail,
+        row.customer?.custName ?? row.customerNameLegacy,
+        row.mobileno,
+        row.email,
+        car ? (clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy)) : '',
+        car ? (clean(car.carVariantMaster?.variant) || clean(car.variantLegacy)) : '',
+        car ? clean(car.subVariant) : '',
+        car?.year ?? '',
+        row.budgetOfCustomer,
+        fmtExportDate(row.visitedDateOfCustomer),
+        row.classification,
+        row.status,
+        row.subStatus,
+        fmtExportDate(row.followUpDate),
+        row.remark,
+      ]
+      lines.push(line.map(csvValue).join(','))
+    }
   }
 
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -225,22 +539,35 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
   URL.revokeObjectURL(url)
 }
 
+function emptyInquiryCar(): InquiryCarInput {
+  return {
+    inquiryCarDetailsId: null,
+    selectedMakeId: null,
+    selectedModelId: null,
+    fkVariantId: null,
+    subVariant: '',
+    carYear: null,
+  }
+}
+
 function emptyForm(): InquiryFormInput {
   return {
-    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '',
+    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '', sourceCode: '', sourceDetail: '',
     customerId: null, customerNameLegacy: '', mobileno: '', email: '',
     budgetOfCustomer: null, visitedDateOfCustomer: '',
-    classification: 'Warm', status: 'FollowUp', subStatus: '',
-    followUpDate: '', remark: '', fkVariantId: null, subVariant: '', carYear: null,
+    classification: 'Warm', status: 'Open', subStatus: '',
+    followUpDate: '', remark: '', inquiryCars: [],
   }
 }
 
 export function InquiryClient({
-  initialData, makes, sourceSuggestions, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
-  sourceSuggestions: string[]
+  sourceOptions: InquirySourceOption[]
+  subStatusSuggestions: string[]
+  inquiryAssistants: UserOption[]
   total: number
   page: number
   pageCount: number
@@ -260,6 +587,7 @@ export function InquiryClient({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [searchInput, setSearchInput] = useState(search)
+  const debouncedSearchInput = useDebouncedValue(searchInput, LIST_FILTER_DEBOUNCE_MS)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [form, setForm] = useState<InquiryFormInput>(emptyForm())
   const [savedFormSnapshot, setSavedFormSnapshot] = useState<string>(JSON.stringify(emptyForm()))
@@ -269,6 +597,8 @@ export function InquiryClient({
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
+  const [saveFeedback, setSaveFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isRoutePending, startRouteTransition] = useTransition()
   const [isPending, startTransition] = useTransition()
 
@@ -277,55 +607,119 @@ export function InquiryClient({
   const [isEmailPending, startEmailTransition] = useTransition()
   const [viewInquiryId, setViewInquiryId] = useState<number | null>(null)
   const [viewInquiry, setViewInquiry] = useState<InquiryRow | null>(null)
+  const [viewTab, setViewTab] = useState<'overview' | 'requirement' | 'activity' | 'record'>('overview')
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState('')
+  const [assignInquiryRow, setAssignInquiryRow] = useState<InquiryRow | null>(null)
+  const [assignUserId, setAssignUserId] = useState('')
+  const [assignError, setAssignError] = useState('')
+  const [isAssignPending, startAssignTransition] = useTransition()
   const [editLoading, setEditLoading] = useState(false)
   const [emailInquiryRow, setEmailInquiryRow] = useState<InquiryRow | null>(null)
   const [emailInventoryMatches, setEmailInventoryMatches] = useState<InventoryMatch[]>([])
+  const [emailHistoryByInventoryId, setEmailHistoryByInventoryId] = useState<Record<number, { emailed: boolean; emailedAt: string | null }>>({})
   const [emailInventoryLoading, setEmailInventoryLoading] = useState(false)
-  const [selectedEmailInventoryId, setSelectedEmailInventoryId] = useState<number | null>(null)
+  const [selectedEmailInventoryIds, setSelectedEmailInventoryIds] = useState<number[]>([])
+  const [emailInventorySearch, setEmailInventorySearch] = useState('')
   const [emailModalError, setEmailModalError] = useState('')
   const emailInventoryRequestRef = useRef(0)
 
+  const loadInventoryMatches = async (cars: Array<{
+    fkVariantId?: number | null
+    selectedMakeId?: number | null
+    selectedModelId?: number | null
+    carYear?: number | null
+    carVariantMaster?: {
+      carMakeMaster: { pkMakeId: number; make: string | null } | null
+      carModelMaster: { pkModelId: number; model: string | null } | null
+    } | null
+  }>) => {
+    const requests = cars
+      .map(car => {
+        const variantId = car.fkVariantId ?? null
+        const makeId = car.selectedMakeId ?? car.carVariantMaster?.carMakeMaster?.pkMakeId ?? null
+        const modelId = car.selectedModelId ?? car.carVariantMaster?.carModelMaster?.pkModelId ?? null
+        const year = car.carYear ?? null
+
+        if (!variantId && !modelId && !makeId) return null
+
+        const params = new URLSearchParams()
+        if (makeId) params.set('makeId', String(makeId))
+        if (modelId) params.set('modelId', String(modelId))
+        if (variantId) params.set('variantId', String(variantId))
+        if (year) params.set('year', String(year))
+        return params
+      })
+      .filter((params): params is URLSearchParams => params !== null)
+
+    if (requests.length === 0) return []
+
+    const results = await Promise.all(requests.map(async params => {
+      const res = await fetch(`/api/inquiry/inventory-match?${params.toString()}`)
+      const payload = await res.json().catch(() => null)
+      if (!res.ok || !Array.isArray(payload)) {
+        throw new Error(payload?.error ?? 'Could not load matching inventory.')
+      }
+      return payload as InventoryMatch[]
+    }))
+
+    const deduped = new Map<number, InventoryMatch>()
+    for (const group of results) {
+      for (const match of group) {
+        const previous = deduped.get(match.inventoryId)
+        deduped.set(match.inventoryId, {
+          ...match,
+          matchReasons: [...new Set([...(previous?.matchReasons ?? []), ...(match.matchReasons ?? [])])],
+        })
+      }
+    }
+    return [...deduped.values()]
+  }
+
   const loadInventoryMatchesForInquiry = async (row: InquiryRow) => {
-    const car = row.inquiryCarDetails[0]
-    const variantId = car?.fkVariantId
-    const makeId = car?.carVariantMaster?.carMakeMaster?.pkMakeId
-    const modelId = car?.carVariantMaster?.carModelMaster?.pkModelId
-    const year = car?.year
-
-    if (!variantId && !modelId && !makeId) {
-      return []
-    }
-
-    const params = new URLSearchParams()
-    if (makeId) params.set('makeId', String(makeId))
-    if (modelId) params.set('modelId', String(modelId))
-    if (variantId) params.set('variantId', String(variantId))
-    if (year) params.set('year', String(year))
-
-    const res = await fetch(`/api/inquiry/inventory-match?${params.toString()}`)
-    const payload = await res.json().catch(() => null)
-    if (!res.ok || !Array.isArray(payload)) {
-      throw new Error(payload?.error ?? 'Could not load matching inventory.')
-    }
-    return payload as InventoryMatch[]
+    return loadInventoryMatches(row.inquiryCarDetails.map(car => ({
+      fkVariantId: car.fkVariantId,
+      carYear: car.year,
+      carVariantMaster: car.carVariantMaster,
+    })))
   }
 
   const openEmailModal = (row: InquiryRow) => {
     const requestId = ++emailInventoryRequestRef.current
     setEmailFeedback(null)
     setEmailModalError('')
-    setSelectedEmailInventoryId(null)
+    setSelectedEmailInventoryIds([])
+    setEmailInventorySearch('')
     setEmailInventoryMatches([])
+    setEmailHistoryByInventoryId({})
     setEmailInquiryRow(row)
     setEmailInventoryLoading(true)
 
-    loadInventoryMatchesForInquiry(row)
-      .then(matches => {
+    Promise.all([
+      loadInventoryMatchesForInquiry(row),
+      getInquiryDetail(row.inquiryId),
+    ])
+      .then(([matches, detail]) => {
         if (emailInventoryRequestRef.current !== requestId) return
-        setEmailInventoryMatches(matches)
-        setSelectedEmailInventoryId(matches[0]?.inventoryId ?? null)
+        const workflowStateByInventoryId = buildInventoryWorkflowStateMap(detail?.inquiryInventoryLinks)
+        setEmailInventoryMatches(matches.map(match => {
+          const state = workflowStateByInventoryId.get(match.inventoryId)
+          return {
+            ...match,
+            currentState: state?.currentState ?? null,
+            currentStateAt: state?.currentStateAt ? fmtDateTime(state.currentStateAt) : null,
+          }
+        }))
+        const history: Record<number, { emailed: boolean; emailedAt: string | null }> = {}
+        for (const link of detail?.vehicleEmailLinks ?? []) {
+          const inventoryId = link.inventoryManagement.inventoryId
+          const current = history[inventoryId]
+          const sentAt = fmtDateTime(link.emailSentAt ?? link.createdAt ?? null) || null
+          if (!current || (!current.emailedAt && sentAt)) {
+            history[inventoryId] = { emailed: true, emailedAt: sentAt }
+          }
+        }
+        setEmailHistoryByInventoryId(history)
       })
       .catch(err => {
         if (emailInventoryRequestRef.current !== requestId) return
@@ -337,14 +731,14 @@ export function InquiryClient({
   }
 
   const handleSendInventoryEmail = () => {
-    if (!emailInquiryRow || !selectedEmailInventoryId) return
+    if (!emailInquiryRow || selectedEmailInventoryIds.length === 0) return
     setEmailingId(emailInquiryRow.inquiryId)
     setEmailFeedback(null)
     setEmailModalError('')
     startEmailTransition(async () => {
-      const result = await sendInquiryInventoryEmail(emailInquiryRow.inquiryId, selectedEmailInventoryId)
+      const result = await sendInquiryInventoryEmails(emailInquiryRow.inquiryId, selectedEmailInventoryIds)
       setEmailFeedback(result.success
-        ? { ok: true, message: 'Email sent successfully.' }
+        ? { ok: true, message: result.message ?? 'Email sent successfully.' }
         : { ok: false, message: result.error ?? 'Something went wrong sending this email.' })
       if (result.success) {
         setEmailInquiryRow(null)
@@ -359,10 +753,19 @@ export function InquiryClient({
     openEmailModal(row)
   }
 
+  const toggleEmailInventorySelection = (inventoryId: number) => {
+    setSelectedEmailInventoryIds(prev => (
+      prev.includes(inventoryId)
+        ? prev.filter(id => id !== inventoryId)
+        : [...prev, inventoryId]
+    ))
+  }
+
   const openView = (row: { inquiryId: number }) => {
     const requestId = ++viewRequestRef.current
     setViewInquiryId(row.inquiryId)
     setViewInquiry(null)
+    setViewTab('overview')
     setViewError('')
     setViewLoading(true)
 
@@ -387,6 +790,7 @@ export function InquiryClient({
   const closeView = () => {
     setViewInquiryId(null)
     setViewInquiry(null)
+    setViewTab('overview')
     setViewError('')
     setViewLoading(false)
     if (searchParams.has('view')) {
@@ -396,12 +800,15 @@ export function InquiryClient({
     }
   }
 
-  const [selectedMakeId, setSelectedMakeId] = useState<number | null>(null)
-  const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
-  const [models, setModels] = useState<CarModelMaster[]>([])
-  const [variants, setVariants] = useState<CarVariantMaster[]>([])
   const [filterModels, setFilterModels] = useState<CarModelMaster[]>([])
   const [filterVariants, setFilterVariants] = useState<CarVariantMaster[]>([])
+  const [carEditor, setCarEditor] = useState<InquiryCarInput>(emptyInquiryCar())
+  const [carEditorModels, setCarEditorModels] = useState<CarModelMaster[]>([])
+  const [carEditorVariants, setCarEditorVariants] = useState<CarVariantMaster[]>([])
+  const [editingCarIndex, setEditingCarIndex] = useState<number | null>(null)
+  const [carEditorError, setCarEditorError] = useState('')
+  const [modelNameCache, setModelNameCache] = useState<Record<number, string>>({})
+  const [variantNameCache, setVariantNameCache] = useState<Record<number, string>>({})
   const [previousInquiries, setPreviousInquiries] = useState<PreviousInquiryMatch[]>([])
   const [previousInquiryLoading, setPreviousInquiryLoading] = useState(false)
   const [previousInquiryError, setPreviousInquiryError] = useState('')
@@ -410,8 +817,10 @@ export function InquiryClient({
   const [inventoryMatchError, setInventoryMatchError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
-  const isFollowUpStatus = form.status.trim() === 'FollowUp'
-  const isVisitedSubStatus = form.subStatus.trim().toLowerCase() === 'visited'
+  const followUpSelected = isFollowupStatus(form.status)
+  const visitedSelected = isVisitedSubStatus(form.subStatus)
+  const isMissingFollowUpDate = followUpSelected && !form.followUpDate.trim()
+  const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
   const activeFilterCount = [
     search.trim() ? 1 : 0,
     status !== 'All' ? 1 : 0,
@@ -432,7 +841,6 @@ export function InquiryClient({
     ? 'No inquiries match the current filters.'
     : 'No inquiries found yet.'
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const viewRequestRef = useRef(0)
   const editRequestRef = useRef(0)
   const previousInquiryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -440,13 +848,181 @@ export function InquiryClient({
   const inventoryMatchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inventoryMatchRequestRef = useRef(0)
 
-  const pushQuery = (params: Record<string, string>) => {
-    const q = new URLSearchParams({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page: '1', ...params })
-    for (const [k, v] of [...q.entries()]) {
-      if (!v || v === 'All') q.delete(k)
+  const resetCarEditor = () => {
+    setCarEditor(emptyInquiryCar())
+    setCarEditorModels([])
+    setCarEditorVariants([])
+    setEditingCarIndex(null)
+    setCarEditorError('')
+  }
+
+  const openAssign = (row: InquiryRow) => {
+    setAssignInquiryRow(row)
+    setAssignUserId(row.assignedTo ? String(row.assignedTo) : '')
+    setAssignError('')
+    setSaveFeedback(null)
+  }
+
+  const forceCloseAssign = () => {
+    setAssignInquiryRow(null)
+    setAssignUserId('')
+    setAssignError('')
+  }
+
+  const closeAssign = () => {
+    if (isAssignPending) return
+    forceCloseAssign()
+  }
+
+  const loadModelsForMake = async (selectedMakeId: number) => {
+    if (!selectedMakeId) {
+      setCarEditorModels([])
+      return []
     }
+    const response = await fetch(`/api/catalog/models?makeId=${selectedMakeId}`)
+    const payload = await response.json().catch(() => [])
+    const models = Array.isArray(payload) ? payload as CarModelMaster[] : []
+    setCarEditorModels(models)
+    setModelNameCache(prev => ({
+      ...prev,
+      ...Object.fromEntries(models.map(model => [model.pkModelId, model.model ?? '—'])),
+    }))
+    return models
+  }
+
+  const loadVariantsForModel = async (selectedModelId: number) => {
+    if (!selectedModelId) {
+      setCarEditorVariants([])
+      return []
+    }
+    const response = await fetch(`/api/catalog/variants?modelId=${selectedModelId}`)
+    const payload = await response.json().catch(() => [])
+    const variants = Array.isArray(payload) ? payload as CarVariantMaster[] : []
+    setCarEditorVariants(variants)
+    setVariantNameCache(prev => ({
+      ...prev,
+      ...Object.fromEntries(variants.map(variant => [variant.pkVariantId, variant.variant ?? '—'])),
+    }))
+    return variants
+  }
+
+  const onCarEditorMakeChange = async (makeId: number) => {
+    setCarEditor(prev => ({
+      ...prev,
+      selectedMakeId: makeId || null,
+      selectedModelId: null,
+      fkVariantId: null,
+    }))
+    setCarEditorVariants([])
+    setCarEditorError('')
+    await loadModelsForMake(makeId)
+  }
+
+  const onCarEditorModelChange = async (modelId: number) => {
+    setCarEditor(prev => ({
+      ...prev,
+      selectedModelId: modelId || null,
+      fkVariantId: null,
+    }))
+    setCarEditorError('')
+    await loadVariantsForModel(modelId)
+  }
+
+  const editInquiryCar = async (rowIndex: number) => {
+    const row = form.inquiryCars[rowIndex]
+    if (!row) return
+
+    setEditingCarIndex(rowIndex)
+    setCarEditor({
+      inquiryCarDetailsId: row.inquiryCarDetailsId ?? null,
+      selectedMakeId: row.selectedMakeId ?? null,
+      selectedModelId: row.selectedModelId ?? null,
+      fkVariantId: row.fkVariantId ?? null,
+      subVariant: row.subVariant ?? '',
+      carYear: row.carYear ?? null,
+    })
+    setCarEditorError('')
+
+    if (row.selectedMakeId) {
+      await loadModelsForMake(row.selectedMakeId)
+    } else {
+      setCarEditorModels([])
+    }
+
+    if (row.selectedModelId) {
+      await loadVariantsForModel(row.selectedModelId)
+    } else {
+      setCarEditorVariants([])
+    }
+  }
+
+  const saveInquiryCarRow = () => {
+    if (!carEditor.selectedMakeId || !carEditor.selectedModelId || !carEditor.fkVariantId) {
+      setCarEditorError('Select make, model, and variant before adding the vehicle row.')
+      return
+    }
+    if (carEditor.carYear !== null && !isValidYear(carEditor.carYear)) {
+      setCarEditorError('Enter a valid 4-digit year for the vehicle row.')
+      return
+    }
+
+    const nextRow: InquiryCarInput = {
+      inquiryCarDetailsId: carEditor.inquiryCarDetailsId ?? null,
+      selectedMakeId: carEditor.selectedMakeId ?? null,
+      selectedModelId: carEditor.selectedModelId ?? null,
+      fkVariantId: carEditor.fkVariantId ?? null,
+      subVariant: carEditor.subVariant,
+      carYear: carEditor.carYear,
+    }
+
+    setForm(prev => {
+      const inquiryCars = [...prev.inquiryCars]
+      if (editingCarIndex !== null) {
+        inquiryCars[editingCarIndex] = nextRow
+      } else {
+        inquiryCars.push(nextRow)
+      }
+      return { ...prev, inquiryCars }
+    })
+    resetCarEditor()
+  }
+
+  const removeInquiryCar = (rowIndex: number) => {
+    setForm(prev => ({
+      ...prev,
+      inquiryCars: prev.inquiryCars.filter((_, index) => index !== rowIndex),
+    }))
+    if (editingCarIndex === rowIndex) {
+      resetCarEditor()
+      return
+    }
+    if (editingCarIndex !== null && rowIndex < editingCarIndex) {
+      setEditingCarIndex(editingCarIndex - 1)
+    }
+  }
+
+  const moveInquiryCar = (rowIndex: number, direction: -1 | 1) => {
+    const nextIndex = rowIndex + direction
+    if (nextIndex < 0 || nextIndex >= form.inquiryCars.length) return
+
+    setForm(prev => {
+      const inquiryCars = [...prev.inquiryCars]
+      const [moved] = inquiryCars.splice(rowIndex, 1)
+      inquiryCars.splice(nextIndex, 0, moved)
+      return { ...prev, inquiryCars }
+    })
+
+    if (editingCarIndex === rowIndex) {
+      setEditingCarIndex(nextIndex)
+    } else if (editingCarIndex === nextIndex) {
+      setEditingCarIndex(rowIndex)
+    }
+  }
+
+  const pushQuery = (params: Record<string, string>) => {
+    const query = buildListQueryString({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page: '1' }, params, true)
     startRouteTransition(() => {
-      router.push(`/inquiry${q.toString() ? `?${q.toString()}` : ''}`)
+      router.push(`/inquiry${query ? `?${query}` : ''}`)
     })
   }
 
@@ -505,19 +1081,17 @@ export function InquiryClient({
   }, [makeId, modelId])
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (searchInput === search) return
-    debounceRef.current = setTimeout(() => pushQuery({ search: searchInput }), 400)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    if (debouncedSearchInput === search) return
+    pushQuery({ search: debouncedSearchInput })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput])
+  }, [debouncedSearchInput])
 
   useEffect(() => {
-    if (modal && isVisitedSubStatus && !form.visitedDateOfCustomer) {
+    if (modal && visitedSelected && !form.visitedDateOfCustomer) {
       f('visitedDateOfCustomer', new Date().toISOString().slice(0, 10))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisitedSubStatus, modal])
+  }, [modal, visitedSelected])
 
   useEffect(() => {
     if (!modal) {
@@ -528,9 +1102,10 @@ export function InquiryClient({
     }
 
     const mobile = form.mobileno.trim()
+    const customerId = form.customerId
     if (previousInquiryDebounceRef.current) clearTimeout(previousInquiryDebounceRef.current)
 
-    if (!mobile) {
+    if (!mobile && !customerId) {
       setPreviousInquiries([])
       setPreviousInquiryError('')
       setPreviousInquiryLoading(false)
@@ -542,7 +1117,11 @@ export function InquiryClient({
       setPreviousInquiryLoading(true)
       setPreviousInquiryError('')
       try {
-        const params = new URLSearchParams({ mobile })
+        const params = new URLSearchParams()
+        if (mobile) params.set('mobile', mobile)
+        if (customerId) params.set('customerId', String(customerId))
+        const variantIds = form.inquiryCars.map(car => car.fkVariantId).filter((id): id is number => Boolean(id))
+        if (variantIds.length) params.set('variantIds', variantIds.join(','))
         if (editId) params.set('excludeInquiryId', String(editId))
         const res = await fetch(`/api/inquiry/previous?${params.toString()}`)
         const payload = await res.json()
@@ -565,7 +1144,7 @@ export function InquiryClient({
     return () => {
       if (previousInquiryDebounceRef.current) clearTimeout(previousInquiryDebounceRef.current)
     }
-  }, [editId, form.mobileno, modal])
+  }, [editId, form.customerId, form.mobileno, modal])
 
   useEffect(() => {
     if (!modal) {
@@ -577,7 +1156,7 @@ export function InquiryClient({
 
     if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
 
-    if (!selectedMakeId && !selectedModelId && !form.fkVariantId) {
+    if (!form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId)) {
       setInventoryMatches([])
       setInventoryMatchError('')
       setInventoryMatchLoading(false)
@@ -589,20 +1168,9 @@ export function InquiryClient({
       setInventoryMatchLoading(true)
       setInventoryMatchError('')
       try {
-        const params = new URLSearchParams()
-        if (selectedMakeId) params.set('makeId', String(selectedMakeId))
-        if (selectedModelId) params.set('modelId', String(selectedModelId))
-        if (form.fkVariantId) params.set('variantId', String(form.fkVariantId))
-        if (form.carYear) params.set('year', String(form.carYear))
-        const res = await fetch(`/api/inquiry/inventory-match?${params.toString()}`)
-        const payload = await res.json()
+        const matches = await loadInventoryMatches(form.inquiryCars)
         if (inventoryMatchRequestRef.current !== requestId) return
-        if (!res.ok) {
-          setInventoryMatches([])
-          setInventoryMatchError(payload.error ?? 'Could not load matching inventory.')
-          return
-        }
-        setInventoryMatches(Array.isArray(payload) ? payload : [])
+        setInventoryMatches(matches)
       } catch {
         if (inventoryMatchRequestRef.current !== requestId) return
         setInventoryMatches([])
@@ -615,9 +1183,7 @@ export function InquiryClient({
     return () => {
       if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
     }
-  }, [form.carYear, form.fkVariantId, modal, selectedMakeId, selectedModelId])
-
-  const resetCascade = () => { setSelectedMakeId(null); setSelectedModelId(null); setModels([]); setVariants([]) }
+  }, [form.inquiryCars, modal])
 
   const customerSnapshot = (customer: CustomerOption | null) => JSON.stringify(customer ? {
     custId: customer.custId,
@@ -633,6 +1199,7 @@ export function InquiryClient({
     setModal(null)
     setDiscardOpen(false)
     setError('')
+    setErrors({})
     clearInquiryEditQuery()
   }
 
@@ -657,10 +1224,29 @@ export function InquiryClient({
     setPreviousInquiryError('')
     setInventoryMatches([])
     setInventoryMatchError('')
-    resetCascade()
+    setSaveFeedback(null)
+    resetCarEditor()
+    setModelNameCache({})
+    setVariantNameCache({})
     setDiscardOpen(false)
     setError('')
     setModal('add')
+
+    getNextInquiryNumber()
+      .then(inquiryNo => {
+        setForm(current => ({ ...current, inquiryNo }))
+        setSavedFormSnapshot(currentSnapshot => {
+          const parsed = JSON.parse(currentSnapshot) as InquiryFormInput
+          return JSON.stringify({ ...parsed, inquiryNo })
+        })
+      })
+      .catch(() => {
+        setForm(current => ({ ...current, inquiryNo: 'Inquiry/1' }))
+        setSavedFormSnapshot(currentSnapshot => {
+          const parsed = JSON.parse(currentSnapshot) as InquiryFormInput
+          return JSON.stringify({ ...parsed, inquiryNo: 'Inquiry/1' })
+        })
+      })
   }
 
   const openEdit = async (r: { inquiryId: number }) => {
@@ -672,10 +1258,10 @@ export function InquiryClient({
     setPreviousInquiryError('')
     setInventoryMatches([])
     setInventoryMatchError('')
+    setSaveFeedback(null)
     setDiscardOpen(false)
     setError('')
-    resetCascade()
-
+    setErrors({})
     try {
       const detail = await getInquiryDetail(r.inquiryId)
       if (editRequestRef.current !== requestId) return
@@ -685,11 +1271,20 @@ export function InquiryClient({
         return
       }
 
-      const car = detail.inquiryCarDetails[0]
+      const inquiryCars = detail.inquiryCarDetails.length > 0 ? detail.inquiryCarDetails.map(car => ({
+        inquiryCarDetailsId: car.inquiryCarDetailsId ?? null,
+        selectedMakeId: car.carVariantMaster?.carMakeMaster?.pkMakeId ?? null,
+        selectedModelId: car.carVariantMaster?.carModelMaster?.pkModelId ?? null,
+        fkVariantId: car.fkVariantId ?? null,
+        subVariant: car.subVariant ?? '',
+        carYear: car.year ?? null,
+      })) : []
       const nextForm = {
         inquiryNo: detail.inquiryNo ?? '',
         dateOfInquiry: fmtDate(detail.dateOfInquiry),
         website: detail.website ?? '',
+        sourceCode: detail.source?.code ?? '',
+        sourceDetail: detail.sourceDetail ?? '',
         customerId: detail.customerId,
         customerNameLegacy: detail.customerNameLegacy ?? '',
         mobileno: detail.mobileno ?? '',
@@ -697,35 +1292,27 @@ export function InquiryClient({
         budgetOfCustomer: detail.budgetOfCustomer ? Number(detail.budgetOfCustomer) : null,
         visitedDateOfCustomer: fmtDate(detail.visitedDateOfCustomer),
         classification: detail.classification ?? 'Warm',
-        status: detail.status ?? 'FollowUp',
+        status: detail.status ?? 'Open',
         subStatus: detail.subStatus ?? '',
         followUpDate: fmtDate(detail.followUpDate),
         remark: detail.remark ?? '',
-        fkVariantId: car?.fkVariantId ?? null,
-        subVariant: car?.subVariant ?? '',
-        carYear: car?.year ?? null,
+        inquiryCars,
       }
       setForm(nextForm)
       setSavedFormSnapshot(JSON.stringify(nextForm))
       setSelectedCustomer(detail.customer)
       setSavedCustomerSnapshot(customerSnapshot(detail.customer))
-
-      const makeId = car?.carVariantMaster?.carMakeMaster?.pkMakeId ?? null
-      const modelId = car?.carVariantMaster?.carModelMaster?.pkModelId ?? null
-      setSelectedMakeId(makeId)
-      setSelectedModelId(modelId)
-      setModels([])
-      setVariants([])
-      if (makeId) {
-        const res = await fetch(`/api/catalog/models?makeId=${makeId}`)
-        if (editRequestRef.current !== requestId) return
-        setModels(await res.json())
-      }
-      if (modelId) {
-        const res = await fetch(`/api/catalog/variants?modelId=${modelId}`)
-        if (editRequestRef.current !== requestId) return
-        setVariants(await res.json())
-      }
+      resetCarEditor()
+      setModelNameCache(Object.fromEntries(
+        detail.inquiryCarDetails
+          .filter(car => car.carVariantMaster?.carModelMaster?.pkModelId)
+          .map(car => [car.carVariantMaster?.carModelMaster?.pkModelId as number, car.carVariantMaster?.carModelMaster?.model ?? '—']),
+      ))
+      setVariantNameCache(Object.fromEntries(
+        detail.inquiryCarDetails
+          .filter(car => car.carVariantMaster?.pkVariantId)
+          .map(car => [car.carVariantMaster?.pkVariantId as number, car.carVariantMaster?.variant ?? '—']),
+      ))
     } catch {
       if (editRequestRef.current !== requestId) return
       setError('Could not load inquiry details.')
@@ -733,24 +1320,6 @@ export function InquiryClient({
     } finally {
       if (editRequestRef.current === requestId) setEditLoading(false)
     }
-  }
-
-  const onMakeChange = async (makeId: number) => {
-    setSelectedMakeId(makeId || null)
-    setSelectedModelId(null)
-    setVariants([])
-    setForm(f => ({ ...f, fkVariantId: null }))
-    if (!makeId) { setModels([]); return }
-    const res = await fetch(`/api/catalog/models?makeId=${makeId}`)
-    setModels(await res.json())
-  }
-
-  const onModelChange = async (modelId: number) => {
-    setSelectedModelId(modelId || null)
-    setForm(f => ({ ...f, fkVariantId: null }))
-    if (!modelId) { setVariants([]); return }
-    const res = await fetch(`/api/catalog/variants?modelId=${modelId}`)
-    setVariants(await res.json())
   }
 
   const onCustomerChange = (c: CustomerOption | null) => {
@@ -765,20 +1334,25 @@ export function InquiryClient({
   }
 
   const f = <K extends keyof InquiryFormInput>(k: K, v: InquiryFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
-
   const save = () => {
     setError('')
-    const workflowError = validateInquiryWorkflow(form)
-    if (workflowError) {
-      setError(workflowError)
+    const validation = validateInquiryFormInput(form)
+    if (validation.error) {
+      setError(validation.error)
+      setErrors(validation.fieldErrors)
       return
     }
+    setErrors({})
     startTransition(async () => {
-      const result = editId ? await updateInquiry(editId, form) : await createInquiry(form)
+      const result = editId
+        ? await updateInquiry(editId, form)
+        : await createInquiry(form)
       if (!result.success) {
         setError(result.error ?? 'Something went wrong.')
+        setSaveFeedback(null)
         return
       }
+      setSaveFeedback(result.message ? { ok: true, message: result.message } : null)
       setSavedFormSnapshot(JSON.stringify(form))
       setSavedCustomerSnapshot(customerSnapshot(selectedCustomer))
       forceCloseInquiryModal()
@@ -790,8 +1364,28 @@ export function InquiryClient({
     if (!deleteId) return
     startTransition(async () => {
       const result = await deleteInquiry(deleteId)
-      if (!result.success) setError(result.error ?? 'Could not delete this record.')
+      setSaveFeedback(result.success
+        ? { ok: true, message: result.message ?? 'Inquiry deleted successfully.' }
+        : { ok: false, message: result.error ?? 'Could not delete this record.' })
       setDeleteId(null)
+      if (result.success) router.refresh()
+    })
+  }
+
+  const saveAssignment = () => {
+    if (!assignInquiryRow) return
+    setAssignError('')
+    startAssignTransition(async () => {
+      const result = await assignInquiry({
+        inquiryId: assignInquiryRow.inquiryId,
+        assignedToUserId: assignUserId ? Number(assignUserId) : null,
+      })
+      if (!result.success) {
+        setAssignError(result.error ?? 'Could not update inquiry assignment.')
+        return
+      }
+      setSaveFeedback({ ok: true, message: result.message ?? 'Inquiry assignment updated.' })
+      forceCloseAssign()
       router.refresh()
     })
   }
@@ -847,77 +1441,48 @@ export function InquiryClient({
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
 
-      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-gray-900">Filters</div>
-            <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600">Search</label>
-            <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, inquiry no..." disabled={isRoutePending} />
-          </div>
-          <Select label="Source" value={source} onChange={e => pushQuery({ source: e.target.value })} disabled={isRoutePending}>
-          <option value="All">All Sources</option>
-          {sourceSuggestions.map(item => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <Select label="Sub-status" value={subStatus} onChange={e => pushQuery({ subStatus: e.target.value })} disabled={isRoutePending}>
-          <option value="All">All Sub-statuses</option>
-          {SUB_STATUS_SUGGESTIONS.map(item => <option key={item} value={item}>{item}</option>)}
-          </Select>
-          <Select label="Make" value={makeId} onChange={e => pushQuery({ makeId: e.target.value, modelId: '', variantId: '' })} disabled={isRoutePending}>
-          <option value="">All Makes</option>
-          {makes.map(item => <option key={item.pkMakeId} value={String(item.pkMakeId)}>{item.make ?? '—'}</option>)}
-          </Select>
-          <Select label="Model" value={modelId} onChange={e => pushQuery({ modelId: e.target.value, variantId: '' })} disabled={isRoutePending || !makeId}>
-          <option value="">All Models</option>
-          {filterModels.map(item => <option key={item.pkModelId} value={String(item.pkModelId)}>{item.model ?? '—'}</option>)}
-          </Select>
-          <Select label="Variant" value={variantId} onChange={e => pushQuery({ variantId: e.target.value })} disabled={isRoutePending || !modelId}>
-          <option value="">All Variants</option>
-          {filterVariants.map(item => <option key={item.pkVariantId} value={String(item.pkVariantId)}>{item.variant ?? '—'}</option>)}
-          </Select>
-          <Input label="Follow-up Date" type="date" value={followUpDate} onChange={e => pushQuery({ followUpDate: e.target.value })} disabled={isRoutePending} />
-          <Input label="Visited Date" type="date" value={visitedDate} onChange={e => pushQuery({ visitedDate: e.target.value })} disabled={isRoutePending} />
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-medium text-gray-600">Classification</label>
-            <div className="flex flex-wrap gap-1.5">
-              {['All', ...INQUIRY_CLASSIFICATIONS].map(c => (
-                <button key={c} onClick={() => pushQuery({ classification: c })} disabled={isRoutePending}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${classification === c || (classification === 'All' && c === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  style={classification === c || (classification === 'All' && c === 'All') ? { backgroundColor: '#C8102E' } : {}}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-medium text-gray-600">Status</label>
-            <div className="flex flex-wrap gap-1.5">
-              {['All', ...INQUIRY_STATUSES].map(s => (
-                <button key={s} onClick={() => pushQuery({ status: s })} disabled={isRoutePending}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition disabled:opacity-60 disabled:cursor-not-allowed ${status === s || (status === 'All' && s === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  style={status === s || (status === 'All' && s === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 flex justify-end">
-          <Btn variant="outline" size="sm" onClick={resetFilters} disabled={isRoutePending || (!search.trim() && status === 'All' && classification === 'All' && source === 'All' && subStatus === 'All' && !followUpDate && !visitedDate && !makeId && !modelId && !variantId)}>
-            Reset Filters
-          </Btn>
-        </div>
-      </div>
+      <InquiryFilters
+        search={searchInput}
+        source={source}
+        subStatus={subStatus}
+        makeId={makeId}
+        modelId={modelId}
+        variantId={variantId}
+        followUpDate={followUpDate}
+        visitedDate={visitedDate}
+        classification={classification}
+        status={status}
+        isRoutePending={isRoutePending}
+        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || followUpDate || visitedDate || makeId || modelId || variantId)}
+        sourceOptions={sourceOptions}
+        subStatusSuggestions={subStatusSuggestions}
+        makes={makes}
+        models={filterModels}
+        variants={filterVariants}
+        classifications={INQUIRY_CLASSIFICATIONS}
+        statuses={INQUIRY_STATUSES}
+        onSearchChange={setSearchInput}
+        onSourceChange={source => pushQuery({ source })}
+        onSubStatusChange={subStatus => pushQuery({ subStatus })}
+        onMakeChange={makeId => pushQuery({ makeId, modelId: '', variantId: '' })}
+        onModelChange={modelId => pushQuery({ modelId, variantId: '' })}
+        onVariantChange={variantId => pushQuery({ variantId })}
+        onFollowUpDateChange={followUpDate => pushQuery({ followUpDate })}
+        onVisitedDateChange={visitedDate => pushQuery({ visitedDate })}
+        onClassificationChange={classification => pushQuery({ classification })}
+        onStatusChange={status => pushQuery({ status })}
+        onReset={resetFilters}
+      />
 
       {emailFeedback && (
         <div className={`mb-4 rounded-lg px-4 py-3 text-sm border ${emailFeedback.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
           {emailFeedback.message}
+        </div>
+      )}
+
+      {saveFeedback && (
+        <div className={`mb-4 rounded-lg px-4 py-3 text-sm border ${saveFeedback.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          {saveFeedback.message}
         </div>
       )}
 
@@ -954,78 +1519,28 @@ export function InquiryClient({
             ? 'pointer-events-none select-none opacity-45 transition-opacity'
             : 'transition-opacity'}
         >
-          <Table headers={['#', 'Date', 'Customer', 'Source', 'Contact', 'Car of Interest', 'Budget', 'Classification', 'Status', 'Sub-status', 'Follow-up', 'Visited', 'Remark', 'Actions']} empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
-            {initialData.map((r, index) => {
-              const car = r.inquiryCarDetails[0]
-              const name = r.customer?.custName ?? r.customerNameLegacy ?? '—'
-              return (
+          <InquiryTable empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
+            <InquiryTableRows rows={initialData}>{(r, index) => (
                 <tr key={r.inquiryId} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{rowNumberStart + index + 1}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.dateOfInquiry) || '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{name}</div>
-                    <div className="text-xs text-gray-500">{r.email ?? ''}</div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[140px] truncate" title={r.website ?? ''}>{r.website ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 text-sm text-gray-700 font-mono">
-                      <Phone className="w-3 h-3 text-gray-400" />{r.mobileno ?? '—'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {inquiryVehicleLabel(car)}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.budgetOfCustomer)}</td>
-                  <td className="px-4 py-3">{r.classification ? <Badge label={r.classification} /> : '—'}</td>
-                  <td className="px-4 py-3">{r.status ? <Badge label={r.status} /> : '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[160px] truncate" title={r.subStatus ?? ''}>{r.subStatus ?? '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followUpDate) || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.visitedDateOfCustomer) || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-[220px] truncate" title={r.remark ?? ''}>{r.remark?.trim() ? r.remark : '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleSendEmail(r)} disabled={isEmailPending && emailingId === r.inquiryId}
-                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition disabled:opacity-40" title="Send car details by email">
-                        <Mail className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition" title="View">
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setDeleteId(r.inquiryId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
+                  <InquiryTableDataCells row={r} number={rowNumberStart + index + 1} assignedToLabel={userOptionLabel(r.assignedToUser)} actions={<InquiryRowActions inquiryId={r.inquiryId} isEmailPending={isEmailPending && emailingId === r.inquiryId} onSendEmail={() => handleSendEmail(r)} onView={() => openView(r)} onEdit={() => openEdit(r)} onAssign={() => openAssign(r)} onDelete={() => setDeleteId(r.inquiryId)} />} />
                 </tr>
-              )
-            })}
-          </Table>
+            )}</InquiryTableRows>
+          </InquiryTable>
         </div>
-        {isRoutePending ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-white/35 backdrop-blur-[1px] text-sm text-gray-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <div>Updating inquiry list...</div>
-          </div>
-        ) : null}
+        {isRoutePending ? <ListLoadingOverlay message="Updating inquiry list..." /> : null}
       </div>
 
-      {pageCount > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-xs text-gray-500">
-            Showing {pageStart.toLocaleString('en-IN')}-{pageEnd.toLocaleString('en-IN')} of {total.toLocaleString('en-IN')} · Page {page} of {pageCount}
-          </div>
-          <div className="flex gap-1.5">
-            <Btn variant="outline" size="sm" disabled={isRoutePending || page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}>
-              <ChevronLeft className="w-3.5 h-3.5" />Prev
-            </Btn>
-            <Btn variant="outline" size="sm" disabled={isRoutePending || page >= pageCount} onClick={() => pushQuery({ page: String(page + 1) })}>
-              Next<ChevronRight className="w-3.5 h-3.5" />
-            </Btn>
-          </div>
-        </div>
-      )}
+      <ListPagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        showingText={`Showing ${pageStart.toLocaleString('en-IN')}-${pageEnd.toLocaleString('en-IN')}`}
+        pending={isRoutePending}
+        className="mt-4"
+        onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
+      />
 
-      <Modal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} onClose={closeView}>
-        <div className="space-y-4">
+      <InquiryViewModal title={`View Inquiry${viewInquiry ? ` — ${viewInquiry.inquiryNo ?? `Inquiry #${viewInquiry.inquiryId}`}` : viewInquiryId ? ` — Inquiry #${viewInquiryId}` : ''}`} open={viewInquiryId !== null} onClose={closeView}>
           {viewLoading ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -1034,84 +1549,17 @@ export function InquiryClient({
           ) : viewError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{viewError}</div>
           ) : viewInquiry ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Linked Customer:</span> {viewInquiry.customer?.custName ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Linked Customer ID:</span> {viewInquiry.customer?.custId ?? viewInquiry.customerId ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Name:</span> {viewInquiry.customer?.custName ?? viewInquiry.customerNameLegacy ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Mobile:</span> {viewInquiry.customer?.custMobile ?? viewInquiry.mobileno ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Email:</span> {viewInquiry.customer?.custEmail ?? viewInquiry.email ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Source:</span> {viewInquiry.website ?? '—'}</div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inquiry</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
-                    <div><span className="font-medium text-gray-900">Inquiry ID:</span> {viewInquiry.inquiryId}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry No:</span> {viewInquiry.inquiryNo ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Inquiry Date:</span> {fmtDate(viewInquiry.dateOfInquiry) || '—'}</div>
-                    <div><span className="font-medium text-gray-900">Classification:</span> {viewInquiry.classification ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Status:</span> {viewInquiry.status ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Sub-status:</span> {viewInquiry.subStatus ?? '—'}</div>
-                    <div><span className="font-medium text-gray-900">Budget:</span> {fmtMoney(viewInquiry.budgetOfCustomer)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Car Requirement</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  {(() => {
-                    const car = viewInquiry.inquiryCarDetails[0]
-                    return (
-                      <>
-                        <div><span className="font-medium text-gray-900">Make:</span> {clean(car?.carVariantMaster?.carMakeMaster?.make) || clean(car?.makeLegacy) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Model:</span> {clean(car?.carVariantMaster?.carModelMaster?.model) || clean(car?.modelLegacy) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Variant:</span> {clean(car?.carVariantMaster?.variant) || clean(car?.variantLegacy) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Sub Variant:</span> {clean(car?.subVariant) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Year:</span> {car?.year ?? '—'}</div>
-                      </>
-                    )
-                  })()}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Follow-up</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  <div><span className="font-medium text-gray-900">Follow-up Date:</span> {fmtDate(viewInquiry.followUpDate) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Visited Date:</span> {fmtDate(viewInquiry.visitedDateOfCustomer) || '—'}</div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Remarks</div>
-                <div className="mt-3 whitespace-pre-wrap text-sm text-gray-700">{viewInquiry.remark?.trim() ? viewInquiry.remark : '—'}</div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Audit</div>
-                <div className="mt-3 grid gap-2 text-sm text-gray-700 md:grid-cols-2">
-                  <div><span className="font-medium text-gray-900">Created At:</span> {fmtDateTime(viewInquiry.createdDt) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Created By:</span> {viewInquiry.createdByUser?.displayName ?? viewInquiry.createdByUser?.userName ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Updated At:</span> {fmtDateTime(viewInquiry.updatedDt) || '—'}</div>
-                  <div><span className="font-medium text-gray-900">Updated By:</span> {viewInquiry.updatedByUser?.displayName ?? viewInquiry.updatedByUser?.userName ?? '—'}</div>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Btn variant="outline" onClick={closeView}>Close</Btn>
-              </div>
-            </>
+            <InquiryDetailView
+              inquiry={viewInquiry}
+              onClose={closeView}
+              onEdit={() => { closeView(); openEdit(viewInquiry) }}
+              onLogFollowup={() => { closeView(); openEdit(viewInquiry) }}
+              onOpenMatch={() => openEmailModal(viewInquiry)}
+            />
           ) : null}
-        </div>
-      </Modal>
+      </InquiryViewModal>
 
-      <Modal title={editId ? 'Edit Inquiry' : 'New Inquiry'} open={!!modal} onClose={requestCloseInquiryModal}>
+      <InquiryFormModal editing={Boolean(editId)} open={!!modal} onClose={requestCloseInquiryModal}>
         {editLoading ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -1119,67 +1567,150 @@ export function InquiryClient({
           </div>
         ) : (
         <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Inquiry No*" value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
+            <Input label="Date of Inquiry*" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
+            <Select
+              label="Reference Website / Source*"
+              value={form.sourceCode}
+              onChange={e => {
+                const selected = sourceOptions.find(source => source.code === e.target.value)
+                setForm(previous => ({
+                  ...previous,
+                  sourceCode: e.target.value,
+                  website: selected?.displayName ?? '',
+                  sourceDetail: selected?.requiresDetail ? previous.sourceDetail : '',
+                }))
+              }}
+              error={errors.website}
+            >
+              <option value="">Select source</option>
+              {sourceOptions.map(source => <option key={source.code} value={source.code}>{source.displayName}</option>)}
+            </Select>
+          </div>
+
+          {sourceOptions.find(source => source.code === form.sourceCode)?.requiresDetail ? (
+            <Input
+              label={form.sourceCode === 'REFERENCE' ? 'Reference Details*' : 'Other Source Details*'}
+              value={form.sourceDetail}
+              onChange={e => f('sourceDetail', e.target.value)}
+              placeholder={form.sourceCode === 'REFERENCE' ? 'Customer, dealer, or referral person' : 'Describe the source'}
+            />
+          ) : null}
+
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Link Existing Customer</label>
+            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
           </div>
 
           {selectedCustomer ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              This inquiry is linked to a customer record. Name, mobile, and email below are locked to that customer so the inquiry does not drift from the master customer data.
+              This inquiry is linked to a customer record. Name, mobile, and email above are locked to that customer so the inquiry does not drift from the master customer data.
             </div>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Name" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} />
-            <Input label="Mobile" value={form.mobileno} onChange={e => f('mobileno', e.target.value)} disabled={!!selectedCustomer} />
-            <Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} disabled={!!selectedCustomer} />
-            <Input label="Inquiry No" value={form.inquiryNo} onChange={e => f('inquiryNo', e.target.value)} />
-            <Input label="Inquiry Date" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} />
-            <div>
-              <Input label="Source" list="inquiry-source-suggestions" value={form.website} onChange={e => f('website', e.target.value)} placeholder="Type or pick a source" />
-              <datalist id="inquiry-source-suggestions">
-                {sourceSuggestions.map(source => <option key={source} value={source} />)}
-              </datalist>
-            </div>
-            <div className="col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              One inquiry tracks one vehicle requirement. If the customer starts considering a different vehicle, create a new inquiry for that vehicle interest.
-            </div>
-            <Select label="Make" value={selectedMakeId ?? ''} onChange={e => onMakeChange(Number(e.target.value))}>
-              <option value="">Select Make</option>
-              {makes.map(m => <option key={m.pkMakeId} value={m.pkMakeId}>{m.make}</option>)}
-            </Select>
-            <Select label="Model" value={selectedModelId ?? ''} onChange={e => onModelChange(Number(e.target.value))} disabled={!selectedMakeId}>
-              <option value="">Select Model</option>
-              {models.map(m => <option key={m.pkModelId} value={m.pkModelId}>{m.model}</option>)}
-            </Select>
-            <Select label="Variant" value={form.fkVariantId ?? ''} onChange={e => f('fkVariantId', Number(e.target.value) || null)} disabled={!selectedModelId}>
-              <option value="">Select Variant</option>
-              {variants.map(v => <option key={v.pkVariantId} value={v.pkVariantId}>{v.variant}</option>)}
-            </Select>
-            <Input label="Sub Variant" value={form.subVariant} onChange={e => f('subVariant', e.target.value)} placeholder="Optional detailed trim / package" />
-            <Input label="Car Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
-            <Input label="Budget (₹)" type="number" value={form.budgetOfCustomer ?? ''} onChange={e => f('budgetOfCustomer', e.target.value ? +e.target.value : null)} />
-            <Input label="Visited Date" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} />
-            <Select label="Classification" value={form.classification} onChange={e => f('classification', e.target.value)}>
-              {INQUIRY_CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
-            </Select>
-            <Select label="Status" value={form.status} onChange={e => f('status', e.target.value)}>
-              {INQUIRY_STATUSES.map(s => <option key={s}>{s}</option>)}
-            </Select>
-            <Input label="Follow-up Date" type="date" value={form.followUpDate} onChange={e => f('followUpDate', e.target.value)} />
-            <div>
-              <Input label="Sub-status" list="sub-status-suggestions" value={form.subStatus} onChange={e => f('subStatus', e.target.value)} />
-              <datalist id="sub-status-suggestions">
-                {SUB_STATUS_SUGGESTIONS.map(s => <option key={s} value={s} />)}
-              </datalist>
-            </div>
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Customer Name*#" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} error={errors.customer} />
+            <Input label="Customer Mobile No*#" value={form.mobileno} onChange={e => f('mobileno', e.target.value)} disabled={!!selectedCustomer} error={errors.mobileno} />
+            <Input label="Customer Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} disabled={!!selectedCustomer} error={errors.email} />
           </div>
 
-          {(isFollowUpStatus || isVisitedSubStatus) ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">Car Details</div>
+                <div className="text-xs text-gray-500">Add one or more vehicle interests for the same inquiry, similar to the legacy screen.</div>
+              </div>
+              {editingCarIndex !== null ? (
+                <Btn variant="outline" size="sm" onClick={resetCarEditor}>Cancel Edit</Btn>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-6">
+              <Select label="Make*#" value={carEditor.selectedMakeId ?? ''} onChange={e => onCarEditorMakeChange(Number(e.target.value))}>
+                <option value="">SELECT</option>
+                {makes.map(item => <option key={item.pkMakeId} value={item.pkMakeId}>{item.make ?? '—'}</option>)}
+              </Select>
+              <Select label="Model*#" value={carEditor.selectedModelId ?? ''} onChange={e => onCarEditorModelChange(Number(e.target.value))} disabled={!carEditor.selectedMakeId}>
+                <option value="">SELECT</option>
+                {carEditorModels.map(item => <option key={item.pkModelId} value={item.pkModelId}>{item.model ?? '—'}</option>)}
+              </Select>
+              <Select label="Variant*#" value={carEditor.fkVariantId ?? ''} onChange={e => {
+                setCarEditor(prev => ({ ...prev, fkVariantId: Number(e.target.value) || null }))
+                setCarEditorError('')
+              }} disabled={!carEditor.selectedModelId}>
+                <option value="">SELECT</option>
+                {carEditorVariants.map(item => <option key={item.pkVariantId} value={item.pkVariantId}>{item.variant ?? '—'}</option>)}
+              </Select>
+              <Input label="Year#" type="number" value={carEditor.carYear ?? ''} onChange={e => {
+                setCarEditor(prev => ({ ...prev, carYear: e.target.value ? Number(e.target.value) : null }))
+                setCarEditorError('')
+              }} />
+              <Input label="Sub Variant" value={carEditor.subVariant} onChange={e => {
+                setCarEditor(prev => ({ ...prev, subVariant: e.target.value }))
+                setCarEditorError('')
+              }} placeholder="Optional" />
+              <div className="flex items-end">
+                <Btn onClick={saveInquiryCarRow} className="w-full">
+                  {editingCarIndex !== null ? 'Update' : 'Add'}
+                </Btn>
+              </div>
+            </div>
+
+            {carEditorError ? (
+              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{carEditorError}</div>
+            ) : null}
+
+            <InquiryCarTable
+              cars={form.inquiryCars}
+              makeNames={Object.fromEntries(makes.map(item => [item.pkMakeId, item.make]))}
+              modelNames={modelNameCache}
+              variantNames={variantNameCache}
+              onMove={moveInquiryCar}
+              onEdit={editInquiryCar}
+              onDelete={removeInquiryCar}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Budget of customer" type="number" value={form.budgetOfCustomer ?? ''} onChange={e => f('budgetOfCustomer', e.target.value ? +e.target.value : null)} error={errors.budgetOfCustomer} />
+            <Select label="Classification*" value={form.classification} onChange={e => f('classification', e.target.value)}>
+              {INQUIRY_CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
+            </Select>
+            <Input label="Visited Date of customer" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Select label="Status*#" value={form.status} onChange={e => {
+              const nextStatus = e.target.value
+              f('status', nextStatus)
+              if (!isFollowupStatus(nextStatus)) {
+                f('followUpDate', '')
+              }
+            }}>
+              {INQUIRY_STATUSES.map(s => <option key={s}>{s}</option>)}
+            </Select>
+            <div>
+              <Input label="Sub Status" list="sub-status-suggestions" value={form.subStatus} onChange={e => f('subStatus', e.target.value)} />
+              <datalist id="sub-status-suggestions">
+                {subStatusSuggestions.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </div>
+            <Input
+              label={followUpSelected ? 'FollowUp Date*' : 'FollowUp Date'}
+              type="date"
+              value={form.followUpDate}
+              onChange={e => f('followUpDate', e.target.value)}
+              error={errors.followUpDate}
+              disabled={!followUpSelected}
+            />
+            <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} placeholder="Notes about this inquiry..." />
+          </div>
+
+          {(isMissingFollowUpDate || isMissingVisitedDate) ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {isFollowUpStatus ? <div>FollowUp status needs a follow-up date.</div> : null}
-              {isVisitedSubStatus ? <div>Visited sub-status needs a visited date.</div> : null}
+              {isMissingFollowUpDate ? <div>Follow status needs a follow-up date.</div> : null}
+              {isMissingVisitedDate ? <div>Visited sub-status needs a visited date.</div> : null}
             </div>
           ) : null}
 
@@ -1188,18 +1719,17 @@ export function InquiryClient({
           ) : null}
 
           {previousInquiryLoading ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Checking previous inquiries for this mobile number...</div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Checking previous inquiries for this mobile number or linked customer...</div>
           ) : null}
 
           {!previousInquiryLoading && previousInquiries.length > 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4">
-              <div className="text-sm font-semibold text-amber-900">Previous inquiries found for this mobile number</div>
+              <div className="text-sm font-semibold text-amber-900">Possible duplicate or overlapping inquiries found</div>
               <div className="mt-1 text-xs text-amber-800">Please review before saving. This is only a warning — you can still continue if this is a genuine new inquiry.</div>
               <div className="mt-3 space-y-3">
                 {previousInquiries.map(match => {
-                  const car = match.inquiryCarDetails[0]
                   const matchName = match.customer?.custName ?? match.customerNameLegacy ?? '—'
-                  const matchVehicle = inquiryVehicleLabel(car)
+                  const matchVehicle = summarizeInquiryVehicles(match.inquiryCarDetails)
 
                   return (
                     <div key={match.inquiryId} className="rounded-md border border-amber-100 bg-white px-3 py-3 text-xs text-gray-700">
@@ -1211,6 +1741,23 @@ export function InquiryClient({
                         <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}{match.classification ? ` · ${match.classification}` : ''}</div>
                         <div><span className="font-medium text-gray-900">Follow-up:</span> {fmtDate(match.followUpDate) || '—'}</div>
                       </div>
+                      {match.matchReasons && match.matchReasons.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {match.matchReasons.map(reason => (
+                            <span key={`${match.inquiryId}-${reason}`} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                              {reason}
+                            </span>
+                          ))}
+                          <a
+                            href={`/inquiry?view=${match.inquiryId}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800 transition hover:bg-amber-50"
+                          >
+                            View
+                          </a>
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })}
@@ -1222,10 +1769,10 @@ export function InquiryClient({
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{inventoryMatchError}</div>
           ) : null}
 
-          {(selectedMakeId || selectedModelId || form.fkVariantId) ? (
+          {form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId) ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
               <div className="text-sm font-semibold text-blue-900">Matching Inventory</div>
-              <div className="mt-1 text-xs text-blue-800">Based on the selected car details, here is matching stock currently in the system.</div>
+              <div className="mt-1 text-xs text-blue-800">Based on all selected vehicle rows, here is matching stock currently in the system.</div>
               {inventoryMatchLoading ? (
                 <div className="mt-3 text-sm text-blue-800">Checking matching inventory...</div>
               ) : inventoryMatches.length === 0 ? (
@@ -1247,6 +1794,8 @@ export function InquiryClient({
                           <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}</div>
                           <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
                           <div><span className="font-medium text-gray-900">KM / Photos:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match._count.inventoryPhotos}</div>
+                          <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched Because:</span> {match.matchReasons?.join(' · ') || 'In stock match'}</div>
+                          <div><span className="font-medium text-gray-900">Current State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
                         </div>
                       </div>
                     )
@@ -1256,96 +1805,73 @@ export function InquiryClient({
             </div>
           ) : null}
 
-          <Textarea label="Remarks" value={form.remark} onChange={e => f('remark', e.target.value)} placeholder="Notes about this inquiry..." />
-
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
             <Btn variant="outline" onClick={requestCloseInquiryModal}>Cancel</Btn>
-            <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
+            {editId ? (
+              <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
+            ) : (
+              <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
+            )}
           </div>
         </div>
         )}
-      </Modal>
+      </InquiryFormModal>
 
-      <Modal title={`Send Matching Inventory${emailInquiryRow ? ` — ${emailInquiryRow.inquiryNo ?? `Inquiry #${emailInquiryRow.inquiryId}`}` : ''}`} open={!!emailInquiryRow} onClose={() => {
+      <AssignInquiryModal
+        row={assignInquiryRow}
+        users={inquiryAssistants}
+        value={assignUserId}
+        error={assignError}
+        pending={isAssignPending}
+        userLabel={userOptionLabel}
+        onChange={setAssignUserId}
+        onClose={closeAssign}
+        onSave={saveAssignment}
+      />
+
+      <EmailVehicleModal title={`Send Matching Inventory${emailInquiryRow ? ` — ${emailInquiryRow.inquiryNo ?? `Inquiry #${emailInquiryRow.inquiryId}`}` : ''}`} open={!!emailInquiryRow} onClose={() => {
         if (isEmailPending) return
         emailInventoryRequestRef.current += 1
         setEmailInquiryRow(null)
         setEmailInventoryMatches([])
-        setSelectedEmailInventoryId(null)
+        setEmailHistoryByInventoryId({})
+        setSelectedEmailInventoryIds([])
+        setEmailInventorySearch('')
         setEmailModalError('')
       }}>
         {emailInquiryRow ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-              <div><span className="font-medium text-gray-800">Customer:</span> {emailInquiryRow.customer?.custName ?? emailInquiryRow.customerNameLegacy ?? '—'}</div>
-              <div><span className="font-medium text-gray-800">Email:</span> {emailInquiryRow.customer?.custEmail ?? emailInquiryRow.email ?? '—'}</div>
-              <div><span className="font-medium text-gray-800">Mobile:</span> {emailInquiryRow.mobileno ?? '—'}</div>
-            </div>
-
-            {emailModalError ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{emailModalError}</div>
-            ) : null}
-
-            {emailInventoryLoading ? (
-              <div className="flex min-h-24 flex-col items-center justify-center gap-3 text-sm text-gray-500">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <div>Loading matching inventory...</div>
-              </div>
-            ) : emailInventoryMatches.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
-                No matching inventory found for this inquiry yet.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-gray-800">Choose which vehicle to send</div>
-                <div className="space-y-2">
-                  {emailInventoryMatches.map(match => {
-                    const vehicle = [
-                      clean(match.carVariantMaster?.carMakeMaster?.make),
-                      clean(match.carVariantMaster?.carModelMaster?.model),
-                      clean(match.carVariantMaster?.variant),
-                    ].filter(Boolean).join(' ') || '—'
-                    const isSelected = selectedEmailInventoryId === match.inventoryId
-                    return (
-                      <button
-                        key={match.inventoryId}
-                        type="button"
-                        onClick={() => setSelectedEmailInventoryId(match.inventoryId)}
-                        className={`w-full rounded-lg border px-4 py-3 text-left transition ${isSelected ? 'border-[#1B2A6B] bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                      >
-                        <div className="grid gap-2 md:grid-cols-3">
-                          <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
-                          <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}` : ''}</div>
-                          <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
-                          <div><span className="font-medium text-gray-900">KM / Photos:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match._count.inventoryPhotos}</div>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3">
-              <Btn variant="outline" onClick={() => {
-                if (isEmailPending) return
-                emailInventoryRequestRef.current += 1
-                setEmailInquiryRow(null)
-                setEmailInventoryMatches([])
-                setSelectedEmailInventoryId(null)
-                setEmailModalError('')
-              }}>Cancel</Btn>
-              <Btn onClick={handleSendInventoryEmail} disabled={isEmailPending || !selectedEmailInventoryId || emailInventoryLoading}>
-                {isEmailPending ? 'Sending...' : 'Send Email'}
-              </Btn>
-            </div>
-          </div>
+          <EmailVehicleContent
+            customer={emailInquiryRow.customer?.custName ?? emailInquiryRow.customerNameLegacy ?? '—'}
+            email={emailInquiryRow.customer?.custEmail ?? emailInquiryRow.email ?? '—'}
+            mobile={emailInquiryRow.mobileno ?? '—'}
+            error={emailModalError}
+            loading={emailInventoryLoading}
+            matches={emailInventoryMatches}
+            historyByInventoryId={emailHistoryByInventoryId}
+            selectedIds={selectedEmailInventoryIds}
+            search={emailInventorySearch}
+            pending={isEmailPending}
+            onSearchChange={setEmailInventorySearch}
+            onToggleSelection={toggleEmailInventorySelection}
+            onCancel={() => {
+              if (isEmailPending) return
+              emailInventoryRequestRef.current += 1
+              setEmailInquiryRow(null)
+              setEmailInventoryMatches([])
+              setEmailHistoryByInventoryId({})
+              setSelectedEmailInventoryIds([])
+              setEmailInventorySearch('')
+              setEmailModalError('')
+            }}
+            onSend={handleSendInventoryEmail}
+            clean={clean}
+            formatMoney={fmtMoney}
+            formatWorkflowState={formatInquiryInventoryWorkflowLabel}
+          />
         ) : null}
-      </Modal>
+      </EmailVehicleModal>
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this inquiry record? This cannot be undone." />

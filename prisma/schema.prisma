@@ -186,6 +186,7 @@ model Customer {
   insuranceMain       InsuranceMain[]
   inventoryManagement InventoryManagement[]
   vehicleEmailLinks   VehicleEmailLink[]
+  feedbackInvitations FeedbackInvitation[]
   loanManagement      LoanManagement[]
   rtoAgent            RtoAgent[]
 
@@ -215,6 +216,7 @@ model CustomerFeedback {
   createdBy             Int?              @map("created_by")
   updatedDate           DateTime?         @map("updated_date") @db.Timestamptz(6)
   updatedBy             Int?              @map("updated_by")
+  submittedAt           DateTime?         @map("submitted_at") @db.Timestamptz(6)
   fkVariantId           Int?              @map("fk_variant_id")
   createdByUser         UserTable?        @relation("customer_feedback_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_created_by_user")
   customer              Customer?         @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_customer_feedback_customer_id")
@@ -224,6 +226,24 @@ model CustomerFeedback {
   @@index([customerId], map: "idx_16450_ix_customer_feedback_customer_id")
   @@index([fkVariantId], map: "idx_16450_ix_customer_feedback_variant")
   @@map("customer_feedback")
+}
+
+model FeedbackInvitation {
+  feedbackInvitationId Int                 @id @default(autoincrement()) @map("feedback_invitation_id")
+  customerId           Int                 @map("customer_id")
+  inventoryId          Int                 @map("inventory_id")
+  recipientEmail       String              @map("recipient_email")
+  tokenHash            String              @unique @map("token_hash")
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt            DateTime            @map("expires_at") @db.Timestamptz(6)
+  submittedAt          DateTime?           @map("submitted_at") @db.Timestamptz(6)
+  invalidatedAt        DateTime?           @map("invalidated_at") @db.Timestamptz(6)
+  createdBy            Int?                @map("created_by")
+  customer             Customer            @relation(fields: [customerId], references: [custId], onDelete: NoAction)
+  inventoryManagement  InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction)
+
+  @@index([customerId, inventoryId])
+  @@map("feedback_invitation")
 }
 
 model DealerMaster {
@@ -316,6 +336,7 @@ model FollowupInquiry {
   pkFollowupId           Int        @id(map: "idx_16485_pk_followup_inquiry") @default(autoincrement()) @map("pk_followup_id")
   fkInquiryId            Int?       @map("fk_inquiry_id")
   followupDate           DateTime?  @map("followup_date") @db.Timestamptz(6)
+  contactOutcome         String?    @map("contact_outcome")
   followupStatus         String?    @map("followup_status")
   followupSubStatus      String?    @map("followup_sub_status")
   comments               String?
@@ -356,33 +377,123 @@ model IndianStatesMaster {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Inquiry {
-  inquiryId             Int                 @id(map: "idx_16506_pk_inquiry") @default(autoincrement()) @map("inquiry_id")
-  inquiryNo             String?             @map("inquiry_no")
-  dateOfInquiry         DateTime?           @map("date_of_inquiry") @db.Timestamptz(6)
+  inquiryId             Int                    @id(map: "idx_16506_pk_inquiry") @default(autoincrement()) @map("inquiry_id")
+  inquiryNo             String?                @map("inquiry_no")
+  dateOfInquiry         DateTime?              @map("date_of_inquiry") @db.Timestamptz(6)
   website               String?
-  customerId            Int?                @map("customer_id")
-  customerNameLegacy    String?             @map("customer_name_legacy")
+  sourceId              Int?                   @map("source_id")
+  sourceDetail          String?                @map("source_detail")
+  customerId            Int?                   @map("customer_id")
+  customerNameLegacy    String?                @map("customer_name_legacy")
   mobileno              String?
   email                 String?
-  budgetOfCustomer      Decimal?            @map("budget_of_customer") @db.Decimal
-  visitedDateOfCustomer DateTime?           @map("visited_date_of_customer") @db.Timestamptz(6)
+  budgetOfCustomer      Decimal?               @map("budget_of_customer") @db.Decimal
+  visitedDateOfCustomer DateTime?              @map("visited_date_of_customer") @db.Timestamptz(6)
   classification        String?
   status                String?
-  subStatus             String?             @map("sub_status")
-  followUpDate          DateTime?           @map("follow_up_date") @db.Timestamptz(6)
+  subStatus             String?                @map("sub_status")
+  followUpDate          DateTime?              @map("follow_up_date") @db.Timestamptz(6)
   remark                String?
-  createdDt             DateTime?           @map("created_dt") @db.Timestamptz(6)
-  createdBy             Int?                @map("created_by")
-  updatedDt             DateTime?           @map("updated_dt") @db.Timestamptz(6)
-  updatedBy             Int?                @map("updated_by")
+  createdDt             DateTime?              @map("created_dt") @db.Timestamptz(6)
+  createdBy             Int?                   @map("created_by")
+  assignedTo            Int?                   @map("assigned_to")
+  updatedDt             DateTime?              @map("updated_dt") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
   followupInquiry       FollowupInquiry[]
-  createdByUser         UserTable?          @relation("inquiry_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_created_by_user")
-  customer              Customer?           @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_customer_id")
-  updatedByUser         UserTable?          @relation("inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_updated_by_user")
+  inquiryEmailHistories InquiryEmailHistory[]
+  inquiryInventoryLinks InquiryInventoryLink[]
+  vehicleEmailLinks     VehicleEmailLink[]
+  whatsappDeliveryLogs  WhatsAppDeliveryLog[]
+  inquiryInventoryEmailLogs InquiryInventoryEmailLog[]
+  noInventoryNotificationLogs InquiryNoInventoryNotificationLog[]
+  assignedToUser        UserTable?             @relation("inquiry_assigned_toTouser_table", fields: [assignedTo], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_assigned_to_user")
+  createdByUser         UserTable?             @relation("inquiry_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_created_by_user")
+  customer              Customer?              @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_customer_id")
+  updatedByUser         UserTable?             @relation("inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_updated_by_user")
   inquiryCarDetails     InquiryCarDetails[]
+  source                InquirySourceMaster?   @relation(fields: [sourceId], references: [sourceId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_source_id")
 
+  @@index([assignedTo], map: "idx_16506_ix_inquiry_assigned_to")
   @@index([customerId], map: "idx_16506_ix_inquiry_customer_id")
+  @@index([sourceId], map: "idx_inquiry_source_id")
   @@map("inquiry")
+}
+
+model InquirySourceMaster {
+  sourceId       Int                          @id(map: "pk_inquiry_source_master") @default(autoincrement()) @map("source_id")
+  code           String                       @unique(map: "uq_inquiry_source_master_code")
+  displayName    String                       @map("display_name")
+  category       String
+  requiresDetail Boolean                      @default(false) @map("requires_detail")
+  isActive       Boolean                      @default(true) @map("is_active")
+  reportingSort  Int                          @default(999) @map("reporting_sort")
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  inquiries      Inquiry[]
+  legacyMappings LegacyInquirySourceMapping[]
+
+  @@unique([displayName], map: "uq_inquiry_source_master_display_name")
+  @@index([isActive, reportingSort], map: "idx_inquiry_source_master_active_sort")
+  @@map("inquiry_source_master")
+}
+
+model LegacyInquirySourceMapping {
+  legacyInquirySourceMappingId Int                 @id(map: "pk_legacy_inquiry_source_mapping") @default(autoincrement()) @map("legacy_inquiry_source_mapping_id")
+  legacySource                 String              @map("legacy_source")
+  normalizedSource             String              @unique(map: "uq_legacy_inquiry_source_mapping_normalized") @map("normalized_source")
+  sourceId                     Int                 @map("source_id")
+  mappingStatus                String              @default("approved") @map("mapping_status")
+  reviewNote                   String?             @map("review_note")
+  createdAt                    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  source                       InquirySourceMaster @relation(fields: [sourceId], references: [sourceId], onDelete: NoAction, onUpdate: NoAction, map: "fk_legacy_inquiry_source_mapping_source")
+
+  @@index([sourceId], map: "idx_legacy_inquiry_source_mapping_source_id")
+  @@map("legacy_inquiry_source_mapping")
+}
+
+model InquiryEmailHistory {
+  inquiryEmailHistoryId Int                  @id(map: "idx_inquiry_email_history_pk") @default(autoincrement()) @map("inquiry_email_history_id")
+  inquiryId             Int                  @map("inquiry_id")
+  inventoryId           Int?                 @map("inventory_id")
+  emailType             String               @map("email_type")
+  recipientEmail        String               @map("recipient_email")
+  recipientName         String?              @map("recipient_name")
+  emailSubject          String               @map("email_subject")
+  deliveryStatus        String               @map("delivery_status")
+  errorMessage          String?              @map("error_message")
+  sentAt                DateTime?            @map("sent_at") @db.Timestamptz(6)
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedBy           Int?                 @map("attempted_by")
+  attemptedByUser       UserTable?           @relation("inquiry_email_history_attempted_byTouser_table", fields: [attemptedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_email_history_attempted_by_user")
+  inquiry               Inquiry              @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_email_history_inquiry")
+  inventoryManagement   InventoryManagement? @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_email_history_inventory")
+
+  @@index([inquiryId, createdAt], map: "idx_inquiry_email_history_inquiry_created_at")
+  @@index([inventoryId], map: "idx_inquiry_email_history_inventory_id")
+  @@index([attemptedBy, createdAt], map: "idx_inquiry_email_history_attempted_by_created_at")
+  @@map("inquiry_email_history")
+}
+
+model InquiryInventoryLink {
+  inquiryInventoryLinkId Int                 @id(map: "idx_inquiry_inventory_links_pk") @default(autoincrement()) @map("inquiry_inventory_link_id")
+  inquiryId              Int                 @map("inquiry_id")
+  inventoryId            Int                 @map("inventory_id")
+  linkType               String              @map("link_type")
+  isActive               Boolean             @default(true) @map("is_active")
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy              Int?                @map("created_by")
+  updatedAt              DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy              Int?                @map("updated_by")
+  createdByUser          UserTable?          @relation("inquiry_inventory_links_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_links_created_by_user")
+  inquiry                Inquiry             @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_inventory_links_inquiry")
+  inventoryManagement    InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_links_inventory")
+  updatedByUser          UserTable?          @relation("inquiry_inventory_links_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_links_updated_by_user")
+
+  @@index([inquiryId], map: "idx_inquiry_inventory_links_inquiry_id")
+  @@index([inventoryId], map: "idx_inquiry_inventory_links_inventory_id")
+  @@index([inquiryId, inventoryId, linkType], map: "idx_inquiry_inventory_links_lookup")
+  @@map("inquiry_inventory_links")
 }
 
 model InquiryCarDetails {
@@ -498,79 +609,160 @@ model InsurancePaymentDetails {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model InventoryManagement {
-  inventoryId      Int                @id(map: "idx_16541_pk_inventory_management") @default(autoincrement()) @map("inventory_id")
-  inventoryNumber  String?            @unique(map: "idx_16541_uq_inventory_management_inventory_number") @map("inventory_number")
-  makeLegacy       String?            @map("make_legacy")
-  modelLegacy      String?            @map("model_legacy")
-  variantLegacy    String?            @map("variant_legacy")
-  colour           String?
-  sku              String?
-  year             Int?
-  month            String?
-  fuelType         String?            @map("fuel_type")
-  noOfOwners       Int?               @map("no_of_owners")
-  tax              String?
-  isCarRegistered  Boolean?           @map("is_car_registered")
-  registrationNo   String?            @map("registration_no")
-  kmsDriven        Decimal?           @map("kms_driven") @db.Decimal
-  insuranceType    String?            @map("insurance_type")
-  price            Decimal?           @db.Decimal
-  otherRemarks     String?            @map("other_remarks")
-  status           String?
-  ownedType        String?            @map("owned_type")
-  ownedBy          String?            @map("owned_by")
-  mobileNoOwnedBy  String?            @map("mobile_no_owned_by")
-  emailIdOwnedBy   String?            @map("email_id_owned_by")
-  customerId       Int?               @map("customer_id")
-  customerName     String?            @map("customer_name")
-  internalComments String?            @map("internal_comments")
-  createdDate      DateTime?          @map("created_date") @db.Timestamptz(6)
-  createdBy        Int?               @map("created_by")
-  updatedDate      DateTime?          @map("updated_date") @db.Timestamptz(6)
-  updatedBy        Int?               @map("updated_by")
-  fkVariantId      Int?               @map("fk_variant_id")
-  checkListDocMain CheckListDocMain[]
-  dsaManagement    DsaManagement[]
-  insuranceMain    InsuranceMain[]
-  createdByUser    UserTable?         @relation("inventory_management_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_created_by_user")
-  customer         Customer?          @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_customer_id")
-  updatedByUser    UserTable?         @relation("inventory_management_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_updated_by_user")
-  carVariantMaster CarVariantMaster?  @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
-  inventoryPhotos  InventoryPhotos[]
-  vehicleEmailLinks VehicleEmailLink[]
-  loanManagement   LoanManagement[]
-  rtoAgent         RtoAgent[]
+  inventoryId           Int                    @id(map: "idx_16541_pk_inventory_management") @default(autoincrement()) @map("inventory_id")
+  inventoryNumber       String?                @unique(map: "idx_16541_uq_inventory_management_inventory_number") @map("inventory_number")
+  makeLegacy            String?                @map("make_legacy")
+  modelLegacy           String?                @map("model_legacy")
+  variantLegacy         String?                @map("variant_legacy")
+  colour                String?
+  sku                   String?
+  year                  Int?
+  month                 String?
+  fuelType              String?                @map("fuel_type")
+  noOfOwners            Int?                   @map("no_of_owners")
+  tax                   String?
+  isCarRegistered       Boolean?               @map("is_car_registered")
+  // The database has a partial unique index for normalized values longer than
+  // five characters; Prisma cannot express that partial-index predicate.
+  registrationNo        String?                @map("registration_no")
+  kmsDriven             Decimal?               @map("kms_driven") @db.Decimal
+  insuranceType         String?                @map("insurance_type")
+  price                 Decimal?               @db.Decimal
+  otherRemarks          String?                @map("other_remarks")
+  status                String?
+  ownedType             String?                @map("owned_type")
+  ownedBy               String?                @map("owned_by")
+  mobileNoOwnedBy       String?                @map("mobile_no_owned_by")
+  emailIdOwnedBy        String?                @map("email_id_owned_by")
+  customerId            Int?                   @map("customer_id")
+  customerName          String?                @map("customer_name")
+  internalComments      String?                @map("internal_comments")
+  createdDate           DateTime?              @map("created_date") @db.Timestamptz(6)
+  createdBy             Int?                   @map("created_by")
+  updatedDate           DateTime?              @map("updated_date") @db.Timestamptz(6)
+  updatedBy             Int?                   @map("updated_by")
+  fkVariantId           Int?                   @map("fk_variant_id")
+  checkListDocMain      CheckListDocMain[]
+  dsaManagement         DsaManagement[]
+  insuranceMain         InsuranceMain[]
+  createdByUser         UserTable?             @relation("inventory_management_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_created_by_user")
+  customer              Customer?              @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_customer_id")
+  updatedByUser         UserTable?             @relation("inventory_management_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_updated_by_user")
+  carVariantMaster      CarVariantMaster?      @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
+  inventoryPhotos       InventoryPhotos[]
+  inquiryInventoryLinks InquiryInventoryLink[]
+  inquiryEmailHistories InquiryEmailHistory[]
+  vehicleEmailLinks     VehicleEmailLink[]
+  whatsappDeliveryLogs WhatsAppDeliveryLog[]
+  inquiryInventoryEmailLogs InquiryInventoryEmailLog[]
+  feedbackInvitations   FeedbackInvitation[]
+  loanManagement        LoanManagement[]
+  rtoAgent              RtoAgent[]
 
   @@index([customerId], map: "idx_16541_ix_inventory_management_customer_id")
   @@index([fkVariantId], map: "idx_16541_ix_inventory_management_variant")
   @@map("inventory_management")
 }
 
+model InventorySkuCounter {
+  makeKey   String   @map("make_key")
+  modelKey  String   @map("model_key")
+  colourKey String   @map("colour_key")
+  lastValue Int      @map("last_value")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([makeKey, modelKey, colourKey], map: "idx_inventory_sku_counters_pk")
+  @@map("inventory_sku_counters")
+}
+
 model VehicleEmailLink {
-  vehicleEmailLinkId Int                     @id(map: "idx_vehicle_email_links_pk") @default(autoincrement()) @map("vehicle_email_link_id")
-  inventoryId        Int                     @map("inventory_id")
-  customerId         Int?                    @map("customer_id")
-  recipientEmail     String                  @map("recipient_email")
-  recipientName      String?                 @map("recipient_name")
-  tokenHash          String                  @unique(map: "idx_vehicle_email_links_token_hash_uq") @map("token_hash")
-  emailSentAt        DateTime?               @map("email_sent_at") @db.Timestamptz(6)
-  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  expiresAt          DateTime?               @map("expires_at") @db.Timestamptz(6)
-  firstRequestedAt   DateTime?               @map("first_requested_at") @db.Timestamptz(6)
-  firstHumanViewAt   DateTime?               @map("first_human_view_at") @db.Timestamptz(6)
-  lastRequestedAt    DateTime?               @map("last_requested_at") @db.Timestamptz(6)
-  requestCount       Int                     @default(0) @map("request_count")
-  humanViewCount     Int                     @default(0) @map("human_view_count")
-  isActive           Boolean                 @default(true) @map("is_active")
-  customer           Customer?               @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_vehicle_email_links_customer")
-  inventoryManagement InventoryManagement    @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_vehicle_email_links_inventory")
-  visits             VehicleEmailLinkVisit[]
-  interactions       VehicleEmailLinkInteraction[]
+  vehicleEmailLinkId  Int                           @id(map: "idx_vehicle_email_links_pk") @default(autoincrement()) @map("vehicle_email_link_id")
+  inventoryId         Int                           @map("inventory_id")
+  inquiryId           Int?                          @map("inquiry_id")
+  customerId          Int?                          @map("customer_id")
+  recipientEmail      String                        @map("recipient_email")
+  recipientName       String?                       @map("recipient_name")
+  channel             String                        @default("Email")
+  tokenHash           String                        @unique(map: "idx_vehicle_email_links_token_hash_uq") @map("token_hash")
+  emailSentAt         DateTime?                     @map("email_sent_at") @db.Timestamptz(6)
+  createdAt           DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt           DateTime?                     @map("expires_at") @db.Timestamptz(6)
+  firstRequestedAt    DateTime?                     @map("first_requested_at") @db.Timestamptz(6)
+  firstHumanViewAt    DateTime?                     @map("first_human_view_at") @db.Timestamptz(6)
+  lastRequestedAt     DateTime?                     @map("last_requested_at") @db.Timestamptz(6)
+  requestCount        Int                           @default(0) @map("request_count")
+  humanViewCount      Int                           @default(0) @map("human_view_count")
+  isActive            Boolean                       @default(true) @map("is_active")
+  customer            Customer?                     @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_vehicle_email_links_customer")
+  inquiry             Inquiry?                      @relation(fields: [inquiryId], references: [inquiryId], onDelete: SetNull, onUpdate: NoAction, map: "fk_vehicle_email_links_inquiry")
+  inventoryManagement InventoryManagement           @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_vehicle_email_links_inventory")
+  visits              VehicleEmailLinkVisit[]
+  interactions        VehicleEmailLinkInteraction[]
 
   @@index([inventoryId], map: "idx_vehicle_email_links_inventory_id")
+  @@index([inquiryId], map: "idx_vehicle_email_links_inquiry_id")
   @@index([customerId], map: "idx_vehicle_email_links_customer_id")
   @@index([recipientEmail], map: "idx_vehicle_email_links_recipient_email")
   @@map("vehicle_email_links")
+}
+
+model WhatsAppDeliveryLog {
+  whatsAppDeliveryLogId Int               @id @default(autoincrement()) @map("whatsapp_delivery_log_id")
+  inquiryId             Int               @map("inquiry_id")
+  inventoryId           Int               @map("inventory_id")
+  recipientMobile       String            @map("recipient_mobile")
+  recipientName         String?           @map("recipient_name")
+  templateName          String            @map("template_name")
+  templateLanguage      String            @map("template_language")
+  vehicleName           String            @map("vehicle_name")
+  buttonUrlSuffix       String?           @map("button_url_suffix")
+  providerMessageId     String?           @map("provider_message_id")
+  status                String
+  errorMessage          String?           @map("error_message")
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt           DateTime?         @map("attempted_at") @db.Timestamptz(6)
+  inquiry               Inquiry           @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_whatsapp_delivery_log_inquiry")
+  inventoryManagement   InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_whatsapp_delivery_log_inventory")
+
+  @@unique([inquiryId, inventoryId], map: "uq_whatsapp_delivery_log_inquiry_inventory")
+  @@index([inquiryId, createdAt], map: "ix_whatsapp_delivery_log_inquiry_created")
+  @@index([status, createdAt], map: "ix_whatsapp_delivery_log_status_created")
+  @@map("whatsapp_delivery_log")
+}
+
+model InquiryInventoryEmailLog {
+  inquiryInventoryEmailLogId Int                 @id @default(autoincrement()) @map("inquiry_inventory_email_log_id")
+  inquiryId                  Int                 @map("inquiry_id")
+  inventoryId                Int                 @map("inventory_id")
+  recipientEmail             String              @map("recipient_email")
+  status                     String
+  errorMessage               String?             @map("error_message")
+  createdAt                  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt                DateTime?           @map("attempted_at") @db.Timestamptz(6)
+  inquiry                    Inquiry             @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_inventory_email_log_inquiry")
+  inventoryManagement        InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_inventory_email_log_inventory")
+
+  @@unique([inquiryId, inventoryId], map: "uq_inquiry_inventory_email_log_inquiry_inventory")
+  @@index([inquiryId, createdAt], map: "ix_inquiry_inventory_email_log_inquiry_created")
+  @@map("inquiry_inventory_email_log")
+}
+
+model InquiryNoInventoryNotificationLog {
+  inquiryNoInventoryNotificationLogId Int      @id @default(autoincrement()) @map("inquiry_no_inventory_notification_log_id")
+  inquiryId                            Int      @map("inquiry_id")
+  channel                              String
+  recipient                            String
+  templateName                         String?  @map("template_name")
+  status                               String
+  errorMessage                         String?  @map("error_message")
+  providerMessageId                    String?  @map("provider_message_id")
+  createdAt                            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  attemptedAt                          DateTime? @map("attempted_at") @db.Timestamptz(6)
+  inquiry                              Inquiry  @relation(fields: [inquiryId], references: [inquiryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_no_inventory_notification_log_inquiry")
+
+  @@unique([inquiryId, channel], map: "uq_inquiry_no_inventory_notification_log_inquiry_channel")
+  @@index([inquiryId, createdAt], map: "ix_inquiry_no_inventory_notification_log_inquiry_created")
+  @@map("inquiry_no_inventory_notification_log")
 }
 
 model VehicleEmailLinkVisit {
@@ -693,19 +885,71 @@ model LoanPaymentDetails {
 }
 
 model MessageTemplate {
-  typeId          Int               @id(map: "idx_16576_pk_message_template") @default(autoincrement()) @map("type_id")
-  messageType     String?           @map("message_type")
-  messageSubject  String?           @map("message_subject")
-  messageBody     String?           @map("message_body")
-  createdDate     DateTime?         @map("created_date") @db.Timestamptz(6)
-  createdBy       Int?              @map("created_by")
-  updatedDate     DateTime?         @map("updated_date") @db.Timestamptz(6)
-  updatedBy       Int?              @map("updated_by")
-  emailAttachment EmailAttachment[]
-  createdByUser   UserTable?        @relation("message_template_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_created_by_user")
-  updatedByUser   UserTable?        @relation("message_template_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_updated_by_user")
+  typeId                   Int                       @id(map: "idx_16576_pk_message_template") @default(autoincrement()) @map("type_id")
+  messageType              String?                   @map("message_type")
+  messageSubject           String?                   @map("message_subject")
+  messageBody              String?                   @map("message_body")
+  createdDate              DateTime?                 @map("created_date") @db.Timestamptz(6)
+  createdBy                Int?                      @map("created_by")
+  updatedDate              DateTime?                 @map("updated_date") @db.Timestamptz(6)
+  updatedBy                Int?                      @map("updated_by")
+  emailAttachment          EmailAttachment[]
+  messageAttachmentUploads MessageAttachmentUpload[]
+  emailDeliveryLogs        EmailDeliveryLog[]
+  createdByUser            UserTable?                @relation("message_template_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_created_by_user")
+  updatedByUser            UserTable?                @relation("message_template_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_template_updated_by_user")
 
   @@map("message_template")
+}
+
+model WhatsAppMessageDraft {
+  whatsAppMessageDraftId Int      @id @default(autoincrement()) @map("whatsapp_message_draft_id")
+  title                 String
+  message               String
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("whatsapp_message_draft")
+}
+
+model EmailDeliveryLog {
+  deliveryLogId   Int             @id @default(autoincrement()) @map("delivery_log_id")
+  templateId      Int             @map("template_id")
+  recipientEmail  String          @map("recipient_email")
+  status          String
+  errorMessage    String?         @map("error_message")
+  attachmentCount Int             @default(0) @map("attachment_count")
+  attemptedAt     DateTime        @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  attemptedBy     Int             @map("attempted_by")
+  retryCount      Int             @default(0) @map("retry_count")
+  nextRetryAt     DateTime?       @map("next_retry_at") @db.Timestamptz(6)
+  emailSubject    String          @map("email_subject")
+  emailHtml       String          @map("email_html")
+  attachmentJson  String?         @map("attachment_json")
+  messageTemplate MessageTemplate @relation(fields: [templateId], references: [typeId], onDelete: Cascade, onUpdate: NoAction, map: "fk_email_delivery_log_template")
+  attemptedByUser UserTable       @relation(fields: [attemptedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_email_delivery_log_user")
+
+  @@index([templateId, attemptedAt], map: "ix_email_delivery_log_template_attempted")
+  @@index([attemptedBy, attemptedAt], map: "ix_email_delivery_log_user_attempted")
+  @@map("email_delivery_log")
+}
+
+model MessageAttachmentUpload {
+  uploadId        String          @id @default(uuid()) @map("upload_id") @db.Uuid
+  templateId      Int             @map("template_id")
+  storedPath      String          @map("stored_path")
+  originalName    String          @map("original_name")
+  mimeType        String          @map("mime_type")
+  byteSize        Int             @map("byte_size")
+  scope           String
+  createdBy       Int             @map("created_by")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  messageTemplate MessageTemplate @relation(fields: [templateId], references: [typeId], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_attachment_upload_template")
+  createdByUser   UserTable       @relation(fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_attachment_upload_user")
+
+  @@index([templateId], map: "ix_message_attachment_upload_template")
+  @@index([createdBy, scope], map: "ix_message_attachment_upload_user_scope")
+  @@map("message_attachment_upload")
 }
 
 model PartnerMaster {
@@ -735,6 +979,24 @@ model RoleMaster {
   users              UserTable[]          @relation("user_table_role_idTorole_master")
 
   @@map("role_master")
+}
+
+model RoleAccessAudit {
+  roleAccessAuditId       Int      @id(map: "pk_role_access_audit") @default(autoincrement()) @map("role_access_audit_id")
+  roleId                  Int      @map("role_id")
+  roleNameSnapshot        String?  @map("role_name_snapshot")
+  changedByUserId         Int      @map("changed_by_user_id")
+  changedByUserName       String?  @map("changed_by_user_name")
+  changedAt               DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+  addedFunctionNamesCsv   String?  @map("added_function_names_csv")
+  removedFunctionNamesCsv String?  @map("removed_function_names_csv")
+  beforeFunctionNamesCsv  String?  @map("before_function_names_csv")
+  afterFunctionNamesCsv   String?  @map("after_function_names_csv")
+
+  @@index([roleId], map: "ix_role_access_audit_role_id")
+  @@index([changedByUserId], map: "ix_role_access_audit_changed_by_user_id")
+  @@index([changedAt], map: "ix_role_access_audit_changed_at")
+  @@map("role_access_audit")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -845,11 +1107,12 @@ model UserTable {
   roleId                            Int?                       @map("role_id")
   roleName                          String?                    @map("role_name")
   status                            String?
-  empId                             Int?                       @map("emp_id")
+  empId                             Int?                       @unique(map: "uq_user_table_emp_id") @map("emp_id")
   displayName                       String?                    @map("display_name")
   emailId                           String?                    @map("email_id")
   lastLoginTime                     DateTime?                  @map("last_login_time") @db.Timestamptz(6)
   lastLogoutTime                    DateTime?                  @map("last_logout_time") @db.Timestamptz(6)
+  authVersion                       Int                        @default(0) @map("auth_version")
   createdDate                       DateTime?                  @map("created_date") @db.Timestamptz(6)
   createdBy                         Int?                       @map("created_by")
   updatedDate                       DateTime?                  @map("updated_date") @db.Timestamptz(6)
@@ -872,10 +1135,14 @@ model UserTable {
   updatedDealerMasters              DealerMaster[]             @relation("dealer_master_updated_byTouser_table")
   createdFollowupInquiries          FollowupInquiry[]          @relation("followup_inquiry_created_byTouser_table")
   updatedFollowupInquiries          FollowupInquiry[]          @relation("followup_inquiry_updated_byTouser_table")
+  assignedInquiries                 Inquiry[]                  @relation("inquiry_assigned_toTouser_table")
   createdInquiries                  Inquiry[]                  @relation("inquiry_created_byTouser_table")
+  attemptedInquiryEmailHistories    InquiryEmailHistory[]      @relation("inquiry_email_history_attempted_byTouser_table")
   updatedInquiries                  Inquiry[]                  @relation("inquiry_updated_byTouser_table")
   createdInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_created_byTouser_table")
   updatedInquiryCarDetailses        InquiryCarDetails[]        @relation("inquiry_car_details_updated_byTouser_table")
+  createdInquiryInventoryLinks      InquiryInventoryLink[]     @relation("inquiry_inventory_links_created_byTouser_table")
+  updatedInquiryInventoryLinks      InquiryInventoryLink[]     @relation("inquiry_inventory_links_updated_byTouser_table")
   createdInsuranceFollowupDetailses InsuranceFollowupDetails[] @relation("insurance_followup_details_created_byTouser_table")
   updatedInsuranceFollowupDetailses InsuranceFollowupDetails[] @relation("insurance_followup_details_updated_byTouser_table")
   createdInsuranceMains             InsuranceMain[]            @relation("insurance_main_created_byTouser_table")
@@ -886,6 +1153,8 @@ model UserTable {
   updatedInventoryManagements       InventoryManagement[]      @relation("inventory_management_updated_byTouser_table")
   createdMessageTemplates           MessageTemplate[]          @relation("message_template_created_byTouser_table")
   updatedMessageTemplates           MessageTemplate[]          @relation("message_template_updated_byTouser_table")
+  messageAttachmentUploads          MessageAttachmentUpload[]
+  emailDeliveryLogs                 EmailDeliveryLog[]
   createdRoleMasters                RoleMaster[]               @relation("role_master_created_byTouser_table")
   updatedRoleMasters                RoleMaster[]               @relation("role_master_updated_byTouser_table")
   createdRtoAgents                  RtoAgent[]                 @relation("rto_agent_created_byTouser_table")

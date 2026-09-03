@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { getInventoryById } from '@/features/inventory/queries'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ inventoryId: string }> },
 ) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { inventoryId } = await params
   const parsedId = Number(inventoryId)

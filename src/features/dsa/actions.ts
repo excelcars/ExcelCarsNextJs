@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface DsaFormInput {
   partnerId: number | null
@@ -32,9 +32,7 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/dsa')
 }
 
 function buildData(input: DsaFormInput) {
@@ -65,6 +63,7 @@ export async function createDsa(input: DsaFormInput): Promise<ActionResult> {
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     const dup = await prisma.dsaManagement.findFirst({ where: { inventoryId: input.inventoryId } })
@@ -99,6 +98,7 @@ export async function updateDsa(id: number, input: DsaFormInput): Promise<Action
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     await prisma.dsaManagement.update({
@@ -122,6 +122,8 @@ export async function updateDsa(id: number, input: DsaFormInput): Promise<Action
 }
 
 export async function deleteDsa(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.dsaManagement.delete({ where: { dsaMainId: id } })
   } catch (err) {

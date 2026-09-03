@@ -1,5 +1,8 @@
+import { getMakes } from '@/features/inventory/queries'
 import { listRtoAgents, getVehicles } from '@/features/rto/queries'
 import { RtoClient } from '@/features/rto/RtoClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function RtoPage({
   searchParams,
@@ -9,11 +12,12 @@ export default async function RtoPage({
     registrationNo?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/rto'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const registrationNo = sp.registrationNo ?? ''
 
-  const [rows, vehicles] = await Promise.all([listRtoAgents(), getVehicles()])
+  const [rows, vehicles, makes] = await Promise.all([listRtoAgents(), getVehicles(), getMakes()])
 
   const data = rows.map((r) => ({
     ...r,
@@ -25,6 +29,7 @@ export default async function RtoPage({
     <RtoClient
       initialData={data}
       vehicles={vehicles}
+      makes={makes}
       initialSearch={search}
       initialRegistrationNo={registrationNo}
     />

@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
+import { ensureInquiryNumberUnique } from "./ensure-inquiry-number-unique.mjs";
+import { ensureVehicleEmailLinkInquiry } from "./ensure-vehicle-email-link-inquiry.mjs";
+import { ensureInquiryStatusConstraint } from "./ensure-inquiry-status-constraint.mjs";
 
 const envFile = join(process.cwd(), ".env.production.local");
 const prismaCli = join(process.cwd(), "node_modules", "prisma", "build", "index.js");
@@ -82,12 +85,14 @@ async function main() {
     .filter((arg) => arg !== "--force" && arg !== "--confirm-production");
 
   console.log("Using .env.production.local for Prisma db push...");
-  await run(process.execPath, [prismaCli, "db", "push", ...prismaArgs], {
-    env: {
-      ...process.env,
-      ...productionEnv,
-    },
-  });
+  const env = {
+    ...process.env,
+    ...productionEnv,
+  };
+  await run(process.execPath, [prismaCli, "db", "push", ...prismaArgs], { env });
+  await ensureInquiryNumberUnique(env);
+  await ensureVehicleEmailLinkInquiry(env);
+  await ensureInquiryStatusConstraint(env);
 }
 
 main().catch((error) => {

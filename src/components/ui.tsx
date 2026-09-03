@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, type ReactNode, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, Loader2 } from 'lucide-react'
 
 export const R = '#C8102E'
 export const N = '#1B2A6B'
@@ -59,27 +59,27 @@ export function Btn({ children, onClick, variant = 'primary', size = 'md', type 
   )
 }
 
-export function Input({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+export function Input({ label, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <input
         {...props}
-        className={`border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
-        style={{ '--tw-ring-color': N } as Record<string, string>}
+        className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
+        style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
       />
     </div>
   )
 }
 
-export function Select({ label, children, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
+export function Select({ label, children, error, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <div className="relative">
         <select
           {...props}
-          className={`w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none pr-8 ${props.className || ''}`}
+          className={`w-full border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none pr-8 ${props.className || ''}`}
         >
           {children}
         </select>
@@ -89,12 +89,14 @@ export function Select({ label, children, ...props }: SelectHTMLAttributes<HTMLS
   )
 }
 
-export function Textarea({ label, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }) {
+export function Textarea({ label, error, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <textarea rows={3} {...props}
-        className={`border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 resize-none ${props.className || ''}`} />
+        className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 resize-none ${props.className || ''}`}
+        style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
+      />
     </div>
   )
 }
@@ -135,11 +137,11 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
 export function Table({ headers, children, empty = false, emptyMessage = 'No records found' }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-max text-sm">
+      <table className="w-full min-w-[1860px] table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal">
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
+          <tr className="bg-white-50 border-b border-gray-200">
             {headers.map(h => (
-              <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+              <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
             ))}
           </tr>
         </thead>
@@ -165,8 +167,8 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   )
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Search...', disabled = false }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean
+export function SearchBar({ value, onChange, placeholder = 'Search...', disabled = false, inputRef }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean; inputRef?: React.RefObject<HTMLInputElement | null>
 }) {
   return (
     <div className="relative">
@@ -174,7 +176,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', disabled
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
-        value={value} onChange={e => onChange(e.target.value)}
+        ref={inputRef} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full sm:w-72 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -272,6 +274,26 @@ export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: strin
           {t}
         </button>
       ))}
+    </div>
+  )
+}
+
+export function LoadingOverlay({
+  show,
+  label = 'Loading...',
+  subtle = false,
+}: {
+  show: boolean
+  label?: string
+  subtle?: boolean
+}) {
+  if (!show) return null
+  return (
+    <div className={`absolute inset-0 z-20 flex items-center justify-center rounded-xl ${subtle ? 'bg-white/65 backdrop-blur-[1px]' : 'bg-white/80 backdrop-blur-[2px]'}`}>
+      <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm">
+        <Loader2 className="h-4 w-4 animate-spin text-[#1B2A6B]" />
+        {label}
+      </div>
     </div>
   )
 }

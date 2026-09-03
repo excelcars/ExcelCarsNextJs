@@ -1,11 +1,15 @@
-import { listInquiries, getInquirySourceSuggestions, getMakes } from '@/features/inquiry/queries'
+import { listInquiries, getInquirySources, getInquirySubStatusSuggestions, getMakes, getInquiryAssistants } from '@/features/inquiry/queries'
 import { InquiryClient } from '@/features/inquiry/InquiryClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
+import { redirect } from 'next/navigation'
 
 export default async function InquiryPage({
   searchParams,
 }: {
   searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; subStatus?: string; followUpDate?: string; visitedDate?: string; makeId?: string; modelId?: string; variantId?: string; view?: string; edit?: string; page?: string }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/inquiry'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const status = sp.status ?? 'All'
@@ -20,11 +24,14 @@ export default async function InquiryPage({
   const autoOpenViewId = Number(sp.view) || null
   const autoOpenEditId = Number(sp.edit) || null
   const page = Number(sp.page) || 1
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
-  const [{ rows, total, pageCount }, makes, sourceSuggestions] = await Promise.all([
-    listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page }),
+  const [{ rows, total, pageCount }, makes, sourceOptions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
+    listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page, restrictToUserId: ownershipScope.restrictToUserId }),
     getMakes(),
-    getInquirySourceSuggestions(),
+    getInquirySources(),
+    getInquirySubStatusSuggestions(),
+    getInquiryAssistants(),
   ])
 
   const data = rows.map((r) => ({
@@ -36,7 +43,9 @@ export default async function InquiryPage({
     <InquiryClient
       initialData={data}
       makes={makes}
-      sourceSuggestions={sourceSuggestions}
+      sourceOptions={sourceOptions}
+      subStatusSuggestions={subStatusSuggestions}
+      inquiryAssistants={inquiryAssistants}
       total={total}
       page={page}
       pageCount={pageCount}

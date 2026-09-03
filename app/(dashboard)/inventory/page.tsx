@@ -1,6 +1,8 @@
-import { listInventory, getMakes, getDealers } from '@/features/inventory/queries'
+import { listInventory, getMakes, getDealers, getInventoryColours } from '@/features/inventory/queries'
 import { InventoryClient } from '@/features/inventory/InventoryClient'
 import { isEmailConfigured } from '@/lib/email/sendMail'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function InventoryPage({
   searchParams,
@@ -38,6 +40,7 @@ export default async function InventoryPage({
     pageSize?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/inventory'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const status = sp.status ?? 'All'
@@ -70,7 +73,7 @@ export default async function InventoryPage({
   const page = Number(sp.page) || 1
   const pageSize = Number(sp.pageSize) || 25
 
-  const [{ rows, total, pageCount }, makes, dealers] = await Promise.all([
+  const [{ rows, total, pageCount, page: safePage, pageSize: safePageSize }, makes, dealers, inventoryColours] = await Promise.all([
     listInventory({
       search,
       status,
@@ -105,6 +108,7 @@ export default async function InventoryPage({
     }),
     getMakes(),
     getDealers(),
+    getInventoryColours(),
   ])
 
   const data = rows.map((r) => ({
@@ -118,6 +122,7 @@ export default async function InventoryPage({
       initialData={data}
       makes={makes}
       dealers={dealers}
+      inventoryColours={inventoryColours}
       emailConfigured={isEmailConfigured()}
       initialSearch={search}
       initialStatus={status}
@@ -148,9 +153,9 @@ export default async function InventoryPage({
       initialInternalComments={internalComments}
       initialOtherRemarks={otherRemarks}
       total={total}
-      page={page}
+      page={safePage}
       pageCount={pageCount}
-      pageSize={pageSize}
+      pageSize={safePageSize}
     />
   )
 }

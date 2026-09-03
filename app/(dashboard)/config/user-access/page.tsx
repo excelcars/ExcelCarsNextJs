@@ -1,15 +1,44 @@
-import { listUsers, getAssignableRoles } from '@/features/useraccess/queries'
+import { listUsers, getAssignableRoles, listStates, listUserAccessRoles } from '@/features/useraccess/queries'
 import { UserAccessClient } from '@/features/useraccess/UserAccessClient'
-import { auth } from '../../../../auth'
-import { prisma } from '@/lib/db/prisma'
+import { getUserAccessActor } from '@/features/useraccess/permissions'
+import { redirect } from 'next/navigation'
 
-export default async function UserAccessPage() {
-  const session = await auth()
-  const me = session?.user?.id
-    ? await prisma.userTable.findUnique({ where: { userId: Number(session.user.id) }, select: { roleId: true } })
-    : null
+export default async function UserAccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string; status?: string; roleId?: string; stateId?: string; page?: string }>
+}) {
+  const sp = await searchParams
+  const actor = await getUserAccessActor()
+  if (!actor) redirect('/dashboard')
 
-  const [rows, roles] = await Promise.all([listUsers(), getAssignableRoles(me?.roleId ?? null)])
+  const search = sp.search ?? ''
+  const status = sp.status ?? 'All'
+  const roleId = sp.roleId ?? ''
+  const stateId = sp.stateId ?? ''
+  const page = Math.max(1, Number(sp.page) || 1)
 
-  return <UserAccessClient initialData={rows} roles={roles} />
+  const [result, roles, filterRoles, states] = await Promise.all([
+    listUsers({ search, status, roleId, stateId, page }),
+    getAssignableRoles(actor.roleId),
+    listUserAccessRoles(),
+    listStates(),
+  ])
+
+  return (
+    <UserAccessClient
+      initialData={result.rows}
+      total={result.total}
+      page={result.page}
+      pageCount={result.pageCount}
+      search={search}
+      status={status}
+      roleId={roleId}
+      stateId={stateId}
+      roles={roles}
+      filterRoles={filterRoles}
+      states={states}
+      actor={actor}
+    />
+  )
 }

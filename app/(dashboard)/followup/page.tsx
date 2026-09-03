@@ -1,6 +1,10 @@
 import { getMakes, getModelsByMake, getVariantsByModel } from '@/features/inventory/queries'
+import { getInquirySources } from '@/features/inquiry/queries'
 import { getUsersForFollowupFilter, listFollowupQueue } from '@/features/followup/queries'
 import { FollowupClient } from '@/features/followup/FollowupClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
+import { redirect } from 'next/navigation'
 
 export default async function FollowupPage({
   searchParams,
@@ -9,6 +13,8 @@ export default async function FollowupPage({
     search?: string
     classification?: string
     status?: string
+    contactOutcome?: string
+    customerName?: string
     subStatus?: string
     website?: string
     customerMobile?: string
@@ -25,10 +31,13 @@ export default async function FollowupPage({
     visitedDateTo?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/followup'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const classification = sp.classification ?? 'All'
   const status = sp.status ?? 'FollowUp'
+  const contactOutcome = sp.contactOutcome ?? ''
+  const customerName = sp.customerName ?? ''
   const subStatus = sp.subStatus ?? ''
   const website = sp.website ?? ''
   const customerMobile = sp.customerMobile ?? ''
@@ -43,15 +52,18 @@ export default async function FollowupPage({
   const followUpDateTo = sp.followUpDateTo ?? ''
   const visitedDateFrom = sp.visitedDateFrom ?? ''
   const visitedDateTo = sp.visitedDateTo ?? ''
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
 
   const parsedMakeId = Number(makeId)
   const parsedModelId = Number(modelId)
 
-  const [rows, makes, models, variants, users] = await Promise.all([
+  const [rows, makes, models, variants, users, sourceOptions] = await Promise.all([
     listFollowupQueue({
       search,
       classification,
       status,
+      contactOutcome,
+      customerName,
       subStatus,
       website,
       customerMobile,
@@ -66,11 +78,14 @@ export default async function FollowupPage({
       followUpDateTo,
       visitedDateFrom,
       visitedDateTo,
+      restrictToUserId: ownershipScope.restrictToUserId,
+      ownershipMode: ownershipScope.ownershipMode,
     }),
     getMakes(),
     Number.isFinite(parsedMakeId) && parsedMakeId > 0 ? getModelsByMake(parsedMakeId) : Promise.resolve([]),
     Number.isFinite(parsedModelId) && parsedModelId > 0 ? getVariantsByModel(parsedModelId) : Promise.resolve([]),
     getUsersForFollowupFilter(),
+    getInquirySources(),
   ])
 
   const data = rows.rows.map((r) => ({
@@ -84,8 +99,11 @@ export default async function FollowupPage({
       search={search}
       classification={classification}
       status={status}
+      contactOutcome={contactOutcome}
+      customerName={customerName}
       subStatus={subStatus}
       website={website}
+      sourceOptions={sourceOptions}
       customerMobile={customerMobile}
       users={users}
       userId={userId}
@@ -104,6 +122,8 @@ export default async function FollowupPage({
       followUpDateTo={followUpDateTo}
       visitedDateFrom={visitedDateFrom}
       visitedDateTo={visitedDateTo}
+      restricted={ownershipScope.restricted}
+      currentUserId={ownershipScope.userId ? String(ownershipScope.userId) : ''}
     />
   )
 }

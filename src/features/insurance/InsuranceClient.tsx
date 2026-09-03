@@ -11,6 +11,7 @@ import {
   type InsuranceFormInput, type LogPaymentInput,
 } from './actions'
 import { PAYOUT_STATUSES, POLICY_STATUSES, CAR_TYPES } from './queries'
+import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
@@ -256,6 +257,7 @@ export function InsuranceClient({
   const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
   const [isRoutePending, startRouteTransition] = useTransition()
   const [exportError, setExportError] = useState('')
@@ -445,6 +447,7 @@ export function InsuranceClient({
     setModal(null)
     setDiscardOpen(false)
     setError('')
+    setErrors({})
   }
 
   const requestCloseForm = () => {
@@ -458,6 +461,56 @@ export function InsuranceClient({
 
   const save = () => {
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.inventoryId && !form.carRegistrationNo?.trim()) {
+      newErrors.inventoryId = true
+      newErrors.carRegistrationNo = true
+    }
+    if (!form.agentPartnerId && !form.agentNameLegacy?.trim()) {
+      newErrors.agentPartnerId = true
+    }
+    if (!form.customerId && !form.customerNameLegacy?.trim()) {
+      newErrors.customer = true
+    }
+    if (form.insurancePremium !== null && form.insurancePremium <= 0) {
+      newErrors.insurancePremium = true
+    }
+    if (form.oDPremium !== null && form.oDPremium <= 0) {
+      newErrors.oDPremium = true
+    }
+    if (form.insurancePremium !== null && form.oDPremium !== null && form.oDPremium > form.insurancePremium) {
+      newErrors.oDPremium = true
+    }
+    if (form.payoutPercentageOdPremium !== null && (form.payoutPercentageOdPremium < 0 || form.payoutPercentageOdPremium > 100)) {
+      newErrors.payoutPercentageOdPremium = true
+    }
+    if (form.carYear !== null && !isValidYear(form.carYear)) {
+      newErrors.carYear = true
+    }
+    if (form.entryDate && form.expiryDate && form.expiryDate <= form.entryDate) {
+      newErrors.expiryDate = true
+      newErrors.entryDate = true
+    }
+    if (form.agentMobileNoLegacy && !isValidPhone(form.agentMobileNoLegacy)) {
+      newErrors.agentMobileNoLegacy = true
+    }
+    if (form.agentEmailIdLegacy && !isValidEmail(form.agentEmailIdLegacy)) {
+      newErrors.agentEmailIdLegacy = true
+    }
+    if (form.customerMobileLegacy && !isValidPhone(form.customerMobileLegacy)) {
+      newErrors.customerMobileLegacy = true
+    }
+    if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
+      newErrors.customerEmailLegacy = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = editId ? await updateInsurance(editId, form) : await createInsurance(form)
       if (!result.success) {
@@ -491,6 +544,7 @@ export function InsuranceClient({
     setPayRow(r)
     setPayForm({ ...emptyPayment(), payoutPaymentStatus: r.payoutPaymentStatus ?? 'Pending', policyStatus: r.policyStatus ?? 'Pending' })
     setError('')
+    setErrors({})
     setPayments([])
     setFollowups([])
     setHistoryLoading(true)
@@ -518,6 +572,36 @@ export function InsuranceClient({
   const savePayment = () => {
     if (!payRow) return
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (payForm.amountReceived !== null && payForm.amountReceived <= 0) {
+      newErrors.amountReceived = true
+    }
+    const totalReceivedAlready = payments.reduce((sum, p) => sum + Number(p.amountReceived ?? 0), 0)
+    const payoutAmt = Number(payRow.payoutAmount ?? 0)
+    if (payForm.amountReceived !== null && (totalReceivedAlready + payForm.amountReceived > payoutAmt)) {
+      newErrors.amountReceived = true
+    }
+    if (payForm.payoutPaymentStatus !== 'Received') {
+      if (!payForm.nextFollowUpDate?.trim()) {
+        newErrors.nextFollowUpDate = true
+      } else {
+        const today = new Date().toISOString().slice(0, 10)
+        if (payForm.nextFollowUpDate < today) {
+          newErrors.nextFollowUpDate = true
+        }
+      }
+    }
+    if (!payForm.remark?.trim()) {
+      newErrors.remark = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = await logInsurancePayment(payRow.insuranceMainId, payForm)
       if (!result.success) {
@@ -683,24 +767,24 @@ export function InsuranceClient({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Insurance Agent *</label>
-              <PartnerPicker partnerType="Insurance Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} />
+              <PartnerPicker partnerType="Insurance Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.agentPartnerId} />
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-              <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
+              <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <Input label="Agent Name" value={form.agentNameLegacy} onChange={e => f('agentNameLegacy', e.target.value)} />
-            <Input label="Agent Mobile" value={form.agentMobileNoLegacy} onChange={e => f('agentMobileNoLegacy', e.target.value)} />
-            <Input label="Agent Email" value={form.agentEmailIdLegacy} onChange={e => f('agentEmailIdLegacy', e.target.value)} />
+            <Input label="Agent Mobile" value={form.agentMobileNoLegacy} onChange={e => f('agentMobileNoLegacy', e.target.value)} error={errors.agentMobileNoLegacy} />
+            <Input label="Agent Email" value={form.agentEmailIdLegacy} onChange={e => f('agentEmailIdLegacy', e.target.value)} error={errors.agentEmailIdLegacy} />
           </div>
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
-              <div className="flex items-center justify-between border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+              <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
                 <div className="flex items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
@@ -715,6 +799,7 @@ export function InsuranceClient({
                   value={vehicleQuery}
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}
+                  error={errors.inventoryId}
                 />
                 {vehicleOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
@@ -739,9 +824,9 @@ export function InsuranceClient({
             <Input label="Make" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} />
             <Input label="Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
             <Input label="Variant" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} />
-            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} />
+            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
             <div className="space-y-1">
-              <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.carRegistrationNo} />
               <div className="flex items-center gap-2">
                 <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
                   Find by Registration
@@ -752,10 +837,10 @@ export function InsuranceClient({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Entry Date" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} />
-            <Input label="Insurance Premium (₹)" type="number" value={form.insurancePremium ?? ''} onChange={e => f('insurancePremium', e.target.value ? +e.target.value : null)} />
-            <Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} />
-            <Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} />
+            <Input label="Entry Date" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} error={errors.entryDate} />
+            <Input label="Insurance Premium (₹)" type="number" value={form.insurancePremium ?? ''} onChange={e => f('insurancePremium', e.target.value ? +e.target.value : null)} error={errors.insurancePremium} />
+            <Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} error={errors.oDPremium} />
+            <Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} error={errors.payoutPercentageOdPremium} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
             <Input label="Total Amount Received" value={formTotalAmountReceived != null ? `₹${Number(formTotalAmountReceived).toLocaleString('en-IN')}` : '₹0'} readOnly className="bg-gray-50" />
             <Select label="Payout Status" value={form.payoutPaymentStatus} onChange={e => f('payoutPaymentStatus', e.target.value)}>
@@ -765,7 +850,7 @@ export function InsuranceClient({
               {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
             <Input label="Renewal Date" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} />
-            <Input label="Expiry Date" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} />
+            <Input label="Expiry Date" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} error={errors.expiryDate} />
             <Input label="Follow-up Date" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
           </div>
           <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} />
@@ -919,16 +1004,16 @@ export function InsuranceClient({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Amount Received (₹) *" type="number" value={payForm.amountReceived ?? ''} onChange={e => pf('amountReceived', e.target.value ? +e.target.value : null)} />
+              <Input label="Amount Received (₹) *" type="number" value={payForm.amountReceived ?? ''} onChange={e => pf('amountReceived', e.target.value ? +e.target.value : null)} error={errors.amountReceived} />
               <Select label="Payout Status *" value={payForm.payoutPaymentStatus} onChange={e => pf('payoutPaymentStatus', e.target.value)}>
                 {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
               <Select label="Policy Status *" value={payForm.policyStatus} onChange={e => pf('policyStatus', e.target.value)}>
                 {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} />
+              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
             </div>
-            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} />
+            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

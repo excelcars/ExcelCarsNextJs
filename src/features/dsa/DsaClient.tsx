@@ -6,6 +6,7 @@ import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBa
 import { PartnerPicker } from '@/components/PartnerPicker'
 import { createDsa, updateDsa, deleteDsa, type DsaFormInput } from './actions'
 import { PAYMENT_STATUSES } from './queries'
+import { isValidEmail, isValidPhone } from '@/lib/validation'
 
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
 interface Vehicle {
@@ -231,6 +232,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
   const [isExporting, startExportTransition] = useTransition()
   const [exportError, setExportError] = useState('')
@@ -296,6 +298,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
     setModal(null)
     setDiscardOpen(false)
     setError('')
+    setErrors({})
   }
 
   const requestCloseForm = () => {
@@ -402,6 +405,45 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
 
   const save = () => {
     setError('')
+    const newErrors: Record<string, boolean> = {}
+
+    if (!form.inventoryId) {
+      newErrors.inventoryId = true
+    }
+    if (!form.partnerId) {
+      newErrors.partnerId = true
+    }
+    if (!form.carRegistrationNo?.trim()) {
+      newErrors.carRegistrationNo = true
+    }
+    if (!form.dsaBankName?.trim()) {
+      newErrors.dsaBankName = true
+    }
+    if (form.loanAmount !== null && form.loanAmount <= 0) {
+      newErrors.loanAmount = true
+    }
+    if (form.percentageOfPayout !== null && (form.percentageOfPayout < 0 || form.percentageOfPayout > 100)) {
+      newErrors.percentageOfPayout = true
+    }
+    if (form.amountPaid !== null && form.amountPaid < 0) {
+      newErrors.amountPaid = true
+    }
+    if (form.amountPaid !== null && form.payoutAmount !== null && form.amountPaid > form.payoutAmount) {
+      newErrors.amountPaid = true
+    }
+    if (form.dsaAgentMobileNo && !isValidPhone(form.dsaAgentMobileNo)) {
+      newErrors.dsaAgentMobileNo = true
+    }
+    if (form.dsaAgentEmail && !isValidEmail(form.dsaAgentEmail)) {
+      newErrors.dsaAgentEmail = true
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+    setErrors({})
+
     startTransition(async () => {
       const result = editId ? await updateDsa(editId, form) : await createDsa(form)
       if (!result.success) {
@@ -603,7 +645,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
-              <div className="border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+              <div className={`border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-gray-800">
                     <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
@@ -621,6 +663,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
                   value={vehicleQuery}
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}
+                  error={errors.inventoryId}
                 />
                 {vehicleOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
@@ -640,12 +683,12 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">DSA Agent *</label>
-            <PartnerPicker partnerType="DSA" label="Agent" value={selectedAgent} onChange={onAgentChange} />
+            <PartnerPicker partnerType="DSA" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.partnerId} />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1 col-span-2">
-              <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} />
+              <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.carRegistrationNo} />
               <div className="flex items-center gap-2">
                 <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
                   Find by Registration
@@ -657,17 +700,17 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Agent Mobile" value={form.dsaAgentMobileNo} onChange={e => f('dsaAgentMobileNo', e.target.value)} />
-            <Input label="Agent Email" value={form.dsaAgentEmail} onChange={e => f('dsaAgentEmail', e.target.value)} />
-            <Input label="Bank Name" value={form.dsaBankName} onChange={e => f('dsaBankName', e.target.value)} placeholder="HDFC Bank, SBI..." />
+            <Input label="Agent Mobile" value={form.dsaAgentMobileNo} onChange={e => f('dsaAgentMobileNo', e.target.value)} error={errors.dsaAgentMobileNo} />
+            <Input label="Agent Email" value={form.dsaAgentEmail} onChange={e => f('dsaAgentEmail', e.target.value)} error={errors.dsaAgentEmail} />
+            <Input label="Bank Name" value={form.dsaBankName} onChange={e => f('dsaBankName', e.target.value)} placeholder="HDFC Bank, SBI..." error={errors.dsaBankName} />
             <Input label="Entry Date" type="date" value={form.dsaEntryDate} onChange={e => f('dsaEntryDate', e.target.value)} />
-            <Input label="Loan Amount (₹)" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} />
-            <Input label="Payout % of Loan" type="number" value={form.percentageOfPayout ?? ''} onChange={e => f('percentageOfPayout', e.target.value ? +e.target.value : null)} />
+            <Input label="Loan Amount (₹)" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} error={errors.loanAmount} />
+            <Input label="Payout % of Loan" type="number" value={form.percentageOfPayout ?? ''} onChange={e => f('percentageOfPayout', e.target.value ? +e.target.value : null)} error={errors.percentageOfPayout} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
             <Select label="Payment Status" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Amount Paid (₹)" type="number" value={form.amountPaid ?? ''} onChange={e => f('amountPaid', e.target.value ? +e.target.value : null)} />
+            <Input label="Amount Paid (₹)" type="number" value={form.amountPaid ?? ''} onChange={e => f('amountPaid', e.target.value ? +e.target.value : null)} error={errors.amountPaid} />
           </div>
           <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} />
 

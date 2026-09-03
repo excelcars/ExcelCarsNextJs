@@ -1,5 +1,7 @@
 import { listChecklists, getVehicles } from '@/features/checklist/queries'
 import { ChecklistClient } from '@/features/checklist/ChecklistClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function ChecklistPage({
   searchParams,
@@ -9,6 +11,7 @@ export default async function ChecklistPage({
     page?: string
   }>
 }) {
+  if (!(await canCurrentUserAccessRoute('/checklist'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const page = Math.max(1, Number(sp.page) || 1)

@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
           ? { carVariantMaster: { fkModelId: modelId } }
           : { carVariantMaster: { fkMakeId: makeId } }),
       ...(year ? { year } : {}),
+      status: { equals: 'In Stock', mode: 'insensitive' },
     },
     include: {
       customer: { select: { custId: true, custName: true, custMobile: true, custEmail: true } },
@@ -34,12 +35,19 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: { inventoryId: 'desc' },
-    take: 12,
+    take: 100,
   })
+
+  const matchReasons = [
+    variantId ? 'Exact variant match' : modelId ? 'Same model match' : makeId ? 'Same make match' : '',
+    year ? 'Year matched' : '',
+    'Currently in stock',
+  ].filter(Boolean)
 
   return NextResponse.json(rows.map(row => ({
     ...row,
     kmsDriven: row.kmsDriven ? row.kmsDriven.toString() : null,
     price: row.price ? row.price.toString() : null,
+    matchReasons,
   })))
 }

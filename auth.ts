@@ -6,6 +6,20 @@ import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  events: {
+    async signOut(message) {
+      if (!('token' in message)) return
+      const userId = Number(message.token?.sub)
+      if (!Number.isInteger(userId) || userId <= 0) return
+
+      await prisma.userTable.update({
+        where: { userId },
+        data: { lastLogoutTime: new Date() },
+      }).catch(() => {
+        // Sign-out should still complete even if the audit timestamp update fails.
+      })
+    },
+  },
   providers: [
     Credentials({
       credentials: {
@@ -39,8 +53,50 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.displayName || user.userName || undefined,
           username: user.userName || undefined,
           roleName: user.roleName ?? null,
+          authVersion: user.authVersion,
         };
       },
     }),
   ],
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt({ token, user }) {
+      if (user) {
+        token.username = user.username;
+        token.roleName = user.roleName;
+        token.authVersion = user.authVersion;
+      }
+
+      const userId = Number(token.sub);
+      if (!Number.isInteger(userId) || userId <= 0) return null;
+
+      // JWTs are not trusted for account state. This centralized check makes
+      // status changes and authVersion bumps revoke every device.
+      const currentUser = await prisma.userTable.findUnique({
+        where: { userId },
+        select: { status: true, authVersion: true, displayName: true, userName: true, roleName: true },
+      });
+
+      if (!currentUser || currentUser.status !== "Active" || currentUser.authVersion !== token.authVersion) {
+        return null;
+      }
+
+      token.name = currentUser.displayName || currentUser.userName || token.name;
+      token.username = currentUser.userName || token.username;
+      token.roleName = currentUser.roleName ?? token.roleName;
+
+      return token;
+    },
+    async session({ session, token }) {
+      if (!session.user || typeof token.sub !== "string" || typeof token.username !== "string") {
+        return session;
+      }
+
+      session.user.id = token.sub;
+      session.user.username = token.username;
+      session.user.roleName = typeof token.roleName === "string" ? token.roleName : null;
+      session.user.name = typeof token.name === "string" ? token.name : session.user.username;
+      return session;
+    },
+  },
 });
