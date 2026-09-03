@@ -183,8 +183,12 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
         `)
       }
     })
-  } catch {
-    return { success: false, error: 'Something went wrong saving role access.' }
+  } catch (error) {
+    console.error('saveRoleAccess transaction failed', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 
   revalidatePath('/config/role-access')
