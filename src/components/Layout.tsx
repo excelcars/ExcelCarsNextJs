@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -189,7 +189,14 @@ export function Layout({
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ Operations: true, Configuration: true, Reports: true })
+  const [pendingNavigation, setPendingNavigation] = useState<{ fromPathname: string; label: string } | null>(null)
   const accessibleRouteSet = new Set(accessibleRoutes)
+
+  useEffect(() => {
+    if (pendingNavigation && pathname !== pendingNavigation.fromPathname) {
+      setPendingNavigation(null)
+    }
+  }, [pathname, pendingNavigation])
 
   const visibleNavItems = navItems
     .map(item => {
@@ -211,6 +218,13 @@ export function Layout({
     .filter(item => item.href || !item.children || item.children.length > 0)
 
   const toggle = (label: string) => setExpanded(p => ({ ...p, [label]: !p[label] }))
+
+  const handleNavigationClick = (event: ReactMouseEvent<HTMLAnchorElement>, label: string) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    if (event.currentTarget.pathname === pathname) return
+
+    setPendingNavigation({ fromPathname: pathname, label })
+  }
 
   const isActive = (item: NavItem) => {
     if (item.href) return item.href === pathname || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
@@ -236,7 +250,10 @@ export function Layout({
             {item.href ? (
               <Link
                 href={item.href}
-                onClick={() => setMobileSidebarOpen(false)}
+                onClick={event => {
+                  handleNavigationClick(event, item.label)
+                  setMobileSidebarOpen(false)
+                }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${pathname === item.href ? 'bg-white/15 text-white font-medium' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
               >
                 {item.icon}
@@ -266,7 +283,10 @@ export function Layout({
                       <Link
                         key={child.href}
                         href={child.href}
-                        onClick={() => setMobileSidebarOpen(false)}
+                        onClick={event => {
+                          handleNavigationClick(event, child.label)
+                          setMobileSidebarOpen(false)
+                        }}
                         className={`block text-left px-3 py-2 rounded-lg text-sm transition-all ${pathname === child.href || pathname.startsWith(`${child.href}/`) ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
                       >
                         {(pathname === child.href || pathname.startsWith(`${child.href}/`)) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}
@@ -328,8 +348,14 @@ export function Layout({
         </header>
 
         {/* Page Content */}
-        <main className={`flex-1 overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-6'}`}>
+        <main className={`relative flex-1 overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-6'}`}>
           {children}
+          {pendingNavigation ? (
+            <div className="absolute inset-0 z-20 flex min-h-full flex-col items-center justify-center bg-gray-50/95" role="status" aria-live="polite" aria-label={`Loading ${pendingNavigation.label}`}>
+              <span className="h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#C8102E]" />
+              <p className="mt-4 text-sm font-medium text-gray-600">Loading {pendingNavigation.label}...</p>
+            </div>
+          ) : null}
         </main>
       </div>
     </div>

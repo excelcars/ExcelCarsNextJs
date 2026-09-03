@@ -4,8 +4,13 @@ import { join } from 'node:path'
 
 async function main() {
   const localStagingEnv = join(process.cwd(), '.env.staging.local')
+  const stagingEnvFile = join(process.cwd(), '.env.staging')
   const exampleStagingEnv = join(process.cwd(), '.env.staging.example')
-  const stagingEnv = existsSync(localStagingEnv) ? localStagingEnv : exampleStagingEnv
+  const stagingEnv = existsSync(localStagingEnv)
+    ? localStagingEnv
+    : existsSync(stagingEnvFile)
+      ? stagingEnvFile
+      : exampleStagingEnv
 
   if (!existsSync(stagingEnv)) {
     throw new Error('Missing .env.staging.local. Copy .env.staging.example to .env.staging.local and set the staging values.')
