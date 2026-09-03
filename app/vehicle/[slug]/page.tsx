@@ -3,6 +3,8 @@ import { headers } from 'next/headers'
 import { Phone, MessageCircle, Gauge, Fuel, CalendarDays, ShieldCheck } from 'lucide-react'
 import { buildPublicVehicleViewModel, recordTrackedVehicleVisit, resolveTrackedVehicleByToken } from '@/features/vehicleEmailLinks/service'
 import { VehicleContactActions } from '@/features/vehicleEmailLinks/VehicleContactActions'
+import { VehicleGallery } from '@/features/vehicleEmailLinks/VehicleGallery'
+import { VehicleSpecifications } from '@/features/vehicleEmailLinks/VehicleSpecifications'
 
 function UnavailableVehiclePage() {
   return (
@@ -48,12 +50,11 @@ export default async function PublicVehiclePage({
   const vehicle = buildPublicVehicleViewModel(trackedLink)
   const phoneHref = `tel:${vehicle.phoneNumber.replace(/[^\d+]/g, '')}`
   const whatsappHref = `https://wa.me/${vehicle.whatsappNumber.replace(/[^\d]/g, '')}`
-  const mailHref = `mailto:${vehicle.contactEmail}`
 
   return (
     <div className="min-h-screen bg-[#f7f9fc] text-gray-900">
       <header className="border-b border-[#e4e9f2] bg-white text-[#142b62]">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo-excel-car.png" alt="Excel Cars" className="h-14 w-auto object-contain" />
           <div className="hidden items-center gap-8 text-sm md:flex">
@@ -63,108 +64,73 @@ export default async function PublicVehiclePage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className="space-y-4">
-            <div className="overflow-hidden rounded-3xl border border-[#e4e9f2] bg-white shadow-sm">
-              {vehicle.hasGallery ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={vehicle.gallery[0].src} alt={vehicle.gallery[0].alt} className="h-[420px] w-full object-cover" />
-              ) : (
-                <div className="flex h-[420px] items-center justify-center bg-gradient-to-br from-[#edf2fb] to-[#f7f9fc] text-sm text-gray-500">
-                  Vehicle photos available on request
-                </div>
-              )}
-            </div>
-
-            {vehicle.gallery.length > 1 ? (
-              <div className="grid grid-cols-4 gap-3">
-                {vehicle.gallery.slice(0, 4).map((photo: { documentId: number; src: string; alt: string }) => (
-                  <div key={photo.documentId} className="overflow-hidden rounded-2xl border border-[#e4e9f2] bg-white shadow-sm">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo.src} alt={photo.alt} className="h-24 w-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            ) : null}
+      <main className="mx-auto max-w-[1240px] px-6 py-6 sm:py-8">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,0.85fr)]">
+          <section className="space-y-6">
+            <VehicleGallery photos={vehicle.gallery} />
+            <VehicleSpecifications
+              highlights={[
+                ['Registration', vehicle.maskedRegistrationNo],
+                ['No. of Owners', vehicle.noOfOwners != null ? String(vehicle.noOfOwners) : '—'],
+                ['Colour', vehicle.colour],
+                ['Status', vehicle.status],
+              ]}
+              ownership={[
+                ['Insurance Type', vehicle.insuranceType],
+                ['Road Tax', vehicle.tax],
+                ['Month of Manufacture', vehicle.month],
+                ['Service History', 'Not recorded'],
+              ]}
+              performance={[
+                ['Fuel Type', vehicle.fuelType],
+                ['KM Driven', vehicle.kmsDriven ?? '—'],
+                ['Year of Manufacture', vehicle.year ? String(vehicle.year) : '—'],
+                ['Model / Variant', [vehicle.model, vehicle.variant].filter(Boolean).join(' / ') || '—'],
+              ]}
+            />
           </section>
 
-          <section className="space-y-5 rounded-3xl border border-[#e4e9f2] bg-white p-6 shadow-sm">
+          <aside className="space-y-5 rounded-3xl border border-[#e4e9f2] bg-white p-5 shadow-sm lg:sticky lg:top-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-4xl font-bold tracking-tight">{vehicle.heading}</h1>
-                <p className="mt-2 text-2xl text-gray-600">{vehicle.subheading}</p>
+                <h1 className="text-2xl font-bold tracking-tight text-[#101b38] sm:text-3xl">{vehicle.heading}</h1>
+                <p className="mt-1 text-lg text-gray-600">{vehicle.subheading}</p>
               </div>
-              <span className="rounded-full bg-[#fff0f4] px-4 py-2 text-sm font-semibold text-[#d7194a]">{vehicle.status}</span>
+              <span className="rounded-full bg-[#fff0f4] px-3 py-1.5 text-xs font-semibold text-[#d7194a]">{vehicle.status}</span>
             </div>
 
             <div>
-              <div className="text-5xl font-bold text-[#d7194a]">₹{vehicle.price ?? 'On Request'}</div>
+              <div className="text-4xl font-bold text-[#d7194a]">{vehicle.price ? `₹${vehicle.price}` : 'On Request'}</div>
               <div className="mt-1 text-sm text-gray-500">Inclusive of all taxes</div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 rounded-2xl border border-[#e4e9f2] bg-[#f7f9fc] p-4 sm:grid-cols-4">
-              <div className="text-center">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-[#e4e9f2] bg-[#fbfcff] p-3 text-center">
                 <Gauge className="mx-auto h-5 w-5 text-[#d7194a]" />
-                <div className="mt-2 text-lg font-semibold">{vehicle.kmsDriven ?? '—'}</div>
+                <div className="mt-1.5 text-base font-semibold">{vehicle.kmsDriven ?? '—'}</div>
                 <div className="text-xs text-gray-500">KM Driven</div>
               </div>
-              <div className="text-center">
+              <div className="rounded-xl border border-[#e4e9f2] bg-[#fbfcff] p-3 text-center">
                 <Fuel className="mx-auto h-5 w-5 text-[#d7194a]" />
-                <div className="mt-2 text-lg font-semibold">{vehicle.fuelType}</div>
+                <div className="mt-1.5 text-base font-semibold">{vehicle.fuelType}</div>
                 <div className="text-xs text-gray-500">Fuel Type</div>
               </div>
-              <div className="text-center">
+              <div className="rounded-xl border border-[#e4e9f2] bg-[#fbfcff] p-3 text-center">
                 <CalendarDays className="mx-auto h-5 w-5 text-[#d7194a]" />
-                <div className="mt-2 text-lg font-semibold">{vehicle.year ?? '—'}</div>
+                <div className="mt-1.5 text-base font-semibold">{vehicle.year ?? '—'}</div>
                 <div className="text-xs text-gray-500">Year</div>
               </div>
-              <div className="text-center">
+              <div className="rounded-xl border border-[#e4e9f2] bg-[#fbfcff] p-3 text-center">
                 <ShieldCheck className="mx-auto h-5 w-5 text-[#d7194a]" />
-                <div className="mt-2 text-lg font-semibold">{vehicle.noOfOwners ?? '—'}</div>
+                <div className="mt-1.5 text-base font-semibold">{vehicle.noOfOwners ?? '—'}</div>
                 <div className="text-xs text-gray-500">Owners</div>
               </div>
             </div>
 
-            <VehicleContactActions token={rawToken} phoneHref={phoneHref} whatsappHref={whatsappHref} mailHref={mailHref} />
-          </section>
+            <VehicleContactActions token={rawToken} phoneHref={phoneHref} whatsappHref={whatsappHref} />
+          </aside>
         </div>
 
-        <section className="mt-8 rounded-3xl border border-[#e4e9f2] bg-white p-6 shadow-sm">
-          <h2 className="mb-6 text-2xl font-bold tracking-tight">Vehicle Details</h2>
-          <div className="grid gap-8 md:grid-cols-2">
-            <div className="space-y-4">
-              {[
-                ['Make', vehicle.make || '—'],
-                ['Model / Variant', [vehicle.model, vehicle.variant].filter(Boolean).join(' / ') || vehicle.subheading],
-                ['Year of Manufacture', vehicle.year ? String(vehicle.year) : '—'],
-                ['Month of Manufacture', vehicle.month],
-                ['Fuel Type', vehicle.fuelType],
-                ['KM Driven', vehicle.kmsDriven ?? '—'],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-4 border-b border-[#edf0f5] pb-3 text-sm">
-                  <span className="text-gray-500">{label}</span>
-                  <span className="font-semibold text-gray-900">{value}</span>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-4">
-              {[
-                ['No. of Owners', vehicle.noOfOwners != null ? String(vehicle.noOfOwners) : '—'],
-                ['Colour', vehicle.colour],
-                ['Registration', vehicle.maskedRegistrationNo],
-                ['Insurance Type', vehicle.insuranceType],
-                ['Road Tax', vehicle.tax],
-                ['Status', vehicle.status],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-4 border-b border-[#edf0f5] pb-3 text-sm">
-                  <span className="text-gray-500">{label}</span>
-                  <span className="font-semibold text-gray-900">{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   )

@@ -12,6 +12,7 @@ import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
 import { normalizeRegistrationNo, validateInventoryInput } from '@/lib/validation'
 import { getInventoryBulkEmailLimits } from './emailLimits'
+import { deleteFromFirebaseStorage, isFirebaseStoragePath } from '@/lib/firebase/storage'
 
 export interface InventoryFormInput {
   registrationNo: string
@@ -684,6 +685,10 @@ async function cleanupInventoryPhotoFiles(photoPaths: Array<string | null>) {
   const root = path.resolve(uploadRoot)
 
   await Promise.all(photoPaths.map(async photoPath => {
+    if (isFirebaseStoragePath(photoPath)) {
+      await deleteFromFirebaseStorage(photoPath).catch(error => console.error('Inventory photo cleanup failed:', photoPath, error))
+      return
+    }
     if (!photoPath?.startsWith('/uploads/inventory')) return
     const resolved = path.resolve(path.join(process.cwd(), 'public', photoPath.replace(/^\//, '')))
     if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return

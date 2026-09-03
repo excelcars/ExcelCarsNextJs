@@ -9,6 +9,7 @@ import { RECIPIENT_GROUPS, resolveMessageRecipients, searchMessageRecipients, ty
 import { isSafeStoredAttachmentPath } from './attachments'
 import { access } from 'fs/promises'
 import { sanitizeEmailHtml } from '@/lib/email/sanitizeHtml'
+import { downloadFromFirebaseStorage, isFirebaseStoragePath } from '@/lib/firebase/storage'
 
 export interface TemplateFormInput {
   messageType: string
@@ -138,10 +139,16 @@ export async function sendTemplateEmail(templateId: number, toEmail: string, sel
     where: { templateId, OR: [{ scope: 'template' }, { scope: 'send', createdBy: userId, uploadId: { in: sendAttachmentIds } }] },
     select: { uploadId: true, storedPath: true, originalName: true, mimeType: true },
   })
-  const attachments = [] as Array<{ filename: string; path: string; contentType: string }>
+  const attachments = [] as Array<{ filename: string; path?: string; content?: Buffer; contentType: string }>
   for (const upload of uploads) {
-    if (!isSafeStoredAttachmentPath(upload.storedPath)) continue
-    try { await access(upload.storedPath); attachments.push({ filename: upload.originalName, path: upload.storedPath, contentType: upload.mimeType }) } catch { /* missing stored file is omitted */ }
+    try {
+      if (isFirebaseStoragePath(upload.storedPath)) {
+        attachments.push({ filename: upload.originalName, content: await downloadFromFirebaseStorage(upload.storedPath), contentType: upload.mimeType })
+      } else if (isSafeStoredAttachmentPath(upload.storedPath)) {
+        await access(upload.storedPath)
+        attachments.push({ filename: upload.originalName, path: upload.storedPath, contentType: upload.mimeType })
+      }
+    } catch { /* missing stored file is omitted */ }
   }
 
   let sentCount = 0

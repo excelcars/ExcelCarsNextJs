@@ -99,9 +99,13 @@ export function RoleAccessClient({
   useEffect(() => {
     setSavedFunctionNames(selectedRoleMappings)
     setDraftFunctionNames(selectedRoleMappings)
-    setError('')
-    setSuccess('')
   }, [selectedRoleMappings, selectedRoleId])
+
+  useEffect(() => {
+    if (!success) return
+    const dismissTimer = setTimeout(() => setSuccess(''), 5000)
+    return () => clearTimeout(dismissTimer)
+  }, [success])
 
   useEffect(() => {
     if (selectedRoleId || roles.length === 0) return
@@ -160,12 +164,18 @@ export function RoleAccessClient({
       setDiscardOpen(true)
       return
     }
+    setError('')
+    setSuccess('')
     setSelectedRoleId(nextRoleId)
   }
 
   const confirmDiscardAndSwitchRole = () => {
     setDiscardOpen(false)
-    if (pendingRoleId) setSelectedRoleId(pendingRoleId)
+    if (pendingRoleId) {
+      setError('')
+      setSuccess('')
+      setSelectedRoleId(pendingRoleId)
+    }
     setPendingRoleId(null)
   }
 
@@ -220,15 +230,19 @@ export function RoleAccessClient({
     setError('')
     setSuccess('')
     startTransition(async () => {
-      const result = await saveRoleAccess(selectedRoleId, draftFunctionNames)
-      if (!result.success) {
-        setError(result.error ?? 'Could not save role access.')
-        return
+      try {
+        const result = await saveRoleAccess(selectedRoleId, draftFunctionNames)
+        if (!result.success) {
+          setError(result.error ?? 'Could not save role access.')
+          return
+        }
+        const next = [...draftFunctionNames].sort()
+        setSavedFunctionNames(next)
+        setDraftFunctionNames(next)
+        setSuccess('Role access saved successfully.')
+      } catch {
+        setError('A server error occurred while saving role access.')
       }
-      const next = [...draftFunctionNames].sort()
-      setSavedFunctionNames(next)
-      setDraftFunctionNames(next)
-      setSuccess('Role access saved successfully.')
     })
   }
 
@@ -357,7 +371,7 @@ export function RoleAccessClient({
 
           <div className="space-y-5 px-5 py-5">
             {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-            {success && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
+            {success && <div role="status" aria-live="polite" className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
 
             {selectedRole ? (
               groupedPermissions.length === 0 ? (

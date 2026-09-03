@@ -185,10 +185,7 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
     })
   } catch (error) {
     console.error('saveRoleAccess transaction failed', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }
+    throw new Error('Role access could not be saved.')
   }
 
   revalidatePath('/config/role-access')
