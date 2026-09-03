@@ -1,6 +1,7 @@
 'use client'
 
-import { Btn, Input, SearchBar, Select } from '@/components/ui'
+import { Btn, SearchBar, Select } from '@/components/ui'
+import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import type { InquirySourceOption } from './sourceMaster'
 
@@ -96,8 +97,8 @@ export function InquiryFilters({
           {subStatusSuggestions.map(item => <option key={item} value={item}>{item}</option>)}
         </Select>
         <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} labeled onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
-        <Input label="Follow-up Date" type="date" value={followUpDate} onChange={e => onFollowUpDateChange(e.target.value)} disabled={isRoutePending} />
-        <Input label="Visited Date" type="date" value={visitedDate} onChange={e => onVisitedDateChange(e.target.value)} disabled={isRoutePending} />
+        <DateFilterInput label="Follow-up Date" value={followUpDate} onChange={onFollowUpDateChange} disabled={isRoutePending} />
+        <DateFilterInput label="Visited Date" value={visitedDate} onChange={onVisitedDateChange} disabled={isRoutePending} />
         <div className="flex flex-col gap-1 md:col-span-2">
           <label className="text-xs font-medium text-gray-600">Classification</label>
           <div className="flex flex-wrap gap-1.5">

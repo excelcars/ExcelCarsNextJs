@@ -18,11 +18,18 @@ import { FollowupFilters } from './FollowupFilters'
 import { FollowupTable } from './FollowupTable'
 import { ListPagination } from '@/components/ListPagination'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
-import { buildFollowupExportFileName, csvValue } from './followupExportHelpers'
+import { buildFollowupExportFileName, csvValue, FOLLOWUP_EXPORT_HEADERS } from './followupExportHelpers'
 import { LogFollowupModal } from './LogFollowupModal'
 import { FollowupHistoryModal } from './FollowupHistoryModal'
 import { FollowupInquiryViewModal } from './FollowupInquiryViewModal'
 import { FollowupInquiryEditModal } from './FollowupInquiryEditModal'
+import { LogFollowupRecentActivity } from './LogFollowupRecentActivity'
+import { FollowupHistoryTimeline } from './FollowupHistoryTimeline'
+import { LogFollowupContactOutcome } from './LogFollowupContactOutcome'
+import { LogFollowupRemark } from './LogFollowupRemark'
+import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime, formatListMoney as fmtMoney } from '@/lib/listFormatters'
+import { buildListQueryString } from '@/lib/listQueryParams'
+import { summarizeVehicleEmailEngagement } from '@/lib/vehicleEmailEngagement'
 
 const CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 const STATUSES = ['Open', 'FollowUp', 'Closed'] as const
@@ -175,23 +182,7 @@ interface UserOption {
   } | null
 }
 
-const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
-const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
-const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
-const fmtDateTime = (d: Date | string | null | undefined) => {
-  if (!d) return ''
-  const value = new Date(d)
-  if (Number.isNaN(value.getTime())) return ''
-  return value.toLocaleString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 const isOverdue = (d: Date | string | null) => d ? new Date(d) < new Date(new Date().toDateString()) : false
-const fmtMoney = (n: string | number | null | undefined) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
 const followupUserLabel = (user: UserOption) => {
   const employeeName = `${user.employee?.empFirstName ?? ''} ${user.employee?.empLastName ?? ''}`.trim()
   const userName = user.userName?.trim()
@@ -270,20 +261,6 @@ function fmtMonthYear(d: Date | string | null | undefined) {
     month: 'short',
     year: 'numeric',
   })
-}
-
-function summarizeVehicleEmailEngagement(link: VehicleEmailLinkRow) {
-  let callClicks = 0
-  let whatsappClicks = 0
-  let emailClicks = 0
-
-  for (const interaction of link.interactions) {
-    if (interaction.interactionType === 'call_click') callClicks += 1
-    if (interaction.interactionType === 'whatsapp_click') whatsappClicks += 1
-    if (interaction.interactionType === 'email_click') emailClicks += 1
-  }
-
-  return { callClicks, whatsappClicks, emailClicks }
 }
 
 function buildVehicleHistoryRows(
@@ -412,37 +389,7 @@ function buildVehicleHistoryRows(
 }
 
 function exportFollowupCsv(rows: FollowupRow[], status: string, classification: string) {
-  const headers = [
-    'Inquiry ID',
-    'Inquiry_No',
-    'Date_of_Inquiry',
-    'WebSite',
-    'Source Detail',
-    'Inquiry Made By',
-    'Inquiry Made By User ID',
-    'Linked_Customer_ID',
-    'Customer',
-    'MobileNo',
-    'Email',
-    'Make',
-    'Model',
-    'Variant',
-    'Year',
-    'Budget_of_Customer',
-    'Latest_Classification',
-    'Latest_Status',
-    'Latest_Sub_Status',
-    'Latest_Follow_Up_Date',
-    'Visited_Date_of_Customer',
-    'Latest_Remark',
-    'Previous_Followup_Date',
-    'Previous_Followup_Status',
-    'Previous_Followup_Sub_Status',
-    'Previous Comments',
-    'Previous_Followup_Classification',
-  ]
-
-  const lines = [headers.map(csvValue).join(',')]
+  const lines = [FOLLOWUP_EXPORT_HEADERS.map(csvValue).join(',')]
   for (const row of rows) {
     const carRows = row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails : [null]
     const historyRows = row.followupInquiry && row.followupInquiry.length > 0 ? row.followupInquiry : [null]
@@ -723,7 +670,7 @@ export function FollowupClient({
   }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
 
   const pushQuery = (params: Record<string, string>) => {
-    const q = new URLSearchParams({
+    const query = buildListQueryString({
       search: initialSearch,
       classification,
       status: initialStatus,
@@ -743,13 +690,9 @@ export function FollowupClient({
       followUpDateTo: initialFollowUpDateTo,
       visitedDateFrom: initialVisitedDateFrom,
       visitedDateTo: initialVisitedDateTo,
-      ...params,
-    })
-    for (const [k, v] of [...q.entries()]) {
-      if (!v) q.delete(k)
-    }
+    }, params)
     startRouteTransition(() => {
-      router.push(`/followup${q.toString() ? `?${q.toString()}` : ''}`)
+      router.push(`/followup${query ? `?${query}` : ''}`)
     })
   }
 
@@ -1444,70 +1387,29 @@ export function FollowupClient({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded border border-[#1B2A6B]/20 bg-blue-50 text-xs font-semibold text-[#1B2A6B]">1</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold text-gray-900">Did you reach them?</div>
-                      <div className="text-sm text-gray-500">This can prefill the follow-up outcome.</div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {CONTACT_OUTCOME_OPTIONS.map(option => (
-                          <button
-                            key={option.key}
-                            type="button"
-                            onClick={() => {
-                              const target = FRIENDLY_STATUS_OPTIONS.find(item => item.key === option.statusKey)
-                              f('contactOutcome', option.value)
-                              if (target) {
-                                f('status', target.status)
-                                f('subStatus', option.subStatus || target.subStatus)
-                                f('useOtherSubStatus', false)
-                                f('otherSubStatus', '')
-                                if (target.status === 'Closed') {
-                                  f('nextFollowUpDate', '')
-                                }
-                              } else {
-                                f('subStatus', option.subStatus)
-                                f('useOtherSubStatus', false)
-                                f('otherSubStatus', '')
-                              }
-                            }}
-                            className={`rounded-xl border px-4 py-3 text-left transition ${form.contactOutcome === option.value ? 'border-[#1B2A6B] bg-blue-50' : 'border-gray-200 bg-white hover:border-[#1B2A6B]/35 hover:bg-gray-50'}`}
-                          >
-                            <div className="text-sm font-semibold text-gray-900">{option.title}</div>
-                            <div className="mt-1 text-xs text-gray-500">{option.hint}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <LogFollowupContactOutcome
+                  options={CONTACT_OUTCOME_OPTIONS}
+                  selectedValue={form.contactOutcome}
+                  onSelect={option => {
+                    const configuredOption = CONTACT_OUTCOME_OPTIONS.find(item => item.key === option.key)
+                    if (!configuredOption) return
+                    const target = FRIENDLY_STATUS_OPTIONS.find(item => item.key === configuredOption.statusKey)
+                    f('contactOutcome', configuredOption.value)
+                    if (target) {
+                      f('status', target.status)
+                      f('subStatus', configuredOption.subStatus || target.subStatus)
+                      f('useOtherSubStatus', false)
+                      f('otherSubStatus', '')
+                      if (target.status === 'Closed') f('nextFollowUpDate', '')
+                    } else {
+                      f('subStatus', configuredOption.subStatus)
+                      f('useOtherSubStatus', false)
+                      f('otherSubStatus', '')
+                    }
+                  }}
+                />
 
-                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded border border-[#1B2A6B]/20 bg-blue-50 text-xs font-semibold text-[#1B2A6B]">2</div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold text-gray-900">What was said?</div>
-                      <div className="text-sm text-gray-500">Write the practical note the next person needs.</div>
-                      {logRow.remark?.trim() ? (
-                        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                          <span className="font-medium text-gray-900">Last remark:</span> {logRow.remark}
-                        </div>
-                      ) : null}
-                      <div className="mt-4">
-                        <Textarea
-                          label="Remark"
-                          value={form.comments}
-                          onChange={e => f('comments', e.target.value)}
-                          placeholder="Asking price, condition, kms, whether they spoke to anyone else, next expectation..."
-                          error={errors.comments}
-                          className="min-h-[120px]"
-                        />
-                        <div className="mt-1 text-xs text-gray-500">This is the main human note. Everything else is structured status.</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <LogFollowupRemark lastRemark={logRow.remark} value={form.comments} error={errors.comments} onChange={value => f('comments', value)} />
 
                 <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
                   <div className="flex items-start gap-3">
@@ -1641,58 +1543,20 @@ export function FollowupClient({
 
                 {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Recent Activity</div>
-                    <button
-                      type="button"
-                      className="text-sm font-medium text-[#1B2A6B]"
-                      onClick={() => {
-                        setLogRow(null)
-                        openFollowupView(logRow.inquiryId)
-                      }}
-                    >
-                      View full log
-                    </button>
-                  </div>
-                  {historyLoading ? (
-                    <div className="mt-4 flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border border-gray-100 bg-gray-50 text-xs text-gray-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <div>Loading follow-up history...</div>
-                    </div>
-                  ) : historyError ? (
-                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{historyError}</div>
-                  ) : (
-                    <div className="mt-4 space-y-3">
-                      {daysLate !== null && daysLate > 0 ? (
-                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                          {daysLate} day{daysLate === 1 ? '' : 's'} with nothing logged. Last scheduled follow-up was {fmtLongDate(logRow.followUpDate)}.
-                        </div>
-                      ) : null}
-                      {history.length === 0 ? (
-                        <div className="text-sm text-gray-500">No prior follow-ups logged.</div>
-                      ) : (
-                        <div className="space-y-2">
-                          {history.map(h => (
-                            <div key={h.pkFollowupId} className="grid gap-2 rounded-lg border border-gray-200 px-3 py-3 md:grid-cols-[140px_1fr]">
-                              <div className="text-sm text-gray-500">{fmtLongDate(h.createdDt ?? h.followupDate)}</div>
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-900">{contactOutcomeLabel(h.contactOutcome)}</span>
-                                  {h.followupStatus ? <Badge label={h.followupStatus} /> : null}
-                                  {h.followupSubStatus ? <span className="text-sm font-medium text-[#1B2A6B]">{h.followupSubStatus}</span> : null}
-                                  {h.followupClassification ? <span className="text-sm text-gray-500">{h.followupClassification}</span> : null}
-                                </div>
-                                <div className="mt-1 text-sm text-gray-700">{clean(h.comments) || 'No remark recorded.'}</div>
-                                {h.followupDate ? <div className="mt-1 text-xs text-gray-500">Next follow-up set for {fmtLongDate(h.followupDate)}</div> : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <LogFollowupRecentActivity
+                  history={history}
+                  loading={historyLoading}
+                  error={historyError}
+                  daysLate={daysLate}
+                  scheduledFollowupDate={logRow.followUpDate}
+                  onViewFullLog={() => {
+                    setLogRow(null)
+                    openFollowupView(logRow.inquiryId)
+                  }}
+                  formatDate={fmtLongDate}
+                  formatOutcome={contactOutcomeLabel}
+                  cleanRemark={clean}
+                />
 
                 {lastEntry ? (
                   <details className="rounded-xl border border-gray-200 bg-white px-5 py-4">
@@ -1842,134 +1706,27 @@ export function FollowupClient({
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-100 px-6 py-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Contact Cadence</div>
-                      <div className="text-sm text-gray-500">{fmtMonthYear(viewHistoryRow.dateOfInquiry)} → today</div>
-                    </div>
-                    <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4">
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700">Raised {fmtLongDate(viewHistoryRow.dateOfInquiry)}</span>
-                        {sortedHistory.slice(0, 5).reverse().map(item => (
-                          <span key={item.pkFollowupId} className="rounded-full border border-[#1B2A6B]/15 bg-white px-3 py-1 text-[#1B2A6B]">
-                            {fmtLongDate(item.createdDt ?? item.followupDate)} · {item.followupStatus ?? 'Follow-up'}
-                          </span>
-                        ))}
-                        {showOverdue ? (
-                          <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 font-medium text-red-700">
-                            {dueDays} days, no contact
-                          </span>
-                        ) : viewHistoryRow.followUpDate ? (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
-                            Next follow-up {fmtLongDate(viewHistoryRow.followUpDate)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 px-6 py-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Follow-up Log</div>
-                      <button
-                        type="button"
-                        className="text-sm font-medium text-[#1B2A6B]"
-                        onClick={() => {
-                          closeFollowupView()
-                          openLog(viewHistoryRow)
-                        }}
-                      >
-                        Add entry
-                      </button>
-                    </div>
-
-                    <div className="mt-5 space-y-5">
-                      {showOverdue ? (
-                        <div className="relative pl-10">
-                          <span className="absolute left-0 top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-red-600 bg-white" />
-                          <span className="absolute left-[7px] top-6 bottom-[-20px] w-px bg-gray-200" />
-                          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <div className="text-2xl font-semibold text-red-900">{fmtLongDate(viewHistoryRow.followUpDate)}</div>
-                              <span className="rounded-md bg-white px-2.5 py-1 text-sm text-red-700">{dueDays} days ago</span>
-                            </div>
-                            <div className="mt-3 text-xl font-semibold text-red-900">Scheduled follow-up is pending</div>
-                            <div className="mt-2 text-sm text-red-700">
-                              {latestLoggedBeforeDue && lastContact
-                                ? `This date was set earlier and nothing has been logged since ${fmtLongDate(lastContact)}.`
-                                : 'This inquiry still needs the next follow-up action to be logged.'}
-                            </div>
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              {mobileNumber ? (
-                                <Btn variant="outline" onClick={() => { window.location.href = `tel:${mobileNumber}` }}>
-                                  Call now
-                                </Btn>
-                              ) : null}
-                              <Btn onClick={() => {
-                                closeFollowupView()
-                                openLog(viewHistoryRow)
-                              }}
-                              >
-                                Reschedule
-                              </Btn>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {sortedHistory.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-gray-200 px-5 py-8 text-center text-sm text-gray-500">
-                          No follow-up history recorded yet.
-                        </div>
-                      ) : (
-                        sortedHistory.map((item, index) => {
-                          const entryAt = item.createdDt ?? item.followupDate
-                          const nextItem = sortedHistory[index + 1]
-                          const nextDate = nextItem?.createdDt ?? nextItem?.followupDate
-                          const gapDays = nextDate ? daysBetween(nextDate, entryAt) : null
-
-                          return (
-                            <div key={item.pkFollowupId} className="relative pl-10">
-                              <span className="absolute left-0 top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[#1B2A6B] bg-white" />
-                              {index < sortedHistory.length - 1 ? <span className="absolute left-[7px] top-6 bottom-[-20px] w-px bg-gray-200" /> : null}
-                              <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <div className="text-2xl font-semibold text-gray-900">{fmtLongDate(entryAt)}</div>
-                                  <div className="text-sm text-gray-500">{fmtDateTime(entryAt)}</div>
-                                  {gapDays !== null ? <span className="rounded-md bg-gray-100 px-2.5 py-1 text-sm text-gray-600">+{gapDays} days</span> : null}
-                                </div>
-
-                                <div className="mt-3 text-xl font-semibold text-gray-900">{item.followupStatus ?? 'Follow-up logged'}</div>
-                                {item.followupSubStatus ? <div className="mt-1 text-sm font-medium text-[#1B2A6B]">{item.followupSubStatus}</div> : null}
-                                <div className="mt-3 text-base text-gray-700">{clean(item.comments) || 'No remark recorded for this follow-up.'}</div>
-
-                                <div className="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-600">
-                                  <span className="font-medium text-gray-900">{item.followupClassification ?? '—'}</span>
-                                  {item.followupDate ? <span>{` · Next follow-up set for ${fmtLongDate(item.followupDate)}`}</span> : null}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-6 py-4">
-                    <div className="text-sm text-gray-500">
-                      {lastContact ? `Last activity ${fmtDateTime(lastContact)}` : 'No follow-up activity recorded yet'}
-                    </div>
-                    <div className="flex gap-3">
-                      <Btn variant="outline" onClick={closeFollowupView}>Close</Btn>
-                      <Btn onClick={() => {
-                        closeFollowupView()
-                        openLog(viewHistoryRow)
-                      }}
-                      >
-                        Log follow-up
-                      </Btn>
-                    </div>
-                  </div>
+                  <FollowupHistoryTimeline
+                    inquiryDate={viewHistoryRow.dateOfInquiry}
+                    scheduledFollowupDate={viewHistoryRow.followUpDate}
+                    history={sortedHistory}
+                    overdue={showOverdue}
+                    overdueDays={dueDays}
+                    lastContact={lastContact}
+                    latestLoggedBeforeDue={latestLoggedBeforeDue}
+                    mobileNumber={mobileNumber}
+                    onCall={() => { window.location.href = `tel:${mobileNumber}` }}
+                    onLogFollowup={() => {
+                      closeFollowupView()
+                      openLog(viewHistoryRow)
+                    }}
+                    onClose={closeFollowupView}
+                    formatLongDate={fmtLongDate}
+                    formatMonthYear={fmtMonthYear}
+                    formatDateTime={fmtDateTime}
+                    daysBetween={daysBetween}
+                    cleanRemark={clean}
+                  />
                 </div>
               )
             })()

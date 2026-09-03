@@ -2,6 +2,7 @@
 
 import { Input, SearchBar, Select } from '@/components/ui'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
+import { DateFilterInput } from '@/components/DateFilterInput'
 import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
 
 type UserOption = {
@@ -157,12 +158,12 @@ export function FollowupFilters({
       </div>
 
       <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <Input label="Inquiry Date From" type="date" value={inquiryDateFrom} onChange={e => onInquiryDateFromChange(e.target.value)} disabled={isRoutePending} />
-        <Input label="Inquiry Date To" type="date" value={inquiryDateTo} onChange={e => onInquiryDateToChange(e.target.value)} disabled={isRoutePending} />
-        <Input label="Follow-up Date From" type="date" value={followUpDateFrom} onChange={e => onFollowUpDateFromChange(e.target.value)} disabled={isRoutePending} />
-        <Input label="Follow-up Date To" type="date" value={followUpDateTo} onChange={e => onFollowUpDateToChange(e.target.value)} disabled={isRoutePending} />
-        <Input label="Visited Date From" type="date" value={visitedDateFrom} onChange={e => onVisitedDateFromChange(e.target.value)} disabled={isRoutePending} />
-        <Input label="Visited Date To" type="date" value={visitedDateTo} onChange={e => onVisitedDateToChange(e.target.value)} disabled={isRoutePending} />
+        <DateFilterInput label="Inquiry Date From" value={inquiryDateFrom} onChange={onInquiryDateFromChange} disabled={isRoutePending} />
+        <DateFilterInput label="Inquiry Date To" value={inquiryDateTo} onChange={onInquiryDateToChange} disabled={isRoutePending} />
+        <DateFilterInput label="Follow-up Date From" value={followUpDateFrom} onChange={onFollowUpDateFromChange} disabled={isRoutePending} />
+        <DateFilterInput label="Follow-up Date To" value={followUpDateTo} onChange={onFollowUpDateToChange} disabled={isRoutePending} />
+        <DateFilterInput label="Visited Date From" value={visitedDateFrom} onChange={onVisitedDateFromChange} disabled={isRoutePending} />
+        <DateFilterInput label="Visited Date To" value={visitedDateTo} onChange={onVisitedDateToChange} disabled={isRoutePending} />
       </div>
     </>
   )
