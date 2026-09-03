@@ -16,6 +16,8 @@ export default async function DashboardGroupLayout({
 
   const profile = await getCurrentUserAccessProfile()
   const accessibleRoutes = profile ? getAccessibleRoutesFromFunctionNames(profile.grantedFunctionNames) : []
+  const displayName = profile?.displayName || profile?.userName || session.user?.name || 'User'
+  const roleName = profile?.roleName || session.user?.roleName || ''
 
-  return <Layout accessibleRoutes={accessibleRoutes}>{children}</Layout>;
+  return <Layout accessibleRoutes={accessibleRoutes} displayName={displayName} roleName={roleName}>{children}</Layout>;
 }

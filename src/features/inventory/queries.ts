@@ -97,20 +97,22 @@ function buildInventoryWhere({
   }
 
   if (search.trim()) {
-    const q = search.trim()
-    andConditions.push({
-      OR: [
-        { registrationNo: { contains: q, mode: 'insensitive' } },
-        { ownedBy: { contains: q, mode: 'insensitive' } },
-        { mobileNoOwnedBy: { contains: q, mode: 'insensitive' } },
-        { colour: { contains: q, mode: 'insensitive' } },
-        { makeLegacy: { contains: q, mode: 'insensitive' } },
-        { modelLegacy: { contains: q, mode: 'insensitive' } },
-        { variantLegacy: { contains: q, mode: 'insensitive' } },
-        { carVariantMaster: { carMakeMaster: { make: { contains: q, mode: 'insensitive' } } } },
-        { carVariantMaster: { carModelMaster: { model: { contains: q, mode: 'insensitive' } } } },
-      ],
-    })
+    const searchTerms = search.trim().split(/\s+/).filter(Boolean)
+    for (const term of searchTerms) {
+      andConditions.push({
+        OR: [
+          { registrationNo: { contains: term, mode: 'insensitive' } },
+          { ownedBy: { contains: term, mode: 'insensitive' } },
+          { mobileNoOwnedBy: { contains: term, mode: 'insensitive' } },
+          { colour: { contains: term, mode: 'insensitive' } },
+          { makeLegacy: { contains: term, mode: 'insensitive' } },
+          { modelLegacy: { contains: term, mode: 'insensitive' } },
+          { variantLegacy: { contains: term, mode: 'insensitive' } },
+          { carVariantMaster: { carMakeMaster: { make: { contains: term, mode: 'insensitive' } } } },
+          { carVariantMaster: { carModelMaster: { model: { contains: term, mode: 'insensitive' } } } },
+        ],
+      })
+    }
   }
 
   if (inventoryNumber.trim()) {

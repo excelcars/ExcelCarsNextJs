@@ -79,47 +79,75 @@ function legacySkuPart(value: string) {
   return value.length < 3 ? value : value.substring(0, 3)
 }
 
-/** Returns the next inventory number using the legacy Inventory/{number} sequence. */
-export async function getNextInventoryNumber() {
-  if (!(await currentUserId())) return null
-  const latest = await prisma.inventoryManagement.findFirst({
-    where: { inventoryNumber: { not: null } },
-    orderBy: { inventoryId: 'desc' },
-    select: { inventoryNumber: true },
-  })
-  const match = latest?.inventoryNumber?.match(/^([^/]+)\/(\d+)$/)
-  return match ? `${match[1]}/${Number(match[2]) + 1}` : 'Inventory/1'
+type InventoryReadClient = Pick<Prisma.TransactionClient, 'inventoryManagement' | '$queryRaw'>
+
+async function calculateNextInventoryNumber(db: InventoryReadClient) {
+  const [sequence] = await db.$queryRaw<Array<{ value: bigint }>>`
+    SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END AS value
+    FROM public.inventory_number_seq
+  `
+  return `Inventory/${sequence?.value ?? 1}`
 }
 
-/** Returns the legacy SKU preview/next value for a make, model, and colour. */
-export async function getInventorySku(make: string, model: string, colour: string, excludeInventoryId?: number) {
-  if (!(await currentUserId())) return ''
+async function allocateInventoryNumber(db: InventoryReadClient) {
+  const [sequence] = await db.$queryRaw<Array<{ value: bigint }>>`
+    SELECT nextval('public.inventory_number_seq') AS value
+  `
+  return `Inventory/${sequence.value}`
+}
+
+async function calculateInventorySku(
+  db: InventoryReadClient,
+  make: string,
+  model: string,
+  colour: string,
+) {
   const cleanMake = make.trim()
   const cleanModel = model.trim()
   const cleanColour = colour.trim()
   if (!cleanMake || !cleanModel || !cleanColour) return ''
 
-  const previous = await prisma.inventoryManagement.findFirst({
-    where: {
-      makeLegacy: cleanMake,
-      modelLegacy: cleanModel,
-      colour: cleanColour,
-      ...(excludeInventoryId ? { NOT: { inventoryId: excludeInventoryId } } : {}),
-    },
-    orderBy: { inventoryId: 'desc' },
-    select: { sku: true },
-  })
+  const makeKey = cleanMake.toLowerCase()
+  const modelKey = cleanModel.toLowerCase()
+  const colourKey = cleanColour.toLowerCase()
+  const [counter] = await db.$queryRaw<Array<{ lastValue: number }>>`
+    SELECT last_value AS "lastValue"
+    FROM public.inventory_sku_counters
+    WHERE make_key = ${makeKey}
+      AND model_key = ${modelKey}
+      AND colour_key = ${colourKey}
+  `
+  const nextValue = (counter?.lastValue ?? 0) + 1
+  return `${legacySkuPart(cleanMake)}-${legacySkuPart(cleanModel)}-${legacySkuPart(cleanColour)}-${nextValue}`
+}
 
-  if (previous?.sku) {
-    const parts = previous.sku.split('-')
-    const last = Number(parts[parts.length - 1])
-    if (parts.length > 1 && Number.isInteger(last)) {
-      parts[parts.length - 1] = String(last + 1)
-      return parts.join('-')
-    }
-  }
+async function allocateInventorySku(db: InventoryReadClient, make: string, model: string, colour: string) {
+  const cleanMake = make.trim()
+  const cleanModel = model.trim()
+  const cleanColour = colour.trim()
+  const makeKey = cleanMake.toLowerCase()
+  const modelKey = cleanModel.toLowerCase()
+  const colourKey = cleanColour.toLowerCase()
+  const [counter] = await db.$queryRaw<Array<{ lastValue: number }>>`
+    INSERT INTO public.inventory_sku_counters (make_key, model_key, colour_key, last_value, updated_at)
+    VALUES (${makeKey}, ${modelKey}, ${colourKey}, 1, NOW())
+    ON CONFLICT (make_key, model_key, colour_key)
+    DO UPDATE SET last_value = "inventory_sku_counters".last_value + 1, updated_at = NOW()
+    RETURNING last_value AS "lastValue"
+  `
+  return `${legacySkuPart(cleanMake)}-${legacySkuPart(cleanModel)}-${legacySkuPart(cleanColour)}-${counter.lastValue}`
+}
 
-  return `${legacySkuPart(cleanMake)}-${legacySkuPart(cleanModel)}-${legacySkuPart(cleanColour)}-1`
+/** Returns the next inventory number using the legacy Inventory/{number} sequence. */
+export async function getNextInventoryNumber() {
+  if (!(await currentUserId())) return null
+  return calculateNextInventoryNumber(prisma)
+}
+
+/** Returns the legacy SKU preview/next value for a make, model, and colour. */
+export async function getInventorySku(make: string, model: string, colour: string) {
+  if (!(await currentUserId())) return ''
+  return calculateInventorySku(prisma, make, model, colour)
 }
 
 function buildData(input: InventoryFormInput) {
@@ -210,15 +238,6 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
     const relationshipError = await validateVariantRelationship(input)
     if (relationshipError) return { success: false, error: relationshipError }
 
-    const normalizedRegistrationNo = normalizeRegistrationNo(input.registrationNo)
-    if (normalizedRegistrationNo.length > 5) {
-      const duplicate = await prisma.inventoryManagement.findFirst({
-        where: { registrationNo: normalizedRegistrationNo },
-        select: { inventoryId: true },
-      })
-      if (duplicate) return { success: false, error: 'This registration number already exists on another vehicle in Inventory.' }
-    }
-
     let skuMake = input.makeLegacy
     let skuModel = input.modelLegacy
     if (input.fkVariantId && (!skuMake.trim() || !skuModel.trim())) {
@@ -229,20 +248,37 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
       skuMake = variant?.carMakeMaster?.make ?? skuMake
       skuModel = variant?.carModelMaster?.model ?? skuModel
     }
-    const sku = await getInventorySku(skuMake, skuModel, input.colour)
-    const inventoryNumber = await getNextInventoryNumber()
-    if (!inventoryNumber) return { success: false, error: 'Not authorized.' }
-    const created = await prisma.inventoryManagement.create({
-      data: {
-        ...buildData(input),
-        sku,
-        inventoryNumber,
-        createdDate: new Date(),
-        updatedDate: new Date(),
-        ...(userId ? { createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } } } : {}),
-      },
-      select: { inventoryId: true, inventoryNumber: true },
+    const outcome = await prisma.$transaction(async tx => {
+      const normalizedRegistrationNo = normalizeRegistrationNo(input.registrationNo)
+      if (normalizedRegistrationNo.length > 5) {
+        const duplicate = await tx.inventoryManagement.findFirst({
+          where: { registrationNo: normalizedRegistrationNo },
+          select: { inventoryId: true },
+        })
+        if (duplicate) return { duplicateRegistration: true as const }
+      }
+
+      const sku = await allocateInventorySku(tx, skuMake, skuModel, input.colour)
+      const inventoryNumber = await allocateInventoryNumber(tx)
+      const created = await tx.inventoryManagement.create({
+        data: {
+          ...buildData(input),
+          sku,
+          inventoryNumber,
+          createdDate: new Date(),
+          updatedDate: new Date(),
+          createdByUser: { connect: { userId } },
+          updatedByUser: { connect: { userId } },
+        },
+        select: { inventoryId: true, inventoryNumber: true },
+      })
+      return { created }
     })
+
+    if ('duplicateRegistration' in outcome) {
+      return { success: false, error: 'This registration number already exists on another vehicle in Inventory.' }
+    }
+    const { created } = outcome
 
     revalidatePath('/inventory')
     return { success: true, inventoryId: created.inventoryId, inventoryNumber: created.inventoryNumber }
@@ -361,6 +397,16 @@ export interface SyncInventoryInquiryInput {
   inquiryId: number
 }
 
+function normalizeEmailRecipients(recipients: SendInventoryEmailInput['recipients']) {
+  const uniqueRecipients = new Map<string, SendInventoryEmailInput['recipients'][number]>()
+  for (const recipient of recipients) {
+    if (!Number.isInteger(recipient.recipientId) || recipient.recipientId <= 0) continue
+    if (recipient.recipientType !== 'customer' && recipient.recipientType !== 'dealer') continue
+    uniqueRecipients.set(`${recipient.recipientType}:${recipient.recipientId}`, recipient)
+  }
+  return [...uniqueRecipients.values()]
+}
+
 export async function updateInventoryEmailRecipient(input: UpdateInventoryEmailRecipientInput): Promise<ActionResult> {
   const authorizedUserId = await currentUserId()
   if (!authorizedUserId) return { success: false, error: 'Not authorized.' }
@@ -388,6 +434,15 @@ export async function updateInventoryEmailRecipient(input: UpdateInventoryEmailR
 export async function sendInventoryEmail(inventoryId: number, input: SendInventoryEmailInput): Promise<ActionResult> {
   const authorizedUserId = await currentUserId()
   if (!authorizedUserId) return { success: false, error: 'Not authorized.' }
+  const recipients = normalizeEmailRecipients(input.recipients)
+  const limits = getInventoryBulkEmailLimits()
+  if (recipients.length === 0) return { success: false, error: 'Add at least one recipient.' }
+  if (recipients.length > limits.maxRecipients) {
+    return { success: false, error: `Add no more than ${limits.maxRecipients} recipients.` }
+  }
+  if (recipients.length > limits.maxMessages) {
+    return { success: false, error: `This send would create ${recipients.length} emails. The limit is ${limits.maxMessages}.` }
+  }
   const session = await auth()
 
   const vehicle = await prisma.inventoryManagement.findUnique({
@@ -405,7 +460,7 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
 
   const uniqueTargets = new Map<string, { toEmail: string; toName: string; customerId: number | null }>()
 
-  for (const recipient of input.recipients) {
+  for (const recipient of recipients) {
     if (recipient.recipientType === 'dealer') {
       const dealer = await prisma.dealerMaster.findUnique({ where: { dealerId: recipient.recipientId } })
       if (dealer?.dealerEmail) {
@@ -593,8 +648,8 @@ export async function sendBulkInventoryEmail(inventoryIds: number[], input: Send
   const authorizedUserId = await currentUserId()
   if (!authorizedUserId) return { success: false, error: 'Not authorized.' }
 
-  const ids = [...new Set(inventoryIds.filter(Number.isInteger))]
-  const recipients = input.recipients.filter(recipient => Number.isInteger(recipient.recipientId))
+  const ids = [...new Set(inventoryIds.filter(id => Number.isInteger(id) && id > 0))]
+  const recipients = normalizeEmailRecipients(input.recipients)
   const limits = getInventoryBulkEmailLimits()
   if (ids.length === 0) return { success: false, error: 'Select at least one vehicle.' }
   if (ids.length > limits.maxVehicles) return { success: false, error: `Select no more than ${limits.maxVehicles} vehicles for bulk email.` }

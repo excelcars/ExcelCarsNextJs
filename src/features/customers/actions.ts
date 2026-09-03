@@ -1,7 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/db/prisma'
-import { CUSTOMER_WRITE_FUNCTION } from '@/lib/access/accessCatalog'
+import { CUSTOMER_WRITE_FUNCTION, INVENTORY_FUNCTION } from '@/lib/access/accessCatalog'
 import { getAuthorizedActorForFunctions } from '@/lib/access/accessControl'
 import { normalizeCustomerName, validateCustomerInput } from './validation'
 
@@ -25,7 +25,7 @@ export async function quickCreateCustomer(input: QuickCustomerInput): Promise<Qu
   if (!validation.value) return { success: false, error: validation.error }
   const value = validation.value
 
-  const actor = await getAuthorizedActorForFunctions([CUSTOMER_WRITE_FUNCTION])
+  const actor = await getAuthorizedActorForFunctions([CUSTOMER_WRITE_FUNCTION, INVENTORY_FUNCTION])
   const userId = actor?.userId ?? null
   if (!userId) return { success: false, error: 'Not authorized.' }
 

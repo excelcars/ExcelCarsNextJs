@@ -2,7 +2,7 @@
 
 ## Status
 
-Next.js implemented; current-state behavior documented from source code.
+Next.js implemented; current-state behavior and the remaining implementation backlog are documented from source code. This file is the single Inventory SSOT and supersedes the former `Inventory_Management_improvement.md` gap-analysis document.
 
 ## Approved final business rule
 
@@ -13,7 +13,7 @@ For the final Next.js workflow, Make, Model, and Variant are all compulsory. A n
 **Route:** `/inventory`  
 **Primary page:** `app/(dashboard)/inventory/page.tsx`
 
-Inventory Management maintains vehicle inventory records and provides listing/search, add, edit, view, and delete. Vehicle image upload/photo management is currently **On Hold**. The module also provides vehicle-email sending and an Inventory-to-Inquiry synchronization workflow, which is implemented and currently **Pending testing**. Delete cleanup and direct links to downstream modules are **On Hold**. The module does not directly manage checklist, insurance, RTO, loan, or DSA records.
+Inventory Management maintains vehicle inventory records and provides listing/search, add, edit, view, and delete. Vehicle image upload/photo management is currently **On Hold**. The module also provides vehicle-email sending and an Inventory-to-Inquiry synchronization workflow, which is implemented but has known pending corrections and remains **Pending testing**. Delete cleanup is implemented and **Pending testing**. Direct links to downstream modules remain **On Hold**. The module does not directly manage checklist, insurance, RTO, loan, or DSA records.
 
 ## Source of truth
 
@@ -42,7 +42,7 @@ Inventory Management maintains vehicle inventory records and provides listing/se
 
 The page calls `canCurrentUserAccessRoute('/inventory')`; unauthorized users are redirected to `/dashboard`. The access catalog maps `/inventory` to the `Inventory_Management` function. The page is inside the authenticated dashboard route group.
 
-Mutating server actions call `getAuthorizedUserIdForRoute('/inventory')`, which requires an active authenticated user whose role grants the route's allowed function. Inventory detail, catalog, photo, and inquiry API routes call `auth()` and return `{ error: 'Unauthorized' }` with HTTP 401 when no session exists. The API routes do not repeat the route-function authorization check; their boundary is session authentication.
+Mutating Inventory server actions call `getAuthorizedUserIdForRoute('/inventory')`, which requires an active authenticated user whose role grants `Inventory_Management`. Inventory detail, photo, inquiry-search, and export API routes repeat the Inventory route authorization check and return HTTP 401 when it fails. Catalog model and variant read APIs require an authenticated session. Customer search accepts Customers, Feedback, or Inventory route access. Inventory users may search and quick-create customers from the Inventory workflow without a separate Customer Management permission; the same quick-create action also accepts `Customer_Management_Write` for Customer Management callers.
 
 The page has no separate local navigation links. Row actions open modals. Customer and dealer configuration pages are only revalidated after an email address is changed; no navigation is performed by Inventory Management itself.
 
@@ -121,7 +121,7 @@ Colour is a required editable input-plus-dropdown. Its suggestions are distinct,
 
 Insurance Type remains free text and is required when Car Registered is checked. Price is required, numeric, and must be greater than zero. While typing, the Price input displays Indian-style comma grouping (for example, `12,50,000`) while the form stores a numeric value for validation and saving; up to two decimal places are supported. Owner Type is a dropdown with `Excel Cars`, `Dealer`, and `Individual`; historical values outside those options are retained as an edit option. Selecting `Excel Cars` fills Name of Owner with `Excel Cars` and clears dealer contact details. Selecting `Dealer` shows the shared input-plus-dropdown picker; selecting a dealer fills Name of Owner, Owner Mobile, and Owner Email from Dealer Master. Owner Mobile is optional numeric text capped at 11 characters, and Owner Email is optional but format-validated. The server also restricts Owner Type to the three supported values.
 
-Customer is managed only through the Customer picker. The picker can search existing customers or create a new Customer Master record, then submits the resulting Customer ID with the inventory record. There is no separate manual Customer / Source field in the form; the legacy `customerName` value is retained for historical compatibility.
+Customer is managed only through the Customer picker. `Inventory_Management` authorizes both searching existing customers and quick-creating a new Customer Master record from this workflow; no separate Customer permission is required on the Inventory page. The picker submits the resulting Customer ID with the inventory record. There is no separate manual Customer / Source field in the form; the legacy `customerName` value is retained for historical compatibility.
 
 Catalog fetch handlers directly parse the response JSON and do not display a dedicated non-OK/error state if either catalog endpoint fails. `CustomerPicker` does display search errors, ignores stale responses using a request ID, closes on outside interaction, and supports cancelling the create-customer panel.
 
@@ -133,9 +133,9 @@ Make, Model, and Variant are passed into the save payload as compatibility text 
 
 ### Server save logic
 
-`createInventory` and `updateInventory` require a trimmed Registration No and vehicle identity, then require route authorization. They normalize registration values to uppercase with spaces removed. For normalized values longer than five characters, both actions check for another Inventory record with the same registration; update excludes the current inventory ID. A duplicate blocks saving. Values of five or fewer characters follow the legacy exception and are not duplicate-checked. The actions write empty strings as null, preserve nullable numeric values, optionally connect a catalog variant and customer, and write audit dates/user relations.
+`createInventory` and `updateInventory` require a trimmed Registration No and vehicle identity, then require route authorization. They normalize registration values to uppercase with spaces removed. For normalized values longer than five characters, both actions check for another Inventory record with the same registration; update excludes the current inventory ID. A duplicate blocks saving. Values of five or fewer characters follow the legacy exception and are not duplicate-checked. A PostgreSQL uniqueness migration has been prepared but is not yet an adequate final safeguard because it indexes the raw stored value; normalized database-level uniqueness remains pending. The actions write empty strings as null, preserve nullable numeric values, optionally connect a catalog variant and customer, and write audit dates/user relations.
 
-For a new record, the form previews the next legacy-style inventory number (`Inventory/<number>`) and keeps it read-only. On save, `createInventory` obtains the next number from the latest stored inventory number and saves it in the create operation. SKU is also read-only: after make, model, and colour are entered, the client requests `getInventorySku`. The server looks for the latest matching legacy make/model/colour SKU and increments its final numeric segment; when none exists it builds `<first 3 make>-<first 3 model>-<first 3 colour>-1` (using the full value when shorter than three characters). Catalog make/model names are used for SKU generation when legacy text is empty. Update preserves the existing inventory number and SKU unless other code changes them. Update explicitly connects or disconnects the customer and catalog variant. Neither action updates the Customer master from manually entered Customer / Source text nor upserts vehicle masters.
+For a new record, the form previews the next legacy-style inventory number (`Inventory/<number>`) and keeps it read-only. The preview is informational and may change if another user creates inventory first. On save, PostgreSQL atomically allocates the Inventory Number from `inventory_number_seq`. SKU is also read-only: after make, model, and colour are entered, the client requests `getInventorySku` for a preview. PostgreSQL maintains an atomic counter for each normalized Make + Model + Colour combination in `inventory_sku_counters`; the saved SKU uses the first three characters of each displayed value plus the allocated counter, such as `<make>-<model>-<colour>-<number>`. The authoritative Inventory Number and SKU are allocated during the create transaction and saved with the new row. Catalog make/model names are used when legacy text is empty. Update preserves the existing inventory number and SKU unless other code changes them. Update explicitly connects or disconnects the customer and catalog variant. Neither action updates the Customer master from manually entered Customer / Source text nor upserts vehicle masters.
 
 After success, the client closes the form and reloads. New records or edits whose status becomes `Booked` or `Sold` open the Update Inquiry modal before the final refresh; the user may skip synchronization.
 
@@ -145,7 +145,7 @@ The edit modal tracks a serialized form/customer baseline and asks for confirmat
 
 View calls `GET /api/inventory/{inventoryId}` lazily and displays catalog and legacy vehicle fields, ownership, customer, comments, price, status, and email-link tracking. The detail API rejects missing/invalid IDs with 400 and missing rows with 404.
 
-Delete cleanup is currently **On Hold**. The existing delete action opens a confirmation dialog stating the deletion is permanent, requires authorization, and attempts to delete the inventory row. Related-record failures are translated to a generic checklist/insurance/loan/RTO/DSA message. Photo and dependent-record cleanup is not currently expanded.
+Delete cleanup is **Implemented — testing pending**. The delete action opens a confirmation dialog stating that deletion is permanent and requires Inventory authorization. It checks for protected checklist, insurance, loan, RTO, and DSA dependencies; when a protected dependency exists, deletion is rejected. Otherwise it deletes Inventory photo database rows and the Inventory record in one database transaction, then attempts to remove the owned photo files. Missing files are tolerated and other file-cleanup failures are logged after the database deletion.
 
 ## Photo management — On Hold
 
@@ -165,9 +165,9 @@ Updating a recipient email lowercases and validates it (basic email format and m
 
 `sendInventoryEmail` rechecks authorization and vehicle existence, resolves each selected recipient from the database, ignores recipients without an email, deduplicates by lowercase email, creates a token-hashed tracked vehicle email link, renders personalized vehicle details, and calls `sendEmail`. Failed sends delete the newly created tracking link. `sendBulkInventoryEmail` is the server-authoritative bulk wrapper: it reads the environment limits, caps unique vehicles and recipients, rejects batches exceeding the total-message limit, then processes each vehicle and returns sent/failed inventory IDs. It returns a failure if no target has an email or all sends fail; partial sends return sent and failed recipients. Successful sends are shown in the modal.
 
-## Inquiry synchronization — Testing pending
+## Inquiry synchronization — Corrections and testing pending
 
-The Inventory-to-Inquiry workflow is implemented, but **testing is pending**. The current code contains an `Update Inquiry` workflow; testing must confirm the search, linking, inquiry update, multiple-vehicle behavior, and follow-up result against the approved business rule.
+The Inventory-to-Inquiry workflow is implemented, but **known corrections and testing are pending**. Before the workflow is considered complete, it must apply the approved Inquiry ownership/access rule, create the required `InquiryInventoryLink` in the same transaction, and ensure that clearing an Inventory customer cannot reuse a stale customer name. Testing must then confirm the search, link creation, inquiry update, multiple-vehicle behavior, and follow-up result against the approved business rule.
 
 In the current code, Update Inquiry opens a modal for any inventory row. The search input is debounced by 250 ms when non-empty. `GET /api/inventory/inquiries` searches inquiry number, legacy customer name, mobile, email, or linked customer using case-insensitive contains. Empty search returns 10 `FollowUp` inquiries; non-empty search returns up to 20 newest inquiries. Results show customer/contact, inquiry number, interested vehicle/year, classification, and status.
 
@@ -180,7 +180,7 @@ The user must select an inquiry. Synchronization is transactional. It:
 5. updates the newest inquiry car-detail row, or creates one when none exists, using inventory catalog/legacy vehicle identity and year; and
 6. deletes other car-detail rows for that inquiry.
 
-Success revalidates `/inventory` and `/inquiry`. After a status-triggered synchronization, the client refreshes the page when the modal is completed or skipped. The user can also open the workflow manually for any row. These behaviors are implemented and remain pending testing.
+Success revalidates `/inventory` and `/inquiry`. After a status-triggered synchronization, the client refreshes the page when the modal is completed or skipped. The user can also open the workflow manually for any row. The current transaction does not yet create an `InquiryInventoryLink`, and inquiry search/synchronization do not yet apply the Inquiry module's ownership predicate. These behaviors remain pending correction and testing.
 
 ## Downstream module links — On Hold
 
@@ -210,13 +210,45 @@ CSV columns now match the old Inventory export and use this order: Make, Model, 
 - Catalog model/variant request failures are not explicitly checked by the client before JSON parsing; customer search failures are surfaced in the picker.
 - `describeError` uses a generic “Something went wrong saving this record.” fallback for failures from save, email-recipient update, email sending, and inquiry synchronization unless a known Prisma error is mapped.
 - Client validation is stronger than server validation; direct server-action calls can bypass several client-only checks.
-- Create inventory and assign its generated number/SKU are separate database operations; an error between them can leave a newly inserted row before finalization.
+- Inventory Number uses a PostgreSQL sequence and SKU uses an atomic per-Make/Model/Colour counter table. Both are allocated during create; the read-only client previews can become stale when another user creates a record first. Sequence values may contain gaps when a transaction fails after allocation.
 - Photo file writing and database insertion are separate operations; a database failure after file write can leave an orphaned file.
 - Photo GET can return a row through either ID or legacy number, while POST requires both values and trusts the submitted inventory number for validation only as a required reference; it stores the database inventory number when available.
 - Email recipients without an address are silently excluded until no usable recipients remain.
 - Inquiry synchronization deletes additional inquiry car-detail rows by design.
 - No inventory-specific audit-history UI, bulk delete, or bulk export selection is implemented. Bulk email selection and sending are implemented through the shared Send Email modal.
 
+## Pending implementation and deferred work
+
+This section is part of the SSOT. Items marked **Pending implementation** are known correctness gaps that should be addressed. Items marked **Deferred / approval required** are not approved requirements and must not be implemented solely for legacy parity.
+
+### Pending implementation
+
+1. **P1 — Inquiry access and ownership:** Apply the approved Inquiry ownership rule to Inventory inquiry search and synchronization, or record an explicit business decision that Inventory permission grants access to every inquiry.
+2. **P1 — Normalized registration uniqueness:** Replace the pending raw-column partial unique index with a PostgreSQL partial unique expression index over the normalized registration value. Preserve the exception for null and normalized values of five or fewer characters, perform a normalized duplicate preflight, and then apply the migration.
+3. **P2 — Permanent inquiry link:** Create the approved `InquiryInventoryLink` inside the same transaction as inquiry synchronization. Use a database uniqueness constraint or link-type-aware upsert to make repeated synchronization idempotent.
+4. **P2 — Customer clearing:** Clearing the Inventory customer must clear both `customerId` and the compatibility `customerName`; inquiry synchronization must not fall back to a stale name.
+5. **P2 — Server validation audit:** Continue aligning direct server-action validation with the client contract, including normalization, numeric ranges, relation verification, and field-level errors. Required Year validation has already been corrected.
+
+### Implemented — verification or documentation pending
+
+1. **Inquiry synchronization:** Runtime testing remains pending after the three inquiry/customer corrections above. Testing must cover search authorization, repeated synchronization, multiple vehicle details, status mapping, history behavior, and permanent link creation.
+2. **Delete and photo cleanup:** Runtime testing is pending because the required server environment was unavailable. Confirm protected-dependency rejection, database rollback behavior, file deletion, missing-file tolerance, and cleanup-error logging.
+3. **Pagination sanitization:** The page now passes the sanitized `page` and `pageSize` returned by `listInventory` to `InventoryClient`. An out-of-range page is still not clamped to the final page.
+4. **Single and bulk email limits:** Both paths use environment-backed vehicle, recipient, and total-message limits. Runtime configuration should be verified in the deployed environment.
+
+### Deferred / approval required
+
+- **Vehicle catalog creation from Inventory:** Make/Model/Variant `+ Add` remains hidden. Creating catalog records from Inventory, colour/fuel master behavior, and atomic catalog-plus-inventory creation require a separate approved workflow.
+- **Legacy customer-contact parity:** The approved Next.js workflow is relation-based through `CustomerPicker`. Reintroducing manual inventory-level customer address/mobile/email capture or legacy exact-match upsert behavior requires approval.
+- **Legacy owner/dealer side effects:** The current Dealer picker fills ownership details but Inventory save does not upsert Dealer Master as a legacy side effect. Any linked-dealer persistence rule requires approval.
+- **Additional list columns:** The current table intentionally shows the operational subset; other legacy fields remain available through view/edit. Adding more columns requires a defined usability need.
+- **Legacy email rules:** Dealer eligibility rules, budget-based customer selection, and photo attachments are outside the approved bulk-email scope. Photo attachments remain tied to the photo-management decision.
+- **Legacy follow-up editor/history:** Manual follow-up status, classification, date, remarks, and history-row creation are not reproduced by the current fixed synchronization. Any replacement must define how existing inquiry vehicle details and history are preserved.
+- **Legacy photo compatibility/new-record upload:** Legacy path migration/display guarantees and attaching photos before the Inventory record exists remain deferred with photo management.
+- **XLSX export:** The accepted export is CSV with legacy-equivalent columns. XLSX requires separate approval.
+- **Exact legacy filtering:** The approved UI uses common partial search plus dropdown filters. Ten separate exact-match legacy fields are not required; fully server-authoritative filtering can be considered separately.
+- **Downstream navigation:** Direct Inventory links to Checklist, Insurance, RTO, DSA, and Financial remain On Hold until those workflows and permission rules are approved.
+
 ## SSOT rule
 
-Update this file whenever the `/inventory` route, displayed fields, filter predicates, save/delete rules, photo API, email workflow, inquiry synchronization, authorization function, or export contract changes.
+This is the only current Inventory SSOT. Update both the implemented-behavior sections and the backlog whenever the `/inventory` route, displayed fields, filter predicates, save/delete rules, photo API, email workflow, inquiry synchronization, authorization function, or export contract changes. Move an item out of the backlog only after its implementation and required verification are complete.

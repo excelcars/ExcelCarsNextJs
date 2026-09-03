@@ -64,7 +64,8 @@ export function validateInventoryInput(input: InventoryValidationInput): string 
   if (input.isCarRegistered === true && !input.tax.trim()) return 'Tax type is required for registered vehicles.'
   if (input.isCarRegistered === true && input.kmsDriven === null) return 'Kilometres driven is required for registered vehicles.'
   if (input.isCarRegistered === true && !input.insuranceType.trim()) return 'Insurance type is required for registered vehicles.'
-  if (input.year !== null && !isValidYear(input.year)) return 'Enter a valid year.'
+  if (input.year === null || input.year === undefined) return 'Year is required.'
+  if (!isValidYear(input.year)) return 'Enter a valid year.'
   if (input.kmsDriven !== null && (!Number.isFinite(input.kmsDriven) || input.kmsDriven < 0)) {
     return 'Kilometres driven must be zero or greater.'
   }
