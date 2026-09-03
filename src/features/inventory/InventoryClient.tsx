@@ -1303,7 +1303,7 @@ export function InventoryClient({
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   {photos.map(photo => (
                     <div key={photo.documentId} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                      {photo.path?.startsWith('/uploads/') ? (
+                      {photo.isUploadedHere && photo.path ? (
                         <img src={photo.path} alt={photo.fileName} className="h-40 w-full bg-gray-100 object-cover" />
                       ) : (
                         <div className="flex h-40 items-center justify-center bg-gray-100 px-3 text-center text-xs text-gray-500">

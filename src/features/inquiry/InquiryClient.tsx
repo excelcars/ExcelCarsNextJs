@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Download, Loader2, Eye, UserPlus } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus, Download, Loader2 } from 'lucide-react'
+import { Btn, Input, Select, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
@@ -256,7 +256,7 @@ function summarizeInquiryVehicles(cars: InquiryCarDetailRow[] | undefined | null
   return `${labels[0]} +${labels.length - 1} more`
 }
 
-function buildVehicleHistoryRows(
+export function buildVehicleHistoryRows(
   inquiryInventoryLinks: InquiryInventoryLinkRow[] | undefined,
   vehicleEmailLinks: VehicleEmailLinkRow[] | undefined,
 ) {
@@ -364,7 +364,7 @@ function buildVehicleHistoryRows(
   })
 }
 
-function buildInquiryActivityItems(inquiry: InquiryRow) {
+export function buildInquiryActivityItems(inquiry: InquiryRow) {
   const items: Array<{
     key: string
     at: Date | string | null
@@ -607,7 +607,6 @@ export function InquiryClient({
   const [isEmailPending, startEmailTransition] = useTransition()
   const [viewInquiryId, setViewInquiryId] = useState<number | null>(null)
   const [viewInquiry, setViewInquiry] = useState<InquiryRow | null>(null)
-  const [viewTab, setViewTab] = useState<'overview' | 'requirement' | 'activity' | 'record'>('overview')
   const [viewLoading, setViewLoading] = useState(false)
   const [viewError, setViewError] = useState('')
   const [assignInquiryRow, setAssignInquiryRow] = useState<InquiryRow | null>(null)
@@ -765,7 +764,6 @@ export function InquiryClient({
     const requestId = ++viewRequestRef.current
     setViewInquiryId(row.inquiryId)
     setViewInquiry(null)
-    setViewTab('overview')
     setViewError('')
     setViewLoading(true)
 
@@ -790,7 +788,6 @@ export function InquiryClient({
   const closeView = () => {
     setViewInquiryId(null)
     setViewInquiry(null)
-    setViewTab('overview')
     setViewError('')
     setViewLoading(false)
     if (searchParams.has('view')) {
@@ -1144,7 +1141,7 @@ export function InquiryClient({
     return () => {
       if (previousInquiryDebounceRef.current) clearTimeout(previousInquiryDebounceRef.current)
     }
-  }, [editId, form.customerId, form.mobileno, modal])
+  }, [editId, form.customerId, form.inquiryCars, form.mobileno, modal])
 
   useEffect(() => {
     if (!modal) {
@@ -1522,7 +1519,7 @@ export function InquiryClient({
           <InquiryTable empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
             <InquiryTableRows rows={initialData}>{(r, index) => (
                 <tr key={r.inquiryId} className="hover:bg-gray-50 transition">
-                  <InquiryTableDataCells row={r} number={rowNumberStart + index + 1} assignedToLabel={userOptionLabel(r.assignedToUser)} actions={<InquiryRowActions inquiryId={r.inquiryId} isEmailPending={isEmailPending && emailingId === r.inquiryId} onSendEmail={() => handleSendEmail(r)} onView={() => openView(r)} onEdit={() => openEdit(r)} onAssign={() => openAssign(r)} onDelete={() => setDeleteId(r.inquiryId)} />} />
+                  <InquiryTableDataCells row={r} number={rowNumberStart + index + 1} assignedToLabel={userOptionLabel(r.assignedToUser)} actions={<InquiryRowActions isEmailPending={isEmailPending && emailingId === r.inquiryId} onSendEmail={() => handleSendEmail(r)} onView={() => openView(r)} onEdit={() => openEdit(r)} onAssign={() => openAssign(r)} onDelete={() => setDeleteId(r.inquiryId)} />} />
                 </tr>
             )}</InquiryTableRows>
           </InquiryTable>
