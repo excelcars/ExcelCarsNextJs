@@ -105,6 +105,7 @@ export function DealerMobileAutocomplete({
               key={mobile}
               type="button"
               role="option"
+              aria-selected={value === mobile}
               onClick={() => selectMobile(mobile)}
               className="w-full border-b border-gray-50 px-3 py-2 text-left text-sm text-gray-800 last:border-0 hover:bg-gray-50"
             >

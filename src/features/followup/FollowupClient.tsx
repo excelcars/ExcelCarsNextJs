@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Phone, PhoneCall, AlertTriangle, Eye, Pencil, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, N } from '@/components/ui'
+import { AlertTriangle, Download, Loader2 } from 'lucide-react'
+import { Badge, Btn, Input, Select, Textarea, PageHeader } from '@/components/ui'
 import { logFollowup, type LogFollowupInput } from './actions'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
 import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES } from '@/features/inquiry/queries'
 import { getInquiryDetail, updateInquiry, type InquiryCarInput, type InquiryFormInput } from '@/features/inquiry/actions'
-import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
+import { isValidYear } from '@/lib/validation'
 import { FOLLOWUP_CONTACT_OUTCOMES, FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
@@ -27,7 +27,7 @@ import { LogFollowupRecentActivity } from './LogFollowupRecentActivity'
 import { FollowupHistoryTimeline } from './FollowupHistoryTimeline'
 import { LogFollowupContactOutcome } from './LogFollowupContactOutcome'
 import { LogFollowupRemark } from './LogFollowupRemark'
-import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime, formatListMoney as fmtMoney } from '@/lib/listFormatters'
+import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime } from '@/lib/listFormatters'
 import { buildListQueryString } from '@/lib/listQueryParams'
 import { summarizeVehicleEmailEngagement } from '@/lib/vehicleEmailEngagement'
 
@@ -263,7 +263,7 @@ function fmtMonthYear(d: Date | string | null | undefined) {
   })
 }
 
-function buildVehicleHistoryRows(
+export function buildVehicleHistoryRows(
   inquiryInventoryLinks: Array<{
     inquiryInventoryLinkId: number
     linkType: string

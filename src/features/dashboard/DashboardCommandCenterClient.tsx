@@ -511,15 +511,6 @@ function ActionLoad({
   )
 }
 
-function AccessNotice({ modules }: { modules: string[] }) {
-  if (modules.length === 0) return null
-  return (
-    <div className="rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs text-white/80">
-      <span className="font-semibold text-white">Limited access:</span> {modules.join(', ')} hidden.
-    </div>
-  )
-}
-
 export function DashboardCommandCenterClient(props: DashboardCommandCenterProps) {
   const [workspace, setWorkspace] = useState<Workspace>(props.initialWorkspace ?? 'overview')
   const [query, setQuery] = useState('')
@@ -698,14 +689,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     { key: 'insights' as const, label: 'Insights', count: props.leadSources.length, show: permissions.canInquiry },
   ].filter(tab => tab.show)
 
-  const restrictedModules = [
-    !permissions.canInventory ? 'Inventory' : null,
-    !permissions.canInquiry ? 'Leads' : null,
-    !permissions.canFollowup ? 'Follow-ups' : null,
-    !permissions.canInsurance ? 'Insurance' : null,
-    !permissions.canRto ? 'RTO/Payments' : null,
-  ].filter((module): module is string => !!module)
-
   const pageSize = 8
   const pageCount = Math.max(1, Math.ceil(currentRows.length / pageSize))
   const pagedAttention = currentRows.slice((page - 1) * pageSize, page * pageSize)
@@ -809,15 +792,12 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </section>
 
             <section className="grid min-h-0 gap-3 overflow-hidden md:grid-cols-[minmax(270px,1fr)_minmax(270px,1fr)]">
-              <div className="grid min-h-0 grid-rows-[1fr_auto] gap-2 overflow-hidden">
-                <ActionLoad
-                  overdueFollowups={permissions.canFollowup ? stats.overdueFollowups : 0}
-                  pendingPayments={permissions.canRto ? props.pendingPayments.length : 0}
-                  insuranceItems={permissions.canInsurance ? insuranceAttention : 0}
-                  rtoRcPending={permissions.canRto ? rtoRcPending : 0}
-                />
-                <AccessNotice modules={restrictedModules} />
-              </div>
+              <ActionLoad
+                overdueFollowups={permissions.canFollowup ? stats.overdueFollowups : 0}
+                pendingPayments={permissions.canRto ? props.pendingPayments.length : 0}
+                insuranceItems={permissions.canInsurance ? insuranceAttention : 0}
+                rtoRcPending={permissions.canRto ? rtoRcPending : 0}
+              />
               <DailyTotals stats={stats} todayStats={props.todayStats} />
             </section>
           </div>

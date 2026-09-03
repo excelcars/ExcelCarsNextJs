@@ -419,6 +419,27 @@ model Inquiry {
   @@map("inquiry")
 }
 
+model InquiryActivityLog {
+  inquiryActivityLogId Int      @id @default(autoincrement()) @map("inquiry_activity_log_id")
+  inquiryId            Int      @map("inquiry_id")
+  eventType            String   @map("event_type")
+  eventLabel           String?  @map("event_label")
+  eventDetail          String?  @map("event_detail")
+  actorUserId          Int?     @map("actor_user_id")
+  actorUserName        String?  @map("actor_user_name")
+  inventoryId          Int?     @map("inventory_id")
+  followupId           Int?     @map("followup_id")
+  inquiryCarDetailsId  Int?     @map("inquiry_car_details_id")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([inquiryId, createdAt], map: "ix_inquiry_activity_log_inquiry_id")
+  @@index([actorUserId, createdAt], map: "ix_inquiry_activity_log_actor_user_id")
+  @@index([inventoryId], map: "ix_inquiry_activity_log_inventory_id")
+  @@index([followupId], map: "ix_inquiry_activity_log_followup_id")
+  @@index([eventType], map: "ix_inquiry_activity_log_event_type")
+  @@map("inquiry_activity_log")
+}
+
 model InquirySourceMaster {
   sourceId       Int                          @id(map: "pk_inquiry_source_master") @default(autoincrement()) @map("source_id")
   code           String                       @unique(map: "uq_inquiry_source_master_code")

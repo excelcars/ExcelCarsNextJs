@@ -3,7 +3,6 @@
 import { Eye, Mail, Pencil, Trash2, UserPlus } from 'lucide-react'
 
 type InquiryRowActionsProps = {
-  inquiryId: number
   isEmailPending: boolean
   onSendEmail: () => void
   onView: () => void
@@ -12,7 +11,7 @@ type InquiryRowActionsProps = {
   onDelete: () => void
 }
 
-export function InquiryRowActions({ inquiryId, isEmailPending, onSendEmail, onView, onEdit, onAssign, onDelete }: InquiryRowActionsProps) {
+export function InquiryRowActions({ isEmailPending, onSendEmail, onView, onEdit, onAssign, onDelete }: InquiryRowActionsProps) {
   return (
     <div className="flex items-center gap-1">
       <button onClick={onSendEmail} disabled={isEmailPending} className="rounded p-1.5 text-gray-400 transition hover:bg-green-50 hover:text-green-600 disabled:opacity-40" title="Send car details by email">
