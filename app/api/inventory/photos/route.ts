@@ -1,11 +1,11 @@
-import { mkdir, unlink, writeFile } from 'fs/promises'
+import { unlink } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { deleteFromFirebaseStorage, firebasePublicUrl, isFirebaseStoragePath, uploadToFirebaseStorage } from '@/lib/firebase/storage'
 
-const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads', 'inventory')
 const PUBLIC_PREFIX = '/uploads/inventory'
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -22,6 +22,11 @@ function fileNameFromPath(photoPath: string | null) {
   if (!photoPath) return 'file'
   const normalized = photoPath.replace(/\\/g, '/')
   return normalized.split('/').pop() || normalized
+}
+
+function responsePath(photoPath: string | null) {
+  const firebaseKey = isFirebaseStoragePath(photoPath) ? photoPath!.slice('firebase://'.length) : null
+  return firebaseKey ? firebasePublicUrl(firebaseKey) : photoPath
 }
 
 export async function GET(req: NextRequest) {
@@ -45,9 +50,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     deduped.map(photo => ({
       documentId: photo.documentId,
-      path: photo.path,
+      path: responsePath(photo.path),
       inventoryNumberLegacy: photo.inventoryNumberLegacy,
-      isUploadedHere: Boolean(photo.path?.startsWith(PUBLIC_PREFIX)),
+      isUploadedHere: Boolean(photo.path?.startsWith(PUBLIC_PREFIX) || isFirebaseStoragePath(photo.path)),
       fileName: fileNameFromPath(photo.path),
     })),
   )
@@ -76,8 +81,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Vehicle not found.' }, { status: 404 })
   }
 
-  await mkdir(path.join(UPLOAD_ROOT, String(inventoryId)), { recursive: true })
-
   const results: Array<{ name: string; success: boolean; error?: string; photo?: unknown }> = []
 
   for (const file of files) {
@@ -93,16 +96,14 @@ export async function POST(req: NextRequest) {
     try {
       const ext = safeExt(file.name, file.type)
       const fileName = `${Date.now()}-${randomUUID()}${ext}`
-      const relativePath = `${PUBLIC_PREFIX}/${inventoryId}/${fileName}`
-      const absolutePath = path.join(UPLOAD_ROOT, String(inventoryId), fileName)
       const bytes = Buffer.from(await file.arrayBuffer())
-      await writeFile(absolutePath, bytes)
+      const storedPath = await uploadToFirebaseStorage(`inventory/${inventoryId}/${fileName}`, bytes, file.type)
 
       const photo = await prisma.inventoryPhotos.create({
         data: {
           fkInventoryId: inventoryId,
           inventoryNumberLegacy: inventory.inventoryNumber ?? inventoryNumber,
-          path: relativePath,
+          path: storedPath,
         },
       })
 
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         success: true,
         photo: {
           documentId: photo.documentId,
-          path: photo.path,
+          path: responsePath(photo.path),
           inventoryNumberLegacy: photo.inventoryNumberLegacy,
           isUploadedHere: true,
           fileName,
@@ -138,9 +139,16 @@ export async function DELETE(req: NextRequest) {
   const photo = await prisma.inventoryPhotos.findUnique({ where: { documentId } })
   if (!photo) return NextResponse.json({ error: 'Photo not found.' }, { status: 404 })
 
-  if (photo.path?.startsWith(PUBLIC_PREFIX)) {
+  if (isFirebaseStoragePath(photo.path)) {
+    try {
+      await deleteFromFirebaseStorage(photo.path)
+    } catch {
+      return NextResponse.json({ error: 'Could not delete the stored file.' }, { status: 500 })
+    }
+  } else if (photo.path?.startsWith(PUBLIC_PREFIX)) {
+    const uploadRoot = path.join(process.cwd(), 'public', 'uploads', 'inventory')
     const resolvedPath = path.resolve(path.join(process.cwd(), 'public', photo.path.replace(/^\//, '')))
-    const resolvedRoot = path.resolve(UPLOAD_ROOT)
+    const resolvedRoot = path.resolve(uploadRoot)
     if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) {
       return NextResponse.json({ error: 'Unsafe photo path.' }, { status: 400 })
     }

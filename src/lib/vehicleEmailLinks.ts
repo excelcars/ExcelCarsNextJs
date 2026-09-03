@@ -83,6 +83,12 @@ export function getInventoryPhotoPublicUrl(photoPath: string | null | undefined)
   const trimmedPath = photoPath?.trim()
   if (!trimmedPath) return null
   if (trimmedPath.startsWith('/uploads/')) return trimmedPath
+  if (trimmedPath.startsWith('firebase://')) {
+    const objectKey = trimmedPath.slice('firebase://'.length)
+    const bucket = process.env.FIREBASE_STORAGE_BUCKET
+    if (!objectKey || !bucket) return null
+    return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(objectKey)}?alt=media`
+  }
   if (/fileupload\/inventory_car_photo/i.test(trimmedPath.replace(/\\/g, '/'))) {
     return buildLegacyInventoryPhotoUrl(trimmedPath)
   }

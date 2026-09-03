@@ -409,18 +409,6 @@ export function RtoClient({
     return makes.find(option => clean(option.make).toLowerCase() === make) ?? null
   }, [form.carMakeLegacy, makes])
 
-  const matchedModel = useMemo(() => {
-    const model = form.carModelLegacy.trim().toLowerCase()
-    if (!model) return null
-    return models.find(option => clean(option.model).toLowerCase() === model) ?? null
-  }, [form.carModelLegacy, models])
-
-  const matchedVariant = useMemo(() => {
-    const variant = form.carVariantLegacy.trim().toLowerCase()
-    if (!variant) return null
-    return variants.find(option => clean(option.variant).toLowerCase() === variant) ?? null
-  }, [form.carVariantLegacy, variants])
-
   const makeOptions = useMemo(
     () => makes.map(option => clean(option.make)).filter(Boolean),
     [makes],

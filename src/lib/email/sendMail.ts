@@ -5,7 +5,7 @@ export interface SendEmailInput {
   subject: string
   html: string
   cc?: string
-  attachments?: Array<{ filename: string; path: string; contentType: string }>
+  attachments?: Array<{ filename: string; path?: string; content?: Buffer; contentType: string }>
 }
 
 export interface SendEmailResult {
