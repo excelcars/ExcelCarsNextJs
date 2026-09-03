@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useTransition, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard, ChevronDown, ChevronRight, Menu, Bell, LogOut,
@@ -22,12 +22,14 @@ function ProfileMenu({
   placement,
   sidebarOpen = true,
   onNavigate,
+  onExpand,
 }: {
   displayName: string
   roleName: string
   placement: 'sidebar' | 'header'
   sidebarOpen?: boolean
   onNavigate?: () => void
+  onExpand?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -61,9 +63,14 @@ function ProfileMenu({
     <div ref={menuRef} className={`relative ${isSidebar ? 'w-full' : ''}`}>
       <button
         type="button"
-        onClick={() => setOpen(value => !value)}
+        onClick={() => {
+          if (isSidebar && !sidebarOpen) onExpand?.()
+          setOpen(value => !value)
+        }}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={isSidebar && !showSidebarDetails ? `Open profile menu for ${displayName}` : undefined}
+        title={isSidebar && !showSidebarDetails ? displayName : undefined}
         className={isSidebar
           ? `w-full flex items-center gap-3 cursor-pointer ${showSidebarDetails ? 'px-2' : 'justify-center px-0'} py-2 rounded-lg text-left transition-all ${open ? 'bg-white/10' : 'hover:bg-white/10'}`
           : 'flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition hover:bg-gray-100'
@@ -72,12 +79,13 @@ function ProfileMenu({
         <div className={`${isSidebar ? 'w-8 h-8 bg-[#C8102E] text-sm' : 'w-7 h-7 bg-[#1B2A6B] text-xs'} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}>
           {displayName.charAt(0)}
         </div>
-        {isSidebar && showSidebarDetails ? (
-          <div className="flex-1 min-w-0">
-            <div className="text-white text-sm font-medium truncate">{displayName}</div>
-            <div className="text-white/50 text-xs truncate">{roleName}</div>
+        {isSidebar && showSidebarDetails && (
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-white">{displayName}</div>
+            <div className="truncate text-xs text-white/50">{roleName}</div>
           </div>
-        ) : (
+        )}
+        {!isSidebar && (
           <span className="text-sm font-medium text-gray-700 hidden sm:block">{displayName}</span>
         )}
         {isSidebar && showSidebarDetails && (open ? <ChevronUp className="w-4 h-4 text-white/60" /> : <ChevronDown className="w-4 h-4 text-white/60" />)}
@@ -185,18 +193,20 @@ export function Layout({
   roleName?: string
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ Operations: true, Configuration: true, Reports: true })
+  const [isNavigationPending, startNavigationTransition] = useTransition()
   const [pendingNavigation, setPendingNavigation] = useState<{ fromPathname: string; label: string } | null>(null)
   const accessibleRouteSet = new Set(accessibleRoutes)
 
   useEffect(() => {
-    if (pendingNavigation && pathname !== pendingNavigation.fromPathname) {
+    if (pendingNavigation && pathname !== pendingNavigation.fromPathname && !isNavigationPending) {
       setPendingNavigation(null)
     }
-  }, [pathname, pendingNavigation])
+  }, [isNavigationPending, pathname, pendingNavigation])
 
   const visibleNavItems = navItems
     .map(item => {
@@ -221,9 +231,12 @@ export function Layout({
 
   const handleNavigationClick = (event: ReactMouseEvent<HTMLAnchorElement>, label: string) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-    if (event.currentTarget.pathname === pathname) return
+    const targetPathname = event.currentTarget.pathname
+    if (targetPathname === pathname) return
 
+    event.preventDefault()
     setPendingNavigation({ fromPathname: pathname, label })
+    startNavigationTransition(() => router.push(targetPathname))
   }
 
   const isActive = (item: NavItem) => {
@@ -244,13 +257,14 @@ export function Layout({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2">
+      <nav className="sidebar-scrollbar flex-1 overflow-y-auto py-4 px-2">
         {visibleNavItems.map(item => (
           <div key={item.label} className="mb-0.5">
             {item.href ? (
               <Link
                 href={item.href}
                 onClick={event => {
+                  setSidebarOpen(true)
                   handleNavigationClick(event, item.label)
                   setMobileSidebarOpen(false)
                 }}
@@ -263,7 +277,15 @@ export function Layout({
               <div>
                 <button
                   type="button"
-                  onClick={() => toggle(item.label)}
+                  onClick={() => {
+                    // A collapsed sidebar uses the icon as the entry point;
+                    // open it first so the section label and children are visible.
+                    if (!sidebarOpen) {
+                      setSidebarOpen(true)
+                      return
+                    }
+                    toggle(item.label)
+                  }}
                   className={`w-full flex cursor-pointer items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${isActive(item) || expanded[item.label] ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
                 >
                   {item.icon}
@@ -303,7 +325,14 @@ export function Layout({
 
       {/* User */}
       <div className="border-t border-white/10 p-3">
-        <ProfileMenu displayName={displayName} roleName={roleName} placement="sidebar" sidebarOpen={sidebarOpen} onNavigate={() => setMobileSidebarOpen(false)} />
+        <ProfileMenu
+          displayName={displayName}
+          roleName={roleName}
+          placement="sidebar"
+          sidebarOpen={sidebarOpen}
+          onNavigate={() => setMobileSidebarOpen(false)}
+          onExpand={() => setSidebarOpen(true)}
+        />
       </div>
     </div>
   )
@@ -348,14 +377,13 @@ export function Layout({
         </header>
 
         {/* Page Content */}
-        <main className={`relative flex-1 overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-6'}`}>
-          {children}
+        <main className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-6'}`} aria-busy={Boolean(pendingNavigation)}>
           {pendingNavigation ? (
-            <div className="absolute inset-0 z-20 flex min-h-full flex-col items-center justify-center bg-gray-50/95" role="status" aria-live="polite" aria-label={`Loading ${pendingNavigation.label}`}>
+            <div className="flex min-h-full w-full flex-1 flex-col items-center justify-center bg-gray-50" role="status" aria-live="polite" aria-label={`Loading ${pendingNavigation.label}`}>
               <span className="h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#C8102E]" />
               <p className="mt-4 text-sm font-medium text-gray-600">Loading {pendingNavigation.label}...</p>
             </div>
-          ) : null}
+          ) : children}
         </main>
       </div>
     </div>

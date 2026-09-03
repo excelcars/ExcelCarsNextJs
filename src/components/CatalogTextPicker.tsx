@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Input } from '@/components/ui'
 
 export function CatalogTextPicker({
@@ -12,7 +12,7 @@ export function CatalogTextPicker({
   error,
   onAdd,
 }: {
-  label: string
+  label: ReactNode
   placeholder: string
   value: string
   onChange: (value: string) => void
