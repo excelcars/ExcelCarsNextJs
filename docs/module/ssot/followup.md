@@ -231,25 +231,31 @@ Vehicle filters:
 Sorting:
 
 - result rows are ordered by:
-  - `followUpDate` ascending
-  - `inquiryId` ascending
+  - the Active, Overdue, Today, and Upcoming queue presets use `followUpDate` ascending, then `inquiryId` ascending
+  - the Newest Activity preset uses `updatedDt` descending, then `inquiryId` descending
+  - the All Inquiries preset uses `dateOfInquiry` descending, then `inquiryId` descending
+
+Quick filters:
+
+- Active: current `FollowUp` inquiries, ordered by next due date
+- Overdue: active inquiries due before today
+- Today: active inquiries due today
+- Upcoming: active inquiries due after today
+- Newest Activity: all statuses, ordered by most recently saved activity
+- All Inquiries: all statuses, ordered by most recent inquiry date
+- the active quick filter is visually selected; applying one clears detailed filters first
 
 ## 8. Queue Rendering Behavior
 Each row displays:
 
-- inquiry date
-- source
-- inquiry made by user display name or user name
 - customer name
 - mobile
-- all linked cars of interest
-- budget
-- visited date
-- classification badge
-- status badge
-- sub-status
-- follow-up date
-- latest remark
+- inquiry date and source as compact customer metadata
+- linked cars of interest
+- classification and status badges with sub-status
+- next follow-up date and inquiry owner
+- latest reached outcome and remark
+- an Actions column using compact icons for log follow-up, history, inquiry view, and inquiry edit
 
 Important display rules:
 

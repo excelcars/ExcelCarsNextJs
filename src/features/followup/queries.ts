@@ -23,6 +23,7 @@ export interface FollowupFilters {
   makeId: string
   modelId: string
   variantId: string
+  sort?: 'due' | 'activity' | 'inquiry'
   page: number
   restrictToUserId?: number | null
   ownershipMode?: InquiryOwnershipMode
@@ -97,6 +98,20 @@ function followupListSelect() {
             carModelMaster: { select: { model: true } },
           },
         },
+      },
+    },
+    followupInquiry: {
+      orderBy: [{ createdDt: 'desc' }, { pkFollowupId: 'desc' }],
+      take: 1,
+      select: {
+        pkFollowupId: true,
+        createdDt: true,
+        followupDate: true,
+        contactOutcome: true,
+        followupStatus: true,
+        followupSubStatus: true,
+        followupClassification: true,
+        comments: true,
       },
     },
   } satisfies Prisma.InquirySelect
@@ -267,6 +282,7 @@ export async function listFollowupQueue({
   makeId,
   modelId,
   variantId,
+  sort,
   page,
   restrictToUserId = null,
   ownershipMode = 'created-or-assigned',
@@ -300,7 +316,11 @@ export async function listFollowupQueue({
     prisma.inquiry.findMany({
       where,
       select: followupListSelect(),
-      orderBy: [{ followUpDate: 'asc' }, { inquiryId: 'asc' }],
+      orderBy: sort === 'activity'
+        ? [{ updatedDt: 'desc' }, { inquiryId: 'desc' }]
+        : sort === 'inquiry'
+          ? [{ dateOfInquiry: 'desc' }, { inquiryId: 'desc' }]
+          : [{ followUpDate: 'asc' }, { inquiryId: 'asc' }],
       skip,
       take: FOLLOWUP_PAGE_SIZE,
     }),

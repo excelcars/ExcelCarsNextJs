@@ -119,8 +119,8 @@ interface FollowupRow {
 
 interface HistoryEntry {
   pkFollowupId: number
-  createdDt?: string | null
-  followupDate: string | null
+  createdDt?: Date | string | null
+  followupDate: Date | string | null
   contactOutcome?: string | null
   followupStatus: string | null
   followupSubStatus: string | null
@@ -508,6 +508,7 @@ export function FollowupClient({
   makeId,
   modelId,
   variantId,
+  sort: initialSort,
   total,
   page,
   pageCount,
@@ -538,6 +539,7 @@ export function FollowupClient({
   makeId: string
   modelId: string
   variantId: string
+  sort: 'due' | 'activity' | 'inquiry'
   total: number
   page: number
   pageCount: number
@@ -553,6 +555,7 @@ export function FollowupClient({
   const router = useRouter()
   const [search, setSearch] = useState(initialSearch)
   const [status, setStatus] = useState(initialStatus)
+  const [sort, setSort] = useState(initialSort)
   const [contactOutcome, setContactOutcome] = useState(initialContactOutcome)
   const [customerName, setCustomerName] = useState(initialCustomerName)
   const [subStatus, setSubStatus] = useState(initialSubStatus)
@@ -610,6 +613,7 @@ export function FollowupClient({
   const activeFilterCount = [
     search.trim() ? 1 : 0,
     status !== 'FollowUp' ? 1 : 0,
+    sort !== 'due' ? 1 : 0,
     contactOutcome ? 1 : 0,
     customerName.trim() ? 1 : 0,
     subStatus.trim() ? 1 : 0,
@@ -630,6 +634,7 @@ export function FollowupClient({
   const hasActiveFilters = Boolean(
     search.trim() ||
     status !== 'FollowUp' ||
+    sort !== 'due' ||
     contactOutcome ||
     customerName.trim() ||
     subStatus.trim() ||
@@ -652,6 +657,7 @@ export function FollowupClient({
   useEffect(() => {
     setSearch(initialSearch)
     setStatus(initialStatus)
+    setSort(initialSort)
     setContactOutcome(initialContactOutcome)
     setCustomerName(initialCustomerName)
     setSubStatus(initialSubStatus)
@@ -667,7 +673,7 @@ export function FollowupClient({
     if (restricted && currentUserId) {
       setUserId(currentUserId)
     }
-  }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
+  }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialSort, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
 
   const pushQuery = (params: Record<string, string>) => {
     const query = buildListQueryString({
@@ -683,6 +689,7 @@ export function FollowupClient({
       makeId,
       modelId,
       variantId,
+      sort: initialSort,
       page: String(page),
       inquiryDateFrom: initialInquiryDateFrom,
       inquiryDateTo: initialInquiryDateTo,
@@ -1197,6 +1204,7 @@ export function FollowupClient({
   const resetFilters = () => {
     setSearch('')
     setStatus('FollowUp')
+    setSort('due')
     setContactOutcome('')
     setSubStatus('')
     setWebsite('')
@@ -1219,6 +1227,7 @@ export function FollowupClient({
       makeId: '',
       modelId: '',
       variantId: '',
+      sort: 'due',
       classification: 'All',
       inquiryDateFrom: '',
       inquiryDateTo: '',
@@ -1230,11 +1239,54 @@ export function FollowupClient({
     })
   }
 
+  const applyQuickFilter = (preset: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all') => {
+    const today = new Date()
+    const formatDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const common = {
+      search: '', classification: 'All', contactOutcome: '', customerName: '', subStatus: '', website: '', customerMobile: '', userId: '',
+      makeId: '', modelId: '', variantId: '', inquiryDateFrom: '', inquiryDateTo: '', visitedDateFrom: '', visitedDateTo: '', page: '1',
+    }
+    const presets = {
+      active: { status: 'FollowUp', sort: 'due', followUpDateFrom: '', followUpDateTo: '' },
+      overdue: { status: 'FollowUp', sort: 'due', followUpDateFrom: '', followUpDateTo: formatDate(yesterday) },
+      today: { status: 'FollowUp', sort: 'due', followUpDateFrom: formatDate(today), followUpDateTo: formatDate(today) },
+      upcoming: { status: 'FollowUp', sort: 'due', followUpDateFrom: formatDate(tomorrow), followUpDateTo: '' },
+      activity: { status: 'All', sort: 'activity', followUpDateFrom: '', followUpDateTo: '' },
+      all: { status: 'All', sort: 'inquiry', followUpDateFrom: '', followUpDateTo: '' },
+    } as const
+    pushQuery({ ...common, ...presets[preset] })
+  }
+
+  const formatLocalDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+  const quickFilterToday = new Date()
+  const quickFilterYesterday = new Date(quickFilterToday)
+  quickFilterYesterday.setDate(quickFilterYesterday.getDate() - 1)
+  const quickFilterTomorrow = new Date(quickFilterToday)
+  quickFilterTomorrow.setDate(quickFilterTomorrow.getDate() + 1)
+  const activeQuickFilter = status === 'FollowUp' && sort === 'due' && !followUpDateFrom && !followUpDateTo
+    ? 'active'
+    : status === 'FollowUp' && sort === 'due' && !followUpDateFrom && followUpDateTo === formatLocalDate(quickFilterYesterday)
+      ? 'overdue'
+      : status === 'FollowUp' && sort === 'due' && followUpDateFrom === formatLocalDate(quickFilterToday) && followUpDateTo === formatLocalDate(quickFilterToday)
+        ? 'today'
+        : status === 'FollowUp' && sort === 'due' && followUpDateFrom === formatLocalDate(quickFilterTomorrow) && !followUpDateTo
+          ? 'upcoming'
+          : status === 'All' && sort === 'activity'
+            ? 'activity'
+            : status === 'All' && sort === 'inquiry'
+              ? 'all'
+              : ''
+  const resultLabel = status === 'Closed' ? 'closed inquiries' : status === 'All' ? 'matching inquiries' : status === 'FollowUp' ? 'active follow-ups' : 'open inquiries'
+
   return (
     <div>
       <PageHeader
         title="Follow-up Queue"
-        subtitle={`${total.toLocaleString('en-IN')} ${status === 'Closed' ? 'closed' : status === 'All' ? 'matching' : 'open'} inquiries${overdueCount && status !== 'Closed' ? ` · ${overdueCount} overdue on this page` : ''}${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}`}
+        subtitle={`${total.toLocaleString('en-IN')} ${resultLabel}${overdueCount && status !== 'Closed' ? ` · ${overdueCount} overdue on this page` : ''}${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}`}
         action={
           <Btn variant="outline" size="sm" onClick={exportAllMatchingFollowups} disabled={isExporting || total === 0}>
             <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}
@@ -1248,6 +1300,23 @@ export function FollowupClient({
       {successMessage ? (
         <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
       ) : null}
+
+      <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick follow-up filters">
+        {[
+          ['active', 'Active'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
+        ].map(([preset, label]) => (
+          <button
+            key={preset}
+            type="button"
+            onClick={() => applyQuickFilter(preset as 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all')}
+            disabled={isRoutePending}
+            aria-pressed={activeQuickFilter === preset}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${activeQuickFilter === preset ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <FollowupFilters
         search={search}
@@ -1331,6 +1400,8 @@ export function FollowupClient({
         >
           <FollowupTable
             rows={initialData}
+            page={page}
+            pageSize={25}
             onLogFollowup={openLog}
             onViewFollowup={openFollowupView}
             onViewInquiry={openInquiryView}
