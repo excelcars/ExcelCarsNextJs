@@ -41,6 +41,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This vehicle link is no longer available.' }, { status: 404 })
   }
 
+  const vehicle = trackedLink.inventoryManagement
+  const now = new Date()
+
+  // Links sent from an existing inquiry already identify the sales record. Some
+  // inventory-email links predate that relation, so fall back to an active
+  // inquiry for the same customer and vehicle before creating a new lead.
+  const linkedInquiry = trackedLink.inquiryId
+    ? await prisma.inquiry.findUnique({
+        where: { inquiryId: trackedLink.inquiryId },
+        select: { inquiryId: true, inquiryNo: true },
+      })
+    : trackedLink.customerId
+      ? await prisma.inquiry.findFirst({
+          where: {
+            customerId: trackedLink.customerId,
+            status: { not: 'Closed' },
+            OR: [
+              { inquiryInventoryLinks: { some: { inventoryId: vehicle.inventoryId, isActive: true } } },
+              ...(vehicle.fkVariantId ? [{ inquiryCarDetails: { some: { fkVariantId: vehicle.fkVariantId } } }] : []),
+            ],
+          },
+          select: { inquiryId: true, inquiryNo: true },
+          orderBy: [{ updatedDt: 'desc' }, { inquiryId: 'desc' }],
+        })
+      : null
+
+  if (linkedInquiry) {
+      try {
+        await prisma.$transaction([
+          prisma.inquiry.update({
+            where: { inquiryId: linkedInquiry.inquiryId },
+            data: { updatedDt: now },
+          }),
+          prisma.inquiryActivityLog.create({
+            data: {
+              inquiryId: linkedInquiry.inquiryId,
+              eventType: 'public_vehicle_enquiry_received',
+              eventLabel: 'Customer enquired from vehicle link',
+              eventDetail: [
+                `Vehicle ${vehicle.inventoryNumber ?? `#${vehicle.inventoryId}`}`,
+                name ? `Submitted by ${name}` : '',
+                message || '',
+              ].filter(Boolean).join(' · '),
+              inventoryId: vehicle.inventoryId,
+              createdAt: now,
+            },
+          }),
+        ])
+      } catch (error) {
+        console.error('Public vehicle enquiry could not be added to the linked inquiry:', error)
+        return NextResponse.json({ error: 'Could not submit your enquiry. Please try again or contact us by phone.' }, { status: 500 })
+      }
+
+      return NextResponse.json({ success: true, inquiryId: linkedInquiry.inquiryId, reusedInquiry: true })
+  }
+
   const source = await prisma.inquirySourceMaster.findUnique({
     where: { code: 'EXCEL_CARS_MUMBAI' },
     select: { sourceId: true, displayName: true },
@@ -49,8 +105,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Enquiries are temporarily unavailable. Please call or WhatsApp us instead.' }, { status: 503 })
   }
 
-  const vehicle = trackedLink.inventoryManagement
-  const now = new Date()
   const inquiryNo = `WEB-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8).toUpperCase()}`
 
   try {
