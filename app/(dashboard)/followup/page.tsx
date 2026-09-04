@@ -22,6 +22,7 @@ export default async function FollowupPage({
     makeId?: string
     modelId?: string
     variantId?: string
+    sort?: string
     page?: string
     inquiryDateFrom?: string
     inquiryDateTo?: string
@@ -45,6 +46,7 @@ export default async function FollowupPage({
   const makeId = sp.makeId ?? ''
   const modelId = sp.modelId ?? ''
   const variantId = sp.variantId ?? ''
+  const sort = sp.sort === 'activity' || sp.sort === 'inquiry' ? sp.sort : 'due'
   const page = Math.max(1, Number(sp.page) || 1)
   const inquiryDateFrom = sp.inquiryDateFrom ?? ''
   const inquiryDateTo = sp.inquiryDateTo ?? ''
@@ -71,6 +73,7 @@ export default async function FollowupPage({
       makeId,
       modelId,
       variantId,
+      sort,
       page,
       inquiryDateFrom,
       inquiryDateTo,
@@ -113,6 +116,7 @@ export default async function FollowupPage({
       makeId={makeId}
       modelId={modelId}
       variantId={variantId}
+      sort={sort}
       total={rows.total}
       page={rows.page}
       pageCount={rows.pageCount}

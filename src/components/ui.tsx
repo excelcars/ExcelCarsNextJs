@@ -134,14 +134,14 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
   )
 }
 
-export function Table({ headers, children, empty = false, emptyMessage = 'No records found' }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string }) {
+export function Table({ headers, children, empty = false, emptyMessage = 'No records found', stickyLastColumn = false, minWidthClass = 'min-w-[1860px]' }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string; stickyLastColumn?: boolean; minWidthClass?: string }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-[1860px] table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal">
+      <table className={`w-full ${minWidthClass} table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal`}>
         <thead>
           <tr className="bg-white-50 border-b border-gray-200">
-            {headers.map(h => (
-              <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+            {headers.map((h, index) => (
+              <th key={h} className={`text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider ${stickyLastColumn && index === headers.length - 1 ? 'sticky right-0 z-20 bg-white shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>{h}</th>
             ))}
           </tr>
         </thead>
