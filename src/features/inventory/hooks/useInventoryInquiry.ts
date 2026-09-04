@@ -19,7 +19,11 @@ export function useInventoryInquiry() {
       setInquiryLoading(true)
       setInquiryError('')
       try {
-        const res = await fetch(`/api/inventory/inquiries?q=${encodeURIComponent(inquiryQuery)}`)
+        const make = inquiryRow.carVariantMaster?.carMakeMaster?.make ?? inquiryRow.makeLegacy ?? ''
+        const model = inquiryRow.carVariantMaster?.carModelMaster?.model ?? inquiryRow.modelLegacy ?? ''
+        const variant = inquiryRow.carVariantMaster?.variant ?? inquiryRow.variantLegacy ?? ''
+        const params = new URLSearchParams({ q: inquiryQuery, make, model, variant })
+        const res = await fetch(`/api/inventory/inquiries?${params.toString()}`)
         const payload = await res.json()
         if (inquiryRequestRef.current !== requestId) return
         if (!res.ok) {

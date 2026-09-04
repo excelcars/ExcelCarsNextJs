@@ -49,14 +49,15 @@ export interface InventoryValidationInput {
   mobileNoOwnedBy: string
   emailIdOwnedBy: string
   noOfOwners: number | null
+  customerId: number | null
   customerName: string
 }
 
 export function validateInventoryInput(input: InventoryValidationInput): string | null {
   if (!input.fkVariantId) return 'Variant is required.'
-  if (!input.registrationNo.trim()) return 'Registration number is required.'
+  if (input.isCarRegistered === true && !input.registrationNo.trim()) return 'Registration number is required for registered vehicles.'
   if (!input.colour.trim()) return 'Colour is required.'
-  if (!input.fuelType.trim()) return 'Fuel type is required.'
+  if (input.isCarRegistered === true && !input.fuelType.trim()) return 'Fuel type is required for registered vehicles.'
   if (!input.status.trim()) return 'Status is required.'
   if (!input.ownedType.trim()) return 'Owner type is required.'
   if (!['Excel Cars', 'Dealer', 'Individual'].includes(input.ownedType.trim())) return 'Select a valid owner type.'
@@ -72,13 +73,16 @@ export function validateInventoryInput(input: InventoryValidationInput): string 
   if (input.price === null || !Number.isFinite(input.price) || input.price <= 0) {
     return 'Price must be greater than zero.'
   }
-  if (input.noOfOwners === null || !Number.isInteger(input.noOfOwners) || input.noOfOwners < 1) {
+  if (input.isCarRegistered === true && (input.noOfOwners === null || !Number.isInteger(input.noOfOwners) || input.noOfOwners < 1)) {
     return 'Number of owners must be at least one.'
+  }
+  if (input.isCarRegistered !== true && input.noOfOwners !== null && (!Number.isInteger(input.noOfOwners) || input.noOfOwners < 0)) {
+    return 'Number of owners must be a whole number of zero or greater.'
   }
   if (!isValidInventoryOwnerMobile(input.mobileNoOwnedBy)) return 'Owner mobile must contain only numbers and be at most 11 digits.'
   if (!isValidEmail(input.emailIdOwnedBy)) return 'Enter a valid owner email address.'
-  if (input.status.trim().toLowerCase() === 'sold' && !input.customerName.trim()) {
-    return 'Customer name is required for Sold inventory.'
+  if (input.status.trim().toLowerCase() === 'sold' && !input.customerId) {
+    return 'Select a customer for Sold inventory.'
   }
   return null
 }

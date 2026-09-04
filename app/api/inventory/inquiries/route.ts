@@ -6,23 +6,52 @@ export async function GET(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
-  const where = q
-    ? {
-        OR: [
+  const make = req.nextUrl.searchParams.get('make')?.trim() ?? ''
+  const model = req.nextUrl.searchParams.get('model')?.trim() ?? ''
+  const variant = req.nextUrl.searchParams.get('variant')?.trim() ?? ''
+  const vehicleConditions = [
+    make ? {
+      OR: [
+        { makeLegacy: { contains: make, mode: 'insensitive' as const } },
+        { carVariantMaster: { carMakeMaster: { make: { contains: make, mode: 'insensitive' as const } } } },
+      ],
+    } : null,
+    model ? {
+      OR: [
+        { modelLegacy: { contains: model, mode: 'insensitive' as const } },
+        { carVariantMaster: { carModelMaster: { model: { contains: model, mode: 'insensitive' as const } } } },
+      ],
+    } : null,
+    variant ? {
+      OR: [
+        { variantLegacy: { contains: variant, mode: 'insensitive' as const } },
+        { carVariantMaster: { variant: { contains: variant, mode: 'insensitive' as const } } },
+      ],
+    } : null,
+  ].filter((condition): condition is NonNullable<typeof condition> => condition !== null)
+  const inquiryCarWhere = vehicleConditions.length > 0 ? { AND: vehicleConditions } : undefined
+
+  const where = {
+    ...(inquiryCarWhere ? { inquiryCarDetails: { some: inquiryCarWhere } } : {}),
+    ...(q
+      ? {
+          OR: [
           { inquiryNo: { contains: q, mode: 'insensitive' as const } },
           { customerNameLegacy: { contains: q, mode: 'insensitive' as const } },
           { mobileno: { contains: q, mode: 'insensitive' as const } },
           { email: { contains: q, mode: 'insensitive' as const } },
           { customer: { custName: { contains: q, mode: 'insensitive' as const } } },
-        ],
-      }
-    : { status: 'FollowUp' }
+          ],
+        }
+      : {}),
+  }
 
   const rows = await prisma.inquiry.findMany({
     where,
     include: {
       customer: { select: { custId: true, custName: true, custMobile: true, custEmail: true } },
       inquiryCarDetails: {
+        ...(inquiryCarWhere ? { where: inquiryCarWhere } : {}),
         include: {
           carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } },
         },
@@ -30,7 +59,7 @@ export async function GET(req: NextRequest) {
       },
     },
     orderBy: { inquiryId: 'desc' },
-    take: q ? 20 : 10,
+    take: 20,
   })
 
   return NextResponse.json(rows)

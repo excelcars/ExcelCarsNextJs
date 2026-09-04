@@ -83,18 +83,15 @@ function legacySkuPart(value: string) {
 type InventoryReadClient = Pick<Prisma.TransactionClient, 'inventoryManagement' | '$queryRaw'>
 
 async function calculateNextInventoryNumber(db: InventoryReadClient) {
-  const [sequence] = await db.$queryRaw<Array<{ value: bigint }>>`
-    SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END AS value
-    FROM public.inventory_number_seq
+  const rows = await db.$queryRaw<Array<{ max_inventory_number: number | bigint | null }>>`
+    SELECT COALESCE(MAX((regexp_match(inventory_number, '([0-9]+)$'))[1]::int), 0) AS max_inventory_number
+    FROM inventory_management
+    WHERE inventory_number ~ '[0-9]+$'
   `
-  return `Inventory/${sequence?.value ?? 1}`
-}
-
-async function allocateInventoryNumber(db: InventoryReadClient) {
-  const [sequence] = await db.$queryRaw<Array<{ value: bigint }>>`
-    SELECT nextval('public.inventory_number_seq') AS value
-  `
-  return `Inventory/${sequence.value}`
+  const rawMax = rows[0]?.max_inventory_number
+  const maxInventoryNumber = typeof rawMax === 'bigint' ? Number(rawMax) : Number(rawMax ?? 0)
+  const safeMax = Number.isFinite(maxInventoryNumber) && maxInventoryNumber > 0 ? maxInventoryNumber : 0
+  return `Inventory/${safeMax + 1}`
 }
 
 async function calculateInventorySku(
@@ -139,7 +136,7 @@ async function allocateInventorySku(db: InventoryReadClient, make: string, model
   return `${legacySkuPart(cleanMake)}-${legacySkuPart(cleanModel)}-${legacySkuPart(cleanColour)}-${counter.lastValue}`
 }
 
-/** Returns the next inventory number using the legacy Inventory/{number} sequence. */
+/** Returns the next inventory number using the highest existing Inventory/{number} suffix. */
 export async function getNextInventoryNumber() {
   if (!(await currentUserId())) return null
   return calculateNextInventoryNumber(prisma)
@@ -260,7 +257,7 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
       }
 
       const sku = await allocateInventorySku(tx, skuMake, skuModel, input.colour)
-      const inventoryNumber = await allocateInventoryNumber(tx)
+      const inventoryNumber = await calculateNextInventoryNumber(tx)
       const created = await tx.inventoryManagement.create({
         data: {
           ...buildData(input),

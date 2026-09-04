@@ -59,7 +59,7 @@ export function Btn({ children, onClick, variant = 'primary', size = 'md', type 
   )
 }
 
-export function Input({ label, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string; error?: boolean }) {
+export function Input({ label, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: ReactNode; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
@@ -72,7 +72,7 @@ export function Input({ label, error, ...props }: InputHTMLAttributes<HTMLInputE
   )
 }
 
-export function Select({ label, children, error, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: string; error?: boolean }) {
+export function Select({ label, children, error, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: ReactNode; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
@@ -89,7 +89,7 @@ export function Select({ label, children, error, ...props }: SelectHTMLAttribute
   )
 }
 
-export function Textarea({ label, error, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: boolean }) {
+export function Textarea({ label, error, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: ReactNode; error?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}

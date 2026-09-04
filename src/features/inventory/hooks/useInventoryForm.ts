@@ -56,7 +56,7 @@ export function useInventoryForm(initialForm: InventoryFormInput, options: { mak
   }
   const onCustomerChange = (customer: CustomerOption | null) => {
     setSelectedCustomer(customer)
-    setForm(prev => ({ ...prev, customerId: customer?.custId ?? null, customerName: customer?.custName ?? prev.customerName }))
+    setForm(prev => ({ ...prev, customerId: customer?.custId ?? null, customerName: customer?.custName ?? '' }))
   }
 
   const addCatalogValue = async () => {
