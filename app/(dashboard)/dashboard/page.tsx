@@ -17,7 +17,7 @@ import {
 } from '@/features/dashboard/DashboardCommandCenterClient'
 import { getCurrentUserAccessProfile } from '@/lib/access/accessControl'
 
-const DASHBOARD_WORKSPACES = ['overview', 'leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays', 'insights'] as const
+const DASHBOARD_WORKSPACES = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays', 'insights'] as const
 type DashboardWorkspace = typeof DASHBOARD_WORKSPACES[number]
 
 function isDashboardWorkspace(value: string | undefined): value is DashboardWorkspace {
@@ -38,7 +38,7 @@ export default async function DashboardPage({
   searchParams?: Promise<{ workspace?: string }>
 }) {
   const sp = await searchParams
-  const initialWorkspace = isDashboardWorkspace(sp?.workspace) ? sp.workspace : 'overview'
+  const initialWorkspace = isDashboardWorkspace(sp?.workspace) ? sp.workspace : 'leads'
   const [session, profile] = await Promise.all([auth(), getCurrentUserAccessProfile()])
   const granted = new Set(profile?.grantedFunctionNames ?? [])
   const permissions = {

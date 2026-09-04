@@ -24,7 +24,18 @@ export function InventoryHeader({
     <PageHeader
       title="Inventory Management"
       subtitle={`${total.toLocaleString('en-IN')} vehicles${status !== 'All' ? ` · ${status}` : ''}`}
-      action={<div className="flex items-center gap-2"><Btn variant="outline" size="sm" onClick={onBulkEmail} disabled={selectedCount === 0}><Mail className="w-3.5 h-3.5" />Send Email{selectedCount > 0 ? ` (${selectedCount})` : ''}</Btn><Btn variant="outline" size="sm" onClick={onExport} disabled={isExporting || total === 0}><Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}</Btn><Btn size="sm" onClick={onAdd}><Plus className="w-3.5 h-3.5" />Add Vehicle</Btn></div>}
+      action={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {selectedCount === 0 && <span className="text-xs text-amber-700">Select at least one inventory vehicle to send an email.</span>}
+          <Btn variant="outline" size="sm" onClick={onBulkEmail} disabled={selectedCount === 0}>
+            <Mail className="w-3.5 h-3.5" />Send Email{selectedCount > 0 ? ` (${selectedCount})` : ''}
+          </Btn>
+          <Btn variant="outline" size="sm" onClick={onExport} disabled={isExporting || total === 0}>
+            <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}
+          </Btn>
+          <Btn size="sm" onClick={onAdd}><Plus className="w-3.5 h-3.5" />Add Vehicle</Btn>
+        </div>
+      }
     />
   )
 }

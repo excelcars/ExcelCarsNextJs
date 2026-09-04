@@ -44,15 +44,30 @@ export async function POST(req: NextRequest) {
   const vehicle = trackedLink.inventoryManagement
   const now = new Date()
 
-  // Links sent from an existing inquiry already identify the customer and the
-  // sales record. A submitted enquiry here is renewed interest, not a new lead.
-  if (trackedLink.inquiryId) {
-    const linkedInquiry = await prisma.inquiry.findUnique({
-      where: { inquiryId: trackedLink.inquiryId },
-      select: { inquiryId: true, inquiryNo: true },
-    })
+  // Links sent from an existing inquiry already identify the sales record. Some
+  // inventory-email links predate that relation, so fall back to an active
+  // inquiry for the same customer and vehicle before creating a new lead.
+  const linkedInquiry = trackedLink.inquiryId
+    ? await prisma.inquiry.findUnique({
+        where: { inquiryId: trackedLink.inquiryId },
+        select: { inquiryId: true, inquiryNo: true },
+      })
+    : trackedLink.customerId
+      ? await prisma.inquiry.findFirst({
+          where: {
+            customerId: trackedLink.customerId,
+            status: { not: 'Closed' },
+            OR: [
+              { inquiryInventoryLinks: { some: { inventoryId: vehicle.inventoryId, isActive: true } } },
+              ...(vehicle.fkVariantId ? [{ inquiryCarDetails: { some: { fkVariantId: vehicle.fkVariantId } } }] : []),
+            ],
+          },
+          select: { inquiryId: true, inquiryNo: true },
+          orderBy: [{ updatedDt: 'desc' }, { inquiryId: 'desc' }],
+        })
+      : null
 
-    if (linkedInquiry) {
+  if (linkedInquiry) {
       try {
         await prisma.$transaction([
           prisma.inquiry.update({
@@ -80,7 +95,6 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ success: true, inquiryId: linkedInquiry.inquiryId, reusedInquiry: true })
-    }
   }
 
   const source = await prisma.inquirySourceMaster.findUnique({

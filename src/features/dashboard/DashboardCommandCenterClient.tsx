@@ -14,13 +14,13 @@ import {
 import { Badge } from '@/components/ui'
 import { LeadSourceChart } from './LeadSourceChart'
 
-type Workspace = 'overview' | 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'birthdays' | 'insights'
+type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'birthdays' | 'insights'
 type SortMode = 'priority' | 'dateAsc' | 'dateDesc'
 type DateValue = string | Date | null
-const DASHBOARD_WORKSPACES: Workspace[] = ['overview', 'leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays', 'insights']
+const DASHBOARD_WORKSPACES: Workspace[] = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays', 'insights']
 
 function workspaceHref(workspace: Workspace) {
-  return workspace === 'overview' ? '/dashboard' : `/dashboard?workspace=${workspace}`
+  return workspace === 'leads' ? '/dashboard' : `/dashboard?workspace=${workspace}`
 }
 
 function localDateParam(date = new Date()) {
@@ -31,9 +31,9 @@ function localDateParam(date = new Date()) {
 }
 
 function readWorkspaceFromUrl() {
-  if (typeof window === 'undefined') return 'overview'
+  if (typeof window === 'undefined') return 'leads'
   const value = new URLSearchParams(window.location.search).get('workspace') ?? undefined
-  return value && DASHBOARD_WORKSPACES.includes(value as Workspace) ? value as Workspace : 'overview'
+  return value && DASHBOARD_WORKSPACES.includes(value as Workspace) ? value as Workspace : 'leads'
 }
 
 export interface DashboardStats {
@@ -328,17 +328,6 @@ function FunnelVisual() {
   )
 }
 
-function ProgressVisual({ value, total }: { value: number; total: number }) {
-  const percent = Math.min(100, Math.round((value / Math.max(total, 1)) * 100))
-  return (
-    <div className="w-28">
-      <div className="h-2 rounded-full bg-white/45">
-        <div className="h-full rounded-full bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-300" style={{ width: `${percent}%` }} />
-      </div>
-    </div>
-  )
-}
-
 function PendingFilesVisual({
   rto,
   payments,
@@ -414,14 +403,14 @@ function PendingFilesKpi({
   )
 }
 
-function DailyTotals({ stats, todayStats }: { stats: DashboardStats; todayStats: TodayStats }) {
+function DailyTotals({ stats, todayStats, permissions }: Pick<DashboardCommandCenterProps, 'stats' | 'todayStats' | 'permissions'>) {
   const today = localDateParam()
   const rows = [
-    { label: 'Stock', value: stats.availableStock, unit: stats.availableStock === 1 ? 'unit' : 'units', sub: 'available', href: '/inventory?status=In%20Stock', icon: <Car className="h-3.5 w-3.5" />, tone: 'bg-emerald-500', visual: <SparkLine /> },
-    { label: 'Leads', value: stats.todayInquiries, unit: stats.todayInquiries === 1 ? 'unit' : 'units', sub: 'today', href: `/followup?status=FollowUp&inquiryDateFrom=${today}&inquiryDateTo=${today}`, icon: <Users className="h-3.5 w-3.5" />, tone: 'bg-slate-500', visual: <FunnelVisual /> },
-    { label: 'Follow-ups', value: todayStats.followupsToday, unit: todayStats.followupsToday === 1 ? 'task' : 'tasks', sub: 'due today', href: `/followup?status=FollowUp&followUpDateFrom=${today}&followUpDateTo=${today}`, icon: <Clock className="h-3.5 w-3.5" />, tone: 'bg-rose-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
-    { label: 'Payments', value: todayStats.paymentsReceivedToday, unit: todayStats.paymentsReceivedToday === 1 ? 'task' : 'tasks', sub: 'received today', href: '/dashboard?workspace=payments', icon: <FileText className="h-3.5 w-3.5" />, tone: 'bg-gray-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
-  ]
+    { show: permissions.canInventory, label: 'Available Stock', value: stats.availableStock, unit: stats.availableStock === 1 ? 'unit' : 'units', sub: 'available', href: '/inventory?status=In%20Stock', icon: <Car className="h-3.5 w-3.5" />, tone: 'bg-emerald-500', visual: <SparkLine /> },
+    { show: permissions.canInquiry && permissions.canFollowup, label: "Today's Leads", value: stats.todayInquiries, unit: stats.todayInquiries === 1 ? 'lead' : 'leads', sub: 'today', href: `/followup?status=FollowUp&inquiryDateFrom=${today}&inquiryDateTo=${today}`, icon: <Users className="h-3.5 w-3.5" />, tone: 'bg-slate-500', visual: <FunnelVisual /> },
+    { show: permissions.canFollowup, label: 'Follow-ups', value: todayStats.followupsToday, unit: todayStats.followupsToday === 1 ? 'task' : 'tasks', sub: 'due today', href: `/followup?status=FollowUp&followUpDateFrom=${today}&followUpDateTo=${today}`, icon: <Clock className="h-3.5 w-3.5" />, tone: 'bg-rose-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
+    { show: permissions.canRto, label: 'Payments', value: todayStats.paymentsReceivedToday, unit: todayStats.paymentsReceivedToday === 1 ? 'task' : 'tasks', sub: 'received today', href: '/dashboard?workspace=payments', icon: <FileText className="h-3.5 w-3.5" />, tone: 'bg-gray-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
+  ].filter(row => row.show)
   return (
     <div className="h-full overflow-hidden rounded-lg bg-white px-3 py-2.5">
       <h3 className="text-base font-semibold text-gray-900">Daily Totals</h3>
@@ -454,18 +443,20 @@ function ActionLoad({
   pendingPayments,
   insuranceItems,
   rtoRcPending,
+  permissions,
 }: {
   overdueFollowups: number
   pendingPayments: number
   insuranceItems: number
   rtoRcPending: number
+  permissions: DashboardCommandCenterProps['permissions']
 }) {
   const rows = [
-    { label: 'Overdue Follow-up', value: overdueFollowups, color: '#dc5f5f' },
-    { label: 'Pending Payments', value: pendingPayments, color: '#9a7378' },
-    { label: 'Insurance', value: insuranceItems, color: '#8f969e' },
-    { label: 'RTO', value: rtoRcPending, color: '#c6ced6' },
-  ]
+    { show: permissions.canFollowup, label: 'Overdue Follow-up', value: overdueFollowups, color: '#dc5f5f' },
+    { show: permissions.canRto, label: 'Pending Payments', value: pendingPayments, color: '#9a7378' },
+    { show: permissions.canInsurance, label: 'Insurance', value: insuranceItems, color: '#8f969e' },
+    { show: permissions.canRto, label: 'RTO', value: rtoRcPending, color: '#c6ced6' },
+  ].filter(row => row.show)
   const total = rows.reduce((sum, row) => sum + row.value, 0)
   const max = Math.max(...rows.map(row => row.value), 1)
   const segments = rows.reduce<Array<{ row: typeof rows[number]; start: number; end: number }>>((acc, row) => {
@@ -501,7 +492,7 @@ function ActionLoad({
                 <div className="min-w-0 text-[11px] leading-tight text-gray-700">
                   <div>{row.label}</div>
                 </div>
-                <strong className="text-right text-sm leading-none text-gray-900">{row.value}</strong>
+                <strong className="shrink-0 text-right text-sm leading-none text-gray-900">{row.value}</strong>
               </div>
             )
           })}
@@ -512,7 +503,7 @@ function ActionLoad({
 }
 
 export function DashboardCommandCenterClient(props: DashboardCommandCenterProps) {
-  const [workspace, setWorkspace] = useState<Workspace>(props.initialWorkspace ?? 'overview')
+  const [workspace, setWorkspace] = useState<Workspace>(props.initialWorkspace ?? 'leads')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('priority')
   const [page, setPage] = useState(1)
@@ -680,7 +671,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     props.reminders.length
 
   const tabs = [
-    { key: 'leads' as const, label: 'Leads', count: props.leadDetails.find(row => row.label === 'All Leads')?.total ?? 0, show: permissions.canFollowup },
+    { key: 'leads' as const, label: 'Lead Details', count: props.leadDetails.find(row => row.label === 'All Leads')?.total ?? 0, show: permissions.canFollowup },
     { key: 'followups' as const, label: 'Follow-ups', count: stats.pendingFollowups, show: permissions.canFollowup },
     { key: 'insurance' as const, label: 'Insurance', count: props.pendingPolicies.length + props.expiryRenewalPolicies.length, show: permissions.canInsurance },
     { key: 'rto' as const, label: 'RTO', count: props.rtoPending.length, show: permissions.canRto },
@@ -716,11 +707,35 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
 
   const rtoRcPending = props.rtoPending.filter(row => row.rcStatus === 'Pending').length
   const insuranceAttention = props.expiryRenewalPolicies.length + props.pendingPolicies.length
+  const kpiCount = [
+    permissions.canInventory,
+    permissions.canInquiry && permissions.canFollowup,
+    permissions.canFollowup,
+    permissions.canRto || permissions.canInsurance,
+  ].filter(Boolean).length
+  const kpiGridClass = kpiCount === 1
+    ? 'grid-cols-1'
+    : kpiCount === 2
+      ? 'grid-cols-1 md:grid-cols-2'
+      : kpiCount === 3
+        ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+        : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
+  const showActionLoad = permissions.canFollowup || permissions.canRto || permissions.canInsurance
+  const showDailyTotals = permissions.canInventory || (permissions.canInquiry && permissions.canFollowup) || permissions.canFollowup || permissions.canRto
+  const attentionAreas = [
+    permissions.canFollowup ? 'follow-ups' : null,
+    permissions.canRto ? 'payments' : null,
+    permissions.canInsurance ? 'insurance' : null,
+    permissions.canRto ? 'RTO' : null,
+  ].filter(Boolean)
+  const attentionDescription = attentionAreas.length
+    ? `Highest priority work across ${attentionAreas.join(', ')}.`
+    : 'No operational modules are available for this account.'
 
   return (
-    <div className="min-h-full xl:h-full xl:min-h-0 xl:overflow-hidden">
-      <div className="min-h-full border border-black/20 bg-gradient-to-br from-[#10183d] via-[#123652] to-[#1f673d] p-3 shadow-2xl xl:h-full xl:overflow-hidden">
-        <div className="grid gap-2 xl:h-full xl:grid-rows-[auto_72px_235px_minmax(250px,1fr)]">
+    <div className="min-h-full 2xl:h-full 2xl:min-h-0 2xl:overflow-hidden">
+      <div className="min-h-full border border-black/20 bg-gradient-to-br from-[#10183d] via-[#123652] to-[#1f673d] p-3 shadow-2xl 2xl:h-full 2xl:overflow-hidden">
+        <div className="grid gap-2 2xl:h-full 2xl:grid-rows-[auto_72px_235px_minmax(250px,1fr)]">
           <div className="flex flex-wrap items-start justify-between gap-3 px-1">
             <div className="text-white">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-base font-semibold text-white shadow-sm ring-1 ring-white/10">
@@ -742,15 +757,15 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid gap-3 ${kpiGridClass}`}>
             {permissions.canInventory && (
-              <CompactKpi label="Available Stock" value={stats.availableStock} sub={`${stats.totalInventory} total`} icon={<Car className="h-4 w-4" />} visual={<SparkLine />} href="/inventory?status=In%20Stock" />
+              <CompactKpi label="Available Stock" value={stats.availableStock} sub="available" icon={<Car className="h-4 w-4" />} visual={<SparkLine />} href="/inventory?status=In%20Stock" />
             )}
-            {permissions.canInquiry && (
-              <CompactKpi label="Today's Leads" value={stats.todayInquiries} sub={`${stats.totalInquiries} all`} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} onClick={() => openWorkspace(permissions.canFollowup ? 'leads' : 'insights')} />
+            {permissions.canInquiry && permissions.canFollowup && (
+              <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/followup?status=FollowUp&inquiryDateFrom=${localDateParam()}&inquiryDateTo=${localDateParam()}`} />
             )}
             {permissions.canFollowup && (
-              <CompactKpi label="Critical Actions" value={stats.pendingFollowups} sub={`${stats.overdueFollowups} overdue`} tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<Clock className="h-4 w-4" />} visual={<ProgressVisual value={stats.overdueFollowups} total={stats.pendingFollowups} />} onClick={() => openWorkspace('followups')} />
+              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<Clock className="h-4 w-4" />} onClick={() => openWorkspace('followups')} />
             )}
             {(permissions.canRto || permissions.canInsurance) && (
               <PendingFilesKpi
@@ -765,14 +780,14 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             )}
           </div>
 
-          <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_580px]">
+          <div className={`grid min-h-0 gap-3 ${showActionLoad && showDailyTotals ? '2xl:grid-cols-[minmax(0,1fr)_580px]' : ''}`}>
             <section className="min-h-0 overflow-hidden rounded-lg bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-gray-900">Needs Attention</h2>
-            <p className="text-xs text-gray-500">Highest priority work across follow-ups, payments, insurance, and RTO.</p>
+            <p className="text-xs text-gray-500">{attentionDescription}</p>
             </div>
-            <button type="button" onClick={() => openWorkspace('overview', true)} className="cursor-pointer text-xs font-semibold text-[#C8102E] hover:underline">View All</button>
+            <button type="button" onClick={() => openWorkspace('followups', true)} className="cursor-pointer text-xs font-semibold text-[#C8102E] hover:underline">View All</button>
           </div>
           <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No urgent work right now" maxHeight="max-h-[145px]">
             {attentionItems.slice(0, 7).map(item => (
@@ -791,21 +806,25 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </WorkTable>
             </section>
 
-            <section className="grid min-h-0 gap-3 overflow-hidden md:grid-cols-[minmax(270px,1fr)_minmax(270px,1fr)]">
-              <ActionLoad
-                overdueFollowups={permissions.canFollowup ? stats.overdueFollowups : 0}
-                pendingPayments={permissions.canRto ? props.pendingPayments.length : 0}
-                insuranceItems={permissions.canInsurance ? insuranceAttention : 0}
-                rtoRcPending={permissions.canRto ? rtoRcPending : 0}
-              />
-              <DailyTotals stats={stats} todayStats={props.todayStats} />
+            {(showActionLoad || showDailyTotals) && (
+            <section className={`grid min-h-0 gap-3 overflow-hidden ${showActionLoad && showDailyTotals ? 'md:grid-cols-[minmax(270px,1fr)_minmax(270px,1fr)]' : ''}`}>
+              {showActionLoad && (
+                <ActionLoad
+                  overdueFollowups={stats.overdueFollowups}
+                  pendingPayments={props.pendingPayments.length}
+                  insuranceItems={insuranceAttention}
+                  rtoRcPending={rtoRcPending}
+                  permissions={permissions}
+                />
+              )}
+              {showDailyTotals && <DailyTotals stats={stats} todayStats={props.todayStats} permissions={permissions} />}
             </section>
+            )}
           </div>
 
-      <section ref={detailWorkspaceRef} className="min-h-0 overflow-hidden rounded-lg bg-white p-3 shadow-sm">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+      <section ref={detailWorkspaceRef} className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-white p-3 shadow-sm">
+        <div className="mb-2 shrink-0 flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-1 overflow-x-auto">
-            <button type="button" onClick={() => openWorkspace('overview')} className={`cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold ${workspace === 'overview' ? 'bg-[#1B2A6B] text-white' : 'text-gray-600 hover:bg-gray-100'}`}>Overview</button>
             {tabs.map(tab => (
               <button key={tab.key} type="button" onClick={() => openWorkspace(tab.key)} className={`cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold ${workspace === tab.key ? 'bg-[#1B2A6B] text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
                 {tab.label} <span className="ml-1 rounded bg-white/20 px-1">{tab.count}</span>
@@ -825,13 +844,13 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </div>
         </div>
 
-        <div className="min-h-0">
+        <div className="min-h-0 flex-1">
         {workspace === 'insights' ? (
           <div className="h-[150px] overflow-hidden">
             <LeadSourceChart data={props.leadSources} />
           </div>
         ) : workspace === 'leads' ? (
-          <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px]" tableMinWidth="min-w-[620px]">
+          <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
             {filteredLeadDetails.map(row => (
               <tr key={row.label} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.label}</td>
@@ -842,7 +861,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'followups' ? (
-          <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} maxHeight="max-h-[215px]" tableMinWidth="min-w-[760px]">
+          <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[760px]">
             {filteredFollowups.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.customerName}</td>
@@ -891,7 +910,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </section>
           </div>
         ) : workspace === 'rto' ? (
-          <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Transfer', 'RC', 'Action']} maxHeight="max-h-[215px]" tableMinWidth="min-w-[860px]">
+          <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Transfer', 'RC', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[860px]">
             {filteredRtoRows.map(row => (
               <tr key={row.rtoAgentMainId} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td>
@@ -906,7 +925,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'payments' ? (
-          <WorkTable headers={['Type', 'Registration', 'Customer', 'Customer Mobile', 'Agent', 'Agent Mobile', 'Due', 'Total', 'Received', 'Balance', 'Action']} maxHeight="max-h-[215px]" tableMinWidth="min-w-[1080px]">
+          <WorkTable headers={['Type', 'Registration', 'Customer', 'Customer Mobile', 'Agent', 'Agent Mobile', 'Due', 'Total', 'Received', 'Balance', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[1080px]">
             {filteredPaymentRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2"><Badge label={row.type} /></td>
@@ -924,7 +943,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'birthdays' ? (
-          <WorkTable headers={['Name', 'Mobile', 'Email', 'Type']} maxHeight="max-h-[215px]" tableMinWidth="min-w-[620px]">
+          <WorkTable headers={['Name', 'Mobile', 'Email', 'Type']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
             {filteredReminderRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.name}</td>
@@ -936,7 +955,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </WorkTable>
         ) : (
           <>
-            <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No records found" maxHeight="max-h-[192px]" tableMinWidth="min-w-[760px]">
+            <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No records found" maxHeight="max-h-[192px] 2xl:h-[calc(100%-2.5rem)] 2xl:max-h-none" tableMinWidth="min-w-[760px]">
               {pagedAttention.map(item => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2"><Badge label={item.priority === 'High' ? 'Overdue' : item.priority} /></td>
