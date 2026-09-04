@@ -82,59 +82,59 @@ export function InventoryFormModal({
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Vehicle identity</p>
             <div className="grid grid-cols-3 gap-4">
-            <Input label={fieldLabel('Inventory No')} value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
-            <Input label={fieldLabel('SKU')} value={currentSku ?? 'Enter make, model, and colour'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
-            <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={makes.map(make => make.make ?? '').filter(Boolean)} error={errors.fkVariantId} />
-            <CatalogTextPicker label={fieldLabel('Model', true)} value={catalogModelText} onChange={value => void onModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={models.map(model => model.model ?? '').filter(Boolean)} error={errors.fkVariantId} />
-            <CatalogTextPicker label={fieldLabel('Variant', true)} value={catalogVariantText} onChange={onVariantChange} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={variants.map(variant => variant.variant ?? '').filter(Boolean)} error={errors.fkVariantId} />
-            <Input label={fieldLabel('Year', true)} type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} error={errors.year} />
-            <Input label={fieldLabel('Month')} value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
-            <CatalogTextPicker label={fieldLabel('Colour', true)} value={form.colour} onChange={value => f('colour', value)} placeholder="Search or enter colour..." options={inventoryColours} error={errors.colour} />
+              <Input label={fieldLabel('Inventory No')} value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
+              <Input label={fieldLabel('SKU')} value={currentSku ?? 'Enter make, model, and colour'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
+              <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={makes.map(make => make.make ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label={fieldLabel('Model', true)} value={catalogModelText} onChange={value => void onModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={models.map(model => model.model ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label={fieldLabel('Variant', true)} value={catalogVariantText} onChange={onVariantChange} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={variants.map(variant => variant.variant ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <Input label={fieldLabel('Year', true)} type="number" value={form.year ?? ''} onChange={e => f('year', e.target.value ? +e.target.value : null)} error={errors.year} />
+              <Input label={fieldLabel('Month')} value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
+              <CatalogTextPicker label={fieldLabel('Colour', true)} value={form.colour} onChange={value => f('colour', value)} placeholder="Search or enter colour..." options={inventoryColours} error={errors.colour} />
             </div>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Registration and vehicle condition</p>
             <div className="grid grid-cols-3 gap-4">
-            <Input
-              label={fieldLabel('Registration No', form.isCarRegistered === true)}
-              value={form.registrationNo}
-              onChange={e => f('registrationNo', normalizeRegistrationNo(e.target.value))}
-              placeholder={form.isCarRegistered === true ? 'Enter registration number' : 'Available when car is registered'}
-              readOnly={form.isCarRegistered !== true}
-              className={form.isCarRegistered !== true ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
-              error={errors.registrationNo}
-            />
-            <Select label={fieldLabel('Fuel Type', form.isCarRegistered === true)} value={form.fuelType} onChange={e => f('fuelType', e.target.value)} error={errors.fuelType}>
-              <option value="">Select Fuel Type</option>
-              {form.fuelType && !fuelTypes.includes(form.fuelType) ? <option value={form.fuelType}>{form.fuelType}</option> : null}
-              {fuelTypes.map(fuelType => <option key={fuelType} value={fuelType}>{fuelType}</option>)}
-            </Select>
-            <Input label={fieldLabel('No. of Owners', form.isCarRegistered === true)} type="number" min={0} step={1} value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
-            <Select label={fieldLabel('Tax', form.isCarRegistered === true)} value={form.tax} onChange={e => f('tax', e.target.value)} error={errors.tax}>
-              <option value="">Select Tax Type</option><option value="Individual">Individual</option><option value="Corporate">Corporate</option>
-            </Select>
-            <Select label="Car Registered" value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'} onChange={e => f('isCarRegistered', e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null)}>
-              <option value="">Select</option><option value="yes">Yes</option><option value="no">No</option>
-            </Select>
-            <Input label={fieldLabel('KM Driven', form.isCarRegistered === true)} type="text" inputMode="decimal" value={formatPriceInput(form.kmsDriven)} onChange={e => { const value = numberInput(e); f('kmsDriven', value ? Number(value) : null) }} error={errors.kmsDriven} />
-            <Input label={fieldLabel('Insurance Type', form.isCarRegistered === true)} value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" error={errors.insuranceType} />
+              <Select label="Car Registered" value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'} onChange={e => f('isCarRegistered', e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null)}>
+                <option value="">Select</option><option value="yes">Yes</option><option value="no">No</option>
+              </Select>
+              <Input
+                label={fieldLabel('Registration No', form.isCarRegistered === true)}
+                value={form.registrationNo}
+                onChange={e => f('registrationNo', normalizeRegistrationNo(e.target.value))}
+                placeholder={form.isCarRegistered === true ? 'Enter registration number' : 'Available when car is registered'}
+                readOnly={form.isCarRegistered !== true}
+                className={form.isCarRegistered !== true ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
+                error={errors.registrationNo}
+              />
+              <Select label={fieldLabel('Fuel Type', form.isCarRegistered === true)} value={form.fuelType} onChange={e => f('fuelType', e.target.value)} error={errors.fuelType}>
+                <option value="">Select Fuel Type</option>
+                {form.fuelType && !fuelTypes.includes(form.fuelType) ? <option value={form.fuelType}>{form.fuelType}</option> : null}
+                {fuelTypes.map(fuelType => <option key={fuelType} value={fuelType}>{fuelType}</option>)}
+              </Select>
+              <Input label={fieldLabel('No. of Owners', form.isCarRegistered === true)} type="number" min={0} step={1} value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
+              <Select label={fieldLabel('Tax', form.isCarRegistered === true)} value={form.tax} onChange={e => f('tax', e.target.value)} error={errors.tax}>
+                <option value="">Select Tax Type</option><option value="Individual">Individual</option><option value="Corporate">Corporate</option>
+              </Select>
+              <Input label={fieldLabel('KM Driven', form.isCarRegistered === true)} type="text" inputMode="decimal" value={formatPriceInput(form.kmsDriven)} onChange={e => { const value = numberInput(e); f('kmsDriven', value ? Number(value) : null) }} error={errors.kmsDriven} />
+              <Input label={fieldLabel('Insurance Type', form.isCarRegistered === true)} value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" error={errors.insuranceType} />
             </div>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Sale and ownership</p>
             <div className="grid grid-cols-3 gap-4">
-            <Select label={fieldLabel('Status', true)} value={form.status} onChange={e => f('status', e.target.value)}>
-              {INVENTORY_STATUSES.map(status => <option key={status}>{status}</option>)}
-            </Select>
-            <Input label={fieldLabel('Price (₹)', true)} type="text" inputMode="decimal" value={formatPriceInput(form.price)} onChange={e => { const value = numberInput(e); f('price', value ? Number(value) : null) }} error={errors.price} />
-            <Select label={fieldLabel('Owner Type', true)} value={form.ownedType} onChange={e => onOwnerTypeChange(e.target.value)} error={errors.ownedType}>
-              <option value="">Select Owner Type</option><option value="Excel Cars">Excel Cars</option><option value="Dealer">Dealer</option><option value="Individual">Individual</option>
-            </Select>
-            {form.ownedType === 'Dealer' ? <CatalogTextPicker label={fieldLabel('Name of Owner', true)} value={form.ownedBy} onChange={onDealerChange} placeholder="Search dealer..." options={dealers.map(dealer => dealer.dealerName ?? '').filter(Boolean)} error={errors.ownedBy} /> : <Input label={fieldLabel('Name of Owner', true)} value={form.ownedBy} autoComplete="new-password" onChange={e => f('ownedBy', e.target.value)} error={errors.ownedBy} />}
-            <Input label={fieldLabel('Owner Mobile')} value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" maxLength={11} error={errors.mobileNoOwnedBy} />
-            <Input label={fieldLabel('Owner Email')} type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} />
+              <Select label={fieldLabel('Status', true)} value={form.status} onChange={e => f('status', e.target.value)}>
+                {INVENTORY_STATUSES.map(status => <option key={status}>{status}</option>)}
+              </Select>
+              <Input label={fieldLabel('Price (₹)', true)} type="text" inputMode="decimal" value={formatPriceInput(form.price)} onChange={e => { const value = numberInput(e); f('price', value ? Number(value) : null) }} error={errors.price} />
+              <Select label={fieldLabel('Owner Type', true)} value={form.ownedType} onChange={e => onOwnerTypeChange(e.target.value)} error={errors.ownedType}>
+                <option value="">Select Owner Type</option><option value="Excel Cars">Excel Cars</option><option value="Dealer">Dealer</option><option value="Individual">Individual</option>
+              </Select>
+              {form.ownedType === 'Dealer' ? <CatalogTextPicker label={fieldLabel('Name of Owner', true)} value={form.ownedBy} onChange={onDealerChange} placeholder="Search dealer..." options={dealers.map(dealer => dealer.dealerName ?? '').filter(Boolean)} error={errors.ownedBy} /> : <Input label={fieldLabel('Name of Owner', true)} value={form.ownedBy} autoComplete="new-password" onChange={e => f('ownedBy', e.target.value)} error={errors.ownedBy} />}
+              <Input label={fieldLabel('Owner Mobile')} value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" maxLength={11} error={errors.mobileNoOwnedBy} />
+              <Input label={fieldLabel('Owner Email')} type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} />
             </div>
           </section>
 
