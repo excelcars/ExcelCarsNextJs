@@ -924,7 +924,15 @@ export function InventoryClient({
 
   const onSelectFiles = (files: FileList | null) => {
     if (!files?.length) return
-    const nextItems: UploadQueueItem[] = Array.from(files).map(file => ({
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp'])
+    const selected = Array.from(files)
+    const invalid = selected.find(file => !allowed.has(file.type) || file.size > 10 * 1024 * 1024)
+    if (invalid) {
+      setPhotoError('Only JPG, PNG, and WEBP photos up to 10 MB each are allowed.')
+      return
+    }
+    setPhotoError('')
+    const nextItems: UploadQueueItem[] = selected.map(file => ({
       id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
       file,
       previewUrl: URL.createObjectURL(file),
@@ -1292,6 +1300,7 @@ export function InventoryClient({
                   />
                 </label>
               </div>
+              <p className="text-xs text-gray-500">Allowed: JPG, JPEG, PNG, WEBP · maximum 10 MB per photo.</p>
 
               {photoError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{photoError}</div>}
 

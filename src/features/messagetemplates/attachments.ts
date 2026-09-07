@@ -6,7 +6,6 @@ export const MESSAGE_ATTACHMENT_ROOT = path.join(process.cwd(), 'storage', 'emai
 export const MAX_MESSAGE_ATTACHMENT_SIZE = 10 * 1024 * 1024
 export const ALLOWED_MESSAGE_ATTACHMENT_TYPES = new Map([
   ['application/pdf', '.pdf'], ['image/jpeg', '.jpg'], ['image/png', '.png'],
-  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.docx'],
 ])
 
 export function attachmentExtension(fileName: string, mimeType: string) {

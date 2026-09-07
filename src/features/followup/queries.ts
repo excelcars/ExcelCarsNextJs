@@ -19,6 +19,7 @@ export interface FollowupFilters {
   subStatus: string
   website: string
   customerMobile: string
+  inquiryId?: string
   userId: string
   makeId: string
   modelId: string
@@ -151,6 +152,7 @@ function buildFollowupWhere({
   subStatus,
   website,
   customerMobile,
+  inquiryId = '',
   userId,
   makeId,
   modelId,
@@ -164,7 +166,12 @@ function buildFollowupWhere({
   const parsedModelId = Number(modelId)
   const parsedMakeId = Number(makeId)
   const parsedUserId = Number(userId)
+  const parsedInquiryId = Number(inquiryId)
   const effectiveOwnershipUserId = restrictToUserId ?? (Number.isFinite(parsedUserId) && parsedUserId > 0 ? parsedUserId : null)
+
+  if (Number.isFinite(parsedInquiryId) && parsedInquiryId > 0) {
+    andConditions.push({ inquiryId: parsedInquiryId })
+  }
 
   if (Number.isFinite(parsedVariantId) && parsedVariantId > 0) {
     andConditions.push({
@@ -278,6 +285,7 @@ export async function listFollowupQueue({
   subStatus,
   website,
   customerMobile,
+  inquiryId = '',
   userId,
   makeId,
   modelId,
@@ -302,6 +310,7 @@ export async function listFollowupQueue({
     subStatus,
     website,
     customerMobile,
+    inquiryId,
     userId,
     makeId,
     modelId,

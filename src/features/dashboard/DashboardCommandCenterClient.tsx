@@ -14,10 +14,10 @@ import {
 import { Badge } from '@/components/ui'
 import { LeadSourceChart } from './LeadSourceChart'
 
-type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'birthdays' | 'insights'
+type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'birthdays'
 type SortMode = 'priority' | 'dateAsc' | 'dateDesc'
 type DateValue = string | Date | null
-const DASHBOARD_WORKSPACES: Workspace[] = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays', 'insights']
+const DASHBOARD_WORKSPACES: Workspace[] = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays']
 
 function workspaceHref(workspace: Workspace) {
   return workspace === 'leads' ? '/dashboard' : `/dashboard?workspace=${workspace}`
@@ -274,18 +274,20 @@ function WorkTable({
   empty,
   maxHeight = 'max-h-[210px]',
   tableMinWidth = 'min-w-full',
+  tableClass = 'w-full',
 }: {
   headers: string[]
   children: ReactNode
   empty?: string
   maxHeight?: string
   tableMinWidth?: string
+  tableClass?: string
 }) {
   const hasRows = Children.count(children) > 0
   return (
     <div className={`${maxHeight} overflow-auto rounded-lg border border-gray-200 bg-white [scrollbar-gutter:stable]`}>
       <div className={tableMinWidth}>
-        <table className="w-full text-xs">
+        <table className={`${tableClass} text-xs`}>
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-100 bg-gray-50">
               {headers.map(header => (
@@ -407,7 +409,7 @@ function DailyTotals({ stats, todayStats, permissions }: Pick<DashboardCommandCe
   const today = localDateParam()
   const rows = [
     { show: permissions.canInventory, label: 'Available Stock', value: stats.availableStock, unit: stats.availableStock === 1 ? 'unit' : 'units', sub: 'available', href: '/inventory?status=In%20Stock', icon: <Car className="h-3.5 w-3.5" />, tone: 'bg-emerald-500', visual: <SparkLine /> },
-    { show: permissions.canInquiry && permissions.canFollowup, label: "Today's Leads", value: stats.todayInquiries, unit: stats.todayInquiries === 1 ? 'lead' : 'leads', sub: 'today', href: `/followup?status=FollowUp&inquiryDateFrom=${today}&inquiryDateTo=${today}`, icon: <Users className="h-3.5 w-3.5" />, tone: 'bg-slate-500', visual: <FunnelVisual /> },
+    { show: permissions.canInquiry, label: "Today's Leads", value: stats.todayInquiries, unit: stats.todayInquiries === 1 ? 'lead' : 'leads', sub: 'today', href: `/inquiry?quickFilter=all&inquiryDate=${today}`, icon: <Users className="h-3.5 w-3.5" />, tone: 'bg-slate-500', visual: <FunnelVisual /> },
     { show: permissions.canFollowup, label: 'Follow-ups', value: todayStats.followupsToday, unit: todayStats.followupsToday === 1 ? 'task' : 'tasks', sub: 'due today', href: `/followup?status=FollowUp&followUpDateFrom=${today}&followUpDateTo=${today}`, icon: <Clock className="h-3.5 w-3.5" />, tone: 'bg-rose-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
     { show: permissions.canRto, label: 'Payments', value: todayStats.paymentsReceivedToday, unit: todayStats.paymentsReceivedToday === 1 ? 'task' : 'tasks', sub: 'received today', href: '/dashboard?workspace=payments', icon: <FileText className="h-3.5 w-3.5" />, tone: 'bg-gray-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
   ].filter(row => row.show)
@@ -451,11 +453,13 @@ function ActionLoad({
   rtoRcPending: number
   permissions: DashboardCommandCenterProps['permissions']
 }) {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
   const rows = [
-    { show: permissions.canFollowup, label: 'Overdue Follow-up', value: overdueFollowups, color: '#dc5f5f' },
-    { show: permissions.canRto, label: 'Pending Payments', value: pendingPayments, color: '#9a7378' },
-    { show: permissions.canInsurance, label: 'Insurance', value: insuranceItems, color: '#8f969e' },
-    { show: permissions.canRto, label: 'RTO', value: rtoRcPending, color: '#c6ced6' },
+    { show: permissions.canFollowup, label: 'Overdue Follow-up', value: overdueFollowups, color: '#dc5f5f', href: `/followup?status=FollowUp&followUpDateTo=${localDateParam(yesterday)}` },
+    { show: permissions.canRto, label: 'Pending Payments', value: pendingPayments, color: '#9a7378', href: '/dashboard?workspace=payments' },
+    { show: permissions.canInsurance, label: 'Insurance', value: insuranceItems, color: '#8f969e', href: '/dashboard?workspace=insurance' },
+    { show: permissions.canRto, label: 'RTO', value: rtoRcPending, color: '#c6ced6', href: '/dashboard?workspace=rto' },
   ].filter(row => row.show)
   const total = rows.reduce((sum, row) => sum + row.value, 0)
   const max = Math.max(...rows.map(row => row.value), 1)
@@ -485,7 +489,7 @@ function ActionLoad({
           {rows.map((row, index) => {
             const sizes = ['h-10 w-10', 'h-8 w-8', 'h-8 w-8', 'h-8 w-8']
             return (
-              <div key={row.label} className="grid grid-cols-[40px_minmax(0,1fr)_28px] items-center gap-2">
+              <a key={row.label} href={row.href} className="grid grid-cols-[40px_minmax(0,1fr)_28px] items-center gap-2 rounded-md transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/25">
                 <div className={`grid ${sizes[index]} place-items-center rounded-full shadow-md`} style={{ background: `conic-gradient(${row.color} ${Math.max(8, Math.round((row.value / max) * 100))}%, #e5e7eb 0)` }}>
                   <div className="h-2/3 w-2/3 rounded-full bg-white" />
                 </div>
@@ -493,7 +497,7 @@ function ActionLoad({
                   <div>{row.label}</div>
                 </div>
                 <strong className="shrink-0 text-right text-sm leading-none text-gray-900">{row.value}</strong>
-              </div>
+              </a>
             )
           })}
         </div>
@@ -525,7 +529,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         type: overdue ? 'Overdue follow-up' : 'Follow-up',
         date: row.followupDate,
         status: row.status ?? 'FollowUp',
-        actionHref: `/followup?status=FollowUp${overdue ? `&followUpDateTo=${today.toISOString().slice(0, 10)}` : ''}`,
+        actionHref: `/followup?status=FollowUp&inquiryId=${row.id}`,
         workspace: 'followups',
       })
     })
@@ -677,7 +681,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     { key: 'rto' as const, label: 'RTO', count: props.rtoPending.length, show: permissions.canRto },
     { key: 'payments' as const, label: 'Payments', count: props.pendingPayments.length, show: permissions.canRto },
     { key: 'birthdays' as const, label: 'Birthdays', count: props.reminders.length, show: true },
-    { key: 'insights' as const, label: 'Insights', count: props.leadSources.length, show: permissions.canInquiry },
   ].filter(tab => tab.show)
 
   const pageSize = 8
@@ -761,8 +764,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             {permissions.canInventory && (
               <CompactKpi label="Available Stock" value={stats.availableStock} sub="available" icon={<Car className="h-4 w-4" />} visual={<SparkLine />} href="/inventory?status=In%20Stock" />
             )}
-            {permissions.canInquiry && permissions.canFollowup && (
-              <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/followup?status=FollowUp&inquiryDateFrom=${localDateParam()}&inquiryDateTo=${localDateParam()}`} />
+            {permissions.canInquiry && (
+              <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/inquiry?quickFilter=all&inquiryDate=${localDateParam()}`} />
             )}
             {permissions.canFollowup && (
               <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<Clock className="h-4 w-4" />} onClick={() => openWorkspace('followups')} />
@@ -845,21 +848,22 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         </div>
 
         <div className="min-h-0 flex-1">
-        {workspace === 'insights' ? (
-          <div className="h-[150px] overflow-hidden">
-            <LeadSourceChart data={props.leadSources} />
+        {workspace === 'leads' ? (
+          <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+            <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]" tableClass="w-auto min-w-[700px]">
+              {filteredLeadDetails.map(row => (
+                <tr key={row.label} className="hover:bg-gray-50">
+                  <td className="px-3 py-2 font-medium text-gray-900">{row.label}</td>
+                  <td className="px-3 py-2"><a href={row.href} className="font-semibold text-[#1B2A6B] hover:underline">{row.total}</a></td>
+                  <td className="px-3 py-2"><a href={row.ownHref} className="font-semibold text-[#1B2A6B] hover:underline">{row.own}</a></td>
+                  <td className="px-3 py-2 font-semibold text-gray-700">{row.other}</td>
+                </tr>
+              ))}
+            </WorkTable>
+            <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
+              <LeadSourceChart data={props.leadSources} totalLeads={stats.totalInquiries} />
+            </section>
           </div>
-        ) : workspace === 'leads' ? (
-          <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
-            {filteredLeadDetails.map(row => (
-              <tr key={row.label} className="hover:bg-gray-50">
-                <td className="px-3 py-2 font-medium text-gray-900">{row.label}</td>
-                <td className="px-3 py-2"><a href={row.href} className="font-semibold text-[#1B2A6B] hover:underline">{row.total}</a></td>
-                <td className="px-3 py-2"><a href={row.ownHref} className="font-semibold text-[#1B2A6B] hover:underline">{row.own}</a></td>
-                <td className="px-3 py-2 font-semibold text-gray-700">{row.other}</td>
-              </tr>
-            ))}
-          </WorkTable>
         ) : workspace === 'followups' ? (
           <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[760px]">
             {filteredFollowups.map(row => (
@@ -869,7 +873,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 <td className="px-3 py-2 text-gray-600">{formatDate(row.followupDate)}</td>
                 <td className="px-3 py-2">{row.classification ? <Badge label={row.classification} /> : '-'}</td>
                 <td className="px-3 py-2">{row.status ? <Badge label={row.status} /> : '-'}</td>
-                <td className="px-3 py-2"><a href="/followup?status=FollowUp" className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+                <td className="px-3 py-2"><a href={`/followup?status=FollowUp&inquiryId=${row.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
               </tr>
             ))}
           </WorkTable>

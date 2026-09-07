@@ -561,7 +561,7 @@ function emptyForm(): InquiryFormInput {
 }
 
 export function InquiryClient({
-  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
@@ -577,10 +577,12 @@ export function InquiryClient({
   source: string
   subStatus: string
   followUpDate: string
+  inquiryDate: string
   visitedDate: string
   makeId: string
   modelId: string
   variantId: string
+  quickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
   autoOpenViewId: number | null
   autoOpenEditId: number | null
 }) {
@@ -1017,7 +1019,7 @@ export function InquiryClient({
   }
 
   const pushQuery = (params: Record<string, string>) => {
-    const query = buildListQueryString({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page: '1' }, params, true)
+    const query = buildListQueryString({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
     startRouteTransition(() => {
       router.push(`/inquiry${query ? `?${query}` : ''}`)
     })
@@ -1398,10 +1400,12 @@ export function InquiryClient({
         if (source !== 'All') params.set('source', source)
         if (subStatus !== 'All') params.set('subStatus', subStatus)
         if (followUpDate) params.set('followUpDate', followUpDate)
+        if (inquiryDate) params.set('inquiryDate', inquiryDate)
         if (visitedDate) params.set('visitedDate', visitedDate)
         if (makeId) params.set('makeId', makeId)
         if (modelId) params.set('modelId', modelId)
         if (variantId) params.set('variantId', variantId)
+        if (quickFilter !== 'active') params.set('quickFilter', quickFilter)
         const res = await fetch(`/api/inquiry/export${params.toString() ? `?${params.toString()}` : ''}`)
         const payload = await res.json().catch(() => null)
         if (!res.ok || !Array.isArray(payload)) {
@@ -1416,7 +1420,12 @@ export function InquiryClient({
 
   const resetFilters = () => {
     setSearchInput('')
-    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', visitedDate: '', makeId: '', modelId: '', variantId: '', page: '1' })
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
+  }
+
+  const applyQuickFilter = (nextQuickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all') => {
+    setSearchInput('')
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
   }
 
   return (
@@ -1449,6 +1458,7 @@ export function InquiryClient({
         visitedDate={visitedDate}
         classification={classification}
         status={status}
+        quickFilter={quickFilter}
         isRoutePending={isRoutePending}
         hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || followUpDate || visitedDate || makeId || modelId || variantId)}
         sourceOptions={sourceOptions}
@@ -1468,6 +1478,7 @@ export function InquiryClient({
         onVisitedDateChange={visitedDate => pushQuery({ visitedDate })}
         onClassificationChange={classification => pushQuery({ classification })}
         onStatusChange={status => pushQuery({ status })}
+        onQuickFilterChange={applyQuickFilter}
         onReset={resetFilters}
       />
 

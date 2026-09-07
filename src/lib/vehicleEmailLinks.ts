@@ -111,11 +111,11 @@ export function classifyVehicleEmailVisit(userAgent: string | null | undefined):
 }
 
 export function getPublicVehiclePhoneNumber() {
-  return process.env.PUBLIC_EXCEL_CARS_PHONE || '+91 98208 88808'
+  return process.env.PUBLIC_EXCEL_CARS_PHONE || '+91 98678 60586'
 }
 
 export function getPublicVehicleWhatsAppNumber() {
-  return process.env.PUBLIC_EXCEL_CARS_WHATSAPP || '919820888808'
+  return process.env.PUBLIC_EXCEL_CARS_WHATSAPP || '919867860586'
 }
 
 export function getPublicVehicleContactEmail() {

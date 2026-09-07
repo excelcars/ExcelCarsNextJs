@@ -5,6 +5,8 @@ import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import type { InquirySourceOption } from './sourceMaster'
 
+type QuickFilter = 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
+
 type CarMakeMaster = { pkMakeId: number; make: string | null }
 type CarModelMaster = { pkModelId: number; model: string | null }
 type CarVariantMaster = { pkVariantId: number; variant: string | null }
@@ -20,6 +22,7 @@ type InquiryFiltersProps = {
   visitedDate: string
   classification: string
   status: string
+  quickFilter: QuickFilter
   isRoutePending: boolean
   hasActiveFilters: boolean
   sourceOptions: InquirySourceOption[]
@@ -39,6 +42,7 @@ type InquiryFiltersProps = {
   onVisitedDateChange: (value: string) => void
   onClassificationChange: (value: string) => void
   onStatusChange: (value: string) => void
+  onQuickFilterChange: (value: QuickFilter) => void
   onReset: () => void
 }
 
@@ -53,6 +57,7 @@ export function InquiryFilters({
   visitedDate,
   classification,
   status,
+  quickFilter,
   isRoutePending,
   hasActiveFilters,
   sourceOptions,
@@ -72,6 +77,7 @@ export function InquiryFilters({
   onVisitedDateChange,
   onClassificationChange,
   onStatusChange,
+  onQuickFilterChange,
   onReset,
 }: InquiryFiltersProps) {
   return (
@@ -81,6 +87,17 @@ export function InquiryFilters({
           <div className="text-sm font-semibold text-gray-900">Filters</div>
           <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick inquiry filters">
+        {([
+          ['active', 'Active'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
+        ] as const).map(([value, label]) => (
+          <button key={value} type="button" onClick={() => onQuickFilterChange(value)} disabled={isRoutePending} aria-pressed={quickFilter === value}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${quickFilter === value ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

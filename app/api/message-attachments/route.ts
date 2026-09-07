@@ -10,6 +10,12 @@ export const runtime = 'nodejs'
 
 async function currentUserId() { return getAuthorizedUserIdForRoute('/config/sms-email') }
 
+function hasAllowedAttachmentSignature(bytes: Buffer, mimeType: string) {
+  if (mimeType === 'application/pdf') return bytes.length >= 5 && bytes.subarray(0, 5).toString('ascii') === '%PDF-'
+  if (mimeType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+}
+
 export async function GET(req: NextRequest) {
   const userId = await currentUserId()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,11 +39,13 @@ export async function POST(req: NextRequest) {
   for (const file of files) {
     const extension = attachmentExtension(file.name, file.type)
     if (!extension || !ALLOWED_MESSAGE_ATTACHMENT_TYPES.has(file.type) || file.size > MAX_MESSAGE_ATTACHMENT_SIZE) continue
-    const storedPath = await uploadToFirebaseStorage(`email-attachments/${templateId}/${randomUUID()}${extension}`, Buffer.from(await file.arrayBuffer()), file.type)
+    const bytes = Buffer.from(await file.arrayBuffer())
+    if (!hasAllowedAttachmentSignature(bytes, file.type)) continue
+    const storedPath = await uploadToFirebaseStorage(`email-attachments/${templateId}/${randomUUID()}${extension}`, bytes, file.type)
     const row = await prisma.messageAttachmentUpload.create({ data: { templateId, storedPath, originalName: path.basename(file.name), mimeType: file.type, byteSize: file.size, scope, createdBy: userId } })
     uploads.push({ uploadId: row.uploadId, originalName: row.originalName, byteSize: row.byteSize, scope: row.scope })
   }
-  if (!uploads.length) return NextResponse.json({ error: 'Only PDF, JPG, PNG, and DOCX files up to 10 MB are allowed.' }, { status: 400 })
+  if (!uploads.length) return NextResponse.json({ error: 'Only PDF, JPG, and PNG files up to 10 MB are allowed.' }, { status: 400 })
   return NextResponse.json({ uploads })
 }
 

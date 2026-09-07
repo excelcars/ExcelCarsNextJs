@@ -187,9 +187,9 @@ Birthdays:
 - Null dates are ignored safely.
 - Type values remain legacy-compatible: `Birth Day` and `Anniversary`.
 
-Insights:
+Lead Details source chart:
 
-- Shows the Top Inquiry Sources chart.
+- Shows the top five Inquiry Sources plus an `Other` bar beside the Lead Details table. `Other` includes every remaining source and inquiries with no linked source, so the bars reconcile to the total.
 - Uses `InquirySourceMaster` relation counts and does not group orphaned legacy free-text source values.
 
 ## 11. Error handling and edge cases

@@ -18,6 +18,7 @@ export default async function FollowupPage({
     subStatus?: string
     website?: string
     customerMobile?: string
+    inquiryId?: string
     userId?: string
     makeId?: string
     modelId?: string
@@ -42,6 +43,7 @@ export default async function FollowupPage({
   const subStatus = sp.subStatus ?? ''
   const website = sp.website ?? ''
   const customerMobile = sp.customerMobile ?? ''
+  const inquiryId = sp.inquiryId ?? ''
   const userId = sp.userId ?? ''
   const makeId = sp.makeId ?? ''
   const modelId = sp.modelId ?? ''
@@ -69,6 +71,7 @@ export default async function FollowupPage({
       subStatus,
       website,
       customerMobile,
+      inquiryId,
       userId,
       makeId,
       modelId,

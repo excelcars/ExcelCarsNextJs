@@ -17,6 +17,13 @@ interface VehicleDetailsEmailInput {
 const row = (label: string, value: string) =>
   `<tr><td style="padding:8px 14px;border:1px solid #dce4f2;background:#f4f7fc;color:#142b62;font-weight:600;">${label}</td><td style="padding:8px 14px;border:1px solid #dce4f2;color:#263651;">${value || '—'}</td></tr>`
 
+export function vehicleDetailsSubject(input: Pick<VehicleDetailsEmailInput, 'make' | 'model' | 'variant' | 'colour'>) {
+  const clean = (value: string) => value.replace(/\s+/g, ' ').trim()
+  const vehicle = [input.make, input.model, input.variant].map(clean).filter(Boolean).join(' ')
+  const colour = clean(input.colour)
+  return ['Car Details', vehicle ? `for ${vehicle}` : '', colour ? `– ${colour}` : ''].filter(Boolean).join(' ')
+}
+
 export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject: string; html: string } {
   // legacy masked registration numbers to the first 5 characters in customer-facing emails
   const maskedReg = input.registrationNo ? input.registrationNo.trim().slice(0, 5) : ''
@@ -62,7 +69,7 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
     </div>
   `
 
-  return { subject: 'Car Details', html }
+  return { subject: vehicleDetailsSubject(input), html }
 }
 
 function escapeHtml(value: string) {

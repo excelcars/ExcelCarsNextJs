@@ -1,10 +1,31 @@
 import { randomUUID } from 'crypto'
+import { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { isValidEmail, isValidPhone } from '@/lib/validation'
 import { resolveTrackedVehicleByToken } from '@/features/vehicleEmailLinks/service'
 
 const MAX_MESSAGE_LENGTH = 2000
+
+function normalizeMobile(value: string) {
+  const digits = value.replace(/\D/g, '')
+  return digits.length > 10 ? digits.slice(-10) : digits
+}
+
+async function findCustomerByMobile(mobile: string) {
+  const normalizedMobile = normalizeMobile(mobile)
+  if (!normalizedMobile) return null
+  const rows = await prisma.$queryRaw<Array<{ cust_id: number }>>(Prisma.sql`
+    SELECT cust_id FROM customer
+    WHERE RIGHT(regexp_replace(COALESCE(cust_mobile, ''), '\\D', '', 'g'), 10) = ${normalizedMobile}
+    ORDER BY cust_id DESC LIMIT 1
+  `)
+  if (!rows.length) return null
+  return prisma.customer.findUnique({
+    where: { custId: rows[0].cust_id },
+    select: { custId: true, custName: true, custMobile: true, custEmail: true },
+  })
+}
 
 function value(body: Record<string, unknown>, key: string) {
   return typeof body[key] === 'string' ? body[key].trim() : ''
@@ -97,6 +118,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, inquiryId: linkedInquiry.inquiryId, reusedInquiry: true })
   }
 
+  const matchingCustomer = await findCustomerByMobile(phone)
+  if (matchingCustomer) {
+    const activeInquiry = await prisma.inquiry.findFirst({
+      where: { customerId: matchingCustomer.custId, status: { not: 'Closed' } },
+      orderBy: [{ updatedDt: 'desc' }, { inquiryId: 'desc' }],
+      select: {
+        inquiryId: true,
+        inquiryNo: true,
+        inquiryCarDetails: { where: vehicle.fkVariantId ? { fkVariantId: vehicle.fkVariantId } : undefined, select: { inquiryCarDetailsId: true } },
+        inquiryInventoryLinks: { where: { inventoryId: vehicle.inventoryId, isActive: true }, select: { inquiryInventoryLinkId: true } },
+      },
+    })
+
+    if (activeInquiry) {
+      try {
+        await prisma.$transaction(async tx => {
+          await tx.inquiry.update({ where: { inquiryId: activeInquiry.inquiryId }, data: { updatedDt: now } })
+          if (!activeInquiry.inquiryCarDetails.length) {
+            await tx.inquiryCarDetails.create({ data: {
+              fkInquiryId: activeInquiry.inquiryId,
+              fkVariantId: vehicle.fkVariantId,
+              makeLegacy: vehicle.makeLegacy,
+              modelLegacy: vehicle.modelLegacy,
+              variantLegacy: vehicle.variantLegacy,
+              year: vehicle.year,
+              createdDt: now,
+              updatedDt: now,
+            } })
+          }
+          if (!activeInquiry.inquiryInventoryLinks.length) {
+            await tx.inquiryInventoryLink.create({ data: {
+              inquiryId: activeInquiry.inquiryId,
+              inventoryId: vehicle.inventoryId,
+              linkType: 'enquired',
+              isActive: true,
+              createdAt: now,
+              updatedAt: now,
+            } })
+          }
+          await tx.inquiryActivityLog.create({ data: {
+            inquiryId: activeInquiry.inquiryId,
+            eventType: 'public_vehicle_enquiry_received',
+            eventLabel: 'Customer enquired from vehicle link',
+            eventDetail: [`Vehicle ${vehicle.inventoryNumber ?? `#${vehicle.inventoryId}`}`, `Matched existing mobile ${normalizeMobile(phone)}`, message].filter(Boolean).join(' · '),
+            inventoryId: vehicle.inventoryId,
+            createdAt: now,
+          } })
+        })
+      } catch (error) {
+        console.error('Public vehicle enquiry could not be added to the existing inquiry:', error)
+        return NextResponse.json({ error: 'Could not submit your enquiry. Please try again or contact us by phone.' }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, inquiryId: activeInquiry.inquiryId, reusedInquiry: true })
+    }
+  }
+
   const source = await prisma.inquirySourceMaster.findUnique({
     where: { code: 'EXCEL_CARS_MUMBAI' },
     select: { sourceId: true, displayName: true },
@@ -115,9 +192,10 @@ export async function POST(req: NextRequest) {
         website: source.displayName,
         sourceId: source.sourceId,
         sourceDetail: `Public vehicle page — ${vehicle.inventoryNumber ?? `Inventory #${vehicle.inventoryId}`}`,
-        customerNameLegacy: name,
-        mobileno: phone,
-        email: email || null,
+        customerId: matchingCustomer?.custId ?? null,
+        customerNameLegacy: matchingCustomer?.custName || name,
+        mobileno: matchingCustomer?.custMobile || phone,
+        email: matchingCustomer?.custEmail || email || null,
         classification: 'Warm',
         status: 'Open',
         remark: message || `Enquiry received from the public vehicle page for ${vehicle.inventoryNumber ?? `inventory #${vehicle.inventoryId}`}.`,

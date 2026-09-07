@@ -222,6 +222,9 @@ Required API surfaces:
   - `source = All`
   - `subStatus = All`
   - fixed page size `25`
+  - default `Active` queue: `FollowUp` inquiries ordered by due date, putting overdue then today's follow-ups before upcoming ones
+  - quick presets: Active, Overdue, Today, Upcoming, Newest Activity, and All Inquiries
+  - `Newest Activity` orders by last update; `All Inquiries` orders by newest `Date of Inquiry`, with blank dates last and `Inquiry ID` breaking ties
 - inquiry statuses currently remain:
   - `Open`
   - `FollowUp`
@@ -354,6 +357,8 @@ Public email links:
 - vehicle email links point to `/vehicle/[slug]?t=<token>`
 - public vehicle pages are intentionally excluded from auth middleware
 - dashboard pages remain authenticated
+- links created from an existing inquiry hide `Enquire Now`; inventory-origin links keep it available
+- a public vehicle enquiry matches an existing customer by normalized mobile number. It adds the vehicle to that customer's active inquiry without duplicating the vehicle interest; if every prior inquiry is closed, it creates a new inquiry linked to the existing customer instead.
 
 ## 10. Listing And Export Behavior
 Inquiry list is now aligned closer to the legacy screen.
