@@ -139,14 +139,14 @@ export async function getLegacyLeadDetails({ userId, roleId }: { userId: number;
     {
       label: 'All Leads',
       condition: {} satisfies LeadCondition,
-      href: '/followup?status=All',
-      ownHref: `/followup?status=All&userId=${userId}`,
+      href: '/inquiry?quickFilter=all',
+      ownHref: `/inquiry?quickFilter=all&userId=${userId}`,
     },
     {
       label: 'Fresh Leads',
       condition: { dateOfInquiry: dateRange(today) } satisfies LeadCondition,
-      href: `/followup?status=FollowUp&inquiryDateFrom=${dateParam(today)}&inquiryDateTo=${dateParam(today)}`,
-      ownHref: `/followup?status=FollowUp&inquiryDateFrom=${dateParam(today)}&inquiryDateTo=${dateParam(today)}&userId=${userId}`,
+      href: `/inquiry?quickFilter=all&inquiryDate=${dateParam(today)}`,
+      ownHref: `/inquiry?quickFilter=all&inquiryDate=${dateParam(today)}&userId=${userId}`,
     },
     {
       label: "Today's Appointment Fixed",
@@ -427,20 +427,21 @@ export async function getPendingPayments({
 }
 
 export async function getLeadSourceBreakdown() {
-  const [rows] = await Promise.all([
+  const [totalInquiries, rows] = await Promise.all([
+    prisma.inquiry.count(),
     prisma.inquirySourceMaster.findMany({
-    where: { inquiries: { some: {} } },
-    select: {
-      displayName: true,
-      _count: { select: { inquiries: true } },
-    },
-    orderBy: { inquiries: { _count: 'desc' } },
-    take: 6,
+      where: { inquiries: { some: {} } },
+      select: {
+        displayName: true,
+        _count: { select: { inquiries: true } },
+      },
+      orderBy: { inquiries: { _count: 'desc' } },
     }),
   ])
-  return [
-    ...rows.map((row) => ({ name: row.displayName, value: row._count.inquiries })),
-  ].sort((a, b) => b.value - a.value).slice(0, 6)
+  const topSources = rows.slice(0, 5).map(row => ({ name: row.displayName, value: row._count.inquiries }))
+  const otherSources = totalInquiries - topSources.reduce((total, row) => total + row.value, 0)
+
+  return otherSources > 0 ? [...topSources, { name: 'Other', value: otherSources }] : topSources
 }
 
 export async function getPendingFollowups(limit: number | null = 8) {

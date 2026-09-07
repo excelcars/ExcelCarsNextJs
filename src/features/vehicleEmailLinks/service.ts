@@ -153,6 +153,7 @@ export function buildPublicVehicleViewModel(
     whatsappNumber: getPublicVehicleWhatsAppNumber(),
     contactEmail: getPublicVehicleContactEmail(),
     inventoryNumber: vehicle.inventoryNumber ?? null,
+    canEnquire: !trackedLink.inquiryId,
   }
 }
 

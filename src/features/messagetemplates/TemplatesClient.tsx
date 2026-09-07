@@ -115,6 +115,12 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
     const templateId = scope === 'template' ? attachmentTemplate?.typeId : sendRow?.typeId
     if (!files?.length || !templateId) return
     setAttachmentError('')
+    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
+    const invalidFile = Array.from(files).find(file => !allowedTypes.has(file.type) || file.size > 10 * 1024 * 1024)
+    if (invalidFile) {
+      setAttachmentError('Only PDF, JPG, and PNG files up to 10 MB each are allowed.')
+      return
+    }
     const formData = new FormData(); formData.set('templateId', String(templateId)); formData.set('scope', scope)
     Array.from(files).forEach(file => formData.append('files', file))
     const res = await fetch('/api/message-attachments', { method: 'POST', body: formData })
@@ -280,7 +286,7 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
             </div>
             <Input label="Other recipient email (optional)" type="email" value={toEmail} onChange={e => setToEmail(e.target.value)} placeholder="name@example.com" />
             <p className="text-xs text-gray-500">Choose at least one listed recipient or enter another email address. A maximum of 50 selected recipients can be sent to at once.</p>
-            <div className="rounded-lg border border-gray-200 p-3 space-y-2"><label className="text-sm font-medium text-gray-800">Extra files for this send</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={e => { void uploadAttachments(e.target.files, 'send'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, PNG, or DOCX — up to 10 MB per file.</p>{sendAttachments.map(file => <div key={file.uploadId} className="flex justify-between text-xs"><span>{file.originalName}</span><button type="button" onClick={() => { void removeAttachment(file.uploadId, 'send') }}><X className="w-3 h-3" /></button></div>)}</div>
+            <div className="rounded-lg border border-gray-200 p-3 space-y-2"><label className="text-sm font-medium text-gray-800">Extra files for this send</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e => { void uploadAttachments(e.target.files, 'send'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, or PNG — up to 10 MB per file.</p>{sendAttachments.map(file => <div key={file.uploadId} className="flex justify-between text-xs"><span>{file.originalName}</span><button type="button" onClick={() => { void removeAttachment(file.uploadId, 'send') }}><X className="w-3 h-3" /></button></div>)}</div>
             {attachmentError && <div className="text-xs text-red-600">{attachmentError}</div>}
 
             {sendError && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{sendError}</div>}
@@ -299,7 +305,7 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
       </Modal>
 
       <Modal title={`Attachments — ${attachmentTemplate?.messageSubject ?? ''}`} open={!!attachmentTemplate} onClose={() => setAttachmentTemplate(null)}>
-        <div className="space-y-3"><p className="text-sm text-gray-600">These files will be included every time this template is sent.</p><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={e => { void uploadAttachments(e.target.files, 'template'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, PNG, or DOCX — up to 10 MB per file.</p>{attachmentError && <div className="text-xs text-red-600">{attachmentError}</div>}{templateAttachments.length === 0 ? <div className="text-sm text-gray-400">No saved attachments.</div> : templateAttachments.map(file => <div key={file.uploadId} className="flex items-center justify-between rounded border px-3 py-2 text-sm"><span>{file.originalName} <span className="text-gray-400">({Math.ceil(file.byteSize / 1024)} KB)</span></span><button type="button" onClick={() => { void removeAttachment(file.uploadId, 'template') }} className="text-red-600">Remove</button></div>)}</div>
+        <div className="space-y-3"><p className="text-sm text-gray-600">These files will be included every time this template is sent.</p><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e => { void uploadAttachments(e.target.files, 'template'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, or PNG — up to 10 MB per file.</p>{attachmentError && <div className="text-xs text-red-600">{attachmentError}</div>}{templateAttachments.length === 0 ? <div className="text-sm text-gray-400">No saved attachments.</div> : templateAttachments.map(file => <div key={file.uploadId} className="flex items-center justify-between rounded border px-3 py-2 text-sm"><span>{file.originalName} <span className="text-gray-400">({Math.ceil(file.byteSize / 1024)} KB)</span></span><button type="button" onClick={() => { void removeAttachment(file.uploadId, 'template') }} className="text-red-600">Remove</button></div>)}</div>
       </Modal>
 
       <Modal title={`Delivery history — ${historyTemplate?.messageSubject ?? ''}`} open={!!historyTemplate} onClose={() => setHistoryTemplate(null)}>

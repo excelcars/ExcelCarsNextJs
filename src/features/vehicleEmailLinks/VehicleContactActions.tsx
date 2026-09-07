@@ -7,6 +7,7 @@ interface VehicleContactActionsProps {
   token: string
   phoneHref: string
   whatsappHref: string
+  canEnquire: boolean
 }
 
 function trackVehicleInteraction(token: string, interactionType: 'call_click' | 'whatsapp_click' | 'email_click', interactionLabel: string) {
@@ -30,6 +31,7 @@ export function VehicleContactActions({
   token,
   phoneHref,
   whatsappHref,
+  canEnquire,
 }: VehicleContactActionsProps) {
   const [enquiryOpen, setEnquiryOpen] = useState(false)
   const [name, setName] = useState('')
@@ -96,13 +98,13 @@ export function VehicleContactActions({
         >
           <MessageCircle className="h-4 w-4" /> WhatsApp
         </a>
-        <button
+        {canEnquire ? <button
           type="button"
           onClick={() => { setSuccess(''); setError(''); setEnquiryOpen(true) }}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#142b62] px-4 py-3 text-sm font-semibold text-[#142b62] transition hover:bg-[#f1f5fb] sm:col-span-2"
         >
           <Mail className="h-4 w-4" /> Enquire Now
-        </button>
+        </button> : null}
       </div>
 
       {enquiryOpen ? (

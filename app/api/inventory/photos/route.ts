@@ -18,6 +18,12 @@ function safeExt(fileName: string, mimeType: string) {
   return '.jpg'
 }
 
+function hasAllowedImageSignature(bytes: Buffer, mimeType: string) {
+  if (mimeType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (mimeType === 'image/png') return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  return bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+}
+
 function fileNameFromPath(photoPath: string | null) {
   if (!photoPath) return 'file'
   const normalized = photoPath.replace(/\\/g, '/')
@@ -97,6 +103,10 @@ export async function POST(req: NextRequest) {
       const ext = safeExt(file.name, file.type)
       const fileName = `${Date.now()}-${randomUUID()}${ext}`
       const bytes = Buffer.from(await file.arrayBuffer())
+      if (!hasAllowedImageSignature(bytes, file.type)) {
+        results.push({ name: file.name, success: false, error: 'File content does not match an allowed image type.' })
+        continue
+      }
       const storedPath = await uploadToFirebaseStorage(`inventory/${inventoryId}/${fileName}`, bytes, file.type)
 
       const photo = await prisma.inventoryPhotos.create({

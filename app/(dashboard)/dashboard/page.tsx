@@ -17,7 +17,7 @@ import {
 } from '@/features/dashboard/DashboardCommandCenterClient'
 import { getCurrentUserAccessProfile } from '@/lib/access/accessControl'
 
-const DASHBOARD_WORKSPACES = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays', 'insights'] as const
+const DASHBOARD_WORKSPACES = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays'] as const
 type DashboardWorkspace = typeof DASHBOARD_WORKSPACES[number]
 
 function isDashboardWorkspace(value: string | undefined): value is DashboardWorkspace {

@@ -127,7 +127,7 @@ export default async function PublicVehiclePage({
               </div>
             </div>
 
-            <VehicleContactActions token={rawToken} phoneHref={phoneHref} whatsappHref={whatsappHref} />
+            <VehicleContactActions token={rawToken} phoneHref={phoneHref} whatsappHref={whatsappHref} canEnquire={vehicle.canEnquire} />
           </aside>
         </div>
 

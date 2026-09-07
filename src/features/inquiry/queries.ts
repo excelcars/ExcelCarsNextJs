@@ -6,6 +6,8 @@ import { getActiveInquirySources } from './sourceMaster.server'
 export const INQUIRY_STATUSES = ['Open', 'FollowUp', 'Closed'] as const
 export const INQUIRY_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 export const PAGE_SIZE = 25
+export const INQUIRY_QUICK_FILTERS = ['active', 'overdue', 'today', 'upcoming', 'activity', 'all'] as const
+export type InquiryQuickFilter = (typeof INQUIRY_QUICK_FILTERS)[number]
 export interface ListInquiriesParams {
   search: string
   status: string
@@ -13,15 +15,17 @@ export interface ListInquiriesParams {
   source: string
   subStatus: string
   followUpDate: string
+  inquiryDate: string
   visitedDate: string
   makeId: string
   modelId: string
   variantId: string
+  quickFilter: InquiryQuickFilter
   page: number
   restrictToUserId?: number | null
 }
 
-function buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'restrictToUserId'>) {
+function buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
   const where: Prisma.InquiryWhereInput = {}
   const andConditions: Prisma.InquiryWhereInput[] = []
 
@@ -29,7 +33,17 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
     andConditions.push(buildInquiryOwnershipWhere(restrictToUserId))
   }
 
-  if (status !== 'All') {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  if (quickFilter === 'active' || quickFilter === 'overdue' || quickFilter === 'today' || quickFilter === 'upcoming') {
+    where.status = 'FollowUp'
+    if (quickFilter === 'overdue') where.followUpDate = { lt: today }
+    if (quickFilter === 'today') where.followUpDate = { gte: today, lt: tomorrow }
+    if (quickFilter === 'upcoming') where.followUpDate = { gte: tomorrow }
+  } else if (status !== 'All') {
     where.status = status
   }
   if (classification !== 'All') {
@@ -49,6 +63,12 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
       gte: start,
       lt: end,
     }
+  }
+  if (inquiryDate) {
+    const start = new Date(`${inquiryDate}T00:00:00.000`)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    where.dateOfInquiry = { gte: start, lt: end }
   }
   if (visitedDate) {
     const start = new Date(`${visitedDate}T00:00:00.000`)
@@ -214,8 +234,16 @@ function inquiryListSelect() {
   } satisfies Prisma.InquirySelect
 }
 
-export async function listInquiries({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, page, restrictToUserId = null }: ListInquiriesParams) {
-  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId })
+function inquiryOrderBy(quickFilter: InquiryQuickFilter): Prisma.InquiryOrderByWithRelationInput[] {
+  if (quickFilter === 'active' || quickFilter === 'overdue' || quickFilter === 'today' || quickFilter === 'upcoming') {
+    return [{ followUpDate: { sort: 'asc', nulls: 'last' } }, { inquiryId: 'desc' }]
+  }
+  if (quickFilter === 'activity') return [{ updatedDt: { sort: 'desc', nulls: 'last' } }, { inquiryId: 'desc' }]
+  return [{ dateOfInquiry: { sort: 'desc', nulls: 'last' } }, { inquiryId: 'desc' }]
+}
+
+export async function listInquiries({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, page, restrictToUserId = null }: ListInquiriesParams) {
+  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, restrictToUserId })
 
   const skip = Math.max(0, (page - 1) * PAGE_SIZE)
 
@@ -223,7 +251,7 @@ export async function listInquiries({ search, status, classification, source, su
     prisma.inquiry.findMany({
       where,
       select: inquiryListSelect(),
-      orderBy: { inquiryId: 'desc' },
+      orderBy: inquiryOrderBy(quickFilter),
       skip,
       take: PAGE_SIZE,
     }),
@@ -240,12 +268,12 @@ export async function getInquiryById(id: number) {
   })
 }
 
-export async function listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'restrictToUserId'>) {
-  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, visitedDate, makeId, modelId, variantId, restrictToUserId })
+export async function listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'visitedDate' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
+  const where = buildInquiryWhere({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, restrictToUserId })
   return prisma.inquiry.findMany({
     where,
     include: inquiryDetailInclude(),
-    orderBy: { inquiryId: 'desc' },
+    orderBy: inquiryOrderBy(quickFilter),
   })
 }
 

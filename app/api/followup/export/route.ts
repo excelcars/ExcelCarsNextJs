@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   const subStatus = req.nextUrl.searchParams.get('subStatus')?.trim() ?? ''
   const website = req.nextUrl.searchParams.get('website')?.trim() ?? ''
   const customerMobile = req.nextUrl.searchParams.get('customerMobile')?.trim() ?? ''
+  const inquiryId = req.nextUrl.searchParams.get('inquiryId')?.trim() ?? ''
   const userId = req.nextUrl.searchParams.get('userId')?.trim() ?? ''
   const makeId = req.nextUrl.searchParams.get('makeId')?.trim() ?? ''
   const modelId = req.nextUrl.searchParams.get('modelId')?.trim() ?? ''
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
     subStatus,
     website,
     customerMobile,
+    inquiryId,
     userId,
     makeId,
     modelId,
