@@ -100,16 +100,21 @@ export function InquirySourceMasterClient({
       </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <Table headers={['Order', 'Source', 'Code', 'Category', 'Detail', 'Status', 'Inquiries', 'Actions']} empty={initialData.length === 0} emptyMessage="No sources match this search.">
+      <Table headers={['Source', 'Configuration', 'Usage', 'Actions']} minWidthClass="min-w-[820px]" empty={initialData.length === 0} emptyMessage="No sources match this search.">
         {initialData.map(row => (
           <tr key={row.sourceId} className="hover:bg-gray-50">
-            <td className="px-4 py-3 font-mono text-sm text-gray-600">{row.reportingSort}</td>
-            <td className="px-4 py-3 font-medium text-gray-900">{row.displayName}</td>
-            <td className="px-4 py-3 font-mono text-sm text-gray-600">{row.code}</td>
-            <td className="px-4 py-3 text-gray-700">{row.category}</td>
-            <td className="px-4 py-3 text-gray-700">{row.requiresDetail ? 'Required' : 'No'}</td>
-            <td className="px-4 py-3"><span className={row.isActive ? 'text-emerald-700' : 'text-gray-500'}>{row.isActive ? 'Active' : 'Inactive'}</span></td>
-            <td className="px-4 py-3 text-gray-700">{row.inquiryCount.toLocaleString('en-IN')}</td>
+            <td className="px-4 py-3">
+              <div className="font-medium text-gray-900">{row.displayName}</div>
+              <div className="mt-1 flex items-center gap-2 text-xs text-gray-500"><span className="font-mono">{row.code}</span><span>•</span><span>Order {row.reportingSort}</span></div>
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-700">
+              <div>{row.category}</div>
+              <div className="mt-1 text-xs text-gray-500">Detail: {row.requiresDetail ? 'Required' : 'Not required'}</div>
+            </td>
+            <td className="px-4 py-3">
+              <div><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${row.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{row.isActive ? 'Active' : 'Inactive'}</span></div>
+              <div className="mt-1 text-xs text-gray-500">{row.inquiryCount.toLocaleString('en-IN')} inquiries</div>
+            </td>
             <td className="px-4 py-3"><div className="flex items-center gap-1">
               <button type="button" onClick={() => openEdit(row)} aria-label={`Edit ${row.displayName}`} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-[#1B2A6B]"><Pencil className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => setDeleteRow(row)} disabled={row.inquiryCount > 0} aria-label={`Delete ${row.displayName}`} title={row.inquiryCount > 0 ? 'Cannot delete a source used by inquiries.' : 'Delete source'} className="rounded p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
