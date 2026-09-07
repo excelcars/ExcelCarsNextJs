@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Car, Eye, Download, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Badge, Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { createChecklist, updateChecklist, deleteChecklist, type ChecklistFormInput, type DocRow } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
@@ -708,15 +709,9 @@ export function ChecklistClient({
               {form.docs.map((d, i) => (
                 <div key={i} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-end border border-gray-100 rounded-lg p-2.5">
                       <Input label={i === 0 ? 'Document' : undefined} list="doc-name-suggestions" value={d.documentName} onChange={e => updateDoc(i, { documentName: e.target.value })} />
-                      <Select label={i === 0 ? 'Applicable / Not Applicable' : undefined} value={d.applicable} onChange={e => updateDoc(i, { applicable: e.target.value })}>
-                        {APPLICABILITY_OPTIONS.map(o => <option key={o}>{o}</option>)}
-                      </Select>
-                      <Select label={i === 0 ? 'Received' : undefined} value={d.received} onChange={e => updateDoc(i, { received: e.target.value })}>
-                        {YES_NO.map(o => <option key={o}>{o}</option>)}
-                      </Select>
-                      <Select label={i === 0 ? 'Original' : undefined} value={d.originalCopy} onChange={e => updateDoc(i, { originalCopy: e.target.value })}>
-                        {ORIGINAL_COPY.map(o => <option key={o}>{o}</option>)}
-                      </Select>
+                      <FormDropdown label={i === 0 ? 'Applicable / Not Applicable' : undefined} value={d.applicable} options={APPLICABILITY_OPTIONS.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { applicable: value })} />
+                      <FormDropdown label={i === 0 ? 'Received' : undefined} value={d.received} options={YES_NO.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { received: value })} />
+                      <FormDropdown label={i === 0 ? 'Original' : undefined} value={d.originalCopy} options={ORIGINAL_COPY.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { originalCopy: value })} />
                   <button type="button" onClick={() => removeDoc(i)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ))}

@@ -59,12 +59,14 @@ export function Btn({ children, onClick, variant = 'primary', size = 'md', type 
   )
 }
 
-export function Input({ label, error, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: ReactNode; error?: boolean }) {
+export function Input({ label, error, autoComplete, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: ReactNode; error?: boolean }) {
+  const isLookup = typeof props.placeholder === 'string' && /\b(search|find|type)\b/i.test(props.placeholder)
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <input
         {...props}
+        autoComplete={autoComplete ?? (isLookup ? 'new-password' : undefined)}
         className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
         style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
       />
@@ -179,6 +181,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', disabled
         ref={inputRef} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
+        autoComplete="new-password"
         className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full sm:w-72 disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </div>

@@ -299,18 +299,25 @@ export function CustomersClient({
         </div>
       </div>
 
-      <Table headers={['Name', 'Type', 'Contact', 'Company', 'DOB', 'Anniversary', 'Actions']} empty={initialData.length === 0}>
+      <Table headers={['Customer', 'Contact', 'Important dates', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
         {initialData.map(r => (
           <tr key={r.custId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-medium text-gray-900">{r.custName}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.type ?? '—'}</td>
+            <td className="px-4 py-3">
+              <div className="font-medium text-gray-900">{r.custName}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                {r.type && <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-[#1B2A6B]">{r.type}</span>}
+                {r.companyName && <span>{r.companyName}</span>}
+              </div>
+            </td>
             <td className="px-4 py-3">
               <div className="text-sm text-gray-700 font-mono">{r.custMobile ?? '—'}</div>
+              {r.mobile_2 && <div className="text-xs text-gray-500 font-mono">{r.mobile_2}</div>}
               <div className="text-xs text-gray-500">{r.custEmail ?? ''}</div>
             </td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.companyName ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.custDob) || '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.custAnniversaryDt) || '—'}</td>
+            <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+              <div><span className="text-gray-400">DOB:</span> {fmtDate(r.custDob) || '—'}</div>
+              <div className="mt-1"><span className="text-gray-400">Anniversary:</span> {fmtDate(r.custAnniversaryDt) || '—'}</div>
+            </td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
                 <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>

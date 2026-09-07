@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Download, Plus, Pencil, Trash2 } from 'lucide-react'
-import { Btn, Input, LoadingOverlay, Modal, Select, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { createDealer, updateDealer, deleteDealer, type DealerFormInput } from './actions'
 import { DealerNameAutocomplete } from './DealerNameAutocomplete'
 import { DealerMobileAutocomplete } from './DealerMobileAutocomplete'
@@ -287,22 +288,8 @@ export function DealersClient({
             <label className="text-xs font-medium text-gray-600">Search value</label>
             <SearchBar value={searchInput} onChange={setSearchInput} placeholder={`Type ${searchFieldLabel}...`} />
           </div>
-          <Select label="Search in" value={field} onChange={event => pushQuery({ field: event.target.value })} className="w-full">
-            <option value="all">All fields</option>
-            <option value="name">Name</option>
-            <option value="primaryMobile">Primary mobile</option>
-            <option value="secondaryMobile">Mobile 2</option>
-            <option value="email">Email</option>
-            <option value="company">Company</option>
-            <option value="address">Address</option>
-            <option value="website">Website</option>
-          </Select>
-          <Select label="Sort by" value={sort} onChange={event => pushQuery({ sort: event.target.value })} className="w-full">
-            <option value="nameAsc">Name: A–Z</option>
-            <option value="nameDesc">Name: Z–A</option>
-            <option value="newest">Newest added</option>
-            <option value="oldest">Oldest added</option>
-          </Select>
+          <FormDropdown label="Search in" value={field} options={[['all', 'All fields'], ['name', 'Name'], ['primaryMobile', 'Primary mobile'], ['secondaryMobile', 'Mobile 2'], ['email', 'Email'], ['company', 'Company'], ['address', 'Address'], ['website', 'Website']].map(([value, label]) => ({ value, label }))} placeholder="All fields" onChange={value => pushQuery({ field: value })} className="w-full" />
+          <FormDropdown label="Sort by" value={sort} options={[['nameAsc', 'Name: A–Z'], ['nameDesc', 'Name: Z–A'], ['newest', 'Newest added'], ['oldest', 'Oldest added']].map(([value, label]) => ({ value, label }))} placeholder="Sort by" onChange={value => pushQuery({ sort: value })} className="w-full" />
           {(search || searchInput || field !== 'all' || sort !== 'nameAsc') && <Btn variant="outline" size="sm" onClick={resetFilters}>Reset Filters</Btn>}
           <p className="text-xs text-gray-500 sm:col-span-2 xl:col-span-4">Choose where to search, then type the value above. Sorting applies immediately; filtering starts after you type.</p>
         </div>
@@ -314,18 +301,18 @@ export function DealersClient({
 
       <div className="relative" aria-busy={isNavigating}>
         <LoadingOverlay show={isNavigating} label="Loading dealers..." subtle />
-      <Table headers={['Name', 'Contact', 'Company', 'Address', 'Actions']} empty={initialData.length === 0}>
+      <Table headers={['Dealer', 'Contact', 'Address', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
         {initialData.map(r => (
           <tr key={r.dealerId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-medium text-gray-900">{r.dealerName ?? '—'}</td>
+            <td className="px-4 py-3">
+              <div className="font-medium text-gray-900">{r.dealerName ?? '—'}</div>
+              {r.dealerCompanyName && <div className="mt-1 text-sm text-gray-600">{r.dealerCompanyName}</div>}
+              {r.dealerWebsite && <div className="mt-0.5 max-w-56 truncate text-xs text-gray-500" title={r.dealerWebsite}>{r.dealerWebsite}</div>}
+            </td>
             <td className="px-4 py-3">
               <div className="font-mono text-sm text-gray-700">{r.dealerMobileNo ?? '—'}</div>
               {r.dealerMobileNo_2 && <div className="mt-0.5 font-mono text-xs text-gray-500">{r.dealerMobileNo_2}</div>}
               {r.dealerEmail && <div className="mt-0.5 max-w-56 truncate text-xs text-gray-500" title={r.dealerEmail}>{r.dealerEmail}</div>}
-            </td>
-            <td className="px-4 py-3">
-              <div className="text-sm text-gray-600">{r.dealerCompanyName ?? '—'}</div>
-              {r.dealerWebsite && <div className="mt-0.5 max-w-48 truncate text-xs text-gray-500" title={r.dealerWebsite}>{r.dealerWebsite}</div>}
             </td>
             <td className="max-w-64 px-4 py-3 text-sm text-gray-600">
               <div className="truncate" title={r.dealerAddress ?? undefined}>{r.dealerAddress ?? '—'}</div>

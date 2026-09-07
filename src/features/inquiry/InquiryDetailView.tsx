@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { Badge, Btn } from '@/components/ui'
 import { getInquiryDetail, setInquiryInventoryWorkflowState } from './actions'
 import { formatInquiryInventoryWorkflowLabel, INQUIRY_INVENTORY_WORKFLOW_OPTIONS } from './workflow'
+import { isFollowupStatus } from '@/lib/inquiryFollowupValidation'
 
 interface InquiryDetailUser {
   userId: number
@@ -399,6 +400,7 @@ function buildInquiryActivityItems(inquiry: InquiryDetailData) {
       detail: [
         followup.followupSubStatus ? `Sub-status: ${followup.followupSubStatus}` : '',
         followup.followupClassification ? `Class: ${followup.followupClassification}` : '',
+        isFollowupStatus(followup.followupStatus) && followup.followupDate ? `Next follow-up: ${fmtDate(followup.followupDate)}` : '',
         followup.comments?.trim() ? followup.comments.trim() : '',
         followup.createdByUser ? `By ${userOptionLabel(followup.createdByUser)}` : '',
       ].filter(Boolean).join(' · ') || 'Follow-up logged',
@@ -465,6 +467,19 @@ function buildInquiryActivityItems(inquiry: InquiryDetailData) {
         email.errorMessage?.trim() ? `Error: ${email.errorMessage.trim()}` : '',
       ].filter(Boolean).join(' · '),
       tone: email.deliveryStatus === 'Sent' ? 'success' : 'danger',
+    })
+  }
+
+  for (const event of inquiry.inquiryActivityEvents ?? []) {
+    items.push({
+      key: `event-${event.inquiryActivityLogId}`,
+      at: event.createdAt,
+      title: event.eventLabel?.trim() || event.eventType,
+      detail: [
+        event.eventDetail?.trim() ? `Remark: ${event.eventDetail.trim()}` : '',
+        event.actorUserName ? `By ${event.actorUserName}` : '',
+      ].filter(Boolean).join(' · ') || 'Activity recorded',
+      tone: 'neutral',
     })
   }
 

@@ -64,7 +64,7 @@ export default async function PublicVehiclePage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1240px] px-6 py-6 sm:py-8">
+      <main className="mx-auto max-w-[1240px] px-4 py-4 sm:px-6 sm:py-8">
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,0.85fr)]">
           <section className="space-y-6">
             <VehicleGallery photos={vehicle.gallery} />
