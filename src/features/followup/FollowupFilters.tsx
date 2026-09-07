@@ -1,6 +1,7 @@
 'use client'
 
-import { Input, SearchBar, Select } from '@/components/ui'
+import { Input, SearchBar } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import { DateFilterInput } from '@/components/DateFilterInput'
 import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
@@ -126,25 +127,13 @@ export function FollowupFilters({
     <>
       <div className="mb-4 flex flex-wrap gap-3">
         <SearchBar value={search} onChange={onSearchChange} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
-        <Select value={status} onChange={e => onStatusChange(e.target.value)} disabled={isRoutePending} className="min-w-[160px]">
-          {statuses.map(option => <option key={option} value={option}>{option === 'FollowUp' ? 'Follow-up Only' : option}</option>)}
-          <option value="All">All Status</option>
-        </Select>
-        <Select value={contactOutcome} onChange={e => onContactOutcomeChange(e.target.value)} disabled={isRoutePending} className="min-w-[210px]">
-          <option value="">All reached outcomes</option>
-          {contactOutcomes.map(option => <option key={option.value} value={option.value}>{option.title}</option>)}
-        </Select>
+        <FormDropdown value={status === 'All' ? '' : status} options={statuses.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up Only' : value }))} placeholder="All Status" allowClear disabled={isRoutePending} className="min-w-[160px]" onChange={value => onStatusChange(value || 'All')} />
+        <FormDropdown value={contactOutcome} options={contactOutcomes.map(option => ({ value: option.value, label: option.title }))} placeholder="All reached outcomes" allowClear disabled={isRoutePending} className="min-w-[210px]" onChange={onContactOutcomeChange} />
         <Input value={customerName} onChange={e => onCustomerNameChange(e.target.value)} placeholder="Customer name..." disabled={isRoutePending} className="min-w-[220px]" />
         <Input value={subStatus} onChange={e => onSubStatusChange(e.target.value)} placeholder="Filter sub-status..." disabled={isRoutePending} className="min-w-[220px]" />
-        <Select value={website} onChange={e => onWebsiteChange(e.target.value)} disabled={isRoutePending} className="min-w-[220px]">
-          <option value="">All Sources</option>
-          {sourceOptions.map(item => <option key={item.code} value={item.code}>{item.displayName}</option>)}
-        </Select>
+        <FormDropdown value={website} options={sourceOptions.map(item => ({ value: item.code, label: item.displayName }))} placeholder="All Sources" allowClear disabled={isRoutePending} className="min-w-[220px]" onChange={onWebsiteChange} />
         <Input value={customerMobile} onChange={e => onCustomerMobileChange(e.target.value)} placeholder="Customer mobile..." disabled={isRoutePending} className="min-w-[200px]" />
-        <Select value={restricted ? currentUserId : userId} onChange={e => onUserIdChange(e.target.value)} disabled={isRoutePending || restricted} className="min-w-[200px]">
-          <option value="">{restricted ? 'My Inquiries Only' : 'All Users'}</option>
-          {users.map(item => <option key={item.userId} value={String(item.userId)}>{userLabel(item)}</option>)}
-        </Select>
+        <FormDropdown value={restricted ? currentUserId : userId} options={users.map(item => ({ value: String(item.userId), label: userLabel(item) }))} placeholder={restricted ? 'My Inquiries Only' : 'All Users'} allowClear disabled={isRoutePending || restricted} className="min-w-[200px]" onChange={onUserIdChange} />
         <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} className="min-w-[180px]" onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         <div className="flex flex-wrap gap-1.5">
           {['All', ...classifications].map(value => (
@@ -157,7 +146,7 @@ export function FollowupFilters({
         </div>
       </div>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mb-4 grid gap-3 md:grid-cols-2">
         <DateFilterInput label="Inquiry Date From" value={inquiryDateFrom} onChange={onInquiryDateFromChange} disabled={isRoutePending} />
         <DateFilterInput label="Inquiry Date To" value={inquiryDateTo} onChange={onInquiryDateToChange} disabled={isRoutePending} />
         <DateFilterInput label="Follow-up Date From" value={followUpDateFrom} onChange={onFollowUpDateFromChange} disabled={isRoutePending} />

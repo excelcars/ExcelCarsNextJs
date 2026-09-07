@@ -1,5 +1,6 @@
 import type { ChangeEvent, ReactNode } from 'react'
-import { Btn, Input, Select, Textarea, Modal } from '@/components/ui'
+import { Btn, Input, Textarea, Modal } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import type { InventoryFormInput } from './actions'
@@ -96,9 +97,7 @@ export function InventoryFormModal({
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Registration and vehicle condition</p>
             <div className="grid grid-cols-3 gap-4">
-              <Select label="Car Registered" value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'} onChange={e => f('isCarRegistered', e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null)}>
-                <option value="">Select</option><option value="yes">Yes</option><option value="no">No</option>
-              </Select>
+              <FormDropdown label="Car Registered" value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'} options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} placeholder="Select" allowClear onChange={value => f('isCarRegistered', value === 'yes' ? true : value === 'no' ? false : null)} />
               <Input
                 label={fieldLabel('Registration No', form.isCarRegistered === true)}
                 value={form.registrationNo}
@@ -108,15 +107,9 @@ export function InventoryFormModal({
                 className={form.isCarRegistered !== true ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
                 error={errors.registrationNo}
               />
-              <Select label={fieldLabel('Fuel Type', form.isCarRegistered === true)} value={form.fuelType} onChange={e => f('fuelType', e.target.value)} error={errors.fuelType}>
-                <option value="">Select Fuel Type</option>
-                {form.fuelType && !fuelTypes.includes(form.fuelType) ? <option value={form.fuelType}>{form.fuelType}</option> : null}
-                {fuelTypes.map(fuelType => <option key={fuelType} value={fuelType}>{fuelType}</option>)}
-              </Select>
+              <FormDropdown label={fieldLabel('Fuel Type', form.isCarRegistered === true)} value={form.fuelType} options={Array.from(new Set(form.fuelType ? [form.fuelType, ...fuelTypes] : fuelTypes)).map(value => ({ value, label: value }))} placeholder="Select fuel type" allowClear error={errors.fuelType} onChange={value => f('fuelType', value)} />
               <Input label={fieldLabel('No. of Owners', form.isCarRegistered === true)} type="number" min={0} step={1} value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
-              <Select label={fieldLabel('Tax', form.isCarRegistered === true)} value={form.tax} onChange={e => f('tax', e.target.value)} error={errors.tax}>
-                <option value="">Select Tax Type</option><option value="Individual">Individual</option><option value="Corporate">Corporate</option>
-              </Select>
+              <FormDropdown label={fieldLabel('Tax', form.isCarRegistered === true)} value={form.tax} options={[{ value: 'Individual', label: 'Individual' }, { value: 'Corporate', label: 'Corporate' }]} placeholder="Select tax type" allowClear error={errors.tax} onChange={value => f('tax', value)} />
               <Input label={fieldLabel('KM Driven', form.isCarRegistered === true)} type="text" inputMode="decimal" value={formatPriceInput(form.kmsDriven)} onChange={e => { const value = numberInput(e); f('kmsDriven', value ? Number(value) : null) }} error={errors.kmsDriven} />
               <Input label={fieldLabel('Insurance Type', form.isCarRegistered === true)} value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" error={errors.insuranceType} />
             </div>
@@ -125,13 +118,9 @@ export function InventoryFormModal({
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Sale and ownership</p>
             <div className="grid grid-cols-3 gap-4">
-              <Select label={fieldLabel('Status', true)} value={form.status} onChange={e => f('status', e.target.value)}>
-                {INVENTORY_STATUSES.map(status => <option key={status}>{status}</option>)}
-              </Select>
+              <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" onChange={value => f('status', value)} />
               <Input label={fieldLabel('Price (₹)', true)} type="text" inputMode="decimal" value={formatPriceInput(form.price)} onChange={e => { const value = numberInput(e); f('price', value ? Number(value) : null) }} error={errors.price} />
-              <Select label={fieldLabel('Owner Type', true)} value={form.ownedType} onChange={e => onOwnerTypeChange(e.target.value)} error={errors.ownedType}>
-                <option value="">Select Owner Type</option><option value="Excel Cars">Excel Cars</option><option value="Dealer">Dealer</option><option value="Individual">Individual</option>
-              </Select>
+              <FormDropdown label={fieldLabel('Owner Type', true)} value={form.ownedType} options={[{ value: 'Excel Cars', label: 'Excel Cars' }, { value: 'Dealer', label: 'Dealer' }, { value: 'Individual', label: 'Individual' }]} placeholder="Select owner type" allowClear error={errors.ownedType} onChange={onOwnerTypeChange} />
               {form.ownedType === 'Dealer' ? <CatalogTextPicker label={fieldLabel('Name of Owner', true)} value={form.ownedBy} onChange={onDealerChange} placeholder="Search dealer..." options={dealers.map(dealer => dealer.dealerName ?? '').filter(Boolean)} error={errors.ownedBy} /> : <Input label={fieldLabel('Name of Owner', true)} value={form.ownedBy} autoComplete="new-password" onChange={e => f('ownedBy', e.target.value)} error={errors.ownedBy} />}
               <Input label={fieldLabel('Owner Mobile')} value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" maxLength={11} error={errors.mobileNoOwnedBy} />
               <Input label={fieldLabel('Owner Email')} type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} />

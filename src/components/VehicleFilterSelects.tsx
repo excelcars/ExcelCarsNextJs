@@ -1,6 +1,6 @@
 'use client'
 
-import { Select } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 
 type Make = { pkMakeId: number; make: string | null }
 type Model = { pkModelId: number; model: string | null }
@@ -24,18 +24,9 @@ type VehicleFilterSelectsProps = {
 export function VehicleFilterSelects({ makeId, modelId, variantId, makes, models, variants, disabled, labeled = false, className, onMakeChange, onModelChange, onVariantChange }: VehicleFilterSelectsProps) {
   return (
     <>
-      <Select label={labeled ? 'Make' : undefined} value={makeId} onChange={e => onMakeChange(e.target.value)} disabled={disabled} className={className}>
-        <option value="">All Makes</option>
-        {makes.map(item => <option key={item.pkMakeId} value={String(item.pkMakeId)}>{item.make ?? '—'}</option>)}
-      </Select>
-      <Select label={labeled ? 'Model' : undefined} value={modelId} onChange={e => onModelChange(e.target.value)} disabled={disabled || !makeId} className={className}>
-        <option value="">All Models</option>
-        {models.map(item => <option key={item.pkModelId} value={String(item.pkModelId)}>{item.model ?? '—'}</option>)}
-      </Select>
-      <Select label={labeled ? 'Variant' : undefined} value={variantId} onChange={e => onVariantChange(e.target.value)} disabled={disabled || !modelId} className={className}>
-        <option value="">All Variants</option>
-        {variants.map(item => <option key={item.pkVariantId} value={String(item.pkVariantId)}>{item.variant ?? '—'}</option>)}
-      </Select>
+      <FormDropdown label={labeled ? 'Make' : undefined} value={makeId} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="All Makes" allowClear disabled={disabled} className={className} onChange={onMakeChange} />
+      <FormDropdown label={labeled ? 'Model' : undefined} value={modelId} options={models.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="All Models" allowClear disabled={disabled || !makeId} className={className} onChange={onModelChange} />
+      <FormDropdown label={labeled ? 'Variant' : undefined} value={variantId} options={variants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="All Variants" allowClear disabled={disabled || !modelId} className={className} onChange={onVariantChange} />
     </>
   )
 }

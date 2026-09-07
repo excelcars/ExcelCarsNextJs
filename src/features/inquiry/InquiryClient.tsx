@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef } from 'react'
+import { useState, useTransition, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Download, Loader2 } from 'lucide-react'
-import { Btn, Input, Select, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
+import { Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
+import { Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
@@ -560,6 +560,85 @@ function emptyForm(): InquiryFormInput {
   }
 }
 
+function fieldLabel(text: string, required = false): ReactNode {
+  return <><span className={required ? 'text-gray-600' : 'text-gray-400'}>{text}</span>{required ? <span className="text-red-600"> *</span> : null}</>
+}
+
+function FormDropdown({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange,
+  disabled = false,
+  allowClear = false,
+  allowCustom = false,
+}: {
+  label: ReactNode
+  value: string
+  options: Array<{ value: string; label: string }>
+  placeholder: string
+  onChange: (value: string) => void
+  disabled?: boolean
+  allowClear?: boolean
+  allowCustom?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const availableOptions = value && !options.some(option => option.value === value)
+    ? [{ value, label: value }, ...options]
+    : options
+  const normalizedQuery = query.trim().toLowerCase()
+  const matchingOptions = normalizedQuery ? availableOptions.filter(option => option.label.toLowerCase().includes(normalizedQuery)) : availableOptions
+  const hasExactMatch = normalizedQuery ? availableOptions.some(option => option.label.trim().toLowerCase() === normalizedQuery) : false
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [open])
+
+  const select = (nextValue: string) => {
+    onChange(nextValue)
+    setQuery('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={pickerRef} className="relative flex flex-col gap-1">
+      <label className="text-xs font-medium text-gray-600">{label}</label>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => { if (!disabled) { setOpen(current => !current); setQuery('') } }}
+        className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-800 outline-none focus:ring-1 focus:ring-[#1B2A6B] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+      >
+        <span className={value ? '' : 'text-gray-400'}>{availableOptions.find(option => option.value === value)?.label || placeholder}</span>
+        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-1 w-full min-w-64 max-w-[calc(100vw-3rem)] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div className="border-b border-gray-100 p-2">
+            <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} placeholder={allowCustom ? 'Search or add an option...' : 'Search options...'} className="w-full rounded-md border border-gray-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B]" /></div>
+          </div>
+          <div role="listbox" className="max-h-52 overflow-y-auto p-1">
+            {allowClear ? <button type="button" role="option" aria-selected={!value} onClick={() => select('')} className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 ${!value ? 'bg-blue-50 text-[#1B2A6B]' : 'text-gray-700'}`}>{placeholder}</button> : null}
+            {matchingOptions.map(option => <button key={option.value} type="button" role="option" aria-selected={value === option.value} onClick={() => select(option.value)} className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50 ${value === option.value ? 'bg-blue-50 font-medium text-[#1B2A6B]' : 'text-gray-700'}`}>{option.label}</button>)}
+            {allowCustom && normalizedQuery && !hasExactMatch ? <button type="button" onClick={() => select(query.trim())} className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-[#1B2A6B] hover:bg-blue-50">Use “{query.trim()}”</button> : null}
+            {matchingOptions.length === 0 && !allowCustom ? <div className="px-3 py-2 text-sm text-gray-400">No matching options.</div> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function InquiryClient({
   initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
 }: {
@@ -818,6 +897,7 @@ export function InquiryClient({
   const [isExporting, startExportTransition] = useTransition()
   const followUpSelected = isFollowupStatus(form.status)
   const visitedSelected = isVisitedSubStatus(form.subStatus)
+  const customerDetailsLocked = Boolean(selectedCustomer || form.customerId)
   const isMissingFollowUpDate = followUpSelected && !form.followUpDate.trim()
   const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
   const activeFilterCount = [
@@ -1326,9 +1406,9 @@ export function InquiryClient({
     setForm(f => ({
       ...f,
       customerId: c?.custId ?? null,
-      customerNameLegacy: c?.custName ?? f.customerNameLegacy,
-      mobileno: c?.custMobile ?? f.mobileno,
-      email: c?.custEmail ?? f.email,
+      customerNameLegacy: c?.custName ?? '',
+      mobileno: c?.custMobile ?? '',
+      email: c?.custEmail ?? '',
     }))
   }
 
@@ -1576,30 +1656,29 @@ export function InquiryClient({
         ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Inquiry No*" value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
-            <Input label="Date of Inquiry*" type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
-            <Select
-              label="Reference Website / Source*"
+            <Input label={fieldLabel('Inquiry No', true)} value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
+            <Input label={fieldLabel('Date of Inquiry', true)} type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
+            <FormDropdown
+              label={fieldLabel('Reference Website / Source', true)}
               value={form.sourceCode}
-              onChange={e => {
-                const selected = sourceOptions.find(source => source.code === e.target.value)
+              options={sourceOptions.map(source => ({ value: source.code, label: source.displayName }))}
+              placeholder="Select source"
+              allowClear
+              onChange={value => {
+                const selected = sourceOptions.find(source => source.code === value)
                 setForm(previous => ({
                   ...previous,
-                  sourceCode: e.target.value,
+                  sourceCode: value,
                   website: selected?.displayName ?? '',
                   sourceDetail: selected?.requiresDetail ? previous.sourceDetail : '',
                 }))
               }}
-              error={errors.website}
-            >
-              <option value="">Select source</option>
-              {sourceOptions.map(source => <option key={source.code} value={source.code}>{source.displayName}</option>)}
-            </Select>
+            />
           </div>
 
           {sourceOptions.find(source => source.code === form.sourceCode)?.requiresDetail ? (
             <Input
-              label={form.sourceCode === 'REFERENCE' ? 'Reference Details*' : 'Other Source Details*'}
+              label={fieldLabel(form.sourceCode === 'REFERENCE' ? 'Reference Details' : 'Other Source Details', true)}
               value={form.sourceDetail}
               onChange={e => f('sourceDetail', e.target.value)}
               placeholder={form.sourceCode === 'REFERENCE' ? 'Customer, dealer, or referral person' : 'Describe the source'}
@@ -1611,16 +1690,16 @@ export function InquiryClient({
             <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
           </div>
 
-          {selectedCustomer ? (
+          {customerDetailsLocked ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
               This inquiry is linked to a customer record. Name, mobile, and email above are locked to that customer so the inquiry does not drift from the master customer data.
             </div>
           ) : null}
 
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Customer Name*#" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} error={errors.customer} />
-            <Input label="Customer Mobile No*#" value={form.mobileno} onChange={e => f('mobileno', e.target.value)} disabled={!!selectedCustomer} error={errors.mobileno} />
-            <Input label="Customer Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} disabled={!!selectedCustomer} error={errors.email} />
+            <Input label={fieldLabel('Customer Name', true)} value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.customer} />
+            <Input label={fieldLabel('Customer Mobile No', true)} value={form.mobileno} onChange={e => f('mobileno', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.mobileno} />
+            <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} />
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -1634,23 +1713,14 @@ export function InquiryClient({
               ) : null}
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-6">
-              <Select label="Make*#" value={carEditor.selectedMakeId ?? ''} onChange={e => onCarEditorMakeChange(Number(e.target.value))}>
-                <option value="">SELECT</option>
-                {makes.map(item => <option key={item.pkMakeId} value={item.pkMakeId}>{item.make ?? '—'}</option>)}
-              </Select>
-              <Select label="Model*#" value={carEditor.selectedModelId ?? ''} onChange={e => onCarEditorModelChange(Number(e.target.value))} disabled={!carEditor.selectedMakeId}>
-                <option value="">SELECT</option>
-                {carEditorModels.map(item => <option key={item.pkModelId} value={item.pkModelId}>{item.model ?? '—'}</option>)}
-              </Select>
-              <Select label="Variant*#" value={carEditor.fkVariantId ?? ''} onChange={e => {
-                setCarEditor(prev => ({ ...prev, fkVariantId: Number(e.target.value) || null }))
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,1.1fr)_auto]">
+              <FormDropdown label={fieldLabel('Make', true)} value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
+              <FormDropdown label={fieldLabel('Model', true)} value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
+              <FormDropdown label={fieldLabel('Variant', true)} value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
+                setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                 setCarEditorError('')
-              }} disabled={!carEditor.selectedModelId}>
-                <option value="">SELECT</option>
-                {carEditorVariants.map(item => <option key={item.pkVariantId} value={item.pkVariantId}>{item.variant ?? '—'}</option>)}
-              </Select>
-              <Input label="Year#" type="number" value={carEditor.carYear ?? ''} onChange={e => {
+              }} />
+              <Input label={fieldLabel('Year', true)} type="number" value={carEditor.carYear ?? ''} onChange={e => {
                 setCarEditor(prev => ({ ...prev, carYear: e.target.value ? Number(e.target.value) : null }))
                 setCarEditorError('')
               }} />
@@ -1681,31 +1751,31 @@ export function InquiryClient({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Budget of customer" type="number" value={form.budgetOfCustomer ?? ''} onChange={e => f('budgetOfCustomer', e.target.value ? +e.target.value : null)} error={errors.budgetOfCustomer} />
-            <Select label="Classification*" value={form.classification} onChange={e => f('classification', e.target.value)}>
-              {INQUIRY_CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
-            </Select>
+            <Input
+              label="Budget of customer"
+              inputMode="numeric"
+              placeholder="e.g. 12,00,000"
+              value={form.budgetOfCustomer === null ? '' : form.budgetOfCustomer.toLocaleString('en-IN')}
+              onChange={e => {
+                const digits = e.target.value.replace(/\D/g, '')
+                f('budgetOfCustomer', digits ? Number(digits) : null)
+              }}
+              error={errors.budgetOfCustomer}
+            />
+            <FormDropdown label={fieldLabel('Classification', true)} value={form.classification} options={INQUIRY_CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => f('classification', value)} />
             <Input label="Visited Date of customer" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Select label="Status*#" value={form.status} onChange={e => {
-              const nextStatus = e.target.value
+            <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INQUIRY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" onChange={nextStatus => {
               f('status', nextStatus)
               if (!isFollowupStatus(nextStatus)) {
                 f('followUpDate', '')
               }
-            }}>
-              {INQUIRY_STATUSES.map(s => <option key={s}>{s}</option>)}
-            </Select>
-            <div>
-              <Input label="Sub Status" list="sub-status-suggestions" value={form.subStatus} onChange={e => f('subStatus', e.target.value)} />
-              <datalist id="sub-status-suggestions">
-                {subStatusSuggestions.map(s => <option key={s} value={s} />)}
-              </datalist>
-            </div>
+            }} />
+            <FormDropdown label="Sub Status" value={form.subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear allowCustom onChange={value => f('subStatus', value)} />
             <Input
-              label={followUpSelected ? 'FollowUp Date*' : 'FollowUp Date'}
+              label={fieldLabel('FollowUp Date', followUpSelected)}
               type="date"
               value={form.followUpDate}
               onChange={e => f('followUpDate', e.target.value)}

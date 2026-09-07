@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { Btn, Select, SearchBar } from '@/components/ui'
+import { Btn, SearchBar } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { INVENTORY_STATUSES } from './queries'
 import type { InventoryFilters as InventoryFilterValues } from './inventoryTypes'
 
@@ -44,23 +45,26 @@ export function InventoryFilters({
   }
 
   return (
-    <div className="mb-4 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+    <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-3">
+        <div className="text-sm font-semibold text-gray-900">Filters</div>
+        <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
+      </div>
+      <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick inventory filters">
+        {([
+          ['All', 'All Vehicles'], ['In Stock', 'In Stock'], ['Booked', 'Booked'], ['Loan Process', 'Loan Process'], ['Sold', 'Sold'], ['Not Available', 'Not Available'],
+        ] as const).map(([value, label]) => (
+          <button key={value} type="button" onClick={() => onFilterChange('status', value)} disabled={isLoading} aria-pressed={filters.status === value}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${filters.status === value ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto]">
         <SearchBar inputRef={searchInputRef} value={searchInput} onChange={onSearchChange} placeholder="Search make, model, variant, colour, owner, mobile or registration..." disabled={isLoading} />
-        <Select disabled={isLoading} value={filters.status} onChange={event => onFilterChange('status', event.target.value)}>
-          <option value="All">All Statuses</option>
-          {INVENTORY_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-        </Select>
-        <Select disabled={isLoading} value={filters.fuelType} onChange={event => onFilterChange('fuelType', event.target.value)}>
-          <option value="">All Fuels</option>
-          {fuelTypes.map(fuelType => <option key={fuelType} value={fuelType}>{fuelType}</option>)}
-        </Select>
-        <Select disabled={isLoading} value={filters.ownedType} onChange={event => onFilterChange('ownedType', event.target.value)}>
-          <option value="">All Owner Types</option>
-          <option value="Excel Cars">Excel Cars</option>
-          <option value="Dealer">Dealer</option>
-          <option value="Individual">Individual</option>
-        </Select>
+        <FormDropdown disabled={isLoading} value={filters.status === 'All' ? '' : filters.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="All Statuses" allowClear onChange={value => onFilterChange('status', value || 'All')} />
+        <FormDropdown disabled={isLoading} value={filters.fuelType} options={fuelTypes.map(value => ({ value, label: value }))} placeholder="All Fuels" allowClear onChange={value => onFilterChange('fuelType', value)} />
+        <FormDropdown disabled={isLoading} value={filters.ownedType} options={['Excel Cars', 'Dealer', 'Individual'].map(value => ({ value, label: value }))} placeholder="All Owner Types" allowClear onChange={value => onFilterChange('ownedType', value)} />
         {activeFilterChips.length > 0 ? <Btn variant="ghost" onClick={onClear} disabled={isLoading}>Clear All</Btn> : null}
       </div>
       <div className="text-sm text-gray-500">

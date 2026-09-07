@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Download, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, PageHeader } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { logFollowup, type LogFollowupInput } from './actions'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
@@ -1492,11 +1493,13 @@ export function FollowupClient({
                         <span className="font-medium text-gray-900">Reached outcome:</span> {contactOutcomeLabel(form.contactOutcome)}
                       </div>
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <Select
+                        <FormDropdown
                           label="Status *"
                           value={friendlyStatusKey}
-                          onChange={e => {
-                            const selected = FRIENDLY_STATUS_OPTIONS.find(option => option.key === e.target.value)
+                          options={FRIENDLY_STATUS_OPTIONS.map(option => ({ value: option.key, label: option.label }))}
+                          placeholder="Select status"
+                          onChange={value => {
+                            const selected = FRIENDLY_STATUS_OPTIONS.find(option => option.key === value)
                             if (!selected) return
                             f('status', selected.status)
                             f('subStatus', selected.subStatus)
@@ -1507,32 +1510,27 @@ export function FollowupClient({
                             }
                           }}
                           error={errors.status}
-                        >
-                          {FRIENDLY_STATUS_OPTIONS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
-                        </Select>
-                        <Select label="Classification" value={form.classification} onChange={e => f('classification', e.target.value)}>
-                          {CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}
-                        </Select>
+                        />
+                        <FormDropdown label="Classification" value={form.classification} options={CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => f('classification', value)} />
                       </div>
                       <div className="mt-4">
-                        <Select
+                        <FormDropdown
                           label="Sub-status"
                           value={form.useOtherSubStatus ? FOLLOWUP_OTHER_SUB_STATUS_VALUE : form.subStatus}
-                          onChange={e => {
-                            if (e.target.value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) {
+                          options={[...SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value })), { value: FOLLOWUP_OTHER_SUB_STATUS_VALUE, label: 'OTHER' }]}
+                          placeholder="-- none --"
+                          allowClear
+                          onChange={value => {
+                            if (value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) {
                               f('useOtherSubStatus', true)
                               f('subStatus', '')
                               return
                             }
                             f('useOtherSubStatus', false)
                             f('otherSubStatus', '')
-                            f('subStatus', e.target.value)
+                            f('subStatus', value)
                           }}
-                        >
-                          <option value="">-- none --</option>
-                          {SUB_STATUS_SUGGESTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                          <option value={FOLLOWUP_OTHER_SUB_STATUS_VALUE}>OTHER</option>
-                        </Select>
+                        />
                         {form.useOtherSubStatus ? (
                           <div className="mt-3">
                             <Input
@@ -1898,21 +1896,12 @@ export function FollowupClient({
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-6">
-                <Select label="Make*#" value={carEditor.selectedMakeId ?? ''} onChange={e => onCarEditorMakeChange(Number(e.target.value))}>
-                  <option value="">SELECT</option>
-                  {makes.map(item => <option key={item.pkMakeId} value={item.pkMakeId}>{item.make ?? '—'}</option>)}
-                </Select>
-                <Select label="Model*#" value={carEditor.selectedModelId ?? ''} onChange={e => onCarEditorModelChange(Number(e.target.value))} disabled={!carEditor.selectedMakeId}>
-                  <option value="">SELECT</option>
-                  {carEditorModels.map(item => <option key={item.pkModelId} value={item.pkModelId}>{item.model ?? '—'}</option>)}
-                </Select>
-                <Select label="Variant*#" value={carEditor.fkVariantId ?? ''} onChange={e => {
-                  setCarEditor(prev => ({ ...prev, fkVariantId: Number(e.target.value) || null }))
+                <FormDropdown label="Make *" value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
+                <FormDropdown label="Model *" value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
+                <FormDropdown label="Variant *" value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
+                  setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                   setCarEditorError('')
-                }} disabled={!carEditor.selectedModelId}>
-                  <option value="">SELECT</option>
-                  {carEditorVariants.map(item => <option key={item.pkVariantId} value={item.pkVariantId}>{item.variant ?? '—'}</option>)}
-                </Select>
+                }} />
                 <Input label="Year#" type="number" value={carEditor.carYear ?? ''} onChange={e => {
                   setCarEditor(prev => ({ ...prev, carYear: e.target.value ? Number(e.target.value) : null }))
                   setCarEditorError('')
@@ -1976,19 +1965,10 @@ export function FollowupClient({
 
             <div className="grid gap-4 md:grid-cols-2">
               <Input label="Budget of customer" type="number" value={editInquiryForm.budgetOfCustomer ?? ''} onChange={e => updateInquiryField('budgetOfCustomer', e.target.value ? Number(e.target.value) : null)} error={editInquiryErrors.budgetOfCustomer} />
-              <Select label="Classification*" value={editInquiryForm.classification} onChange={e => updateInquiryField('classification', e.target.value)}>
-                {INQUIRY_CLASSIFICATIONS.map(item => <option key={item}>{item}</option>)}
-              </Select>
+              <FormDropdown label="Classification *" value={editInquiryForm.classification} options={INQUIRY_CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => updateInquiryField('classification', value)} />
               <Input label="Visited Date of customer" type="date" value={editInquiryForm.visitedDateOfCustomer} onChange={e => updateInquiryField('visitedDateOfCustomer', e.target.value)} error={editInquiryErrors.visitedDateOfCustomer} />
-              <Select label="Status*#" value={editInquiryForm.status} onChange={e => updateInquiryField('status', e.target.value)}>
-                {INQUIRY_STATUSES.map(item => <option key={item}>{item}</option>)}
-              </Select>
-              <div>
-                <Input label="Sub Status" list="followup-edit-inquiry-sub-status-suggestions" value={editInquiryForm.subStatus} onChange={e => updateInquiryField('subStatus', e.target.value)} />
-                <datalist id="followup-edit-inquiry-sub-status-suggestions">
-                  {SUB_STATUS_SUGGESTIONS.map(item => <option key={item} value={item} />)}
-                </datalist>
-              </div>
+              <FormDropdown label="Status *" value={editInquiryForm.status} options={INQUIRY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" onChange={value => updateInquiryField('status', value)} />
+              <FormDropdown label="Sub Status" value={editInquiryForm.subStatus} options={SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear onChange={value => updateInquiryField('subStatus', value)} />
               <Input
                 label={isFollowupStatus(editInquiryForm.status) ? 'FollowUp Date*' : 'FollowUp Date'}
                 type="date"

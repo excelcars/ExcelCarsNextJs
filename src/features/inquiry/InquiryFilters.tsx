@@ -1,6 +1,7 @@
 'use client'
 
-import { Btn, SearchBar, Select } from '@/components/ui'
+import { Btn, SearchBar } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import type { InquirySourceOption } from './sourceMaster'
@@ -105,14 +106,8 @@ export function InquiryFilters({
           <label className="text-xs font-medium text-gray-600">Search</label>
           <SearchBar value={search} onChange={onSearchChange} placeholder="Name, mobile, email, source, vehicle..." disabled={isRoutePending} />
         </div>
-        <Select label="Source" value={source} onChange={e => onSourceChange(e.target.value)} disabled={isRoutePending}>
-          <option value="All">All Sources</option>
-          {sourceOptions.map(item => <option key={item.code} value={item.code}>{item.displayName}</option>)}
-        </Select>
-        <Select label="Sub-status" value={subStatus} onChange={e => onSubStatusChange(e.target.value)} disabled={isRoutePending}>
-          <option value="All">All Sub-statuses</option>
-          {subStatusSuggestions.map(item => <option key={item} value={item}>{item}</option>)}
-        </Select>
+        <FormDropdown label="Source" value={source === 'All' ? '' : source} options={sourceOptions.map(item => ({ value: item.code, label: item.displayName }))} placeholder="All Sources" allowClear disabled={isRoutePending} onChange={value => onSourceChange(value || 'All')} />
+        <FormDropdown label="Sub-status" value={subStatus === 'All' ? '' : subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="All Sub-statuses" allowClear disabled={isRoutePending} onChange={value => onSubStatusChange(value || 'All')} />
         <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} labeled onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         <DateFilterInput label="Follow-up Date" value={followUpDate} onChange={onFollowUpDateChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date" value={visitedDate} onChange={onVisitedDateChange} disabled={isRoutePending} />

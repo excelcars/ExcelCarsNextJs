@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { FormDropdown } from '@/components/FormDropdown'
 import { createAgent, updateAgent, deleteAgent, type AgentFormInput } from './adminActions'
 import { AGENT_TYPES } from './adminQueries'
 
@@ -88,12 +89,16 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
       </div>
     </div>
 
-    <Table headers={['Name', 'Type', 'Mobile', 'Email', 'Actions']} empty={initialData.length === 0}>
+    <Table headers={['Agent', 'Contact', 'Actions']} minWidthClass="min-w-[620px]" empty={initialData.length === 0}>
       {initialData.map(row => <tr key={row.partnerId} className="hover:bg-gray-50 transition">
-        <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
-        <td className="px-4 py-3 text-sm text-gray-600">{row.partnerType}</td>
-        <td className="px-4 py-3 text-sm text-gray-700 font-mono">{row.mobile ?? '—'}</td>
-        <td className="px-4 py-3 text-sm text-gray-600">{row.email ?? '—'}</td>
+        <td className="px-4 py-3">
+          <div className="font-medium text-gray-900">{row.name}</div>
+          <div className="mt-1"><span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1B2A6B]">{row.partnerType}</span></div>
+        </td>
+        <td className="px-4 py-3">
+          <div className="font-mono text-sm text-gray-700">{row.mobile ?? '—'}</div>
+          {row.email && <div className="mt-0.5 text-xs text-gray-500">{row.email}</div>}
+        </td>
         <td className="px-4 py-3"><div className="flex items-center gap-1">
           <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
           <button onClick={() => setDeleteId(row.partnerId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -107,7 +112,7 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
     </div></div>}
 
     <Modal title={editId ? 'Edit Agent' : 'Add Agent'} open={!!modal} onClose={() => setModal(null)}><div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4"><Select label="Type" value={form.partnerType} onChange={e => f('partnerType', e.target.value)}>{AGENT_TYPES.map(agentType => <option key={agentType}>{agentType}</option>)}</Select>
+      <div className="grid grid-cols-2 gap-4"><FormDropdown label="Type" value={form.partnerType} options={AGENT_TYPES.map(value => ({ value, label: value }))} placeholder="Select type" onChange={value => f('partnerType', value)} />
         <Input label="Name *" value={form.name} onChange={e => f('name', e.target.value)} /><Input label="Mobile" value={form.mobile} onChange={e => f('mobile', e.target.value)} /><Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} /></div>
       {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
       <div className="flex gap-3 justify-end pt-2"><Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Agent'}</Btn></div>

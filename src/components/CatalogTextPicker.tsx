@@ -51,7 +51,7 @@ export function CatalogTextPicker({
         error={error}
       />
       {open && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+        <div className="absolute z-30 mt-1 w-full min-w-64 max-w-[calc(100vw-3rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg max-h-56">
           {onAdd && value.trim() && (
             <button type="button" onMouseDown={event => { event.preventDefault(); onAdd(value.trim()); setOpen(false) }} className="w-full text-left px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 border-b border-gray-100">
               + Add “{value.trim()}”
