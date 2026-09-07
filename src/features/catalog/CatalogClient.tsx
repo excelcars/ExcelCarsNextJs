@@ -271,6 +271,9 @@ export function CatalogClient({
       router.refresh();
     });
   };
+  const editKindLabel = editTarget
+    ? editTarget.kind.charAt(0).toUpperCase() + editTarget.kind.slice(1)
+    : "";
   const openModels = async (make: MakeSummary) => {
     const res = await fetch(`/api/catalog/models?makeId=${make.pkMakeId}`);
     const items = await res.json();
@@ -359,85 +362,54 @@ export function CatalogClient({
         />
       </div>
       <Table
-        headers={["Vehicle hierarchy", "Actions"]}
-        minWidthClass="min-w-[900px] [&_th:first-child]:w-[85%] [&_th:last-child]:w-[15%]"
+        headers={["Make", "Model", "Variants"]}
+        minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[25%] [&_th:last-child]:w-[53%]"
         empty={initialData.length === 0}
       >
-        {initialData.map((row) => (
-          <tr key={row.pkMakeId} className="hover:bg-gray-50 transition">
+        {initialData.flatMap((row) => row.carModelMaster.length ? row.carModelMaster.map((model, index) => (
+          <tr key={model.pkModelId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3 align-top">
-              <div className="font-medium text-gray-900">{row.make ?? "—"}</div>
-              {row.carModelMaster.length ? (
-                <div className="mt-2 space-y-1.5 text-sm text-gray-600">
-                  {row.carModelMaster.map((model) => (
-                    <div key={model.pkModelId} className="flex flex-wrap items-baseline gap-x-1 gap-y-1">
-                      <button
-                        type="button"
-                        onClick={() => openVariants(row.pkMakeId, model)}
-                        className="font-medium text-left text-gray-700 hover:text-[#1B2A6B] hover:underline"
-                      >
-                        {model.model ?? "—"}
-                      </button>
-                      <span className="text-gray-300">•</span>
-                      {model.carVariantMaster.length ? model.carVariantMaster.map((variant) => (
-                        <button
-                          key={variant.pkVariantId}
-                          type="button"
-                          onClick={() => openVariants(row.pkMakeId, model)}
-                          className="text-gray-500 hover:text-[#1B2A6B] hover:underline"
-                        >
-                          {variant.variant ?? "—"}
-                        </button>
-                      )) : <span className="text-xs text-gray-400">No variants</span>}
-                      {model._count.carVariantMaster > model.carVariantMaster.length && (
-                        <button
-                          type="button"
-                          onClick={() => openVariants(row.pkMakeId, model)}
-                          className="font-medium text-[#1B2A6B] hover:underline"
-                        >
-                          +{model._count.carVariantMaster - model.carVariantMaster.length}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {row._count.carModelMaster > row.carModelMaster.length && (
-                    <button
-                      type="button"
-                      onClick={() => openModels(row)}
-                      className="font-medium text-[#1B2A6B] hover:underline"
-                    >
-                      +{row._count.carModelMaster - row.carModelMaster.length}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-1 text-sm text-gray-400">No models yet</div>
+              <div className="flex items-center gap-1">
+                <div className="font-medium text-gray-900">{row.make ?? "—"}</div>
+                {index === 0 && <>
+                  <button type="button" onClick={() => openModels(row)} aria-label={`Manage models for ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Manage models"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => setDeleteTarget({ kind: "make", id: row.pkMakeId, name: row.make ?? "make" })} aria-label={`Delete ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete make"><Trash2 className="w-3.5 h-3.5" /></button>
+                </>}
+              </div>
+              {index === 0 && <div className="mt-1 text-xs text-gray-400">{row._count.carModelMaster} models · {row._count.carVariantMaster} variants</div>}
+            </td>
+            <td className="px-4 py-3 align-top">
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => openVariants(row.pkMakeId, model)} className="font-medium text-left text-gray-800 hover:text-[#1B2A6B] hover:underline">
+                  {model.model ?? "—"}
+                </button>
+                <button type="button" onClick={() => openVariants(row.pkMakeId, model)} aria-label={`Manage variants for ${model.model ?? "model"}`} className="p-1 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Manage variants"><Pencil className="w-3.5 h-3.5" /></button>
+              </div>
+              {index === row.carModelMaster.length - 1 && row._count.carModelMaster > row.carModelMaster.length && (
+                <button type="button" onClick={() => openModels(row)} className="mt-1 block text-xs font-medium text-[#1B2A6B] hover:underline">
+                  +{row._count.carModelMaster - row.carModelMaster.length} more models
+                </button>
               )}
             </td>
             <td className="px-4 py-3 align-top">
-              <button
-                onClick={() => openEditMake(row)}
-                className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"
-                title="Edit make"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() =>
-                  setDeleteTarget({
-                    kind: "make",
-                    id: row.pkMakeId,
-                    name: row.make ?? "make",
-                  })
-                }
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                title="Delete make"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {model.carVariantMaster.length ? (
+                  <>
+                    {model.carVariantMaster.map((variant) => <button key={variant.pkVariantId} type="button" onClick={() => openVariants(row.pkMakeId, model)} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]">{variant.variant ?? "—"}</button>)}
+                    {model._count.carVariantMaster > model.carVariantMaster.length && <button type="button" onClick={() => openVariants(row.pkMakeId, model)} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1B2A6B] hover:underline">+{model._count.carVariantMaster - model.carVariantMaster.length} more</button>}
+                  </>
+                ) : <span className="text-sm text-gray-400">No variants yet</span>}
+                <button type="button" onClick={() => openVariants(row.pkMakeId, model)} className="rounded px-2 py-1 text-xs font-medium text-[#1B2A6B] hover:bg-blue-50">Manage</button>
+              </div>
             </td>
           </tr>
-        ))}
+        )) : [
+          <tr key={row.pkMakeId} className="hover:bg-gray-50 transition">
+            <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><div className="font-medium text-gray-900">{row.make ?? "—"}</div><button type="button" onClick={() => openModels(row)} aria-label={`Manage models for ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Manage models"><Pencil className="w-3.5 h-3.5" /></button><button type="button" onClick={() => setDeleteTarget({ kind: "make", id: row.pkMakeId, name: row.make ?? "make" })} aria-label={`Delete ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete make"><Trash2 className="w-3.5 h-3.5" /></button></div><div className="mt-1 text-xs text-gray-400">No models yet</div></td>
+            <td className="px-4 py-3 text-sm text-gray-400">—</td>
+            <td className="px-4 py-3 text-sm text-gray-400">—</td>
+          </tr>
+        ])}
       </Table>
       {pageCount > 1 && (
         <div className="flex items-center justify-between mt-4">
@@ -467,26 +439,36 @@ export function CatalogClient({
         </div>
       )}
       <Modal
-        title={editTarget ? `Edit ${editTarget.kind}` : "Add Vehicle Master"}
+        title={editTarget ? `Edit ${editKindLabel}` : "Add Vehicle Master"}
         open={modal}
         onClose={() => setModal(false)}
       >
         <div className="space-y-4">
           {editTarget ? (
             <>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-[#1B2A6B]">Editing {editKindLabel}</div>
+                <div className="mt-1 text-sm text-gray-600">
+                  {editTarget.kind === "make" && "This changes the brand name used across the vehicle catalog."}
+                  {editTarget.kind === "model" && "Update the model name and confirm its Make below."}
+                  {editTarget.kind === "variant" && "Update the variant name and confirm its Make and Model below."}
+                </div>
+              </div>
               <Input
-                label={`${editTarget.kind} *`}
+                label={`${editKindLabel} name *`}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                placeholder={`Enter ${editTarget.kind} name`}
+                autoFocus
               />
               {editTarget.kind !== "make" && (
-                <FormDropdown label="Make *" value={String(selectedMakeId || '')} options={makes.map(make => ({ value: String(make.pkMakeId), label: make.make ?? '—' }))} placeholder="Select make" allowClear onChange={(value) => {
+                <FormDropdown label="Make *" value={String(selectedMakeId || '')} options={makes.map(make => ({ value: String(make.pkMakeId), label: make.make ?? '—' }))} placeholder="Select the Make" allowClear onChange={(value) => {
                     setSelectedMakeId(Number(value));
                     setSelectedModelId(0);
                   }} />
               )}
               {editTarget.kind === "variant" && (
-                <FormDropdown label="Model *" value={String(selectedModelId || '')} options={models.map(model => ({ value: String(model.pkModelId), label: model.model ?? '—' }))} placeholder="Select model" allowClear onChange={value => setSelectedModelId(Number(value))} />
+                <FormDropdown label="Model *" value={String(selectedModelId || '')} options={models.map(model => ({ value: String(model.pkModelId), label: model.model ?? '—' }))} placeholder="Select the Model" allowClear onChange={value => setSelectedModelId(Number(value))} />
               )}
             </>
           ) : (
