@@ -9,7 +9,7 @@ Vehicle Masters manages the catalog hierarchy used by vehicle selectors througho
 
 `Make → Model → Variant`
 
-The page supports server-side search and pagination over Make rows, a compact three-column hierarchy summary, Make/Model/Variant edit/delete, and hierarchical creation of Make, Model, and Variant records.
+The page supports server-side search and pagination over Make rows, a user-oriented Make/Model/Variants overview, Make/Model/Variant edit/delete, and hierarchical creation of Make, Model, and Variant records.
 
 ## 2. Source Evidence
 
@@ -57,7 +57,7 @@ Search is server-side and matches the active master name field case-insensitivel
 
 Search input is debounced by 400 ms and written to the URL. Search is applied server-side across Make, Model, and Variant names. The client only renders the returned Make page.
 
-The main table has one row per Make with three columns: `Make`, `Model`, and `Variant`. It shows the first three Models for each Make and appends `+N` for additional Models. For each displayed Model, it shows the first three Variants and appends that Model's remaining count as `+N`.
+The main table has one row per displayed Model with four columns: `Make`, `Model`, `Variants`, and `Actions`. Make rows with no models are still shown. The Make cell shows the make name and, once per make, the total model and variant counts. The Variants cell shows the first three variants as compact labels and appends the remaining count as `+N more`.
 
 For example:
 
@@ -67,7 +67,7 @@ For example:
 
 Search matches Make, Model, or Variant and returns matching Make rows with the same summary representation. Pagination is at the Make-row level, with 25 Makes per page.
 
-Displayed Model and Variant names are clickable. Clicking a Model or Variant opens its complete child-list manager. Clicking a Model's `+N` opens all Models for that Make; clicking a Variant `+N` opens all Variants for that Model. The child-list manager provides Edit and Delete actions for each Model or Variant and an Add Model/Add Variant action at the relevant level.
+Displayed Model and Variant names are clickable. Clicking a Model, a Variant label, or the Variants `+N more` action opens that Model's complete variant manager. The `+N more models` action opens all Models for that Make. The pencil beside a Make opens its model list, and the pencil beside a Model opens its variant list; individual editing remains available inside those child lists. Make delete remains available once per Make. The child-list manager provides Edit and Delete actions for each Model or Variant and an Add Model/Add Variant action at the relevant level.
 
 When Edit is selected from a child-list manager, the manager closes before the edit modal opens. Only the active edit modal remains mounted, preventing the child-list modal from appearing behind it.
 
