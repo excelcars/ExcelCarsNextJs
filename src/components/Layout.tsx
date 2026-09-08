@@ -32,6 +32,7 @@ function ProfileMenu({
   onExpand?: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -56,10 +57,16 @@ function ProfileMenu({
     setOpen(false)
     onNavigate?.()
   }
+  const handleSignOut = async () => {
+    if (isSigningOut) return
+    setIsSigningOut(true)
+    setOpen(false)
+    await signOut({ callbackUrl: '/login' })
+  }
   const isSidebar = placement === 'sidebar'
   const showSidebarDetails = !isSidebar || sidebarOpen
 
-  return (
+  return (<>
     <div ref={menuRef} className={`relative ${isSidebar ? 'w-full' : ''}`}>
       <button
         type="button"
@@ -126,9 +133,10 @@ function ProfileMenu({
           <div className={`p-1.5 ${isSidebar ? 'border-t border-white/10' : 'border-t border-gray-200'}`}>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={handleSignOut}
+              disabled={isSigningOut}
               role="menuitem"
-              className={`w-full flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm transition ${isSidebar ? 'text-red-300 hover:bg-red-500/10 hover:text-red-200' : 'text-red-600 hover:bg-red-50'}`}
+              className={`w-full flex items-center gap-3 cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm transition disabled:cursor-wait disabled:opacity-60 ${isSidebar ? 'text-red-300 hover:bg-red-500/10 hover:text-red-200' : 'text-red-600 hover:bg-red-50'}`}
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -137,7 +145,19 @@ function ProfileMenu({
         </div>
       )}
     </div>
-  )
+    {isSigningOut && (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950/45 text-center backdrop-blur-[1px]" role="status" aria-live="polite">
+        <div className="rounded-xl bg-white px-7 py-6 shadow-2xl">
+          <svg className="mx-auto h-8 w-8 animate-spin text-[#1B2A6B]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="mt-3 text-sm font-semibold text-gray-900">Signing you out…</p>
+          <p className="mt-1 text-xs text-gray-500">Please wait.</p>
+        </div>
+      </div>
+    )}
+  </>)
 }
 
 const navItems: NavItem[] = [
