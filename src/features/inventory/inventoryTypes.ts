@@ -80,6 +80,7 @@ export interface UploadQueueItem {
 export interface InquiryOption {
   inquiryId: number
   inquiryNo: string | null
+  dateOfInquiry: string | Date | null
   customerId: number | null
   customerNameLegacy: string | null
   mobileno: string | null
