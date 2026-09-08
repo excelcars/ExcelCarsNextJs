@@ -27,14 +27,14 @@ export default function LoginPage() {
 
       if (result?.error) {
         setError('Invalid username or password, or account is inactive.')
+        setLoading(false)
         return
       }
 
-      router.push('/dashboard')
+      router.replace('/dashboard')
       router.refresh()
     } catch {
       setError('Unable to sign in right now. Please try again.')
-    } finally {
       setLoading(false)
     }
   }
@@ -68,7 +68,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
           <p className="text-sm text-gray-500 mb-8">Sign in to your ExcelCars CRM account</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="relative space-y-4" aria-busy={loading}>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Username</label>
               <input
@@ -76,6 +76,7 @@ export default function LoginPage() {
                 placeholder="Enter your username"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/30 transition"
                 required
+                disabled={loading}
                 autoComplete="username"
               />
             </div>
@@ -87,9 +88,10 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm pr-10 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/30 transition"
                   required
+                  disabled={loading}
                   autoComplete="current-password"
                 />
-                <button type="button" onClick={() => setShowPw(!showPw)}
+                <button type="button" onClick={() => setShowPw(!showPw)} disabled={loading}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -105,14 +107,20 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white font-medium text-sm transition hover:opacity-90 disabled:opacity-60"
               style={{ backgroundColor: '#1B2A6B' }}
             >
-              {loading ? (
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <LogIn className="w-4 h-4" />
+              Sign In
+            </button>
+
+            {loading && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-lg bg-white/85 text-center backdrop-blur-[1px]">
+                <svg className="h-7 w-7 animate-spin text-[#1B2A6B]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-              ) : <LogIn className="w-4 h-4" />}
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
+                <p className="mt-3 text-sm font-medium text-gray-800" role="status">Signing you in…</p>
+                <p className="mt-1 text-xs text-gray-500">Please wait.</p>
+              </div>
+            )}
           </form>
         </div>
       </div>

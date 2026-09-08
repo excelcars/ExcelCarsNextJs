@@ -354,14 +354,19 @@ export function CatalogClient({
           </Btn>
         }
       />
-      <div className="mb-4">
-        <SearchBar
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder="Search make, model, variant..."
-        />
+      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
+        <div className="flex max-w-md flex-col gap-1">
+          <label className="text-xs font-medium text-gray-600">Search vehicle masters</label>
+          <SearchBar
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Make, model, variant..."
+          />
+        </div>
+        <p className="mt-3 text-xs text-gray-500">Search across make, model, and variant names.</p>
       </div>
       <Table
+<<<<<<< Updated upstream
         headers={["Make", "Model", "Variants"]}
         minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[25%] [&_th:last-child]:w-[53%]"
         empty={initialData.length === 0}
@@ -390,6 +395,64 @@ export function CatalogClient({
                   +{row._count.carModelMaster - row.carModelMaster.length} more models
                 </button>
               )}
+=======
+        headers={["Make", "Model", "Variant", "Actions"]}
+        minWidthClass="min-w-[1050px]"
+        empty={initialData.length === 0}
+      >
+        {initialData.map((row) => (
+          <tr key={row.pkMakeId} className="hover:bg-gray-50 transition">
+            <td className="px-4 py-3 font-medium text-gray-900 align-top">{row.make ?? "—"}</td>
+            <td className="px-4 py-3 text-sm text-gray-600 align-top">
+              {row.carModelMaster.length ? <>
+                {row.carModelMaster.map((model) => (
+                  <button
+                    key={model.pkModelId}
+                    type="button"
+                    onClick={() => openVariants(row.pkMakeId, model)}
+                    className="mr-1 text-left hover:text-[#1B2A6B] hover:underline"
+                  >
+                    {model.model ?? "—"}
+                  </button>
+                ))}
+                {row._count.carModelMaster > row.carModelMaster.length && (
+                  <button
+                    type="button"
+                    onClick={() => openModels(row)}
+                    className="font-medium text-[#1B2A6B] hover:underline"
+                  >
+                    +{row._count.carModelMaster - row.carModelMaster.length}
+                  </button>
+                )}
+              </> : "—"}
+            </td>
+            <td className="px-4 py-3 text-sm text-gray-600 align-top">
+              {row.carModelMaster.length
+                ? row.carModelMaster.map((model) => (
+                    <div key={model.pkModelId}>
+                      {model.carVariantMaster.map((variant) => (
+                        <button
+                          key={variant.pkVariantId}
+                          type="button"
+                          onClick={() => openVariants(row.pkMakeId, model)}
+                          className="mr-1 hover:text-[#1B2A6B] hover:underline"
+                        >
+                          {variant.variant ?? "—"}
+                        </button>
+                      ))}
+                      {model._count.carVariantMaster > model.carVariantMaster.length && (
+                        <button
+                          type="button"
+                          onClick={() => openVariants(row.pkMakeId, model)}
+                          className="font-medium text-[#1B2A6B] hover:underline"
+                        >
+                          +{model._count.carVariantMaster - model.carVariantMaster.length}
+                        </button>
+                      )}
+                    </div>
+                  ))
+                : "—"}
+>>>>>>> Stashed changes
             </td>
             <td className="px-4 py-3 align-top">
               <div className="flex flex-wrap items-center gap-1.5">

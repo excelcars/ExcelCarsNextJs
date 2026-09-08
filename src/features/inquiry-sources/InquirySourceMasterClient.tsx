@@ -95,8 +95,12 @@ export function InquirySourceMasterClient({
         action={<Btn size="sm" onClick={openAdd}><Plus className="h-3.5 w-3.5" /> Add Source</Btn>}
       />
 
-      <div className="mb-4 flex flex-wrap gap-3">
-        <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Source name, code, category..." />
+      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
+        <div className="flex max-w-md flex-col gap-1">
+          <label className="text-xs font-medium text-gray-600">Search sources</label>
+          <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Source name, code, category..." />
+        </div>
+        <p className="mt-3 text-xs text-gray-500">Search by source name, code, or category.</p>
       </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
