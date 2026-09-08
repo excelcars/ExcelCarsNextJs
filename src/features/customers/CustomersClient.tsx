@@ -286,17 +286,26 @@ export function CustomersClient({
         action={canWrite ? <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Customer</Btn> : undefined}
       />
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, company..." />
-        <div className="flex flex-wrap gap-1.5">
-          {['All', ...CUSTOMER_TYPES].map(t => (
-            <button key={t} onClick={() => pushQuery({ type: t })}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${type === t || (type === 'All' && t === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              style={type === t || (type === 'All' && t === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>
-              {t}
-            </button>
-          ))}
+      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
+        <div className="grid items-end gap-3 md:grid-cols-[minmax(18rem,1fr)_auto]">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-600">Search customers</label>
+            <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, company..." />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-gray-600">Customer type</span>
+            <div className="flex flex-wrap gap-1.5">
+              {['All', ...CUSTOMER_TYPES].map(t => (
+                <button key={t} onClick={() => pushQuery({ type: t })}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${type === t || (type === 'All' && t === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                  style={type === t || (type === 'All' && t === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+        <p className="mt-3 text-xs text-gray-500">Search by name, mobile number, email address, or company.</p>
       </div>
 
       <Table headers={['Customer', 'Contact', 'Important dates', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
