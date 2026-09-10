@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
@@ -9,7 +10,7 @@ import {
   createLoan, updateLoan, deleteLoan, logLoanPayment,
   type LoanFormInput, type LogLoanPaymentInput,
 } from './actions'
-import { PAYMENT_STATUSES, CAR_TYPES } from './queries'
+import { PAYMENT_STATUSES, CAR_TYPES, LOAN_PAGE_SIZES } from './queries'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
@@ -105,7 +106,11 @@ const fmtDateTime = (value: Date | string | null | undefined) => {
     minute: '2-digit',
   })
 }
-const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+const fmtMoney = (n: string | number | null) => {
+  if (n === null) return '—'
+  const value = Number(n)
+  return Number.isFinite(value) ? `₹${value.toLocaleString('en-IN')}` : '—'
+}
 const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
 
 function csvValue(value: string | number | boolean | null | undefined) {
@@ -205,12 +210,13 @@ function vehicleLabel(v: Vehicle) {
 }
 
 function emptyForm(): LoanFormInput {
+  const today = new Date().toISOString().slice(0, 10)
   return {
     partnerId: null, bankName: '', bankPersonName: '', bankPersonMobileNo: '', bankPersonEmailId: '', customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
     inventoryId: null, fkVariantId: null, registrationNo: '', carType: 'PreOwned', carMake: '', carModel: '', carVariant: '', carYear: null,
-    entryDate: new Date().toISOString().slice(0, 10),
-    loanAmount: null, percentagePayoutAmount: null, payoutAmount: null,
-    paymentStatus: 'Pending', paymentDate: '', followupDate: '', remarks: '',
+    entryDate: today,
+    loanAmount: null, percentagePayoutAmount: null, payoutAmount: null, initialAmountReceived: null,
+    paymentStatus: 'Pending', paymentDate: today, followupDate: today, remarks: '',
   }
 }
 
@@ -249,23 +255,32 @@ export function LoanClient({
   initialData,
   vehicles,
   initialSearch = '',
+  initialFilters = {}, total, page, pageSize, pageCount,
 }: {
   initialData: LoanRow[]
   vehicles: Vehicle[]
   initialSearch?: string
+  initialFilters?: Partial<LoanFilters>
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
 }) {
+  const router = useRouter()
   const [data, setData] = useState(initialData)
   const [filters, setFilters] = useState<LoanFilters>(() => ({
     ...emptyFilters(),
     search: initialSearch,
+    ...initialFilters,
   }))
 
   useEffect(() => {
     setFilters(prev => ({
       ...prev,
-      search: initialSearch,
+      ...emptyFilters(), search: initialSearch, ...initialFilters,
     }))
-  }, [initialSearch])
+    setData(initialData)
+  }, [initialSearch, initialFilters, initialData])
 
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [viewRow, setViewRow] = useState<LoanRow | null>(null)
@@ -385,6 +400,7 @@ export function LoanClient({
       loanAmount: r.loanAmount ? Number(r.loanAmount) : null,
       percentagePayoutAmount: r.percentagePayoutAmount ? Number(r.percentagePayoutAmount) : null,
       payoutAmount: r.payoutAmount ? Number(r.payoutAmount) : null,
+      initialAmountReceived: null,
       paymentStatus: r.paymentStatus ?? 'Pending',
       paymentDate: fmtDate(r.paymentDate), followupDate: fmtDate(r.followupDate),
       remarks: r.remarks ?? '',
@@ -488,24 +504,32 @@ export function LoanClient({
     setError('')
     const newErrors: Record<string, boolean> = {}
 
-    if (!form.inventoryId && !form.registrationNo?.trim()) {
-      newErrors.inventoryId = true
+    if (!form.registrationNo?.trim()) {
       newErrors.registrationNo = true
     }
     if (!form.bankName?.trim()) {
       newErrors.bankName = true
     }
-    if (!form.partnerId) {
-      newErrors.partnerId = true
-    }
     if (!form.customerId && !form.customerNameLegacy?.trim()) {
       newErrors.customer = true
     }
+    if (!form.carMake.trim()) newErrors.carMake = true
+    if (!form.carModel.trim()) newErrors.carModel = true
+    if (!form.carVariant.trim()) newErrors.carVariant = true
+    if (form.carYear === null) newErrors.carYear = true
     if (form.loanAmount !== null && form.loanAmount <= 0) {
       newErrors.loanAmount = true
     }
     if (form.percentagePayoutAmount !== null && (form.percentagePayoutAmount < 0 || form.percentagePayoutAmount > 100)) {
       newErrors.percentagePayoutAmount = true
+    }
+    if (!editId) {
+      const payout = form.loanAmount !== null && form.percentagePayoutAmount !== null
+        ? Math.round((form.loanAmount * form.percentagePayoutAmount) / 100 * 100) / 100
+        : null
+      if (form.initialAmountReceived === null || form.initialAmountReceived <= 0 || (payout !== null && form.initialAmountReceived > payout)) {
+        newErrors.initialAmountReceived = true
+      }
     }
     if (form.carYear !== null && !isValidYear(form.carYear)) {
       newErrors.carYear = true
@@ -597,7 +621,7 @@ export function LoanClient({
     if (payForm.amountPaid !== null && (totalPaidAlready + payForm.amountPaid > payoutAmt)) {
       newErrors.amountPaid = true
     }
-    if (payForm.paymentStatus !== 'Received') {
+    if (payForm.paymentStatus === 'Pending') {
       if (!payForm.nextFollowUpDate?.trim()) {
         newErrors.nextFollowUpDate = true
       } else {
@@ -607,7 +631,7 @@ export function LoanClient({
         }
       }
     }
-    if (!payForm.remark?.trim()) {
+    if (payForm.paymentStatus === 'Pending' && !payForm.remark?.trim()) {
       newErrors.remark = true
     }
 
@@ -632,7 +656,11 @@ export function LoanClient({
     setExportError('')
     startExportTransition(async () => {
       try {
-        exportLoanCsv(filtered, filters.search)
+        const params = new URLSearchParams()
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value && value !== 'All') params.set(key, String(value))
+        })
+        window.location.assign(`/api/loan/export${params.size ? `?${params}` : ''}`)
       } catch (err) {
         setExportError(err instanceof Error ? err.message : 'Could not export loan records.')
       }
@@ -640,7 +668,23 @@ export function LoanClient({
   }
 
   const setFilter = <K extends keyof LoanFilters>(key: K, value: LoanFilters[K]) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
+    const next = { ...filters, [key]: value }
+    setFilters(next)
+    const params = new URLSearchParams()
+    Object.entries(next).forEach(([name, current]) => {
+      if (current && current !== 'All') params.set(name, String(current))
+    })
+    startTransition(() => router.push(`/loan${params.size ? `?${params}` : ''}`))
+  }
+
+  const navigatePage = (nextPage: number, nextPageSize = pageSize) => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([name, current]) => {
+      if (current && current !== 'All') params.set(name, String(current))
+    })
+    if (nextPage > 1) params.set('page', String(nextPage))
+    if (nextPageSize !== 25) params.set('pageSize', String(nextPageSize))
+    startTransition(() => router.push(`/loan${params.size ? `?${params}` : ''}`))
   }
 
   return (
@@ -675,7 +719,10 @@ export function LoanClient({
             <Input label="To Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
           </div>
           <div className="mt-4 flex justify-end">
-            <Btn variant="outline" size="sm" onClick={() => setFilters(emptyFilters())}>Reset Filters</Btn>
+            <Btn variant="outline" size="sm" onClick={() => {
+              setFilters(emptyFilters())
+              startTransition(() => router.push('/loan'))
+            }}>Reset Filters</Btn>
           </div>
         </div>
       </div>
@@ -709,13 +756,24 @@ export function LoanClient({
           </tr>
         ))}
       </Table>
+      <div className="mt-4 flex items-center justify-between gap-3 text-sm text-gray-600">
+        <span>Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} of {total}</span>
+        <div className="flex items-center gap-2">
+          <Select value={String(pageSize)} onChange={event => navigatePage(1, Number(event.target.value))} className="w-28">
+            {LOAN_PAGE_SIZES.map(size => <option key={size} value={size}>{size} / page</option>)}
+          </Select>
+          <Btn variant="outline" size="sm" disabled={isPending || page <= 1} onClick={() => navigatePage(page - 1)}>Previous</Btn>
+          <span>Page {page} of {pageCount}</span>
+          <Btn variant="outline" size="sm" disabled={isPending || page >= pageCount} onClick={() => navigatePage(page + 1)}>Next</Btn>
+        </div>
+      </div>
 
       <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Input label="Bank Name" value={form.bankName} onChange={e => f('bankName', e.target.value)} placeholder="HDFC Bank, SBI..." error={errors.bankName} />
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Bank Contact Person *</label>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Bank Contact Person</label>
               <PartnerPicker partnerType="Bank" label="Bank Contact" value={selectedBankContact} onChange={onBankContactChange} error={errors.partnerId} />
             </div>
           </div>
@@ -730,6 +788,13 @@ export function LoanClient({
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
             <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
           </div>
+          {!selectedCustomer && (
+            <div className="grid grid-cols-3 gap-4">
+              <Input label="Customer Name" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} error={errors.customer} />
+              <Input label="Customer Mobile" value={form.customerMobileLegacy} onChange={e => f('customerMobileLegacy', e.target.value)} error={errors.customerMobileLegacy} />
+              <Input label="Customer Email" value={form.customerEmailLegacy} onChange={e => f('customerEmailLegacy', e.target.value)} error={errors.customerEmailLegacy} />
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
@@ -771,10 +836,10 @@ export function LoanClient({
             <Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>
-            <Input label="Make" value={form.carMake} onChange={e => f('carMake', e.target.value)} />
-            <Input label="Model" value={form.carModel} onChange={e => f('carModel', e.target.value)} />
-            <Input label="Variant" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} />
-            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
+            <Input label="Make *" value={form.carMake} onChange={e => f('carMake', e.target.value)} error={errors.carMake} />
+            <Input label="Model *" value={form.carModel} onChange={e => f('carModel', e.target.value)} error={errors.carModel} />
+            <Input label="Variant *" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} error={errors.carVariant} />
+            <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
             <div className="space-y-1">
               <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.registrationNo} />
               <div className="flex items-center gap-2">
@@ -791,6 +856,7 @@ export function LoanClient({
             <Input label="Loan Amount (₹)" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} error={errors.loanAmount} />
             <Input label="Payout % of Loan" type="number" value={form.percentagePayoutAmount ?? ''} onChange={e => f('percentagePayoutAmount', e.target.value ? +e.target.value : null)} error={errors.percentagePayoutAmount} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
+            {!editId && <Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={errors.initialAmountReceived} />}
             <Select label="Payment Status" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
@@ -951,8 +1017,8 @@ export function LoanClient({
                 </div>
               )}
               {followups.length > 0 && (
-                <div className="mt-2 space-y-1 text-xs text-gray-500">
-                  {followups.slice(0, 3).map(fu => (
+                <div className="mt-2 space-y-1 text-xs text-gray-500 max-h-32 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
+                  {followups.map(fu => (
                     <div key={fu.loanFollowupId}>{fmtDate(fu.followupDate)} — {fu.remark ?? ''}</div>
                   ))}
                 </div>
@@ -964,9 +1030,9 @@ export function LoanClient({
               <Select label="Payment Status *" value={payForm.paymentStatus} onChange={e => pf('paymentStatus', e.target.value)}>
                 {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
+              <Input label={`Next Follow-up Date${payForm.paymentStatus === 'Pending' ? ' *' : ''}`} type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
             </div>
-            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
+            <Textarea label={`Remark${payForm.paymentStatus === 'Pending' ? ' *' : ''}`} value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

@@ -190,7 +190,7 @@ function emptyForm(): InsuranceFormInput {
     customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
     inventoryId: null, fkVariantId: null, carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '',
     entryDate: new Date().toISOString().slice(0, 10),
-    insurancePremium: null, oDPremium: null, payoutPercentageOdPremium: null, payoutAmount: null,
+    insurancePremium: null, oDPremium: null, payoutPercentageOdPremium: null, payoutAmount: null, initialAmountReceived: null,
     payoutPaymentStatus: 'Pending', policyStatus: 'Pending',
     renewalDate: '', expiryDate: '', followupDate: '', remark: '',
   }
@@ -358,6 +358,7 @@ export function InsuranceClient({
       oDPremium: r.oDPremium ? Number(r.oDPremium) : null,
       payoutPercentageOdPremium: r.payoutPercentageOdPremium ? Number(r.payoutPercentageOdPremium) : null,
       payoutAmount: r.payoutAmount ? Number(r.payoutAmount) : null,
+      initialAmountReceived: null,
       payoutPaymentStatus: r.payoutPaymentStatus ?? 'Pending',
       policyStatus: r.policyStatus ?? 'Pending',
       renewalDate: fmtDate(r.renewalDate), expiryDate: fmtDate(r.expiryDate), followupDate: fmtDate(r.followupDate),
@@ -463,31 +464,34 @@ export function InsuranceClient({
     setError('')
     const newErrors: Record<string, boolean> = {}
 
-    if (!form.inventoryId && !form.carRegistrationNo?.trim()) {
-      newErrors.inventoryId = true
+    if (!form.carRegistrationNo?.trim()) {
       newErrors.carRegistrationNo = true
     }
-    if (!form.agentPartnerId && !form.agentNameLegacy?.trim()) {
+    if (!form.agentPartnerId) {
       newErrors.agentPartnerId = true
     }
-    if (!form.customerId && !form.customerNameLegacy?.trim()) {
+    if (!form.customerId) {
       newErrors.customer = true
     }
-    if (form.insurancePremium !== null && form.insurancePremium <= 0) {
+    if (form.insurancePremium === null || form.insurancePremium <= 0) {
       newErrors.insurancePremium = true
     }
-    if (form.oDPremium !== null && form.oDPremium <= 0) {
+    if (form.oDPremium === null || form.oDPremium <= 0) {
       newErrors.oDPremium = true
     }
     if (form.insurancePremium !== null && form.oDPremium !== null && form.oDPremium > form.insurancePremium) {
       newErrors.oDPremium = true
     }
-    if (form.payoutPercentageOdPremium !== null && (form.payoutPercentageOdPremium < 0 || form.payoutPercentageOdPremium > 100)) {
+    if (form.payoutPercentageOdPremium === null || form.payoutPercentageOdPremium < 0 || form.payoutPercentageOdPremium > 100) {
       newErrors.payoutPercentageOdPremium = true
     }
-    if (form.carYear !== null && !isValidYear(form.carYear)) {
+    if (form.carYear === null || !isValidYear(form.carYear)) {
       newErrors.carYear = true
     }
+    if (!form.entryDate) newErrors.entryDate = true
+    if (!form.renewalDate) newErrors.renewalDate = true
+    if (!form.expiryDate) newErrors.expiryDate = true
+    if (!form.followupDate) newErrors.followupDate = true
     if (form.entryDate && form.expiryDate && form.expiryDate <= form.entryDate) {
       newErrors.expiryDate = true
       newErrors.entryDate = true
@@ -503,6 +507,9 @@ export function InsuranceClient({
     }
     if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
       newErrors.customerEmailLegacy = true
+    }
+    if (!editId && (form.initialAmountReceived === null || form.initialAmountReceived <= 0 || (form.payoutAmount !== null && form.initialAmountReceived > form.payoutAmount))) {
+      newErrors.initialAmountReceived = true
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -582,7 +589,7 @@ export function InsuranceClient({
     if (payForm.amountReceived !== null && (totalReceivedAlready + payForm.amountReceived > payoutAmt)) {
       newErrors.amountReceived = true
     }
-    if (payForm.payoutPaymentStatus !== 'Received') {
+    if (payForm.payoutPaymentStatus === 'Pending') {
       if (!payForm.nextFollowUpDate?.trim()) {
         newErrors.nextFollowUpDate = true
       } else {
@@ -592,7 +599,7 @@ export function InsuranceClient({
         }
       }
     }
-    if (!payForm.remark?.trim()) {
+    if (payForm.payoutPaymentStatus === 'Pending' && !payForm.remark?.trim()) {
       newErrors.remark = true
     }
 
@@ -770,7 +777,7 @@ export function InsuranceClient({
               <PartnerPicker partnerType="Insurance Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.agentPartnerId} />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Customer *</label>
               <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
             </div>
           </div>
@@ -821,9 +828,9 @@ export function InsuranceClient({
             <Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>
-            <Input label="Make" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} />
-            <Input label="Model" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} />
-            <Input label="Variant" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} />
+            <Input label="Make *" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} error={errors.carMakeLegacy} />
+            <Input label="Model *" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} error={errors.carModelLegacy} />
+            <Input label="Variant *" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} error={errors.carVariantLegacy} />
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
             <div className="space-y-1">
               <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.carRegistrationNo} />
@@ -837,11 +844,12 @@ export function InsuranceClient({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Entry Date" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} error={errors.entryDate} />
+            <Input label="Entry Date *" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} error={errors.entryDate} />
             <Input label="Insurance Premium (₹)" type="number" value={form.insurancePremium ?? ''} onChange={e => f('insurancePremium', e.target.value ? +e.target.value : null)} error={errors.insurancePremium} />
             <Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} error={errors.oDPremium} />
             <Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} error={errors.payoutPercentageOdPremium} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
+            {!editId && <Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={errors.initialAmountReceived} />}
             <Input label="Total Amount Received" value={formTotalAmountReceived != null ? `₹${Number(formTotalAmountReceived).toLocaleString('en-IN')}` : '₹0'} readOnly className="bg-gray-50" />
             <Select label="Payout Status" value={form.payoutPaymentStatus} onChange={e => f('payoutPaymentStatus', e.target.value)}>
               {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -849,9 +857,9 @@ export function InsuranceClient({
             <Select label="Policy Status" value={form.policyStatus} onChange={e => f('policyStatus', e.target.value)}>
               {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Renewal Date" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} />
+            <Input label="Renewal Date *" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} error={errors.renewalDate} />
             <Input label="Expiry Date" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} error={errors.expiryDate} />
-            <Input label="Follow-up Date" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
+            <Input label="Follow-up Date *" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} />
           </div>
           <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} />
 

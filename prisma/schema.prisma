@@ -671,6 +671,7 @@ model InventoryManagement {
   updatedByUser         UserTable?             @relation("inventory_management_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_updated_by_user")
   carVariantMaster      CarVariantMaster?      @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
   inventoryPhotos       InventoryPhotos[]
+  inventoryVideos       InventoryVideo[]
   inquiryInventoryLinks InquiryInventoryLink[]
   inquiryEmailHistories InquiryEmailHistory[]
   vehicleEmailLinks     VehicleEmailLink[]
@@ -825,6 +826,24 @@ model InventoryPhotos {
 
   @@index([fkInventoryId], map: "idx_16548_ix_inventory_photos_inventory")
   @@map("inventory_photos")
+}
+
+model InventoryVideo {
+  inventoryVideoId      Int                  @id(map: "inventory_videos_pkey") @default(autoincrement()) @map("inventory_video_id")
+  fkInventoryId         Int                  @map("fk_inventory_id")
+  sourceType            String               @map("source_type")
+  youtubeUrl            String?              @map("youtube_url")
+  youtubeVideoId        String?              @map("youtube_video_id")
+  storagePath           String?              @map("storage_path")
+  fileName              String?              @map("file_name")
+  isFeatured            Boolean              @default(false) @map("is_featured")
+  sortOrder             Int                  @default(0) @map("sort_order")
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  inventoryManagement   InventoryManagement  @relation(fields: [fkInventoryId], references: [inventoryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inventory_videos_inventory")
+
+  @@index([fkInventoryId], map: "ix_inventory_videos_inventory")
+  @@index([fkInventoryId, isFeatured], map: "ix_inventory_videos_featured")
+  @@map("inventory_videos")
 }
 
 model LoanFollowupDetails {

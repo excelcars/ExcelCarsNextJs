@@ -12,6 +12,8 @@ export function useInventoryFilters(filters: InventoryFilters) {
     add('status', 'Status', filters.status)
     add('fuelType', 'Fuel', filters.fuelType)
     add('ownedType', 'Owner Type', filters.ownedType)
+    add('priceMin', 'Budget From', filters.priceMin)
+    add('priceMax', 'Budget To', filters.priceMax)
     return items
   }, [filters])
 

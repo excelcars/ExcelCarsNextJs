@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '../../../../auth'
 import { listInsuranceForExport } from '@/features/insurance/queries'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await canCurrentUserAccessRoute('/insurance'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const search = req.nextUrl.searchParams.get('search')?.trim() ?? ''
   const fromDate = req.nextUrl.searchParams.get('fromDate')?.trim() ?? ''

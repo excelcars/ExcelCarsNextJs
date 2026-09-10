@@ -21,6 +21,7 @@ import { InventoryFormModal } from './InventoryFormModal'
 import { InventoryViewModal } from './InventoryViewModal'
 import { InventoryEmailModal } from './InventoryEmailModal'
 import { InventoryInquiryModal } from './InventoryInquiryModal'
+import { InventoryVideosModal } from './InventoryVideosModal'
 import { buildDirtySnapshot, clean, emptyFilters, emptyForm, formatPriceInput } from './inventoryUtils'
 
 const INVENTORY_FUEL_TYPES = ['Petrol', 'Diesel', 'CNG']
@@ -318,6 +319,7 @@ export function InventoryClient({
   const { emailRow, setEmailRow, emailRows, setEmailRows, recipientType, setRecipientType, dealerQuery, setDealerQuery, dealerOpen, setDealerOpen, emailSelectedDealer, setEmailSelectedDealer, emailSelectedCustomer, setEmailSelectedCustomer, emailRecipients, setEmailRecipients, editingRecipientEmailKey, setEditingRecipientEmailKey, recipientEmailDraft, setRecipientEmailDraft, recipientEmailError, setRecipientEmailError, emailError, setEmailError, emailSentMessage, setEmailSentMessage, emailProgress, setEmailProgress, isEmailSending, setIsEmailSending } = inventory.email
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<number[]>([])
   const [photoRow, setPhotoRow] = useState<InventoryRow | null>(null)
+  const [videoRow, setVideoRow] = useState<InventoryRow | null>(null)
   const [photos, setPhotos] = useState<InventoryPhoto[]>([])
   const [photoError, setPhotoError] = useState('')
   const [photoLoading, setPhotoLoading] = useState(false)
@@ -1196,7 +1198,7 @@ export function InventoryClient({
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
 
-      <InventoryFiltersPanel searchInput={searchInput} filters={filters} activeFilterChips={activeFilterChips as InventoryFilterChip[]} isLoading={isListLoading} fuelTypes={INVENTORY_FUEL_TYPES} onSearchChange={value => { setSearchInput(value); setFilter('search', value) }} onFilterChange={(key, value) => setFilter(key, value)} onClear={clearAllFilters} />
+      <InventoryFiltersPanel searchInput={searchInput} filters={filters} activeFilterChips={activeFilterChips as InventoryFilterChip[]} isLoading={isListLoading} fuelTypes={INVENTORY_FUEL_TYPES} onSearchChange={value => { setSearchInput(value); setFilter('search', value) }} onFilterChange={(key, value) => setFilter(key, value)} onBudgetApply={(priceMin, priceMax) => setFilters(prev => ({ ...prev, priceMin, priceMax }))} onClear={clearAllFilters} />
 
       <div className={`space-y-3 transition-opacity ${isListLoading ? 'opacity-60' : 'opacity-100'}`}>
         {isListLoading ? (
@@ -1206,7 +1208,7 @@ export function InventoryClient({
           </div>
         ) : null}
         <InventorySelectionBar selectedCount={selectedInventoryIds.length} visibleCount={data.length} onSelectVisible={() => setSelectedInventoryIds(data.map(row => row.inventoryId))} onClear={() => setSelectedInventoryIds([])} />
-        <InventoryTable
+      <InventoryTable
           rows={data}
           selectedInventoryIds={selectedInventoryIds}
           page={page}
@@ -1214,7 +1216,8 @@ export function InventoryClient({
           onSelectionChange={(inventoryId, checked) => setSelectedInventoryIds(prev => checked ? [...prev, inventoryId] : prev.filter(id => id !== inventoryId))}
           onView={openView}
           onInquirySync={openInquirySync}
-          onPhotos={openPhotos}
+        onPhotos={openPhotos}
+        onVideos={setVideoRow}
           onEmail={openEmail}
           onEdit={openEdit}
           onDelete={setDeleteId}
@@ -1372,6 +1375,8 @@ export function InventoryClient({
           </div>
         ) : null}
       </Modal>
+
+      <InventoryVideosModal row={videoRow} onClose={() => setVideoRow(null)} />
 
       <InventoryInquiryModal {...inquiryModalProps} />
     </div>

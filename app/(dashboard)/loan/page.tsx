@@ -7,16 +7,16 @@ export default async function LoanPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    search?: string
+    search?: string; registrationNo?: string; customerName?: string; customerMobile?: string; bankName?: string; bankPersonName?: string; paymentStatus?: string; fromDate?: string; toDate?: string; page?: string; pageSize?: string
   }>
 }) {
   if (!(await canCurrentUserAccessRoute('/loan'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
 
-  const [rows, vehicles] = await Promise.all([listLoans(), getVehicles()])
+  const [result, vehicles] = await Promise.all([listLoans({ ...sp, page: Number(sp.page) || 1, pageSize: Number(sp.pageSize) || 25 }), getVehicles()])
 
-  const data = rows.map((r) => ({
+  const data = result.rows.map((r) => ({
     ...r,
     loanAmount: r.loanAmount ? r.loanAmount.toString() : null,
     percentagePayoutAmount: r.percentagePayoutAmount ? r.percentagePayoutAmount.toString() : null,
@@ -24,5 +24,5 @@ export default async function LoanPage({
     totalAmountReceived: r.totalAmountReceived ? r.totalAmountReceived.toString() : null,
   }))
 
-  return <LoanClient initialData={data} vehicles={vehicles} initialSearch={search} />
+  return <LoanClient initialData={data} vehicles={vehicles} initialSearch={search} initialFilters={sp} total={result.total} page={result.page} pageSize={result.pageSize} pageCount={result.pageCount} />
 }

@@ -640,7 +640,7 @@ function FormDropdown({
 }
 
 export function InquiryClient({
-  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
@@ -658,6 +658,8 @@ export function InquiryClient({
   followUpDate: string
   inquiryDate: string
   visitedDate: string
+  budgetMin: string
+  budgetMax: string
   makeId: string
   modelId: string
   variantId: string
@@ -908,6 +910,8 @@ export function InquiryClient({
     subStatus !== 'All' ? 1 : 0,
     followUpDate ? 1 : 0,
     visitedDate ? 1 : 0,
+    budgetMin ? 1 : 0,
+    budgetMax ? 1 : 0,
     makeId ? 1 : 0,
     modelId ? 1 : 0,
     variantId ? 1 : 0,
@@ -1099,7 +1103,7 @@ export function InquiryClient({
   }
 
   const pushQuery = (params: Record<string, string>) => {
-    const query = buildListQueryString({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
+    const query = buildListQueryString({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
     startRouteTransition(() => {
       router.push(`/inquiry${query ? `?${query}` : ''}`)
     })
@@ -1482,6 +1486,8 @@ export function InquiryClient({
         if (followUpDate) params.set('followUpDate', followUpDate)
         if (inquiryDate) params.set('inquiryDate', inquiryDate)
         if (visitedDate) params.set('visitedDate', visitedDate)
+        if (budgetMin) params.set('budgetMin', budgetMin)
+        if (budgetMax) params.set('budgetMax', budgetMax)
         if (makeId) params.set('makeId', makeId)
         if (modelId) params.set('modelId', modelId)
         if (variantId) params.set('variantId', variantId)
@@ -1500,12 +1506,12 @@ export function InquiryClient({
 
   const resetFilters = () => {
     setSearchInput('')
-    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
   }
 
   const applyQuickFilter = (nextQuickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all') => {
     setSearchInput('')
-    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
   }
 
   return (
@@ -1516,7 +1522,7 @@ export function InquiryClient({
         action={
           <div className="flex items-center gap-2">
             <Btn variant="outline" size="sm" onClick={exportAllMatchingInquiries} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || !!followUpDate || !!visitedDate || !!makeId || !!modelId || !!variantId ? 'Export Filtered' : 'Export All'} (${total})`}
+              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || !!followUpDate || !!visitedDate || !!budgetMin || !!budgetMax || !!makeId || !!modelId || !!variantId ? 'Export Filtered' : 'Export All'} (${total})`}
             </Btn>
             <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />New Inquiry</Btn>
           </div>
@@ -1536,11 +1542,13 @@ export function InquiryClient({
         variantId={variantId}
         followUpDate={followUpDate}
         visitedDate={visitedDate}
+        budgetMin={budgetMin}
+        budgetMax={budgetMax}
         classification={classification}
         status={status}
         quickFilter={quickFilter}
         isRoutePending={isRoutePending}
-        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || followUpDate || visitedDate || makeId || modelId || variantId)}
+        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || followUpDate || visitedDate || budgetMin || budgetMax || makeId || modelId || variantId)}
         sourceOptions={sourceOptions}
         subStatusSuggestions={subStatusSuggestions}
         makes={makes}
@@ -1556,6 +1564,7 @@ export function InquiryClient({
         onVariantChange={variantId => pushQuery({ variantId })}
         onFollowUpDateChange={followUpDate => pushQuery({ followUpDate })}
         onVisitedDateChange={visitedDate => pushQuery({ visitedDate })}
+        onBudgetApply={(budgetMin, budgetMax) => pushQuery({ budgetMin, budgetMax })}
         onClassificationChange={classification => pushQuery({ classification })}
         onStatusChange={status => pushQuery({ status })}
         onQuickFilterChange={applyQuickFilter}

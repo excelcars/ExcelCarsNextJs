@@ -14,24 +14,31 @@ async function loadUsers(userIds: number[]) {
   return new Map(users.map(user => [user.userId, user]))
 }
 
-function buildChecklistWhere(search: string): Prisma.CheckListDocMainWhereInput {
+function buildChecklistWhere(search: string, registration: string): Prisma.CheckListDocMainWhereInput {
   const q = search.trim()
-  if (!q) return {}
+  const exactRegistration = registration.trim()
+  const filters: Prisma.CheckListDocMainWhereInput[] = []
 
-  return {
-    OR: [
-      { registrationNo: { contains: q, mode: 'insensitive' } },
-      { customerNameLegacy: { contains: q, mode: 'insensitive' } },
-      { customerMobileLegacy: { contains: q, mode: 'insensitive' } },
-      { customerEmailLegacy: { contains: q, mode: 'insensitive' } },
-      { customer: { custName: { contains: q, mode: 'insensitive' } } },
-      { customer: { custMobile: { contains: q, mode: 'insensitive' } } },
-      { customer: { custEmail: { contains: q, mode: 'insensitive' } } },
-      { make: { contains: q, mode: 'insensitive' } },
-      { model: { contains: q, mode: 'insensitive' } },
-      { variant: { contains: q, mode: 'insensitive' } } ,
-    ],
+  if (exactRegistration) filters.push({ registrationNo: { equals: exactRegistration } })
+  if (q) {
+    filters.push({
+      OR: [
+        { registrationNo: { contains: q, mode: 'insensitive' } },
+        { customerNameLegacy: { contains: q, mode: 'insensitive' } },
+        { customerMobileLegacy: { contains: q, mode: 'insensitive' } },
+        { customerEmailLegacy: { contains: q, mode: 'insensitive' } },
+        { customer: { custName: { contains: q, mode: 'insensitive' } } },
+        { customer: { custMobile: { contains: q, mode: 'insensitive' } } },
+        { customer: { custEmail: { contains: q, mode: 'insensitive' } } },
+        { make: { contains: q, mode: 'insensitive' } },
+        { model: { contains: q, mode: 'insensitive' } },
+        { variant: { contains: q, mode: 'insensitive' } },
+      ],
+    })
   }
+
+  if (filters.length === 0) return {}
+  return filters.length === 1 ? filters[0] : { AND: filters }
 }
 
 async function mapChecklistSummaryRows(rows: Array<{
@@ -70,8 +77,8 @@ async function mapChecklistSummaryRows(rows: Array<{
     ? await prisma.$queryRaw<Array<{ documentId: number; applicableCount: bigint; receivedApplicableCount: bigint; receivedCount: bigint }>>(Prisma.sql`
         SELECT
           fk_document_id AS "documentId",
-          SUM(CASE WHEN applicable = 'Applicable' THEN 1 ELSE 0 END) AS "applicableCount",
-          SUM(CASE WHEN applicable = 'Applicable' AND received = 'Yes' THEN 1 ELSE 0 END) AS "receivedApplicableCount",
+          SUM(CASE WHEN applicable IN ('Yes', 'Applicable') THEN 1 ELSE 0 END) AS "applicableCount",
+          SUM(CASE WHEN applicable IN ('Yes', 'Applicable') AND received = 'Yes' THEN 1 ELSE 0 END) AS "receivedApplicableCount",
           SUM(CASE WHEN received = 'Yes' THEN 1 ELSE 0 END) AS "receivedCount"
         FROM checklist_doc_details
         WHERE fk_document_id IN (${Prisma.join(documentIds)})
@@ -101,8 +108,8 @@ async function mapChecklistSummaryRows(rows: Array<{
   }))
 }
 
-export async function listChecklists({ search = '', page = 1 }: { search?: string; page?: number }) {
-  const where = buildChecklistWhere(search)
+export async function listChecklists({ search = '', registration = '', page = 1 }: { search?: string; registration?: string; page?: number }) {
+  const where = buildChecklistWhere(search, registration)
   const safePage = Math.max(1, page || 1)
 
   const [rows, total] = await Promise.all([
@@ -147,8 +154,8 @@ export async function listChecklists({ search = '', page = 1 }: { search?: strin
   }
 }
 
-export async function listChecklistsForExport({ search = '' }: { search?: string }) {
-  const where = buildChecklistWhere(search)
+export async function listChecklistsForExport({ search = '', registration = '' }: { search?: string; registration?: string }) {
+  const where = buildChecklistWhere(search, registration)
   const rows = await prisma.checkListDocMain.findMany({
     where,
     select: {
@@ -212,6 +219,11 @@ export async function getVehicles() {
       colour: true,
       year: true,
       fuelType: true,
+      customerId: true,
+      customerName: true,
+      customer: {
+        select: { custId: true, custName: true, custMobile: true, custEmail: true },
+      },
       carVariantMaster: {
         select: { variant: true, carMakeMaster: { select: { make: true } }, carModelMaster: { select: { model: true } } },
       },

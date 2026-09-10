@@ -1,4 +1,4 @@
-import { Eye, Images, Link2, Mail, Pencil, Trash2 } from 'lucide-react'
+import { Eye, Images, Link2, Mail, Pencil, Trash2, Video } from 'lucide-react'
 import { Table } from '@/components/ui'
 import { InventoryDetailCell } from './InventoryDetailCell'
 import type { InventoryRow } from './inventoryTypes'
@@ -18,6 +18,7 @@ interface InventoryTableProps {
   onView: (row: InventoryRow) => void
   onInquirySync: (row: InventoryRow) => void
   onPhotos: (row: InventoryRow) => void
+  onVideos: (row: InventoryRow) => void
   onEmail: (row: InventoryRow) => void
   onEdit: (row: InventoryRow) => void
   onDelete: (inventoryId: number) => void
@@ -32,6 +33,7 @@ export function InventoryTable({
   onView,
   onInquirySync,
   onPhotos,
+  onVideos,
   onEmail,
   onEdit,
   onDelete,
@@ -55,6 +57,7 @@ export function InventoryTable({
                 <button onClick={() => onView(r)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
                 <button onClick={() => onInquirySync(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Update Inquiry"><Link2 className="w-3.5 h-3.5" /></button>
                 <button onClick={() => onPhotos(r)} className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition" title="Manage Photos"><span className="relative inline-flex"><Images className="w-3.5 h-3.5" />{r._count.inventoryPhotos > 0 ? <span className="absolute -right-2 -top-2 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-[10px] leading-4 text-white text-center">{r._count.inventoryPhotos}</span> : null}</span></button>
+                <button onClick={() => onVideos(r)} className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition" title="Manage Videos"><Video className="w-3.5 h-3.5" /></button>
                 <button onClick={() => onEmail(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Send Email"><Mail className="w-3.5 h-3.5" /></button>
                 <button onClick={() => onEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                 <button onClick={() => onDelete(r.inventoryId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
