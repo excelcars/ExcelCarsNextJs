@@ -336,8 +336,9 @@ export async function deleteInventory(id: number): Promise<ActionResult> {
     })
     if (!inventory) return { success: false, error: 'Vehicle not found.' }
 
-    const [photos, checklistCount, dsaCount, insuranceCount, inquiryLinkCount, emailLinkCount, feedbackCount, loanCount, rtoCount] = await Promise.all([
+    const [photos, videos, checklistCount, dsaCount, insuranceCount, inquiryLinkCount, emailLinkCount, feedbackCount, loanCount, rtoCount] = await Promise.all([
       prisma.inventoryPhotos.findMany({ where: { fkInventoryId: id }, select: { path: true } }),
+      prisma.inventoryVideo.findMany({ where: { fkInventoryId: id }, select: { storagePath: true } }),
       prisma.checkListDocMain.count({ where: { inventoryId: id } }),
       prisma.dsaManagement.count({ where: { inventoryId: id } }),
       prisma.insuranceMain.count({ where: { inventoryId: id } }),
@@ -369,7 +370,7 @@ export async function deleteInventory(id: number): Promise<ActionResult> {
       await tx.inventoryManagement.delete({ where: { inventoryId: id } })
     })
 
-    await cleanupInventoryPhotoFiles(photos.map(photo => photo.path))
+    await cleanupInventoryPhotoFiles([...photos.map(photo => photo.path), ...videos.map(video => video.storagePath)])
   } catch (err) {
     return { success: false, error: describeError(err) }
   }

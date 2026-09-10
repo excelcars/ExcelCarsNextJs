@@ -8,15 +8,17 @@ export default async function ChecklistPage({
 }: {
   searchParams: Promise<{
     search?: string
+    registration?: string
     page?: string
   }>
 }) {
   if (!(await canCurrentUserAccessRoute('/checklist'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
+  const registration = sp.registration ?? ''
   const page = Math.max(1, Number(sp.page) || 1)
   const [result, vehicles] = await Promise.all([
-    listChecklists({ search, page }),
+    listChecklists({ search, registration, page }),
     getVehicles(),
   ])
 
@@ -29,6 +31,7 @@ export default async function ChecklistPage({
       pageCount={result.pageCount}
       pageSize={result.pageSize}
       initialSearch={search}
+      initialRegistration={registration}
     />
   )
 }

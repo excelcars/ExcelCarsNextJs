@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 export default async function InquiryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; subStatus?: string; followUpDate?: string; inquiryDate?: string; visitedDate?: string; makeId?: string; modelId?: string; variantId?: string; quickFilter?: string; view?: string; edit?: string; page?: string }>
+  searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; subStatus?: string; followUpDate?: string; inquiryDate?: string; visitedDate?: string; budgetMin?: string; budgetMax?: string; makeId?: string; modelId?: string; variantId?: string; quickFilter?: string; view?: string; edit?: string; page?: string }>
 }) {
   if (!(await canCurrentUserAccessRoute('/inquiry'))) redirect('/dashboard')
   const sp = await searchParams
@@ -19,6 +19,8 @@ export default async function InquiryPage({
   const followUpDate = sp.followUpDate ?? ''
   const inquiryDate = sp.inquiryDate ?? ''
   const visitedDate = sp.visitedDate ?? ''
+  const budgetMin = sp.budgetMin ?? ''
+  const budgetMax = sp.budgetMax ?? ''
   const makeId = sp.makeId ?? ''
   const modelId = sp.modelId ?? ''
   const variantId = sp.variantId ?? ''
@@ -29,7 +31,7 @@ export default async function InquiryPage({
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
   const [{ rows, total, pageCount }, makes, sourceOptions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
-    listInquiries({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, makeId, modelId, variantId, quickFilter, page, restrictToUserId: ownershipScope.restrictToUserId }),
+    listInquiries({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, restrictToUserId: ownershipScope.restrictToUserId }),
     getMakes(),
     getInquirySources(),
     getInquirySubStatusSuggestions(),
@@ -59,6 +61,8 @@ export default async function InquiryPage({
       followUpDate={followUpDate}
       inquiryDate={inquiryDate}
       visitedDate={visitedDate}
+      budgetMin={budgetMin}
+      budgetMax={budgetMax}
       makeId={makeId}
       modelId={modelId}
       variantId={variantId}

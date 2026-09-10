@@ -1,6 +1,7 @@
 'use client'
 
-import { Btn, SearchBar } from '@/components/ui'
+import { useEffect, useState } from 'react'
+import { Btn, Input, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
@@ -21,6 +22,8 @@ type InquiryFiltersProps = {
   variantId: string
   followUpDate: string
   visitedDate: string
+  budgetMin: string
+  budgetMax: string
   classification: string
   status: string
   quickFilter: QuickFilter
@@ -41,6 +44,7 @@ type InquiryFiltersProps = {
   onVariantChange: (value: string) => void
   onFollowUpDateChange: (value: string) => void
   onVisitedDateChange: (value: string) => void
+  onBudgetApply: (budgetMin: string, budgetMax: string) => void
   onClassificationChange: (value: string) => void
   onStatusChange: (value: string) => void
   onQuickFilterChange: (value: QuickFilter) => void
@@ -56,6 +60,8 @@ export function InquiryFilters({
   variantId,
   followUpDate,
   visitedDate,
+  budgetMin,
+  budgetMax,
   classification,
   status,
   quickFilter,
@@ -76,11 +82,18 @@ export function InquiryFilters({
   onVariantChange,
   onFollowUpDateChange,
   onVisitedDateChange,
+  onBudgetApply,
   onClassificationChange,
   onStatusChange,
   onQuickFilterChange,
   onReset,
 }: InquiryFiltersProps) {
+  const [draftBudgetMin, setDraftBudgetMin] = useState(budgetMin)
+  const [draftBudgetMax, setDraftBudgetMax] = useState(budgetMax)
+
+  useEffect(() => { setDraftBudgetMin(budgetMin) }, [budgetMin])
+  useEffect(() => { setDraftBudgetMax(budgetMax) }, [budgetMax])
+
   return (
     <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -111,6 +124,8 @@ export function InquiryFilters({
         <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} labeled onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         <DateFilterInput label="Follow-up Date" value={followUpDate} onChange={onFollowUpDateChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date" value={visitedDate} onChange={onVisitedDateChange} disabled={isRoutePending} />
+        <Input label="Budget From" type="number" min="0" inputMode="numeric" value={draftBudgetMin} onChange={event => setDraftBudgetMin(event.target.value)} placeholder="Minimum budget" disabled={isRoutePending} />
+        <div className="flex items-end gap-2"><Input label="Budget To" type="number" min="0" inputMode="numeric" value={draftBudgetMax} onChange={event => setDraftBudgetMax(event.target.value)} placeholder="Maximum budget" disabled={isRoutePending} /><Btn variant="outline" size="sm" onClick={() => onBudgetApply(draftBudgetMin, draftBudgetMax)} disabled={isRoutePending || (draftBudgetMin === budgetMin && draftBudgetMax === budgetMax)}>Apply Budget</Btn></div>
         <div className="flex flex-col gap-1 md:col-span-2">
           <label className="text-xs font-medium text-gray-600">Classification</label>
           <div className="flex flex-wrap gap-1.5">

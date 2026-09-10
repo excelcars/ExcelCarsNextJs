@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { validateChecklistInput } from './validation'
 
 export interface DocRow {
   documentName: string
@@ -71,6 +72,8 @@ async function validateChecklistInventory(input: ChecklistFormInput, currentDocu
       inventoryId: true,
       registrationNo: true,
       status: true,
+      customerId: true,
+      customerName: true,
     },
   })
 
@@ -80,6 +83,14 @@ async function validateChecklistInventory(input: ChecklistFormInput, currentDocu
 
   if ((inventory.status ?? '').trim() !== 'Sold') {
     return 'Checklist can only be created for sold vehicles.'
+  }
+
+  if (input.customerId !== inventory.customerId) {
+    return 'Checklist customer must match the selected vehicle customer.'
+  }
+
+  if (inventory.customerId === null && input.customerNameLegacy.trim() !== (inventory.customerName ?? '').trim()) {
+    return 'Checklist customer must match the selected vehicle customer.'
   }
 
   if (normalizeRegistration(input.registrationNo) !== normalizeRegistration(inventory.registrationNo)) {
@@ -102,14 +113,14 @@ async function validateChecklistInventory(input: ChecklistFormInput, currentDocu
 }
 
 export async function createChecklist(input: ChecklistFormInput): Promise<ActionResult> {
+  const inputError = validateChecklistInput(input)
+  if (inputError) return { success: false, error: inputError }
+
   const validationError = await validateChecklistInventory(input)
   if (validationError) return { success: false, error: validationError }
   const inventoryId = input.inventoryId as number
 
   const docs = validDocs(input.docs)
-  if (docs.length === 0) {
-    return { success: false, error: 'Add at least one document.' }
-  }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
@@ -145,40 +156,42 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
 }
 
 export async function updateChecklist(id: number, input: ChecklistFormInput): Promise<ActionResult> {
+  const inputError = validateChecklistInput(input)
+  if (inputError) return { success: false, error: inputError }
+
   const validationError = await validateChecklistInventory(input, id)
   if (validationError) return { success: false, error: validationError }
 
   const docs = validDocs(input.docs)
-  if (docs.length === 0) {
-    return { success: false, error: 'Add at least one document.' }
-  }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
-    await prisma.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
+    await prisma.$transaction(async tx => {
+      await tx.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
 
-    await prisma.checkListDocMain.update({
-      where: { documentId: id },
-      data: {
-        ...buildMainData(input),
-        inventoryId: input.inventoryId,
-        customerId: input.customerId,
-        updatedDate: new Date(),
-        ...(userId ? { updatedBy: userId } : {}),
-        checklistDocDetails: {
-          create: docs.map(d => ({
-            documentName: d.documentName,
-            applicable: d.applicable,
-            received: d.received,
-            originalCopy: d.originalCopy,
-            createdDt: new Date(),
-            updatedDt: new Date(),
-            ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
-          })),
+      await tx.checkListDocMain.update({
+        where: { documentId: id },
+        data: {
+          ...buildMainData(input),
+          inventoryId: input.inventoryId,
+          customerId: input.customerId,
+          updatedDate: new Date(),
+          ...(userId ? { updatedBy: userId } : {}),
+          checklistDocDetails: {
+            create: docs.map(d => ({
+              documentName: d.documentName,
+              applicable: d.applicable,
+              received: d.received,
+              originalCopy: d.originalCopy,
+              createdDt: new Date(),
+              updatedDt: new Date(),
+              ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+            })),
+          },
         },
-      },
+      })
     })
   } catch (err) {
     return { success: false, error: describeError(err) }
@@ -192,8 +205,10 @@ export async function deleteChecklist(id: number): Promise<ActionResult> {
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
   try {
-    await prisma.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
-    await prisma.checkListDocMain.delete({ where: { documentId: id } })
+    await prisma.$transaction(async tx => {
+      await tx.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
+      await tx.checkListDocMain.delete({ where: { documentId: id } })
+    })
   } catch (err) {
     return { success: false, error: describeError(err) }
   }

@@ -29,6 +29,9 @@ export async function resolveTrackedVehicleByToken(rawToken: string) {
           inventoryPhotos: {
             orderBy: { documentId: 'desc' },
           },
+          inventoryVideos: {
+            orderBy: [{ isFeatured: 'desc' }, { sortOrder: 'asc' }, { inventoryVideoId: 'desc' }],
+          },
         },
       },
     },
@@ -129,6 +132,15 @@ export function buildPublicVehicleViewModel(
       }
     })
     .filter((photo): photo is { documentId: number; src: string; alt: string } => Boolean(photo))
+  const videos: Array<{ inventoryVideoId: number; sourceType: 'YOUTUBE' | 'UPLOAD'; youtubeVideoId: string | null; src: string | null; isFeatured: boolean }> = []
+  for (const video of vehicle.inventoryVideos) {
+    if (video.sourceType === 'YOUTUBE' && video.youtubeVideoId) {
+      videos.push({ inventoryVideoId: video.inventoryVideoId, sourceType: 'YOUTUBE', youtubeVideoId: video.youtubeVideoId, src: null, isFeatured: video.isFeatured })
+      continue
+    }
+    const src = getInventoryPhotoPublicUrl(video.storagePath)
+    if (src) videos.push({ inventoryVideoId: video.inventoryVideoId, sourceType: 'UPLOAD', youtubeVideoId: null, src, isFeatured: video.isFeatured })
+  }
 
   return {
     make,
@@ -149,6 +161,7 @@ export function buildPublicVehicleViewModel(
     maskedRegistrationNo: maskRegistrationNumber(vehicle.registrationNo),
     gallery,
     hasGallery: gallery.length > 0,
+    videos,
     phoneNumber: getPublicVehiclePhoneNumber(),
     whatsappNumber: getPublicVehicleWhatsAppNumber(),
     contactEmail: getPublicVehicleContactEmail(),

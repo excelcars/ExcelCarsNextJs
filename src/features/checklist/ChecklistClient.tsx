@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Car, Eye, Download, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
-import { CustomerPicker } from '@/components/CustomerPicker'
 import { createChecklist, updateChecklist, deleteChecklist, type ChecklistFormInput, type DocRow } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
@@ -13,21 +12,19 @@ const LEGACY_DOCS = [
   'Original Registration Book / RC Card',
   'Original Tax Book for before 97 vehicle',
   'Dealers Invoice',
-  'Insurance Certificate (State Comprehensive / Third Party)',
-  'Municipal Tax Receipt (If applicable)',
+  'Insurance Certificate (State Comprehensive / Third Party )',
+  'Muncipal Tax Receipt (If applicable)',
   'TTO Set duly signed all places',
   'Authorised Signatory Letter on Company Letter Head (In case of Company Vehicle)',
   'NOC Finance Company (If Hypothecation Case)',
   'Owner Authority Letter to Middle Man for selling car',
-  'Form No 35',
-  'Spare Key',
-  'PUC Certificate',
-  'Service History',
-  'Road Tax',
-  'Hypothecation NOC',
+  'PUC Validity',
+  'Duplicate Keys',
+  'Manuals',
+  'Spare Tyre & Tool Kit',
 ] as const
 const YES_NO = ['Yes', 'No'] as const
-const APPLICABILITY_OPTIONS = ['Applicable', 'Not Applicable'] as const
+const APPLICABILITY_OPTIONS = ['Yes', 'No'] as const
 const ORIGINAL_COPY = ['Original', 'Copy'] as const
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
@@ -40,6 +37,9 @@ interface Vehicle {
   colour: string | null
   year: number | null
   fuelType: string | null
+  customerId: number | null
+  customerName: string | null
+  customer: CustomerOption | null
   carVariantMaster: {
     variant: string | null
     carMakeMaster: { make: string | null } | null
@@ -103,7 +103,7 @@ function emptyForm(): ChecklistFormInput {
   return {
     inventoryId: null, make: '', model: '', variant: '', colour: '', registrationNo: '', year: null, fuelType: '',
     customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
-    docs: LEGACY_DOCS.map(name => ({ documentName: name, applicable: 'Not Applicable', received: 'No', originalCopy: 'Original' })),
+    docs: LEGACY_DOCS.map(name => ({ documentName: name, applicable: 'No', received: 'No', originalCopy: 'Original' })),
   }
 }
 
@@ -120,8 +120,21 @@ function optionSnapshot<T extends object | null>(value: T) {
     : ''
 }
 
+function isApplicable(value: string | null) {
+  return value === 'Yes' || value === 'Applicable'
+}
+
+function customerSnapshotForVehicle(v: Vehicle) {
+  return {
+    customerId: v.customer?.custId ?? v.customerId,
+    customerNameLegacy: v.customer?.custName ?? v.customerName ?? '',
+    customerMobileLegacy: v.customer?.custMobile ?? '',
+    customerEmailLegacy: v.customer?.custEmail ?? '',
+  }
+}
+
 function computeStatus(docs: { applicable: string | null; received: string | null }[]) {
-  const applicable = docs.filter(d => d.applicable === 'Applicable')
+  const applicable = docs.filter(d => isApplicable(d.applicable))
   if (applicable.length === 0) return 'Partial'
   return applicable.every(d => d.received === 'Yes') ? 'Complete' : 'Partial'
 }
@@ -142,9 +155,9 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-function buildChecklistExportFileName(rows: Array<{ documentId: number }>, search: string) {
+function buildChecklistExportFileName(rows: Array<{ documentId: number }>, search: string, kind: 'summary' | 'details') {
   const today = new Date().toISOString().slice(0, 10)
-  const parts = ['checklist']
+  const parts = ['checklist', kind]
   if (search.trim()) parts.push('filtered')
   if (parts.length === 1) parts.push(`${rows.length}-rows`)
   parts.push(today)
@@ -204,7 +217,56 @@ function exportChecklistCsv(rows: ChecklistDetailRow[], search: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = buildChecklistExportFileName(rows, search)
+  link.download = buildChecklistExportFileName(rows, search, 'summary')
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportLegacyChecklistDetailsCsv(rows: ChecklistDetailRow[], search: string) {
+  const headers = [
+    'Make',
+    'Model',
+    'Variant',
+    'Colour',
+    'Registration No',
+    'Year',
+    'Fuel Type',
+    'Customer Name',
+    'Customer Mobile',
+    'Customer Email',
+    'Document Name',
+    'Applicable',
+    'Received',
+    'Original Copy',
+  ]
+  const lines = [headers.map(csvValue).join(',')]
+
+  for (const row of rows) {
+    for (const detail of row.checklistDocDetails) {
+      lines.push([
+        clean(row.make),
+        clean(row.model),
+        clean(row.variant),
+        clean(row.colour),
+        row.registrationNo,
+        row.year,
+        clean(row.fuelType),
+        row.customer?.custName ?? row.customerNameLegacy,
+        row.customer?.custMobile ?? row.customerMobileLegacy,
+        row.customer?.custEmail ?? row.customerEmailLegacy,
+        detail.documentName,
+        detail.applicable,
+        detail.received,
+        detail.originalCopy,
+      ].map(csvValue).join(','))
+    }
+  }
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildChecklistExportFileName(rows, search, 'details')
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -217,6 +279,7 @@ export function ChecklistClient({
   pageCount,
   pageSize,
   initialSearch,
+  initialRegistration,
 }: {
   initialData: ChecklistListRow[]
   vehicles: Vehicle[]
@@ -225,10 +288,12 @@ export function ChecklistClient({
   pageCount: number
   pageSize: number
   initialSearch: string
+  initialRegistration: string
 }) {
   const router = useRouter()
   const [data, setData] = useState(initialData)
   const [search, setSearch] = useState(initialSearch)
+  const [registration, setRegistration] = useState(initialRegistration)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [viewRow, setViewRow] = useState<ChecklistDetailRow | null>(null)
@@ -261,6 +326,10 @@ export function ChecklistClient({
   useEffect(() => {
     setSearch(initialSearch)
   }, [initialSearch])
+
+  useEffect(() => {
+    setRegistration(initialRegistration)
+  }, [initialRegistration])
 
   const vehicleMatches = useMemo(() => {
     const q = vehicleQuery.toLowerCase()
@@ -299,18 +368,21 @@ export function ChecklistClient({
   }
 
   const applyDetailToForm = (r: ChecklistDetailRow) => {
+    const nextVehicle = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    const vehicleCustomer = nextVehicle ? customerSnapshotForVehicle(nextVehicle) : null
     const nextForm: ChecklistFormInput = {
       inventoryId: r.inventoryId,
       make: r.make ?? '', model: r.model ?? '', variant: r.variant ?? '', colour: r.colour ?? '',
       registrationNo: r.registrationNo ?? '', year: r.year, fuelType: r.fuelType ?? '',
-      customerId: r.customerId,
-      customerNameLegacy: r.customerNameLegacy ?? '', customerMobileLegacy: r.customerMobileLegacy ?? '', customerEmailLegacy: r.customerEmailLegacy ?? '',
+      customerId: vehicleCustomer?.customerId ?? r.customerId,
+      customerNameLegacy: vehicleCustomer?.customerNameLegacy ?? r.customerNameLegacy ?? '',
+      customerMobileLegacy: vehicleCustomer?.customerMobileLegacy ?? r.customerMobileLegacy ?? '',
+      customerEmailLegacy: vehicleCustomer?.customerEmailLegacy ?? r.customerEmailLegacy ?? '',
       docs: r.checklistDocDetails.length
-        ? r.checklistDocDetails.map(d => ({ documentName: d.documentName ?? '', applicable: d.applicable ?? 'Not Applicable', received: d.received ?? 'No', originalCopy: d.originalCopy ?? 'Original' }))
+        ? r.checklistDocDetails.map(d => ({ documentName: d.documentName ?? '', applicable: d.applicable ?? 'No', received: d.received ?? 'No', originalCopy: d.originalCopy ?? 'Original' }))
         : emptyForm().docs,
     }
-    const nextCustomer = r.customer
-    const nextVehicle = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    const nextCustomer = nextVehicle?.customer ?? r.customer
     setForm(nextForm)
     setSavedFormSnapshot(JSON.stringify(nextForm))
     setSelectedCustomer(nextCustomer)
@@ -379,7 +451,9 @@ export function ChecklistClient({
   }
 
   const selectVehicle = (v: Vehicle) => {
+    const customer = customerSnapshotForVehicle(v)
     setSelectedVehicle(v)
+    setSelectedCustomer(v.customer)
     setVehicleOpen(false)
     setVehicleQuery('')
     setForm(f => ({
@@ -392,6 +466,7 @@ export function ChecklistClient({
       registrationNo: v.registrationNo ?? '',
       year: v.year,
       fuelType: v.fuelType ?? '',
+      ...customer,
     }))
   }
 
@@ -404,6 +479,7 @@ export function ChecklistClient({
     }
 
     setSelectedVehicle(null)
+    setSelectedCustomer(null)
     setForm(f => ({
       ...f,
       inventoryId: null,
@@ -414,24 +490,17 @@ export function ChecklistClient({
       colour: '',
       year: null,
       fuelType: '',
-    }))
-  }
-
-  const onCustomerChange = (c: CustomerOption | null) => {
-    setSelectedCustomer(c)
-    setForm(f => ({
-      ...f,
-      customerId: c?.custId ?? null,
-      customerNameLegacy: c?.custName ?? f.customerNameLegacy,
-      customerMobileLegacy: c?.custMobile ?? f.customerMobileLegacy,
-      customerEmailLegacy: c?.custEmail ?? f.customerEmailLegacy,
+      customerId: null,
+      customerNameLegacy: '',
+      customerMobileLegacy: '',
+      customerEmailLegacy: '',
     }))
   }
 
   const updateDoc = (i: number, patch: Partial<DocRow>) => {
     setForm(f => ({ ...f, docs: f.docs.map((d, idx) => idx === i ? { ...d, ...patch } : d) }))
   }
-  const addDoc = () => setForm(f => ({ ...f, docs: [...f.docs, { documentName: '', applicable: 'Not Applicable', received: 'No', originalCopy: 'Original' }] }))
+  const addDoc = () => setForm(f => ({ ...f, docs: [...f.docs, { documentName: '', applicable: 'No', received: 'No', originalCopy: 'Original' }] }))
   const removeDoc = (i: number) => setForm(f => ({ ...f, docs: f.docs.filter((_, idx) => idx !== i) }))
 
   const closeForm = () => {
@@ -505,18 +574,24 @@ export function ChecklistClient({
     })
   }
 
-  const exportRows = () => {
+  const exportRows = (format: 'summary' | 'details') => {
     setExportError('')
     startExportTransition(async () => {
       try {
         const params = new URLSearchParams()
         if (search.trim()) params.set('search', search.trim())
+        if (registration.trim()) params.set('registration', registration.trim())
         const res = await fetch(`/api/checklist/export${params.toString() ? `?${params.toString()}` : ''}`)
         const payload = await res.json().catch(() => null)
         if (!res.ok || !Array.isArray(payload)) {
           throw new Error(payload?.error ?? 'Could not export checklist records.')
         }
-        exportChecklistCsv(payload as ChecklistDetailRow[], search)
+        const rows = payload as ChecklistDetailRow[]
+        if (format === 'details') {
+          exportLegacyChecklistDetailsCsv(rows, search)
+        } else {
+          exportChecklistCsv(rows, search)
+        }
       } catch (err) {
         setExportError(err instanceof Error ? err.message : 'Could not export checklist records.')
       }
@@ -526,6 +601,7 @@ export function ChecklistClient({
   const pushQuery = (params: Record<string, string>) => {
     const q = new URLSearchParams({
       search: initialSearch,
+      registration: initialRegistration,
       page: String(page),
       ...params,
     })
@@ -539,13 +615,13 @@ export function ChecklistClient({
 
   useEffect(() => {
     const handle = setTimeout(() => {
-      if (search !== initialSearch) {
-        pushQuery({ search, page: '1' })
+      if (search !== initialSearch || registration !== initialRegistration) {
+        pushQuery({ search, registration, page: '1' })
       }
     }, 350)
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSearch, search])
+  }, [initialRegistration, initialSearch, registration, search])
 
   return (
     <div>
@@ -554,8 +630,11 @@ export function ChecklistClient({
         subtitle={`${total} vehicle checklists`}
         action={
           <div className="flex items-center gap-2">
-            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() ? 'Export Filtered' : 'Export All'} (${total})`}
+            <Btn variant="outline" size="sm" onClick={() => exportRows('summary')} disabled={isExporting || total === 0}>
+              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() ? 'Export Filtered' : 'Export Summary'} (${total})`}
+            </Btn>
+            <Btn variant="outline" size="sm" onClick={() => exportRows('details')} disabled={isExporting || total === 0}>
+              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : 'Export Detail Rows'}
             </Btn>
             <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Checklist</Btn>
           </div>
@@ -563,7 +642,12 @@ export function ChecklistClient({
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer..." disabled={isRoutePending} />
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchBar value={search} onChange={setSearch} placeholder="Search reg no, customer..." disabled={isRoutePending} />
+          <div className="w-56">
+            <Input value={registration} onChange={e => setRegistration(e.target.value)} placeholder="Exact registration no..." disabled={isRoutePending} />
+          </div>
+        </div>
         <div className="text-xs text-gray-500">
           Page {page} of {pageCount} · {pageSize} per page
         </div>
@@ -667,7 +751,7 @@ export function ChecklistClient({
                 <div className="flex items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(f => ({ ...f, inventoryId: null })) }} className="text-gray-400 hover:text-red-600">
+                <button type="button" onClick={() => { setSelectedVehicle(null); setSelectedCustomer(null); setForm(f => ({ ...f, inventoryId: null, customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '' })) }} className="text-gray-400 hover:text-red-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -697,7 +781,11 @@ export function ChecklistClient({
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
+            <div className={`border ${errors.customer ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
+              <div className="text-sm font-medium text-gray-800">{form.customerNameLegacy || 'No linked customer'}</div>
+              <div className="text-xs text-gray-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>
+            </div>
+            <div className="mt-1 text-xs text-gray-500">Customer details are derived from the selected vehicle.</div>
           </div>
 
           <div>
@@ -709,7 +797,7 @@ export function ChecklistClient({
               {form.docs.map((d, i) => (
                 <div key={i} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-end border border-gray-100 rounded-lg p-2.5">
                       <Input label={i === 0 ? 'Document' : undefined} list="doc-name-suggestions" value={d.documentName} onChange={e => updateDoc(i, { documentName: e.target.value })} />
-                      <FormDropdown label={i === 0 ? 'Applicable / Not Applicable' : undefined} value={d.applicable} options={APPLICABILITY_OPTIONS.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { applicable: value })} />
+                      <FormDropdown label={i === 0 ? 'Applicable' : undefined} value={d.applicable} options={APPLICABILITY_OPTIONS.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { applicable: value })} />
                       <FormDropdown label={i === 0 ? 'Received' : undefined} value={d.received} options={YES_NO.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { received: value })} />
                       <FormDropdown label={i === 0 ? 'Original' : undefined} value={d.originalCopy} options={ORIGINAL_COPY.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { originalCopy: value })} />
                   <button type="button" onClick={() => removeDoc(i)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
