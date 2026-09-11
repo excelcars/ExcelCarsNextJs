@@ -84,6 +84,29 @@ const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
 const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
 
+const INSURANCE_VALIDATION_MESSAGES: Record<string, string> = {
+  agentPartnerId: 'Select an insurance agent.',
+  customer: 'Select a customer.',
+  carRegistrationNo: 'Registration number is required.',
+  carType: 'Select a valid car type.',
+  carMakeLegacy: 'Make is required.',
+  carModelLegacy: 'Model is required.',
+  carVariantLegacy: 'Variant is required.',
+  carYear: 'Enter a valid car year.',
+  entryDate: 'Entry date is required and must be before the expiry date.',
+  renewalDate: 'Renewal date is required.',
+  expiryDate: 'Expiry date is required and must be after the entry date.',
+  followupDate: 'Follow-up date is required.',
+  insurancePremium: 'Insurance premium must be greater than zero.',
+  oDPremium: 'OD premium must be greater than zero and cannot exceed the insurance premium.',
+  payoutPercentageOdPremium: 'Payout percentage must be between 0 and 100.',
+  initialAmountReceived: 'Initial amount must be greater than zero and cannot exceed the payout amount.',
+  agentMobileNoLegacy: 'Agent mobile must contain 10 digits.',
+  agentEmailIdLegacy: 'Enter a valid agent email address.',
+  customerMobileLegacy: 'Customer mobile must contain 10 digits.',
+  customerEmailLegacy: 'Enter a valid customer email address.',
+}
+
 function csvValue(value: string | number | boolean | null | undefined) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
@@ -444,7 +467,17 @@ export function InsuranceClient({
     }))
   }
 
-  const f = <K extends keyof InsuranceFormInput>(k: K, v: InsuranceFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+  const f = <K extends keyof InsuranceFormInput>(k: K, v: InsuranceFormInput[K]) => {
+    setForm(prev => ({ ...prev, [k]: v }))
+    setErrors(prev => {
+      if (!prev[k]) return prev
+      const next = { ...prev }
+      delete next[k]
+      return next
+    })
+  }
+
+  const fieldError = (field: string) => errors[field] ? <p role="alert" className="mt-1 text-xs text-red-600">{INSURANCE_VALIDATION_MESSAGES[field] ?? 'Please enter a valid value.'}</p> : null
 
   const closeForm = () => {
     setModal(null)
@@ -475,6 +508,12 @@ export function InsuranceClient({
     if (!form.customerId) {
       newErrors.customer = true
     }
+    if (!(CAR_TYPES as readonly string[]).includes(form.carType)) {
+      newErrors.carType = true
+    }
+    if (!form.carMakeLegacy.trim()) newErrors.carMakeLegacy = true
+    if (!form.carModelLegacy.trim()) newErrors.carModelLegacy = true
+    if (!form.carVariantLegacy.trim()) newErrors.carVariantLegacy = true
     if (form.insurancePremium === null || form.insurancePremium <= 0) {
       newErrors.insurancePremium = true
     }
@@ -715,17 +754,19 @@ export function InsuranceClient({
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Insurance Agent *</label>
               <PartnerPicker partnerType="Insurance Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.agentPartnerId} />
+              {fieldError('agentPartnerId')}
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Customer *</label>
               <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
+              {fieldError('customer')}
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <Input label="Agent Name" value={form.agentNameLegacy} onChange={e => f('agentNameLegacy', e.target.value)} />
-            <Input label="Agent Mobile" value={form.agentMobileNoLegacy} onChange={e => f('agentMobileNoLegacy', e.target.value)} error={errors.agentMobileNoLegacy} />
-            <Input label="Agent Email" value={form.agentEmailIdLegacy} onChange={e => f('agentEmailIdLegacy', e.target.value)} error={errors.agentEmailIdLegacy} />
+            <div><Input label="Agent Mobile" value={form.agentMobileNoLegacy} onChange={e => f('agentMobileNoLegacy', e.target.value)} error={errors.agentMobileNoLegacy} />{fieldError('agentMobileNoLegacy')}</div>
+            <div><Input label="Agent Email" value={form.agentEmailIdLegacy} onChange={e => f('agentEmailIdLegacy', e.target.value)} error={errors.agentEmailIdLegacy} />{fieldError('agentEmailIdLegacy')}</div>
           </div>
 
           <div>
@@ -765,15 +806,16 @@ export function InsuranceClient({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)}>
+            <div><Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)} error={errors.carType}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
-            </Select>
-            <Input label="Make *" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} error={errors.carMakeLegacy} />
-            <Input label="Model *" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} error={errors.carModelLegacy} />
-            <Input label="Variant *" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} error={errors.carVariantLegacy} />
-            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
+            </Select>{fieldError('carType')}</div>
+            <div><Input label="Make *" value={form.carMakeLegacy} onChange={e => f('carMakeLegacy', e.target.value)} error={errors.carMakeLegacy} />{fieldError('carMakeLegacy')}</div>
+            <div><Input label="Model *" value={form.carModelLegacy} onChange={e => f('carModelLegacy', e.target.value)} error={errors.carModelLegacy} />{fieldError('carModelLegacy')}</div>
+            <div><Input label="Variant *" value={form.carVariantLegacy} onChange={e => f('carVariantLegacy', e.target.value)} error={errors.carVariantLegacy} />{fieldError('carVariantLegacy')}</div>
+            <div><Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />{fieldError('carYear')}</div>
             <div className="space-y-1">
               <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.carRegistrationNo} />
+              {fieldError('carRegistrationNo')}
               <div className="flex items-center gap-2">
                 <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
                   Find by Registration
@@ -784,12 +826,12 @@ export function InsuranceClient({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Entry Date *" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} error={errors.entryDate} />
-            <Input label="Insurance Premium (₹)" type="number" value={form.insurancePremium ?? ''} onChange={e => f('insurancePremium', e.target.value ? +e.target.value : null)} error={errors.insurancePremium} />
-            <Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} error={errors.oDPremium} />
-            <Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} error={errors.payoutPercentageOdPremium} />
+            <div><Input label="Entry Date *" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} error={errors.entryDate} />{fieldError('entryDate')}</div>
+            <div><Input label="Insurance Premium (₹)" type="number" value={form.insurancePremium ?? ''} onChange={e => f('insurancePremium', e.target.value ? +e.target.value : null)} error={errors.insurancePremium} />{fieldError('insurancePremium')}</div>
+            <div><Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} error={errors.oDPremium} />{fieldError('oDPremium')}</div>
+            <div><Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} error={errors.payoutPercentageOdPremium} />{fieldError('payoutPercentageOdPremium')}</div>
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
-            {!editId && <Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={errors.initialAmountReceived} />}
+            {!editId && <div><Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={errors.initialAmountReceived} />{fieldError('initialAmountReceived')}</div>}
             <Input label="Total Amount Received" value={formTotalAmountReceived != null ? `₹${Number(formTotalAmountReceived).toLocaleString('en-IN')}` : '₹0'} readOnly className="bg-gray-50" />
             <Select label="Payout Status" value={form.payoutPaymentStatus} onChange={e => f('payoutPaymentStatus', e.target.value)}>
               {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -797,9 +839,9 @@ export function InsuranceClient({
             <Select label="Policy Status" value={form.policyStatus} onChange={e => f('policyStatus', e.target.value)}>
               {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Renewal Date *" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} error={errors.renewalDate} />
-            <Input label="Expiry Date" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} error={errors.expiryDate} />
-            <Input label="Follow-up Date *" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} />
+            <div><Input label="Renewal Date *" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} error={errors.renewalDate} />{fieldError('renewalDate')}</div>
+            <div><Input label="Expiry Date *" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} error={errors.expiryDate} />{fieldError('expiryDate')}</div>
+            <div><Input label="Follow-up Date *" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} />{fieldError('followupDate')}</div>
           </div>
           <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} />
 
