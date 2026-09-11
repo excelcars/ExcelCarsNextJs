@@ -181,14 +181,6 @@ export function CatalogClient({
     setError("");
     setModal(true);
   };
-  const openEditMake = (row: MakeSummary) =>
-    openEdit({
-      kind: "make",
-      id: row.pkMakeId,
-      name: row.make ?? "",
-      makeId: row.pkMakeId,
-      modelId: 0,
-    });
   const openEditModel = (row: ModelOption) =>
     openEdit({
       kind: "model",

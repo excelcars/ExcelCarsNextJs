@@ -3,17 +3,19 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
-import { CustomerPicker } from '@/components/CustomerPicker'
+import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, ConfirmDialog } from '@/components/ui'
+import { LoanFiltersPanel } from './LoanFiltersPanel'
+import { LoanPagination } from './LoanPagination'
+import { LoanCustomerLookup, type LoanCustomerOption } from './LoanCustomerLookup'
+import type { LoanCustomerVehicleContext } from './customerLookup'
 import { PartnerPicker } from '@/components/PartnerPicker'
 import {
   createLoan, updateLoan, deleteLoan, logLoanPayment,
   type LoanFormInput, type LogLoanPaymentInput,
 } from './actions'
-import { PAYMENT_STATUSES, CAR_TYPES, LOAN_PAGE_SIZES } from './queries'
+import { PAYMENT_STATUSES, CAR_TYPES } from './queries'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
-interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface PartnerOption { partnerId: number; name: string; mobile: string | null; email: string | null }
 interface UserOption { userId: number; userName: string | null; displayName: string | null }
 interface Vehicle {
@@ -61,7 +63,7 @@ interface LoanRow {
   updatedDate: Date | string | null
   updatedBy: number | null
   fkPartnerId: number | null
-  customer: CustomerOption | null
+  customer: LoanCustomerOption | null
   partnerMaster: PartnerOption | null
   createdByUser?: UserOption | null
   updatedByUser?: UserOption | null
@@ -79,7 +81,7 @@ interface FollowupHistoryEntry {
   remark: string | null
 }
 
-interface LoanFilters {
+export interface LoanFilters {
   search: string
   registrationNo: string
   customerName: string
@@ -112,97 +114,6 @@ const fmtMoney = (n: string | number | null) => {
   return Number.isFinite(value) ? `₹${value.toLocaleString('en-IN')}` : '—'
 }
 const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
-
-function csvValue(value: string | number | boolean | null | undefined) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function buildLoanExportFileName(rows: LoanRow[], search: string) {
-  const today = new Date().toISOString().slice(0, 10)
-  const parts = ['loan']
-  if (search.trim()) parts.push('filtered')
-  if (parts.length === 1) parts.push(`${rows.length}-rows`)
-  parts.push(today)
-  return `${parts.map(slugify).filter(Boolean).join('-')}.csv`
-}
-
-function exportLoanCsv(rows: LoanRow[], search: string) {
-  const headers = [
-    'Loan ID',
-    'Linked Inventory ID',
-    'Linked Customer ID',
-    'Linked Bank Contact ID',
-    'Entry Date',
-    'Bank Name',
-    'Bank Person Name',
-    'Bank Person Mobile No',
-    'Bank Person Email ID',
-    'Customer Name',
-    'Customer Mobile',
-    'Customer Email',
-    'Registration No',
-    'Car Type',
-    'Make',
-    'Model',
-    'Variant',
-    'Car Year',
-    'Loan Amount',
-    'Payout Percentage',
-    'Payout Amount',
-    'Total Amount Received',
-    'Payment Status',
-    'Payment Date',
-    'Follow-up Date',
-    'Remarks',
-  ]
-
-  const lines = [headers.map(csvValue).join(',')]
-  for (const row of rows) {
-    lines.push([
-      row.loanManagementId,
-      row.inventoryId,
-      row.customer?.custId ?? row.customerId,
-      row.fkPartnerId,
-      fmtDate(row.entryDate),
-      row.bankName,
-      row.bankPersonName,
-      row.bankPersonMobileNo,
-      row.bankPersonEmailId,
-      row.customer?.custName ?? row.customerNameLegacy,
-      row.customer?.custMobile ?? row.customerMobileLegacy,
-      row.customer?.custEmail ?? row.customerEmailLegacy,
-      row.registrationNo,
-      row.carType,
-      row.carMake,
-      row.carModel,
-      row.carVariant,
-      row.carYear,
-      row.loanAmount,
-      row.percentagePayoutAmount,
-      row.payoutAmount,
-      row.totalAmountReceived,
-      row.paymentStatus,
-      fmtDate(row.paymentDate),
-      fmtDate(row.followupDate),
-      row.remarks,
-    ].map(csvValue).join(','))
-  }
-
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = buildLoanExportFileName(rows, search)
-  link.click()
-  URL.revokeObjectURL(url)
-}
 
 function vehicleLabel(v: Vehicle) {
   const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
@@ -286,7 +197,7 @@ export function LoanClient({
   const [viewRow, setViewRow] = useState<LoanRow | null>(null)
   const [form, setForm] = useState<LoanFormInput>(emptyForm())
   const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<LoanCustomerOption | null>(null)
   const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
   const [selectedBankContact, setSelectedBankContact] = useState<PartnerOption | null>(null)
   const [savedBankContactSnapshot, setSavedBankContactSnapshot] = useState('')
@@ -444,15 +355,28 @@ export function LoanClient({
     }))
   }
 
-  const onCustomerChange = (c: CustomerOption | null) => {
+  const onCustomerChange = (c: LoanCustomerOption | null, lookupVehicle?: LoanCustomerVehicleContext | null) => {
     setSelectedCustomer(c)
     setForm(f => ({
       ...f,
       customerId: c?.custId ?? null,
-      customerNameLegacy: c?.custName ?? f.customerNameLegacy,
-      customerMobileLegacy: c?.custMobile ?? f.customerMobileLegacy,
-      customerEmailLegacy: c?.custEmail ?? f.customerEmailLegacy,
+      customerNameLegacy: c?.custName ?? '',
+      customerMobileLegacy: c?.custMobile ?? '',
+      customerEmailLegacy: c?.custEmail ?? '',
+      ...(lookupVehicle ? {
+        inventoryId: lookupVehicle.inventoryId,
+        fkVariantId: lookupVehicle.fkVariantId,
+        registrationNo: lookupVehicle.registrationNo ?? f.registrationNo,
+        carMake: lookupVehicle.make ?? f.carMake,
+        carModel: lookupVehicle.model ?? f.carModel,
+        carVariant: lookupVehicle.variant ?? f.carVariant,
+        carYear: lookupVehicle.year ?? f.carYear,
+      } : {}),
     }))
+    if (lookupVehicle?.inventoryId) {
+      setSelectedVehicle(vehicles.find(vehicle => vehicle.inventoryId === lookupVehicle.inventoryId) ?? null)
+      setVehicleLookupMessage(`Copied vehicle details from the selected inquiry.`)
+    }
   }
 
   const onBankContactChange = (p: PartnerOption | null) => {
@@ -510,7 +434,7 @@ export function LoanClient({
     if (!form.bankName?.trim()) {
       newErrors.bankName = true
     }
-    if (!form.customerId && !form.customerNameLegacy?.trim()) {
+    if (!form.customerId) {
       newErrors.customer = true
     }
     if (!form.carMake.trim()) newErrors.carMake = true
@@ -702,30 +626,10 @@ export function LoanClient({
         }
       />
 
-      <div className="mb-4 space-y-4">
-        <SearchBar value={filters.search} onChange={value => setFilter('search', value)} placeholder="Reg no, customer, bank..." />
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
-            <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
-            <Input label="Customer Mobile" value={filters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
-            <Input label="Bank Name" value={filters.bankName} onChange={e => setFilter('bankName', e.target.value)} />
-            <Input label="Bank Person Name" value={filters.bankPersonName} onChange={e => setFilter('bankPersonName', e.target.value)} />
-            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
-              <option value="All">All</option>
-              {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
-            </Select>
-            <Input label="From Date" type="date" value={filters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
-            <Input label="To Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Btn variant="outline" size="sm" onClick={() => {
-              setFilters(emptyFilters())
-              startTransition(() => router.push('/loan'))
-            }}>Reset Filters</Btn>
-          </div>
-        </div>
-      </div>
+      <LoanFiltersPanel filters={filters} onChange={setFilter} onReset={() => {
+        setFilters(emptyFilters())
+        startTransition(() => router.push('/loan'))
+      }} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <Table headers={['Reg No', 'Customer', 'Bank', 'Loan Amount', 'Payout', 'Received', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
@@ -756,17 +660,7 @@ export function LoanClient({
           </tr>
         ))}
       </Table>
-      <div className="mt-4 flex items-center justify-between gap-3 text-sm text-gray-600">
-        <span>Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} of {total}</span>
-        <div className="flex items-center gap-2">
-          <Select value={String(pageSize)} onChange={event => navigatePage(1, Number(event.target.value))} className="w-28">
-            {LOAN_PAGE_SIZES.map(size => <option key={size} value={size}>{size} / page</option>)}
-          </Select>
-          <Btn variant="outline" size="sm" disabled={isPending || page <= 1} onClick={() => navigatePage(page - 1)}>Previous</Btn>
-          <span>Page {page} of {pageCount}</span>
-          <Btn variant="outline" size="sm" disabled={isPending || page >= pageCount} onClick={() => navigatePage(page + 1)}>Next</Btn>
-        </div>
-      </div>
+      <LoanPagination total={total} page={page} pageSize={pageSize} pageCount={pageCount} pending={isPending} onNavigate={navigatePage} />
 
       <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
@@ -786,15 +680,8 @@ export function LoanClient({
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
+            <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
           </div>
-          {!selectedCustomer && (
-            <div className="grid grid-cols-3 gap-4">
-              <Input label="Customer Name" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} error={errors.customer} />
-              <Input label="Customer Mobile" value={form.customerMobileLegacy} onChange={e => f('customerMobileLegacy', e.target.value)} error={errors.customerMobileLegacy} />
-              <Input label="Customer Email" value={form.customerEmailLegacy} onChange={e => f('customerEmailLegacy', e.target.value)} error={errors.customerEmailLegacy} />
-            </div>
-          )}
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>

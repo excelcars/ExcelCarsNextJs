@@ -110,46 +110,45 @@ async function mapChecklistSummaryRows(rows: Array<{
 
 export async function listChecklists({ search = '', registration = '', page = 1 }: { search?: string; registration?: string; page?: number }) {
   const where = buildChecklistWhere(search, registration)
-  const safePage = Math.max(1, page || 1)
+  const total = await prisma.checkListDocMain.count({ where })
+  const pageCount = Math.max(1, Math.ceil(total / CHECKLIST_PAGE_SIZE))
+  const safePage = Math.min(Math.max(1, page || 1), pageCount)
 
-  const [rows, total] = await Promise.all([
-    prisma.checkListDocMain.findMany({
-      where,
-      select: {
-        documentId: true,
-        inventoryId: true,
-        make: true,
-        model: true,
-        variant: true,
-        colour: true,
-        registrationNo: true,
-        year: true,
-        fuelType: true,
-        customerId: true,
-        customerNameLegacy: true,
-        customerMobileLegacy: true,
-        customerEmailLegacy: true,
-        createdBy: true,
-        createdDate: true,
-        updatedBy: true,
-        updatedDate: true,
-        customer: true,
-        _count: {
-          select: { checklistDocDetails: true },
-        },
+  const rows = await prisma.checkListDocMain.findMany({
+    where,
+    select: {
+      documentId: true,
+      inventoryId: true,
+      make: true,
+      model: true,
+      variant: true,
+      colour: true,
+      registrationNo: true,
+      year: true,
+      fuelType: true,
+      customerId: true,
+      customerNameLegacy: true,
+      customerMobileLegacy: true,
+      customerEmailLegacy: true,
+      createdBy: true,
+      createdDate: true,
+      updatedBy: true,
+      updatedDate: true,
+      customer: true,
+      _count: {
+        select: { checklistDocDetails: true },
       },
-      orderBy: { documentId: 'desc' },
-      skip: (safePage - 1) * CHECKLIST_PAGE_SIZE,
-      take: CHECKLIST_PAGE_SIZE,
-    }),
-    prisma.checkListDocMain.count({ where }),
-  ])
+    },
+    orderBy: { documentId: 'desc' },
+    skip: (safePage - 1) * CHECKLIST_PAGE_SIZE,
+    take: CHECKLIST_PAGE_SIZE,
+  })
 
   return {
     rows: await mapChecklistSummaryRows(rows),
     total,
     page: safePage,
-    pageCount: Math.max(1, Math.ceil(total / CHECKLIST_PAGE_SIZE)),
+    pageCount,
     pageSize: CHECKLIST_PAGE_SIZE,
   }
 }

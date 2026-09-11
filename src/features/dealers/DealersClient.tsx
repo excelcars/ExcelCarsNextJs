@@ -8,17 +8,7 @@ import { FormDropdown } from '@/components/FormDropdown'
 import { createDealer, updateDealer, deleteDealer, type DealerFormInput } from './actions'
 import { DealerNameAutocomplete } from './DealerNameAutocomplete'
 import { DealerMobileAutocomplete } from './DealerMobileAutocomplete'
-
-interface DealerRow {
-  dealerId: number
-  dealerName: string | null
-  dealerMobileNo: string | null
-  dealerMobileNo_2: string | null
-  dealerEmail: string | null
-  dealerAddress: string | null
-  dealerCompanyName: string | null
-  dealerWebsite: string | null
-}
+import type { DealerFieldErrors, DealerRow } from './types'
 
 function emptyForm(): DealerFormInput {
   return { dealerName: '', dealerMobileNo: '', dealerMobileNo_2: '', dealerEmail: '', dealerAddress: '', dealerCompanyName: '', dealerWebsite: '' }
@@ -54,8 +44,6 @@ function exportDealersCsv(rows: DealerRow[], search: string) {
   URL.revokeObjectURL(url)
 }
 
-type DealerFieldErrors = Partial<Record<keyof DealerFormInput, string>>
-
 function clientValidationErrors(form: DealerFormInput): DealerFieldErrors {
   const errors: DealerFieldErrors = {}
   const mobile = form.dealerMobileNo.trim()
@@ -76,17 +64,6 @@ function clientValidationErrors(form: DealerFormInput): DealerFieldErrors {
     }
   }
   return errors
-}
-
-const searchFieldLabels: Record<string, string> = {
-  all: 'all dealer details',
-  name: 'dealer name',
-  primaryMobile: 'primary mobile',
-  secondaryMobile: 'second mobile',
-  email: 'email address',
-  company: 'company name',
-  address: 'address',
-  website: 'website',
 }
 
 export function DealersClient({
@@ -124,7 +101,16 @@ export function DealersClient({
   const [isNavigating, startNavigationTransition] = useTransition()
   const [isExporting, startExportTransition] = useTransition()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const searchFieldLabel = searchFieldLabels[field] ?? searchFieldLabels.all
+  const searchFieldLabel = {
+    all: 'all dealer details',
+    name: 'dealer name',
+    primaryMobile: 'primary mobile',
+    secondaryMobile: 'second mobile',
+    email: 'email address',
+    company: 'company name',
+    address: 'address',
+    website: 'website',
+  }[field] ?? 'all dealer details'
   const hasUnsavedChanges = useMemo(() => modal !== null && Object.keys(form).some(key => {
     const fieldKey = key as keyof DealerFormInput
     return form[fieldKey] !== initialForm[fieldKey]

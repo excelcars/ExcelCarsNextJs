@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import nodemailer from 'nodemailer'
+import { currentInsuranceReminderDay, queueDailyInsuranceReminders, retryInsuranceReminders } from './insuranceReminders.mjs'
 
 const prisma = new PrismaClient()
 const MAX_RETRIES = 2
@@ -22,3 +23,17 @@ async function retryPendingEmails() {
 console.log('ExcelCars email retry worker started')
 retryPendingEmails().catch(console.error)
 setInterval(() => retryPendingEmails().catch(console.error), 60 * 1000)
+
+let lastInsuranceReminderDay = null
+async function runInsuranceRemindersIfDue() {
+  const day = currentInsuranceReminderDay()
+  if (day === lastInsuranceReminderDay) return
+  await queueDailyInsuranceReminders(prisma)
+  lastInsuranceReminderDay = day
+}
+
+console.log('ExcelCars insurance reminder worker ready (set INSURANCE_REMINDER_ENABLED=true to activate)')
+runInsuranceRemindersIfDue().catch(console.error)
+retryInsuranceReminders(prisma).catch(console.error)
+setInterval(() => runInsuranceRemindersIfDue().catch(console.error), 60 * 60 * 1000)
+setInterval(() => retryInsuranceReminders(prisma).catch(console.error), 60 * 1000)

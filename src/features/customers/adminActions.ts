@@ -6,19 +6,9 @@ import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedActorForFunctions } from '@/lib/access/accessControl'
 import { CUSTOMER_WRITE_FUNCTION } from '@/lib/access/accessCatalog'
 import { normalizeCustomerName, validateCustomerInput } from './validation'
+import type { CustomerFormInput } from './types'
 
-export interface CustomerFormInput {
-  type: string
-  custName: string
-  custAddress: string
-  custMobile: string
-  mobile_2: string
-  custEmail: string
-  custDob: string
-  custAnniversaryDt: string
-  comments: string
-  companyName: string
-}
+export type { CustomerFormInput } from './types'
 
 export interface ActionResult {
   success: boolean

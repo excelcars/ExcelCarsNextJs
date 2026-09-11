@@ -4,6 +4,8 @@
 
 This document describes the actual current implementation only, after two code-review passes. Route: `/checklist`.
 
+The route page is a thin authorization/data-loading wrapper. The interactive feature composes focused UI components; the listing and pagination are implemented by `ChecklistTable.tsx` rather than embedded in the feature controller.
+
 Evidence: `app/(dashboard)/checklist/page.tsx`, `src/features/checklist/ChecklistClient.tsx`, `actions.ts`, `queries.ts`, `app/api/checklist/detail/route.ts`, `app/api/checklist/export/route.ts`, `src/lib/access/accessControl.ts`, and `prisma/schema.prisma`.
 
 ## Access and page load
@@ -22,7 +24,7 @@ List rows are newest-first by `documentId`, page size 25. The query computes tot
 
 The table shows Registration No, vehicle make/model/variant, customer name/mobile, `received / document count`, computed status, and View/Edit/Delete controls. Status is `Complete` only when at least one document is applicable (`Yes`, with transitional recognition of historical `Applicable`) and every applicable document is `Yes` received; otherwise it is `Partial`. It is derived at display time and not stored.
 
-The debounced (350 ms) broad search updates URL `search` and resets to page 1. It is a case-insensitive substring search over registration, legacy/customer-relation name/mobile/email, make, model, and variant. A separate Exact Registration No filter uses URL `registration` and database equality; when both filters are supplied, both must match. Exports use the same filters. Colour, year, fuel type, IDs, document text, and status are not searchable. Previous/Next navigation preserves filters; page parsing clamps only to at least one, so an out-of-range URL page can render an empty slice.
+The debounced (350 ms) broad search updates URL `search` and resets to page 1. It is a case-insensitive substring search over registration, legacy/customer-relation name/mobile/email, make, model, and variant. A separate Exact Registration No filter uses URL `registration` and database equality; when both filters are supplied, both must match. Exports use the same filters. Colour, year, fuel type, IDs, document text, and status are not searchable. Previous/Next navigation preserves filters; the data query clamps out-of-range page numbers to the final available page.
 
 Export Summary or Export Detail Rows calls `/api/checklist/export` with the current search. The route loads every matching header, then each detail, and returns JSON. Summary export builds a UTF-8 CSV with header/customer snapshot, counts, derived status, and semicolon-separated document summaries. Detail-row export produces one row per child document with the legacy column order: vehicle/customer snapshot, document name, applicability, received, and original/copy; headers with no details emit no data row. Export failures render an inline error; both exports are disabled when total is zero. This is CSV, not the legacy server Excel helper.
 
@@ -34,7 +36,7 @@ Add opens a modal populated with the legacy 13 suggested document rows, defaults
 
 Registration entry offers normalized, client-side matching over loaded vehicles. An exact normalized registration immediately selects the vehicle and snapshots its make/model/variant/colour/year/fuel type; otherwise it clears inventory and vehicle fields. A second picker searches registration, SKU, make, model, and variant client-side and can select any loaded vehicle. The client list comes from all inventory records, not only sold vehicles; save validation enforces sold status.
 
-Customer data is read-only and derived from the selected Inventory record; the form does not offer an independent customer picker. The server rejects a customer ID that differs from the Inventory customer and, for an Inventory record without a customer ID, rejects a different legacy customer name. Optional mobile/email/year inputs are validated by shared helpers if populated. The form allows adding arbitrary document names and removing any row, including every suggested row. It requires at least one nonblank document server-side; blank-named rows are discarded. Document dropdown values are `Yes`/`No` for both Applicable and Received and `Original`/`Copy`. Existing `Applicable` values remain visible on edit and count as applicable for status calculations until data is normalized.
+Customer data is read-only and derived from the selected Inventory record; the form does not offer an independent customer picker. The server rejects a customer ID that differs from the Inventory customer and, for an Inventory record without a customer ID, rejects a different legacy customer name. Optional mobile/email/year inputs are validated by shared helpers if populated. The form allows adding arbitrary document names and removing any row, including every suggested row. It requires at least one nonblank document server-side; blank-named rows are discarded. Applicable and Received use compact `Yes`/`No` segmented controls, while Original/Copy uses a visually distinct two-option segmented control. Existing `Applicable` values remain visible on edit and count as applicable for status calculations until data is normalized.
 
 Edit opens the same modal, fetches `/api/checklist/detail?documentId=…`, and maps the saved document rows exactly as stored (including custom rows). There is loading/error feedback. Both add/edit warn before discarding changed form/customer/vehicle state. Successful save closes and reloads the browser page.
 
@@ -53,5 +55,9 @@ View retrieves fresh detail data and shows vehicle/customer snapshot, created/up
 ## SSOT rule
 
 `Authorized Checklist_Management user → sold Inventory record + normalized registration match → one checklist per Inventory ID → replaceable document-detail set.`
+
+## Approved modernization decisions
+
+The following intentional Next.js improvements are approved and part of the supported module contract: custom document add/remove, detail and audit view, pagination, normalized registration matching for vehicle selection/validation, destructive-action and unsaved-change confirmations, explicit client/API error feedback, atomic update/delete persistence, and detail/export permission enforcement. They replace less safe or less capable legacy behavior and must not be removed solely to reproduce the old UI.
 
 Update this SSOT when authorization, list/search/export behavior, suggested documents, validation, calculated status, or persistence semantics change.

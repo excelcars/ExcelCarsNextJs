@@ -12,6 +12,7 @@ test('pending insurance payments require a follow-up and remark', () => {
 
 test('paid insurance payments may omit follow-up and reject invalid values', () => {
   assert.equal(validateInsurancePaymentInput({ amountReceived: 100, payoutPaymentStatus: 'Paid', policyStatus: 'Received', nextFollowUpDate: '', remark: '' }, today).error, null)
+  assert.equal(validateInsurancePaymentInput({ amountReceived: 100, payoutPaymentStatus: 'Paid', policyStatus: 'Renewed', nextFollowUpDate: '', remark: '' }, today).error, null)
   assert.equal(validateInsurancePaymentInput({ amountReceived: 0, payoutPaymentStatus: 'Paid', policyStatus: 'Received', nextFollowUpDate: '', remark: '' }, today).error, 'Amount received must be greater than zero.')
   assert.equal(validateInsurancePaymentInput({ amountReceived: 100, payoutPaymentStatus: 'Received', policyStatus: 'Received', nextFollowUpDate: '', remark: '' }, today).error, 'Select a valid payout status.')
 })

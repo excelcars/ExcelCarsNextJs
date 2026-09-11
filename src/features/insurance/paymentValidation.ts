@@ -7,7 +7,7 @@ export type InsurancePaymentInput = {
 }
 
 export const INSURANCE_PAYOUT_STATUSES = new Set(['Pending', 'Paid'])
-export const INSURANCE_POLICY_STATUSES = new Set(['Pending', 'Received'])
+export const INSURANCE_POLICY_STATUSES = new Set(['Pending', 'Received', 'Renewed'])
 
 export function validateInsurancePaymentInput(input: InsurancePaymentInput, now = new Date()): { error: string | null; nextFollowUpDate: Date | null } {
   if (typeof input.amountReceived !== 'number' || !Number.isFinite(input.amountReceived) || input.amountReceived <= 0) {
