@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, Car, IndianRupee, Eye, Download, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus, X, Car, Download, Loader2 } from 'lucide-react'
+import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader, ConfirmDialog } from '@/components/ui'
+import { InsuranceFilters } from './InsuranceFilters'
+import { InsuranceTable } from './InsuranceTable'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
 import {
@@ -28,7 +30,7 @@ interface Vehicle {
   } | null
 }
 
-interface InsuranceRow {
+export interface InsuranceRow {
   insuranceMainId: number
   inventoryId: number | null
   agentNameLegacy: string | null
@@ -698,75 +700,13 @@ export function InsuranceClient({
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <SearchBar value={search} onChange={setSearch} placeholder="Reg no, customer, agent..." disabled={isRoutePending} />
-          <Input label="From Date" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} disabled={isRoutePending} />
-          <Input label="To Date" type="date" value={toDate} onChange={e => setToDate(e.target.value)} disabled={isRoutePending} />
-          <Btn variant="outline" size="sm" onClick={resetFilters} disabled={isRoutePending || (!search && !fromDate && !toDate)}>
-            Reset Filters
-          </Btn>
-        </div>
-        <div className="text-xs text-gray-500">
-          Page {page} of {pageCount} · {pageSize} per page
-        </div>
-      </div>
+      <InsuranceFilters search={search} fromDate={fromDate} toDate={toDate} page={page} pageCount={pageCount} pageSize={pageSize} total={total} pending={isRoutePending}
+        onSearch={setSearch} onFromDate={setFromDate} onToDate={setToDate} onReset={resetFilters}
+        onPrevious={() => pushQuery({ search, page: String(page - 1) })} onNext={() => pushQuery({ search, page: String(page + 1) })} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <div className={isRoutePending ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-      <Table headers={['Reg No', 'Customer', 'Agent', 'Premium / OD', 'Payout', 'Received', 'Payout Status', 'Policy Status', 'Renewal / Expiry', 'Actions']} empty={data.length === 0}>
-        {data.map(r => (
-          <tr key={r.insuranceMainId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.carRegistrationNo ?? '—'}</td>
-            <td className="px-4 py-3">
-              <div className="font-medium text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
-              <div className="text-xs text-gray-500 font-mono">{r.customerMobileLegacy ?? ''}</div>
-            </td>
-            <td className="px-4 py-3">
-              <div className="text-sm text-gray-700">{r.partnerMaster?.name ?? r.agentNameLegacy ?? '—'}</div>
-              <div className="text-xs text-gray-500">{r.partnerMaster?.mobile ?? r.agentMobileNoLegacy ?? ''}</div>
-            </td>
-            <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.insurancePremium)} / {fmtMoney(r.oDPremium)}</td>
-            <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.payoutAmount)}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.totalAmountReceived)}</td>
-            <td className="px-4 py-3">{r.payoutPaymentStatus ? <Badge label={r.payoutPaymentStatus} /> : '—'}</td>
-            <td className="px-4 py-3">{r.policyStatus ? <Badge label={r.policyStatus} /> : '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.renewalDate) || '—'} / {fmtDate(r.expiryDate) || '—'}</td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
-                <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteId(r.insuranceMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="text-sm text-gray-500">
-          Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1}-{(page - 1) * pageSize + data.length} of {total}
-        </div>
-        <div className="flex items-center gap-2">
-          <Btn
-            variant="outline"
-            size="sm"
-            onClick={() => pushQuery({ search, page: String(page - 1) })}
-            disabled={page <= 1 || isRoutePending}
-          >
-            Previous
-          </Btn>
-          <Btn
-            variant="outline"
-            size="sm"
-            onClick={() => pushQuery({ search, page: String(page + 1) })}
-            disabled={page >= pageCount || isRoutePending}
-          >
-            Next
-          </Btn>
-        </div>
+      <InsuranceTable rows={data} onPay={openPay} onView={openView} onEdit={openEdit} onDelete={setDeleteId} />
       </div>
 
       <Modal title={editId ? 'Edit Insurance' : 'Add Insurance'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">

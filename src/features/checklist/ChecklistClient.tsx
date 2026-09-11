@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, Car, Eye, Download, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
-import { FormDropdown } from '@/components/FormDropdown'
+import { Plus, Trash2, X, Car, Download, Loader2 } from 'lucide-react'
+import { Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ChecklistTable } from './ChecklistTable'
+import { ChecklistYesNoToggle } from './ChecklistYesNoToggle'
+import { ChecklistDocumentTypeToggle } from './ChecklistDocumentTypeToggle'
 import { createChecklist, updateChecklist, deleteChecklist, type ChecklistFormInput, type DocRow } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
@@ -23,9 +25,6 @@ const LEGACY_DOCS = [
   'Manuals',
   'Spare Tyre & Tool Kit',
 ] as const
-const YES_NO = ['Yes', 'No'] as const
-const APPLICABILITY_OPTIONS = ['Yes', 'No'] as const
-const ORIGINAL_COPY = ['Original', 'Copy'] as const
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
 interface UserOption { userId: number; userName: string | null; displayName: string | null }
@@ -47,7 +46,7 @@ interface Vehicle {
   } | null
 }
 
-interface ChecklistListRow {
+export interface ChecklistListRow {
   documentId: number
   make: string | null
   model: string | null
@@ -137,11 +136,6 @@ function computeStatus(docs: { applicable: string | null; received: string | nul
   const applicable = docs.filter(d => isApplicable(d.applicable))
   if (applicable.length === 0) return 'Partial'
   return applicable.every(d => d.received === 'Yes') ? 'Complete' : 'Partial'
-}
-
-function computeStatusFromCounts(applicableCount: number, receivedApplicableCount: number) {
-  if (applicableCount === 0) return 'Partial'
-  return applicableCount === receivedApplicableCount ? 'Complete' : 'Partial'
 }
 
 function csvValue(value: string | number | boolean | null | undefined) {
@@ -303,6 +297,7 @@ export function ChecklistClient({
   const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [vehicleOpen, setVehicleOpen] = useState(false)
+  const [registrationOpen, setRegistrationOpen] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
@@ -362,6 +357,7 @@ export function ChecklistClient({
     setSelectedVehicle(null)
     setSavedVehicleSnapshot('')
     setVehicleQuery('')
+    setRegistrationOpen(false)
     setEditId(null)
     setError('')
     setModal('add')
@@ -379,7 +375,7 @@ export function ChecklistClient({
       customerMobileLegacy: vehicleCustomer?.customerMobileLegacy ?? r.customerMobileLegacy ?? '',
       customerEmailLegacy: vehicleCustomer?.customerEmailLegacy ?? r.customerEmailLegacy ?? '',
       docs: r.checklistDocDetails.length
-        ? r.checklistDocDetails.map(d => ({ documentName: d.documentName ?? '', applicable: d.applicable ?? 'No', received: d.received ?? 'No', originalCopy: d.originalCopy ?? 'Original' }))
+        ? r.checklistDocDetails.map(d => ({ documentName: d.documentName ?? '', applicable: d.applicable === 'Applicable' ? 'Yes' : d.applicable ?? 'No', received: d.received ?? 'No', originalCopy: d.originalCopy ?? 'Original' }))
         : emptyForm().docs,
     }
     const nextCustomer = nextVehicle?.customer ?? r.customer
@@ -390,6 +386,7 @@ export function ChecklistClient({
     setSelectedVehicle(nextVehicle)
     setSavedVehicleSnapshot(optionSnapshot(nextVehicle))
     setVehicleQuery('')
+    setRegistrationOpen(false)
   }
 
   const loadChecklistDetail = async (documentId: number) => {
@@ -455,6 +452,7 @@ export function ChecklistClient({
     setSelectedVehicle(v)
     setSelectedCustomer(v.customer)
     setVehicleOpen(false)
+    setRegistrationOpen(false)
     setVehicleQuery('')
     setForm(f => ({
       ...f,
@@ -480,6 +478,7 @@ export function ChecklistClient({
 
     setSelectedVehicle(null)
     setSelectedCustomer(null)
+    setRegistrationOpen(true)
     setForm(f => ({
       ...f,
       inventoryId: null,
@@ -530,6 +529,7 @@ export function ChecklistClient({
     }
     if (!form.customerId && !form.customerNameLegacy?.trim()) {
       newErrors.customer = true
+      setError('The selected vehicle has no linked customer. Link a customer in Inventory before creating a checklist.')
     }
     if (form.customerMobileLegacy && !isValidPhone(form.customerMobileLegacy)) {
       newErrors.customerMobileLegacy = true
@@ -654,57 +654,8 @@ export function ChecklistClient({
       </div>
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <div className={isRoutePending ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-      <Table headers={['Reg No', 'Vehicle', 'Customer', 'Documents', 'Status', 'Actions']} empty={data.length === 0}>
-        {data.map(r => {
-          const status = computeStatusFromCounts(r.applicableCount, r.receivedApplicableCount)
-          const received = r.receivedCount
-          return (
-            <tr key={r.documentId} className="hover:bg-gray-50 transition">
-              <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.registrationNo ?? '—'}</td>
-              <td className="px-4 py-3 text-sm text-gray-700">{[clean(r.make), clean(r.model), clean(r.variant)].filter(Boolean).join(' ') || '—'}</td>
-              <td className="px-4 py-3">
-                <div className="font-medium text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
-                <div className="text-xs text-gray-500 font-mono">{r.customerMobileLegacy ?? ''}</div>
-              </td>
-              <td className="px-4 py-3 text-sm text-gray-600">{received} / {r.documentCount} received</td>
-              <td className="px-4 py-3"><Badge label={status} /></td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-1">
-                  <button onClick={() => openView(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => setDeleteId(r.documentId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              </td>
-            </tr>
-          )
-        })}
-      </Table>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="text-sm text-gray-500">
-          Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1}-{(page - 1) * pageSize + data.length} of {total}
-        </div>
-        <div className="flex items-center gap-2">
-          <Btn
-            variant="outline"
-            size="sm"
-            onClick={() => pushQuery({ search, page: String(page - 1) })}
-            disabled={page <= 1 || isRoutePending}
-          >
-            Previous
-          </Btn>
-          <Btn
-            variant="outline"
-            size="sm"
-            onClick={() => pushQuery({ search, page: String(page + 1) })}
-            disabled={page >= pageCount || isRoutePending}
-          >
-            Next
-          </Btn>
-        </div>
-      </div>
+      <ChecklistTable data={data} total={total} page={page} pageCount={pageCount} pageSize={pageSize} pending={isRoutePending}
+        onView={openView} onEdit={openEdit} onDelete={setDeleteId} onPage={nextPage => pushQuery({ search, registration, page: String(nextPage) })} />
 
       <Modal title={editId ? 'Edit Checklist' : 'Add Checklist'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         {detailLoading && editId ? (
@@ -721,20 +672,27 @@ export function ChecklistClient({
           </div>
         ) : (
         <div className="space-y-4">
-          <div>
+          <div className="relative">
             <Input
               label="Registration No *"
               placeholder="Start typing registration no..."
               value={form.registrationNo}
-              list="checklist-registration-options"
-              onChange={e => onRegistrationChange(e.target.value)}
+              onChange={e => { onRegistrationChange(e.target.value); setRegistrationOpen(true) }}
+              onFocus={() => setRegistrationOpen(true)}
               error={errors.registrationNo}
             />
-            <datalist id="checklist-registration-options">
-              {registrationMatches.map(v => (
-                <option key={v.inventoryId} value={v.registrationNo ?? ''}>{vehicleLabel(v)}</option>
-              ))}
-            </datalist>
+            {registrationOpen && !selectedVehicle && (
+              <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                {registrationMatches.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-400">No matching registrations</div>
+                ) : registrationMatches.map(v => (
+                  <button key={v.inventoryId} type="button" onClick={() => selectVehicle(v)} className="w-full border-b border-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-50 last:border-0">
+                    <span className="font-medium text-gray-800">{v.registrationNo ?? v.sku ?? '—'}</span>
+                    <span className="block text-xs text-gray-500">{vehicleLabel(v)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="mt-1 text-xs text-gray-500">
               {selectedVehicle
                 ? `Linked vehicle: ${vehicleLabel(selectedVehicle)}`
@@ -781,11 +739,11 @@ export function ChecklistClient({
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <div className={`border ${errors.customer ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
-              <div className="text-sm font-medium text-gray-800">{form.customerNameLegacy || 'No linked customer'}</div>
+            <div className={`border ${errors.customer ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-gray-50'} rounded-md px-3 py-2`}>
+              <div className={`text-sm font-medium ${form.customerNameLegacy ? 'text-gray-800' : 'text-red-700'}`}>{form.customerNameLegacy || 'No customer linked to this vehicle'}</div>
               <div className="text-xs text-gray-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>
             </div>
-            <div className="mt-1 text-xs text-gray-500">Customer details are derived from the selected vehicle.</div>
+            <div className={`mt-1 text-xs ${form.customerNameLegacy ? 'text-gray-500' : 'text-red-600'}`}>{form.customerNameLegacy ? 'Customer details are derived from the selected vehicle.' : 'Link a customer in Inventory before saving this checklist.'}</div>
           </div>
 
           <div>
@@ -797,9 +755,9 @@ export function ChecklistClient({
               {form.docs.map((d, i) => (
                 <div key={i} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-end border border-gray-100 rounded-lg p-2.5">
                       <Input label={i === 0 ? 'Document' : undefined} list="doc-name-suggestions" value={d.documentName} onChange={e => updateDoc(i, { documentName: e.target.value })} />
-                      <FormDropdown label={i === 0 ? 'Applicable' : undefined} value={d.applicable} options={APPLICABILITY_OPTIONS.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { applicable: value })} />
-                      <FormDropdown label={i === 0 ? 'Received' : undefined} value={d.received} options={YES_NO.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { received: value })} />
-                      <FormDropdown label={i === 0 ? 'Original' : undefined} value={d.originalCopy} options={ORIGINAL_COPY.map(value => ({ value, label: value }))} placeholder="Select" onChange={value => updateDoc(i, { originalCopy: value })} />
+                      <ChecklistYesNoToggle label={i === 0 ? 'Applicable' : undefined} value={d.applicable} onChange={value => updateDoc(i, { applicable: value })} />
+                      <ChecklistYesNoToggle label={i === 0 ? 'Received' : undefined} value={d.received} onChange={value => updateDoc(i, { received: value })} />
+                      <ChecklistDocumentTypeToggle label={i === 0 ? 'Document type' : undefined} value={d.originalCopy} onChange={value => updateDoc(i, { originalCopy: value })} />
                   <button type="button" onClick={() => removeDoc(i)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ))}

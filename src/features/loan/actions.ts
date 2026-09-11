@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { isValidEmail, isValidPhone, isValidYear, normalizeRegistrationNo } from '@/lib/validation'
 import { LOAN_PAYMENT_STATUSES, validateLoanPaymentInput } from './paymentValidation'
+import { normalizeCustomerName, validateCustomerInput } from '@/features/customers/validation'
 
 export interface LoanFormInput {
   partnerId: number | null
@@ -48,6 +49,17 @@ export interface ActionResult {
   error?: string
 }
 
+export interface CreateLoanCustomerInput {
+  custName: string
+  custMobile: string
+  custEmail: string
+}
+
+export interface CreateLoanCustomerResult extends ActionResult {
+  customer?: { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
+  duplicateNames?: string[]
+}
+
 const LOAN_CAR_TYPES = new Set(['New', 'PreOwned'])
 const REGISTRATION_WHITESPACE_PATTERN = '\\s+'
 
@@ -57,6 +69,48 @@ async function currentUserId(): Promise<number | null> {
 
 function toDate(v: string): Date | null {
   return v ? new Date(v) : null
+}
+
+/** Creates a Customer Master record only after the Loan operator explicitly chooses this action. */
+export async function createCustomerFromLoan(input: CreateLoanCustomerInput): Promise<CreateLoanCustomerResult> {
+  const validation = validateCustomerInput({
+    type: 'Customer', custName: input.custName, custAddress: '', custMobile: input.custMobile,
+    mobile_2: '', custEmail: input.custEmail, custDob: '', custAnniversaryDt: '', comments: '', companyName: '',
+  })
+  if (!validation.value) return { success: false, error: validation.error }
+  const value = validation.value
+
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
+
+  try {
+    const candidates = await prisma.customer.findMany({
+      where: value.custMobile
+        ? { custMobile: { equals: value.custMobile, mode: 'insensitive' } }
+        : { custEmail: { equals: value.custEmail, mode: 'insensitive' } },
+      select: { custName: true },
+    })
+    const normalizedName = normalizeCustomerName(value.custName).toLowerCase()
+    if (candidates.some(customer => normalizeCustomerName(customer.custName).toLowerCase() === normalizedName)) {
+      return {
+        success: false,
+        error: 'This name and primary contact already exist. Select the existing customer instead.',
+        duplicateNames: candidates.map(customer => customer.custName),
+      }
+    }
+
+    const now = new Date()
+    const customer = await prisma.customer.create({
+      data: {
+        custName: value.custName, custMobile: value.custMobile || null, custEmail: value.custEmail || null, type: value.type,
+        createdDt: now, updatedDt: now, createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } },
+      },
+      select: { custId: true, custName: true, custMobile: true, custEmail: true },
+    })
+    return { success: true, customer }
+  } catch {
+    return { success: false, error: 'Could not create customer.' }
+  }
 }
 
 function calculatePayoutAmount(input: LoanFormInput): Prisma.Decimal | null {
@@ -78,9 +132,10 @@ async function findDuplicateRegistration(registrationNo: string, excludingLoanId
   return matches[0] ?? null
 }
 
-function validateLoanInput(input: LoanFormInput): string | null {
+function validateLoanInput(input: LoanFormInput, { requireCustomerLink = false }: { requireCustomerLink?: boolean } = {}): string | null {
   if (!normalizeRegistrationNo(input.registrationNo)) return 'Registration number is required.'
   if (!input.bankName.trim()) return 'Bank name is required.'
+  if (requireCustomerLink && !input.customerId) return 'Select or explicitly create a Customer Master record.'
   if (!input.customerId && !input.customerNameLegacy.trim()) return 'Link a customer or enter a name.'
   if (!LOAN_CAR_TYPES.has(input.carType)) return 'Select a valid car type.'
   if (!input.carMake.trim()) return 'Car make is required.'
@@ -140,7 +195,7 @@ function buildData(input: LoanFormInput) {
 export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
   const partnerId = input.partnerId
   if (partnerId !== null && (!Number.isInteger(partnerId) || partnerId <= 0)) return { success: false, error: 'Select a valid bank contact.' }
-  const validationError = validateLoanInput(input)
+  const validationError = validateLoanInput(input, { requireCustomerLink: true })
   if (validationError) return { success: false, error: validationError }
   const initialPaymentError = validateInitialPayment(input)
   if (initialPaymentError) return { success: false, error: initialPaymentError }
@@ -213,7 +268,7 @@ export async function updateLoan(id: number, input: LoanFormInput): Promise<Acti
   if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'A valid loan record is required.' }
   const partnerId = input.partnerId
   if (partnerId !== null && (!Number.isInteger(partnerId) || partnerId <= 0)) return { success: false, error: 'Select a valid bank contact.' }
-  const validationError = validateLoanInput(input)
+  const validationError = validateLoanInput(input, { requireCustomerLink: true })
   if (validationError) return { success: false, error: validationError }
 
   const userId = await currentUserId()

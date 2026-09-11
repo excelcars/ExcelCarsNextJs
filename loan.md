@@ -3,7 +3,7 @@
 ## Status: Next.js implemented; current-state behavior documented
 
 **Route:** `/loan`  
-**Evidence:** `app/(dashboard)/loan/page.tsx`, `src/features/loan/LoanClient.tsx`, `actions.ts`, `queries.ts`, `app/api/loan/history/route.ts`, `src/lib/access/accessControl.ts`, and `prisma/schema.prisma`.
+**Evidence:** `app/(dashboard)/loan/page.tsx`, `src/features/loan/LoanClient.tsx`, `src/features/loan/LoanCustomerLookup.tsx`, `actions.ts`, `queries.ts`, `customerLookup.ts`, `app/api/loan/history/route.ts`, `app/api/loan/customer-search/route.ts`, `src/lib/access/accessControl.ts`, and `prisma/schema.prisma`.
 
 ## 1. Purpose and access
 
@@ -19,7 +19,7 @@ The module manages loan-referral records, their linked customer, bank partner/co
 
 The main model is `loanManagement`. It stores bank/contact and customer/vehicle snapshot data, relationship ids, amounts, current payment/follow-up summary, remarks, and audit ids/dates.
 
-- `customerId` optionally links `customer`; linked customer display values take precedence in reading the UI/export.
+- `customerId` links `customer` for every newly created loan; linked customer display values take precedence in reading the UI/export. Legacy rows may still have only snapshot fields until they are edited and linked.
 - `fkPartnerId` optionally links `partnerMaster`; a selected Bank partner fills the contact snapshot, but a verified manual bank-contact snapshot may be saved when no partner record exists.
 - `inventoryId` and `fkVariantId` may link an inventory vehicle/variant. The UI treats vehicle linkage as optional if a registration is entered manually.
 - `loanPaymentDetails` contains appended payment entries; `loanFollowupDetails` contains appended follow-up entries.
@@ -42,9 +42,11 @@ Reset clears all filters. Filtered count is the subtitle. All filters are URL-ba
 
 ### Create and edit
 
-**Add Loan** and **Edit** open a modal. The form exposes bank name; required Bank partner/contact picker; editable contact snapshot fields; customer picker; optional inventory picker/registration lookup; vehicle fields; commercial/payment fields; and remarks. **Add Loan** also requires an initial amount received.
+**Add Loan** and **Edit** open a modal. The form exposes bank name; required Bank partner/contact picker; editable contact snapshot fields; a mobile-first customer lookup; optional inventory picker/registration lookup; vehicle fields; commercial/payment fields; and remarks. **Add Loan** also requires an initial amount received.
 
-- Selecting customer copies id/name/mobile/email into form snapshot fields. When no existing customer is selected, the form exposes manual name/mobile/email snapshot fields; a customer link or manual customer name is required. Saving a manual snapshot does not create a customer-master record.
+- The customer section searches Customer Master and Inquiry Management by mobile number. It returns each Customer Master person and inquiry separately, even when they share a mobile number, so the operator chooses the correct named person. Inquiry results show their number and available vehicle context.
+- An inquiry already linked to a Customer Master record can be selected directly. An unlinked inquiry can only become a customer through the explicit **Create Customer from Loan** confirmation; it pre-fills the inquiry identity and vehicle context but never creates a master record silently. Customer creation validates name/contact and prevents a same-name/same-primary-contact duplicate.
+- New loans require a Customer Master link. Selecting an inquiry vehicle copies its linked stock vehicle, or its inquiry car make/model/variant/year, into the loan form; the loan schema has no inquiry-id relation, so the inquiry itself is displayed as lookup context rather than persisted as a fabricated link. Existing legacy loans without a customer link must be linked to a selected or newly created customer before an edit can be saved.
 - Selecting a Bank partner copies partner id/name/mobile/email. It is optional; `Bank Name` remains client-required and manual contact fields remain editable.
 - Selecting stock vehicle fills inventory/variant id, make/model/variant/year and registration. A user may enter vehicle details manually, but registration is required in every case.
 - Vehicle lookup normalizes registration by stripping non-alphanumerics and uppercasing; no match is informational and does not block manual continuation.
@@ -52,7 +54,7 @@ Reset clears all filters. Filtered count is the subtitle. All filters are URL-ba
 - Payout is displayed as a client-recomputed two-decimal value whenever both loan amount and percentage are present: `round(loanAmount * percentage / 100, 2)`. On create/update, the server independently performs that calculation and ignores the submitted payout amount.
 - Payment status options are `Pending` and `Paid`; entry, initial-payment, and follow-up dates default to today. Initial amount received must be positive and no greater than the computed payout.
 
-Client validation requires vehicle make, model, variant, and valid year, and rejects nonpositive entered loan amount, payout percentage outside 0–100, and invalid optional phone/email fields. It does not require entry date, payment date, follow-up date, or a partner link. Create/update independently enforce registration, bank name, customer-or-name, car-type, vehicle make/model/variant/year, optional selected-partner validity, optional contact formats, amount/percentage range, paired amount-and-percentage, and payment-status rules. The server calculates the payout from validated amount/percentage; it never trusts the submitted payout field.
+Client and server validation require a Customer Master selection, vehicle make, model, variant, and valid year, and reject nonpositive entered loan amount, payout percentage outside 0–100, and invalid optional phone/email fields. They do not require entry date, payment date, follow-up date, or a partner link. Both create and update enforce a customer link, so a legacy snapshot-only row must be linked before it can be saved. Both paths enforce registration, bank name, car-type, vehicle make/model/variant/year, optional selected-partner validity, optional contact formats, amount/percentage range, paired amount-and-percentage, and payment-status rules. The server calculates the payout from validated amount/percentage; it never trusts the submitted payout field.
 
 Create and update require registration. The value is canonicalized by stripping whitespace and uppercasing before storage. Duplicate lookup applies that same whitespace-stripped uppercase normalization to stored legacy values before comparison, so it catches case/spacing variations without rewriting existing data. Create then atomically creates the main row, an initial payment-detail row, and an initial follow-up-detail row. Main `totalAmountReceived` is initialized from the validated initial payment; its payment/follow-up dates default to the current server time when a date was not supplied. Update overwrites the main row’s data/relations without creating another initial payment. Both paths revalidate `/loan`.
 
@@ -95,6 +97,6 @@ This document describes actual current Next.js behavior, including client-only f
 - Loan registration is mandatory, whitespace-stripped/uppercased, and duplicate-checked against normalized legacy values.
 - Loan list filters, pagination, and full CSV export are server-side and URL-backed.
 - Module permission is intentionally broad: any user with `/loan` access can act on all loan records.
-- Bank partners and customer-master links are optional; manual bank/customer referral snapshots are supported and do not silently create master records.
+- Bank partners remain optional. New loan referrals require an explicit Customer Master link, selected mobile-first from Customer Master/Inquiry Management or created through the explicit Loan customer action. Legacy customer snapshots remain readable for migration only.
 - Make, model, variant, and model year are mandatory. Monetary zero is displayed as `₹0`.
 - Focused unit tests cover payment status/follow-up validation and registration normalization; broader database integration testing remains future quality work, not a functional requirement.

@@ -593,6 +593,7 @@ model InsuranceMain {
   fkVariantId               Int?                       @map("fk_variant_id")
   fkPartnerId               Int?                       @map("fk_partner_id")
   insuranceFollowupDetails  InsuranceFollowupDetails[]
+  insuranceReminderDeliveries InsuranceReminderDelivery[]
   createdByUser             UserTable?                 @relation("insurance_main_created_byTouser_table", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_created_by_user")
   customer                  Customer?                  @relation(fields: [customerId], references: [custId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_customer_id")
   inventoryManagement       InventoryManagement?       @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "fk_insurance_main_inventory_id")
@@ -826,6 +827,47 @@ model InventoryPhotos {
 
   @@index([fkInventoryId], map: "idx_16548_ix_inventory_photos_inventory")
   @@map("inventory_photos")
+}
+
+model InsuranceReminderDelivery {
+  insuranceReminderDeliveryId Int       @id @default(autoincrement()) @map("insurance_reminder_delivery_id")
+  insuranceMainId             Int       @map("insurance_main_id")
+  recipientType               String    @map("recipient_type")
+  recipientName               String?   @map("recipient_name")
+  recipientKey                String    @map("recipient_key")
+  channel                     String
+  daysBeforeExpiry            Int       @map("days_before_expiry")
+  status                      String
+  recipientAddress            String    @map("recipient_address")
+  emailSubject                String?   @map("email_subject")
+  emailHtml                   String?   @map("email_html")
+  whatsAppMessage             String?   @map("whatsapp_message")
+  errorMessage                String?   @map("error_message")
+  providerMessageId           String?   @map("provider_message_id")
+  retryCount                  Int       @default(0) @map("retry_count")
+  nextRetryAt                 DateTime? @map("next_retry_at") @db.Timestamptz(6)
+  attemptedAt                 DateTime  @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  insuranceMain               InsuranceMain @relation(fields: [insuranceMainId], references: [insuranceMainId], onDelete: Cascade, onUpdate: NoAction, map: "fk_insurance_reminder_delivery_insurance")
+  attempts                    InsuranceReminderAttempt[]
+
+  @@unique([insuranceMainId, recipientKey, channel, daysBeforeExpiry], map: "uq_insurance_reminder_delivery_schedule")
+  @@index([status, attemptedAt], map: "ix_insurance_reminder_delivery_status_attempted")
+  @@index([insuranceMainId, attemptedAt], map: "ix_insurance_reminder_delivery_insurance_attempted")
+  @@map("insurance_reminder_delivery")
+}
+
+model InsuranceReminderAttempt {
+  insuranceReminderAttemptId  Int                       @id @default(autoincrement()) @map("insurance_reminder_attempt_id")
+  insuranceReminderDeliveryId Int                       @map("insurance_reminder_delivery_id")
+  attemptNumber               Int                       @map("attempt_number")
+  status                      String
+  errorMessage                String?                   @map("error_message")
+  providerMessageId           String?                   @map("provider_message_id")
+  attemptedAt                 DateTime                  @default(now()) @map("attempted_at") @db.Timestamptz(6)
+  delivery                    InsuranceReminderDelivery @relation(fields: [insuranceReminderDeliveryId], references: [insuranceReminderDeliveryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_insurance_reminder_attempt_delivery")
+
+  @@index([insuranceReminderDeliveryId, attemptedAt], map: "ix_insurance_reminder_attempt_delivery_attempted")
+  @@map("insurance_reminder_attempt")
 }
 
 model InventoryVideo {
