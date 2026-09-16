@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Loader2 } from 'lucide-react'
 import { Btn, Input, Modal } from '@/components/ui'
-import { deleteInventory, sendInventoryEmail, sendBulkInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryEmailRecipient, getNextInventoryNumber } from './actions'
+import { deleteInventory, sendInventoryEmail, sendBulkInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryInquiry, updateInventoryEmailRecipient, getNextInventoryNumber } from './actions'
 import { isValidEmail, normalizeRegistrationNo } from '@/lib/validation'
 import type { CarMakeMaster, Dealer, CustomerOption, InventoryRow, InventoryPhoto, UploadQueueItem, InquiryOption, EmailRecipient, InventoryFilters } from './inventoryTypes'
 import { InventoryTable } from './InventoryTable'
@@ -329,6 +329,7 @@ export function InventoryClient({
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
   const [isSyncingInquiry, startSyncInquiryTransition] = useTransition()
+  const [isUpdatingInquiry, startUpdateInquiryTransition] = useTransition()
   const [pendingInventoryRefresh, setPendingInventoryRefresh] = useState(false)
   const { inquiryRow, inquiryQuery, inquiryMatches, selectedInquiry, inquiryLoading, inquiryError } = inventoryInquiry.state
   const { setInquiryRow, setInquiryQuery, setInquiryMatches, setSelectedInquiry, setInquiryError } = inventoryInquiry.actions
@@ -814,10 +815,17 @@ export function InventoryClient({
       setRecipientEmailError('Enter a valid email address.')
       return
     }
+    if (recipient.recipientType === 'direct') {
+      setEmailRecipients(prev => prev.map(item => item.key === recipient.key ? { ...item, email } : item))
+      setEditingRecipientEmailKey(null)
+      setRecipientEmailDraft('')
+      setRecipientEmailError('')
+      return
+    }
     setRecipientEmailError('')
     startTransition(async () => {
       const result = await updateInventoryEmailRecipient({
-        recipientType: recipient.recipientType,
+        recipientType: recipient.recipientType as 'dealer' | 'customer',
         recipientId: recipient.recipientId,
         email,
       })
@@ -861,6 +869,21 @@ export function InventoryClient({
       setInquiryMatches([])
       setInquiryQuery('')
       if (pendingInventoryRefresh) window.location.reload()
+    })
+  }
+
+  const updateInquiryDetails = (input: { status: string; subStatus: string; followUpDate: string; remark: string }) => {
+    if (!selectedInquiry) return
+    setInquiryError('')
+    startUpdateInquiryTransition(async () => {
+      const result = await updateInventoryInquiry({ inquiryId: selectedInquiry.inquiryId, ...input })
+      if (!result.success) {
+        setInquiryError(result.error ?? 'Could not save inquiry changes.')
+        return
+      }
+      const updated = { ...selectedInquiry, ...input, followUpDate: input.status === 'FollowUp' ? input.followUpDate : null }
+      setSelectedInquiry(updated)
+      setInquiryMatches(prev => prev.map(item => item.inquiryId === updated.inquiryId ? updated : item))
     })
   }
 
@@ -1037,7 +1060,7 @@ export function InventoryClient({
     setIsEmailSending(true)
     try {
       const rows = emailRows.length > 0 ? emailRows : [emailRow]
-      const recipients = emailRecipients.map(recipient => ({ recipientType: recipient.recipientType, recipientId: recipient.recipientId }))
+      const recipients = emailRecipients.map(recipient => ({ recipientType: recipient.recipientType, recipientId: recipient.recipientId, email: recipient.email, name: recipient.name }))
       setEmailProgress(rows.map(row => ({ inventoryId: row.inventoryId, label: row.registrationNo ?? row.inventoryNumber ?? `Vehicle #${row.inventoryId}`, status: 'pending' })))
       if (rows.length > 1) {
         const limits = await getInventoryBulkEmailConfig()
@@ -1183,11 +1206,11 @@ export function InventoryClient({
 
   const inquiryModalProps = {
     row: inquiryRow, query: inquiryQuery, matches: inquiryMatches, selected: selectedInquiry,
-    loading: inquiryLoading, error: inquiryError, syncing: isSyncingInquiry,
+    loading: inquiryLoading, error: inquiryError, syncing: isSyncingInquiry, updating: isUpdatingInquiry,
     pendingRefresh: pendingInventoryRefresh, vehicleLabel,
     onClose: () => { setInquiryRow(null); setSelectedInquiry(null); setInquiryMatches([]); setInquiryQuery(''); setInquiryError(''); if (pendingInventoryRefresh) window.location.reload() },
     onQueryChange: setInquiryQuery, onSelect: setSelectedInquiry,
-    onOpenInquiry: (id: number) => router.push(`/inquiry?edit=${id}`), onSync: syncInquiry,
+    onOpenInquiry: (id: number) => router.push(`/inquiry?edit=${id}`), onUpdate: updateInquiryDetails, onSync: syncInquiry,
   }
 
   return (

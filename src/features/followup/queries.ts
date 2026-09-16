@@ -41,6 +41,7 @@ function followupListSelect() {
     website: true,
     sourceId: true,
     sourceDetail: true,
+    location: true,
     source: {
       select: {
         code: true,

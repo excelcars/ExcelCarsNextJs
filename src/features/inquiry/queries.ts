@@ -125,6 +125,7 @@ function buildInquiryWhere({ search, status, classification, source, subStatus, 
       { mobileno: { contains: q, mode: 'insensitive' } },
       { email: { contains: q, mode: 'insensitive' } },
       { website: { contains: q, mode: 'insensitive' } },
+      { location: { contains: q, mode: 'insensitive' } },
       { source: { displayName: { contains: q, mode: 'insensitive' } } },
       { customerNameLegacy: { contains: q, mode: 'insensitive' } },
       { customer: { custName: { contains: q, mode: 'insensitive' } } },
@@ -179,6 +180,7 @@ function inquiryListSelect() {
     website: true,
     sourceId: true,
     sourceDetail: true,
+    location: true,
     source: {
       select: {
         code: true,

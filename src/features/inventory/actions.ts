@@ -51,6 +51,14 @@ export interface ActionResult {
   failedInventoryIds?: number[]
 }
 
+export interface UpdateInventoryInquiryInput {
+  inquiryId: number
+  status: string
+  subStatus: string
+  followUpDate: string
+  remark: string
+}
+
 async function currentUserId(): Promise<number | null> {
   return getAuthorizedUserIdForRoute('/inventory')
 }
@@ -381,8 +389,10 @@ export async function deleteInventory(id: number): Promise<ActionResult> {
 
 export interface SendInventoryEmailInput {
   recipients: Array<{
-    recipientType: 'dealer' | 'customer'
+    recipientType: 'dealer' | 'customer' | 'direct'
     recipientId: number
+    email?: string | null
+    name?: string | null
   }>
 }
 
@@ -399,6 +409,11 @@ export interface SyncInventoryInquiryInput {
 function normalizeEmailRecipients(recipients: SendInventoryEmailInput['recipients']) {
   const uniqueRecipients = new Map<string, SendInventoryEmailInput['recipients'][number]>()
   for (const recipient of recipients) {
+    if (recipient.recipientType === 'direct') {
+      const email = recipient.email?.trim().toLowerCase()
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email ?? '') && (email?.length ?? 0) <= 254) uniqueRecipients.set(`direct:${email}`, { ...recipient, email })
+      continue
+    }
     if (!Number.isInteger(recipient.recipientId) || recipient.recipientId <= 0) continue
     if (recipient.recipientType !== 'customer' && recipient.recipientType !== 'dealer') continue
     uniqueRecipients.set(`${recipient.recipientType}:${recipient.recipientId}`, recipient)
@@ -460,7 +475,9 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
   const uniqueTargets = new Map<string, { toEmail: string; toName: string; customerId: number | null }>()
 
   for (const recipient of recipients) {
-    if (recipient.recipientType === 'dealer') {
+    if (recipient.recipientType === 'direct' && recipient.email) {
+      uniqueTargets.set(recipient.email.toLowerCase(), { toEmail: recipient.email, toName: recipient.name?.trim() || 'there', customerId: null })
+    } else if (recipient.recipientType === 'dealer') {
       const dealer = await prisma.dealerMaster.findUnique({ where: { dealerId: recipient.recipientId } })
       if (dealer?.dealerEmail) {
         uniqueTargets.set(dealer.dealerEmail.toLowerCase(), {
@@ -625,6 +642,55 @@ export async function syncInventoryToInquiry(inventoryId: number, input: SyncInv
   revalidatePath('/inventory')
   revalidatePath('/inquiry')
   return { success: true }
+}
+
+export async function updateInventoryInquiry(input: UpdateInventoryInquiryInput): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
+
+  const status = input.status.trim()
+  if (!['Open', 'FollowUp', 'Closed'].includes(status)) return { success: false, error: 'Select a valid inquiry status.' }
+  if (status === 'FollowUp' && !input.followUpDate) return { success: false, error: 'Follow-up date is required for FollowUp status.' }
+
+  try {
+    const now = new Date()
+    await prisma.$transaction(async tx => {
+      const inquiry = await tx.inquiry.findUnique({ where: { inquiryId: input.inquiryId }, select: { inquiryId: true } })
+      if (!inquiry) throw new Error('Inquiry not found.')
+      await tx.inquiry.update({
+        where: { inquiryId: input.inquiryId },
+        data: {
+          status,
+          subStatus: input.subStatus.trim() || null,
+          followUpDate: status === 'FollowUp' ? new Date(`${input.followUpDate}T00:00:00.000`) : null,
+          remark: input.remark.trim() || null,
+          updatedDt: now,
+          updatedByUser: { connect: { userId } },
+        },
+      })
+      await tx.followupInquiry.create({
+        data: {
+          fkInquiryId: input.inquiryId,
+          followupDate: status === 'FollowUp' ? new Date(`${input.followUpDate}T00:00:00.000`) : null,
+          followupStatus: status,
+          followupSubStatus: input.subStatus.trim() || null,
+          comments: input.remark.trim() || null,
+          createdDt: now,
+          updatedDt: now,
+          createdBy: userId,
+          updatedBy: userId,
+        },
+      })
+    })
+  } catch (error) {
+    return { success: false, error: error instanceof Error && error.message === 'Inquiry not found.' ? error.message : 'Could not save inquiry changes.' }
+  }
+
+  revalidatePath('/inventory')
+  revalidatePath('/inquiry')
+  revalidatePath('/followup')
+  revalidatePath('/dashboard')
+  return { success: true, message: 'Inquiry changes saved.' }
 }
 
 function describeError(err: unknown): string {

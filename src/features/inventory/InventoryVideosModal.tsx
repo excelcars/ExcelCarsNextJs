@@ -68,7 +68,7 @@ export function InventoryVideosModal({ row, onClose }: { row: InventoryRow | nul
   const upload = (files: FileList | null) => {
     if (!row || !files?.length) return
     const selected = Array.from(files)
-    if (selected.some(file => file.type !== 'video/mp4' || file.size > 100 * 1024 * 1024)) {
+    if (selected.some(file => (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) || file.size > 100 * 1024 * 1024)) {
       setError('Only MP4 videos up to 100 MB each are allowed.')
       return
     }

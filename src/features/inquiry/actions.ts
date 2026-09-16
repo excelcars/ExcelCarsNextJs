@@ -21,6 +21,7 @@ export interface InquiryFormInput {
   website: string
   sourceCode: string
   sourceDetail: string
+  location: string
   customerId: number | null
   customerNameLegacy: string
   mobileno: string
@@ -337,6 +338,7 @@ function buildInquiryData(
     website: source.displayName,
     source: { connect: { sourceId: source.sourceId } },
     sourceDetail: normalizeOptionalText(input.sourceDetail),
+    location: normalizeOptionalText(input.location),
     customerNameLegacy: resolvedContact.customerNameLegacy,
     mobileno: resolvedContact.mobileno,
     email: resolvedContact.email,
@@ -1650,6 +1652,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
         website: true,
         sourceId: true,
         sourceDetail: true,
+        location: true,
         status: true,
         subStatus: true,
         classification: true,
@@ -1767,6 +1770,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
             ? `Source ${normalizeOptionalText(existing.website) ?? 'blank'}${normalizeOptionalText(existing.sourceDetail) ? ` (${normalizeOptionalText(existing.sourceDetail)})` : ''} -> ${resolvedSource.source.displayName}${normalizeOptionalText(input.sourceDetail) ? ` (${normalizeOptionalText(input.sourceDetail)})` : ''}`
             : '',
           existing.customerId !== resolvedContact.customerId ? `Customer ${existing.customerId ?? 'none'} -> ${resolvedContact.customerId ?? 'none'}` : '',
+          normalizeOptionalText(existing.location) !== normalizeOptionalText(input.location) ? `Location ${normalizeOptionalText(existing.location) ?? 'blank'} -> ${normalizeOptionalText(input.location) ?? 'blank'}` : '',
           existing.status !== normalizeOptionalText(input.status) ? `Status ${existing.status ?? 'blank'} -> ${normalizeOptionalText(input.status) ?? 'blank'}` : '',
           existing.subStatus !== normalizeOptionalText(input.subStatus) ? `Sub-status ${existing.subStatus ?? 'blank'} -> ${normalizeOptionalText(input.subStatus) ?? 'blank'}` : '',
         ].filter(Boolean).join(' · ') || 'Inquiry fields updated.',

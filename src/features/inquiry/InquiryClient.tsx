@@ -54,6 +54,7 @@ interface InquiryRow {
   dateOfInquiry: Date | string | null
   website: string | null
   sourceDetail: string | null
+  location: string | null
   customerId: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -123,9 +124,14 @@ interface InventoryMatch {
   inventoryNumber: string | null
   registrationNo: string | null
   year: number | null
+  month: string | null
+  colour: string | null
+  fuelType: string | null
+  noOfOwners: number | null
   kmsDriven: string | null
   price: string | null
   status: string | null
+  otherRemarks: string | null
   matchReasons?: string[]
   currentState?: string | null
   currentStateAt?: string | null
@@ -486,6 +492,7 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
     'Inquiry No',
     'WebSite',
     'Source Detail',
+    'Location',
     'Customer',
     'MobileNo',
     'Email',
@@ -511,6 +518,7 @@ function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, cl
         row.inquiryNo,
         row.website,
         row.sourceDetail,
+        row.location,
         row.customer?.custName ?? row.customerNameLegacy,
         row.mobileno,
         row.email,
@@ -552,7 +560,7 @@ function emptyInquiryCar(): InquiryCarInput {
 
 function emptyForm(): InquiryFormInput {
   return {
-    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '', sourceCode: '', sourceDetail: '',
+    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '', sourceCode: '', sourceDetail: '', location: '',
     customerId: null, customerNameLegacy: '', mobileno: '', email: '',
     budgetOfCustomer: null, visitedDateOfCustomer: '',
     classification: 'Warm', status: 'Open', subStatus: '',
@@ -1368,6 +1376,7 @@ export function InquiryClient({
         website: detail.website ?? '',
         sourceCode: detail.source?.code ?? '',
         sourceDetail: detail.sourceDetail ?? '',
+        location: detail.location ?? '',
         customerId: detail.customerId,
         customerNameLegacy: detail.customerNameLegacy ?? '',
         mobileno: detail.mobileno ?? '',
@@ -1710,6 +1719,7 @@ export function InquiryClient({
             <Input label={fieldLabel('Customer Mobile No', true)} value={form.mobileno} onChange={e => f('mobileno', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.mobileno} />
             <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} />
           </div>
+          <Input label="Location" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Pune, Dubai" />
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
@@ -1877,10 +1887,13 @@ export function InquiryClient({
                         <div className="grid gap-2 md:grid-cols-3">
                           <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
                           <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}` : ''}</div>
+                          <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}${match.month ? ` ${match.month}` : ''}` : ''}</div>
+                          <div><span className="font-medium text-gray-900">Colour / Fuel:</span> {[match.colour, match.fuelType].filter(Boolean).join(' / ') || '—'}</div>
+                          <div><span className="font-medium text-gray-900">KM / Owners:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match.noOfOwners ?? '—'}</div>
                           <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}</div>
                           <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
-                          <div><span className="font-medium text-gray-900">KM / Photos:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match._count.inventoryPhotos}</div>
+                          <div><span className="font-medium text-gray-900">Photos:</span> {match._count.inventoryPhotos}</div>
+                          <div className="md:col-span-3"><span className="font-medium text-gray-900">Remarks:</span> {clean(match.otherRemarks) || '—'}</div>
                           <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched Because:</span> {match.matchReasons?.join(' · ') || 'In stock match'}</div>
                           <div><span className="font-medium text-gray-900">Current State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
                         </div>

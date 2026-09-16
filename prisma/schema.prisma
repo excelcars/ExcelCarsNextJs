@@ -383,6 +383,7 @@ model Inquiry {
   website               String?
   sourceId              Int?                   @map("source_id")
   sourceDetail          String?                @map("source_detail")
+  location              String?
   customerId            Int?                   @map("customer_id")
   customerNameLegacy    String?                @map("customer_name_legacy")
   mobileno              String?

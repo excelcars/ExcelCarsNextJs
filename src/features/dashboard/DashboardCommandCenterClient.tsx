@@ -602,11 +602,10 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   }, [attentionItems, query, sort])
 
   const filteredLeadDetails = useMemo(() => {
-    const rows = props.leadDetails.filter(row => textMatches([row.label, row.total, row.own, row.other], query))
-    if (sort === 'dateAsc') return [...rows].sort((a, b) => a.label.localeCompare(b.label))
-    if (sort === 'dateDesc') return [...rows].sort((a, b) => b.label.localeCompare(a.label))
-    return [...rows].sort((a, b) => b.total - a.total)
-  }, [props.leadDetails, query, sort])
+    // This is the legacy operational sequence, not a ranked report. Preserve it
+    // even when dashboard sorting is changed for the other workspaces.
+    return props.leadDetails.filter(row => textMatches([row.label, row.total, row.own, row.other], query))
+  }, [props.leadDetails, query])
 
   const filteredFollowups = useMemo(() => {
     const rows = props.followups.filter(row => textMatches([row.customerName, row.mobile, row.classification, row.status, formatDate(row.followupDate)], query))
@@ -768,7 +767,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/inquiry?quickFilter=all&inquiryDate=${localDateParam()}`} />
             )}
             {permissions.canFollowup && (
-              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<Clock className="h-4 w-4" />} onClick={() => openWorkspace('followups')} />
+              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<Clock className="h-4 w-4" />} href={`/followup?status=FollowUp&followUpDateTo=${localDateParam(new Date(Date.now() - 86_400_000))}`} />
             )}
             {(permissions.canRto || permissions.canInsurance) && (
               <PendingFilesKpi
