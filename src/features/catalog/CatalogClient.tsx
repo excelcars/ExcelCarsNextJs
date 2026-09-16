@@ -4,11 +4,12 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
+  Eye,
+  Loader2,
   Pencil,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-react";
 import {
   Btn,
@@ -84,6 +85,7 @@ export function CatalogClient({
   const [name, setName] = useState("");
   const [selectedMakeId, setSelectedMakeId] = useState(0);
   const [selectedModelId, setSelectedModelId] = useState(0);
+  const [selectedVariantId, setSelectedVariantId] = useState(0);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [variants, setVariants] = useState<VariantOption[]>([]);
   const [newMake, setNewMake] = useState("");
@@ -96,7 +98,10 @@ export function CatalogClient({
   const [manager, setManager] = useState<{
     kind: "models" | "variants";
     title: string;
+    makeName: string;
     makeId: number;
+    readOnly?: boolean;
+    loading: boolean;
     modelId?: number;
     items: (ModelOption | VariantOption)[];
   } | null>(null);
@@ -149,6 +154,7 @@ export function CatalogClient({
     setName("");
     setSelectedMakeId(0);
     setSelectedModelId(0);
+    setSelectedVariantId(0);
     setNewMake("");
     setNewModel("");
     setNewVariant("");
@@ -266,27 +272,47 @@ export function CatalogClient({
   const editKindLabel = editTarget
     ? editTarget.kind.charAt(0).toUpperCase() + editTarget.kind.slice(1)
     : "";
-  const openModels = async (make: MakeSummary) => {
+  const openModels = async (make: MakeSummary, readOnly = false) => {
+    const base = {
+      kind: "models" as const,
+      title: `${make.make ?? "Make"} — Models`,
+      makeName: make.make ?? "Make",
+      makeId: make.pkMakeId,
+      readOnly,
+    };
+    setManager({ ...base, loading: true, items: [] });
     const res = await fetch(`/api/catalog/models?makeId=${make.pkMakeId}`);
     const items = await res.json();
     setManager({
-      kind: "models",
-      title: `${make.make ?? "Make"} — Models`,
-      makeId: make.pkMakeId,
+      ...base,
+      loading: false,
       items: Array.isArray(items) ? items : [],
     });
   };
   const openVariants = async (makeId: number, model: ModelSummary) => {
+    const base = {
+      kind: "variants" as const,
+      title: `${model.model ?? "Model"} — Variants`,
+      makeName: makes.find(make => make.pkMakeId === makeId)?.make ?? "Make",
+      makeId,
+      modelId: model.pkModelId,
+    };
+    setManager({ ...base, loading: true, items: [] });
     const res = await fetch(`/api/catalog/variants?modelId=${model.pkModelId}`);
     const items = await res.json();
     setManager({
-      kind: "variants",
-      title: `${model.model ?? "Model"} — Variants`,
-      makeId,
-      modelId: model.pkModelId,
+      ...base,
+      loading: false,
       items: Array.isArray(items) ? items : [],
     });
   };
+  const makeActions = (make: MakeSummary) => (
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={() => openModels(make, true)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-600" title="View" aria-label={`View ${make.make ?? 'make'}`}><Eye className="h-3.5 w-3.5" /></button>
+      <button type="button" onClick={() => openModels(make)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-[#1B2A6B]" title="Edit" aria-label={`Edit ${make.make ?? 'make'}`}><Pencil className="h-3.5 w-3.5" /></button>
+      <button type="button" onClick={() => setDeleteTarget({ kind: 'make', id: make.pkMakeId, name: make.make ?? 'make' })} className="rounded p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-600" title="Delete" aria-label={`Delete ${make.make ?? 'make'}`}><Trash2 className="h-3.5 w-3.5" /></button>
+    </div>
+  );
   const addControl = (kind: "make" | "model" | "variant", enabled = true) => (
     <div className="mt-2">
       {!{ make: addingMake, model: addingModel, variant: addingVariant }[
@@ -358,8 +384,8 @@ export function CatalogClient({
         <p className="mt-3 text-xs text-gray-500">Search across make, model, and variant names.</p>
       </div>
       <Table
-        headers={["Make", "Model", "Variants"]}
-        minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[25%] [&_th:last-child]:w-[53%]"
+        headers={["Make", "Model", "Variants", "Actions"]}
+        minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[25%] [&_th:nth-child(3)]:w-[43%] [&_th:last-child]:w-[10%]"
         empty={initialData.length === 0}
       >
         {initialData.flatMap((row) =>
@@ -367,38 +393,30 @@ export function CatalogClient({
             ? row.carModelMaster.map((model, index) => (
                 <tr key={model.pkModelId} className="hover:bg-gray-50 transition">
                   <td className="px-4 py-3 align-top">
-                    <div className="flex items-center gap-1">
-                      <div className="font-medium text-gray-900">{row.make ?? "—"}</div>
-                      {index === 0 && <>
-                        <button type="button" onClick={() => openModels(row)} aria-label={`Manage models for ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Manage models"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => setDeleteTarget({ kind: "make", id: row.pkMakeId, name: row.make ?? "make" })} aria-label={`Delete ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete make"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </>}
-                    </div>
+                    <div className="font-medium text-gray-900">{row.make ?? "—"}</div>
                     {index === 0 && <div className="mt-1 text-xs text-gray-400">{row._count.carModelMaster} models · {row._count.carVariantMaster} variants</div>}
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <div className="flex items-center gap-1">
-                      <button type="button" onClick={() => openVariants(row.pkMakeId, model)} className="font-medium text-left text-gray-800 hover:text-[#1B2A6B] hover:underline">{model.model ?? "—"}</button>
-                      <button type="button" onClick={() => openVariants(row.pkMakeId, model)} aria-label={`Manage variants for ${model.model ?? "model"}`} className="p-1 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Manage variants"><Pencil className="w-3.5 h-3.5" /></button>
-                    </div>
-                    {index === row.carModelMaster.length - 1 && row._count.carModelMaster > row.carModelMaster.length && <button type="button" onClick={() => openModels(row)} className="mt-1 block text-xs font-medium text-[#1B2A6B] hover:underline">+{row._count.carModelMaster - row.carModelMaster.length} more models</button>}
+                    <div className="font-medium text-gray-800">{model.model ?? "—"}</div>
+                    {index === row.carModelMaster.length - 1 && row._count.carModelMaster > row.carModelMaster.length && <div className="mt-1 text-xs text-gray-500">+{row._count.carModelMaster - row.carModelMaster.length} more models</div>}
                   </td>
                   <td className="px-4 py-3 align-top">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {model.carVariantMaster.length ? <>
-                        {model.carVariantMaster.map((variant) => <button key={variant.pkVariantId} type="button" onClick={() => openVariants(row.pkMakeId, model)} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]">{variant.variant ?? "—"}</button>)}
-                        {model._count.carVariantMaster > model.carVariantMaster.length && <button type="button" onClick={() => openVariants(row.pkMakeId, model)} className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1B2A6B] hover:underline">+{model._count.carVariantMaster - model.carVariantMaster.length} more</button>}
+                        {model.carVariantMaster.map((variant) => <span key={variant.pkVariantId} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{variant.variant ?? "—"}</span>)}
+                        {model._count.carVariantMaster > model.carVariantMaster.length && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1B2A6B]">+{model._count.carVariantMaster - model.carVariantMaster.length} more</span>}
                       </> : <span className="text-sm text-gray-400">No variants yet</span>}
-                      <button type="button" onClick={() => openVariants(row.pkMakeId, model)} className="rounded px-2 py-1 text-xs font-medium text-[#1B2A6B] hover:bg-blue-50">Manage</button>
                     </div>
                   </td>
+                  <td className="px-4 py-3 align-top">{index === 0 ? makeActions(row) : null}</td>
                 </tr>
               ))
             : [
                 <tr key={row.pkMakeId} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 align-top"><div className="flex items-center gap-1"><div className="font-medium text-gray-900">{row.make ?? "—"}</div><button type="button" onClick={() => openModels(row)} aria-label={`Manage models for ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Manage models"><Pencil className="w-3.5 h-3.5" /></button><button type="button" onClick={() => setDeleteTarget({ kind: "make", id: row.pkMakeId, name: row.make ?? "make" })} aria-label={`Delete ${row.make ?? "make"}`} className="p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete make"><Trash2 className="w-3.5 h-3.5" /></button></div><div className="mt-1 text-xs text-gray-400">No models yet</div></td>
+                  <td className="px-4 py-3 align-top"><div className="font-medium text-gray-900">{row.make ?? "—"}</div><div className="mt-1 text-xs text-gray-400">No models yet</div></td>
                   <td className="px-4 py-3 text-sm text-gray-400">—</td>
                   <td className="px-4 py-3 text-sm text-gray-400">—</td>
+                  <td className="px-4 py-3 align-top">{makeActions(row)}</td>
                 </tr>,
               ],
         )}
@@ -465,23 +483,29 @@ export function CatalogClient({
             </>
           ) : (
             <>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                <div className="font-semibold">Build the vehicle path in order</div>
+                <div className="mt-1 text-xs text-blue-800">Select an existing Make, then Model, then Variant. If any level is missing, use the matching “Add new” link below it. Selecting an existing variant does not create a duplicate.</div>
+              </div>
               <div>
                 <FormDropdown label="Make" value={String(selectedMakeId || '')} options={makes.map(make => ({ value: String(make.pkMakeId), label: make.make ?? '—' }))} placeholder="Select existing make" allowClear onChange={(value) => {
                     setSelectedMakeId(Number(value));
                     setSelectedModelId(0);
+                    setSelectedVariantId(0);
                   }} />
                 {addControl("make")}
               </div>
               {selectedMakeId > 0 && (
                 <div>
-                  <FormDropdown label="Model" value={String(selectedModelId || '')} options={models.map(model => ({ value: String(model.pkModelId), label: model.model ?? '—' }))} placeholder="Select existing model" allowClear onChange={value => setSelectedModelId(Number(value))} />
+                  <FormDropdown label="Model" value={String(selectedModelId || '')} options={models.map(model => ({ value: String(model.pkModelId), label: model.model ?? '—' }))} placeholder="Select existing model" allowClear onChange={value => { setSelectedModelId(Number(value)); setSelectedVariantId(0) }} />
                   {addControl("model")}
                 </div>
               )}
               {selectedModelId > 0 && (
                 <div>
-                  <FormDropdown label="Variant" value="" options={variants.map(variant => ({ value: String(variant.pkVariantId), label: variant.variant ?? '—' }))} placeholder={variants.length ? 'Select existing variant' : 'No variants yet'} allowClear onChange={() => undefined} />
+                  <FormDropdown label="Variant" value={String(selectedVariantId || '')} options={variants.map(variant => ({ value: String(variant.pkVariantId), label: variant.variant ?? '—' }))} placeholder={variants.length ? 'Select existing variant' : 'No variants yet'} allowClear onChange={value => setSelectedVariantId(Number(value))} />
                   {addControl("variant")}
+                  {selectedVariantId > 0 ? <div className="mt-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">This variant already exists in the Vehicle Master. Use <span className="font-semibold">Add new variant</span> only to create another one.</div> : null}
                 </div>
               )}
             </>
@@ -514,16 +538,10 @@ export function CatalogClient({
       >
         {manager && (
           <div className="space-y-3">
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setManager(null)}
-                className="text-gray-400 hover:text-gray-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {manager.items.length === 0 ? (
+            {manager.kind === "models" && !manager.readOnly && <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => openEdit({ kind: "make", id: manager.makeId, name: manager.makeName, makeId: 0, modelId: 0 })}><Pencil className="w-3.5 h-3.5" />Edit Make</Btn><Btn size="sm" variant="outline" onClick={() => setDeleteTarget({ kind: "make", id: manager.makeId, name: manager.makeName })}><Trash2 className="w-3.5 h-3.5" />Delete Make</Btn></div>}
+            {manager.loading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Loading {manager.kind}...</div>
+            ) : manager.items.length === 0 ? (
               <div className="py-8 text-center text-sm text-gray-500">
                 No records found
               </div>
@@ -544,7 +562,7 @@ export function CatalogClient({
                     <span className="text-sm font-medium text-gray-800">
                       {itemName ?? "—"}
                     </span>
-                    <span className="flex gap-1">
+                    {!manager.readOnly && <span className="flex gap-1">
                       <button
                         type="button"
                         onClick={() =>
@@ -575,6 +593,18 @@ export function CatalogClient({
                         <button
                           type="button"
                           onClick={() => {
+                            const model = item as ModelOption;
+                            openVariants(manager.makeId, { ...model, _count: { carVariantMaster: 0 }, carVariantMaster: [] });
+                          }}
+                          className="rounded px-2 py-1 text-xs font-medium text-[#1B2A6B] hover:bg-blue-50"
+                        >
+                          Variants
+                        </button>
+                      )}
+                      {isModel && (
+                        <button
+                          type="button"
+                          onClick={() => {
                             setManager(null);
                             openAddVariant(manager.makeId, id);
                           }}
@@ -584,12 +614,12 @@ export function CatalogClient({
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       )}
-                    </span>
+                    </span>}
                   </div>
                 );
               })
             )}
-            {manager.kind === "models" && (
+            {manager.kind === "models" && !manager.readOnly && (
               <Btn
                 size="sm"
                 onClick={() => {

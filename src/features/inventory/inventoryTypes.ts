@@ -88,6 +88,9 @@ export interface InquiryOption {
   classification: string | null
   status: string | null
   subStatus: string | null
+  followUpDate: string | Date | null
+  remark: string | null
+  website?: string | null
   customer: CustomerOption | null
   inquiryCarDetails: Array<{
     fkVariantId: number | null
@@ -102,7 +105,7 @@ export interface InquiryOption {
 
 export interface EmailRecipient {
   key: string
-  recipientType: 'dealer' | 'customer'
+  recipientType: 'dealer' | 'customer' | 'direct'
   recipientId: number
   name: string
   email: string | null

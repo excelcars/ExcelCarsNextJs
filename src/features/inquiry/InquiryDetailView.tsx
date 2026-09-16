@@ -156,6 +156,7 @@ type InquiryDetailData = {
   dateOfInquiry: Date | string | null
   website: string | null
   sourceDetail: string | null
+  location: string | null
   customerId: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -577,6 +578,7 @@ export function InquiryDetailView({
             <span>Customer #{currentInquiry.customer?.custId ?? currentInquiry.customerId ?? '-'}</span>
             <span>·</span>
             <span>Raised {fmtDate(currentInquiry.dateOfInquiry) || '-'}</span>
+            {currentInquiry.location ? <><span>·</span><span>{currentInquiry.location}</span></> : null}
             <span>·</span>
             <span>Inquiry #{currentInquiry.inquiryId}</span>
           </div>
@@ -898,6 +900,10 @@ export function InquiryDetailView({
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Source</div>
                   <div className="mt-1 text-xl text-gray-900">{currentInquiry.website ?? '-'}{currentInquiry.sourceDetail ? ` (${currentInquiry.sourceDetail})` : ''}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Location</div>
+                  <div className="mt-1 text-xl text-gray-900">{currentInquiry.location ?? '-'}</div>
                 </div>
               </div>
             </div>

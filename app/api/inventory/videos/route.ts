@@ -48,7 +48,13 @@ async function setFeatured(inventoryId: number, inventoryVideoId: number) {
   ])
 }
 
-export async function GET(req: NextRequest) {
+function errorResponse(operation: string, error: unknown) {
+  console.error(`Inventory video ${operation} failed:`, error)
+  const message = error instanceof Error ? error.message : 'Unexpected server error.'
+  return NextResponse.json({ error: `Could not ${operation}: ${message}` }, { status: 500 })
+}
+
+async function getVideos(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const inventoryId = Number(req.nextUrl.searchParams.get('inventoryId'))
   if (!inventoryId) return NextResponse.json({ error: 'Inventory id is required.' }, { status: 400 })
@@ -56,7 +62,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(videos.map(toResponse))
 }
 
-export async function POST(req: NextRequest) {
+async function createVideo(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const contentType = req.headers.get('content-type') ?? ''
 
@@ -90,14 +96,14 @@ export async function POST(req: NextRequest) {
       const storagePath = await uploadToFirebaseStorage(`inventory/${inventoryId}/videos/${fileName}`, bytes, 'video/mp4')
       const video = await prisma.inventoryVideo.create({ data: { fkInventoryId: inventoryId, sourceType: 'UPLOAD', storagePath, fileName: file.name, isFeatured: nextOrder === 0, sortOrder: nextOrder++ } })
       results.push({ name: file.name, success: true, video: toResponse(video) })
-    } catch {
-      results.push({ name: file.name, success: false, error: 'Upload failed.' })
+    } catch (error) {
+      results.push({ name: file.name, success: false, error: error instanceof Error ? error.message : 'Upload failed.' })
     }
   }
   return NextResponse.json({ success: results.some(result => result.success), results })
 }
 
-export async function PATCH(req: NextRequest) {
+async function updateVideo(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => null)
   const inventoryId = Number(body?.inventoryId)
@@ -109,7 +115,7 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ success: true })
 }
 
-export async function DELETE(req: NextRequest) {
+async function deleteVideo(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json().catch(() => null)
   const inventoryId = Number(body?.inventoryId)
@@ -124,4 +130,20 @@ export async function DELETE(req: NextRequest) {
     if (next) await setFeatured(inventoryId, next.inventoryVideoId)
   }
   return NextResponse.json({ success: true })
+}
+
+export async function GET(req: NextRequest) {
+  try { return await getVideos(req) } catch (error) { return errorResponse('load inventory videos', error) }
+}
+
+export async function POST(req: NextRequest) {
+  try { return await createVideo(req) } catch (error) { return errorResponse('save inventory video', error) }
+}
+
+export async function PATCH(req: NextRequest) {
+  try { return await updateVideo(req) } catch (error) { return errorResponse('update inventory video', error) }
+}
+
+export async function DELETE(req: NextRequest) {
+  try { return await deleteVideo(req) } catch (error) { return errorResponse('delete inventory video', error) }
 }

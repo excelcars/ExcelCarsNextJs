@@ -87,6 +87,7 @@ interface FollowupRow {
   dateOfInquiry: Date | string | null
   website: string | null
   sourceDetail?: string | null
+  location?: string | null
   customerId?: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -475,6 +476,7 @@ function emptyInquiryForm(): InquiryFormInput {
     website: '',
     sourceCode: '',
     sourceDetail: '',
+    location: '',
     customerId: null,
     customerNameLegacy: '',
     mobileno: '',
@@ -1060,6 +1062,7 @@ export function FollowupClient({
           website: detail.website ?? '',
           sourceCode: detail.source?.code ?? '',
           sourceDetail: detail.sourceDetail ?? '',
+          location: detail.location ?? '',
           customerId: detail.customerId,
           customerNameLegacy: detail.customerNameLegacy ?? '',
           mobileno: detail.mobileno ?? '',
@@ -1885,6 +1888,7 @@ export function FollowupClient({
               <Input label="Customer Mobile No*#" value={editInquiryForm.mobileno} onChange={e => updateInquiryField('mobileno', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.mobileno} />
               <Input label="Customer Email" type="email" value={editInquiryForm.email} onChange={e => updateInquiryField('email', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.email} />
             </div>
+            <Input label="Location" value={editInquiryForm.location} onChange={e => updateInquiryField('location', e.target.value)} placeholder="e.g. Andheri West, Pune, Dubai" />
 
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">

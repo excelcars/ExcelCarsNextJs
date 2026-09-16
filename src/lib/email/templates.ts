@@ -25,8 +25,9 @@ export function vehicleDetailsSubject(input: Pick<VehicleDetailsEmailInput, 'mak
 }
 
 export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject: string; html: string } {
-  // legacy masked registration numbers to the first 5 characters in customer-facing emails
-  const maskedReg = input.registrationNo ? input.registrationNo.trim().slice(0, 5) : ''
+  // Customer emails show only the RTO prefix (for example, MH14), never the vehicle series.
+  const registration = input.registrationNo?.trim().replace(/\s+/g, '') ?? ''
+  const maskedReg = registration.match(/^[A-Za-z]{2}\d{2}/)?.[0]?.toUpperCase() ?? registration.slice(0, 4).toUpperCase()
   const price = input.price ? `₹${Number(input.price).toLocaleString('en-IN')}` : ''
   const km = input.kmsDriven ? `${Number(input.kmsDriven).toLocaleString('en-IN')} km` : ''
   const ctaHtml = input.viewDetailsUrl
@@ -62,8 +63,9 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
       ${ctaHtml}
       <p>Hope you have a splendid buying experience with Excel Cars' wide range and easy financing options.</p>
       <p>For more information and personal assistance, walk in to our showroom at:<br>
-      Gujral House, 167 CST Road, Opp. Central Bank Of India,<br>
-      Off. BKC, Kalina, Santacruz East, Mumbai 400098.</p>
+      Excel Cars, Gujral House, 167, CST Road, Kolivery Village,<br>
+      MMRDA Area, Kalina, Santacruz East, Mumbai, Maharashtra 400098.<br>
+      <a href="https://maps.app.goo.gl/fh48FW9PvXE6WHzdA" style="color:#d7194a;text-decoration:underline;">Google Maps location</a>.</p>
       <p>Happy buying with Excel Cars.</p>
       <p>Best Regards,<br>${input.signedBy}</p>
     </div>

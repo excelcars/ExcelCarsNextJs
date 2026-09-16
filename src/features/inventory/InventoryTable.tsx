@@ -40,7 +40,7 @@ export function InventoryTable({
 }: InventoryTableProps) {
   return (
     <div className="[&_table]:min-w-0 [&_th]:px-2 [&_td]:px-2 [&_th:first-child]:w-16 [&_th:first-child]:min-w-16 [&_th:first-child]:max-w-16 [&_td:first-child]:w-16 [&_td:first-child]:min-w-16 [&_td:first-child]:max-w-16">
-      <Table headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Actions']} empty={rows.length === 0}>
+      <Table headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Remarks', 'Internal Remarks', 'Actions']} empty={rows.length === 0}>
         {rows.map((r, index) => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
             <td className="px-2 py-3 text-center"><input type="checkbox" checked={selectedInventoryIds.includes(r.inventoryId)} onChange={event => onSelectionChange(r.inventoryId, event.target.checked)} aria-label={`Select ${r.registrationNo ?? r.inventoryNumber ?? 'vehicle'}`} /></td>
@@ -52,6 +52,8 @@ export function InventoryTable({
             <td className="px-4 py-3"><InventoryDetailCell items={[['Price', r.price !== null ? Number(r.price).toFixed(2) : null], ['Status', r.status]]} /></td>
             <td className="px-4 py-3"><InventoryDetailCell items={[['Owned Type', r.ownedType], ['Owned By', r.ownedBy], ['Mobile', r.mobileNoOwnedBy], ['Email', r.emailIdOwnedBy]]} /></td>
             <td className="px-4 py-3"><InventoryDetailCell items={[['Customer', r.customerName ?? r.customer?.custName], ['Mobile', r.customer?.custMobile], ['Email', r.customer?.custEmail]]} /></td>
+            <td className="px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap">{clean(r.otherRemarks) || '—'}</td>
+            <td className="px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap">{clean(r.internalComments) || '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center flex-wrap gap-1">
                 <button onClick={() => onView(r)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>

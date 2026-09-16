@@ -4,7 +4,7 @@ import { AlertTriangle, Clock3, ExternalLink, Pencil, PhoneCall } from 'lucide-r
 import { Badge, Table } from '@/components/ui'
 
 type FollowupTableRow = {
-  inquiryId: number; inquiryNo?: string | null; dateOfInquiry: Date | string | null; website: string | null; sourceDetail?: string | null
+  inquiryId: number; inquiryNo?: string | null; dateOfInquiry: Date | string | null; website: string | null; sourceDetail?: string | null; location?: string | null
   customerNameLegacy: string | null; mobileno: string | null; email: string | null; classification: string | null; status?: string | null; subStatus: string | null; followUpDate: Date | string | null; remark: string | null
   followupInquiry?: Array<{ contactOutcome?: string | null }>; createdBy?: number | null; createdByUser?: { userName: string | null; displayName: string | null } | null
   customer: { custName: string; custMobile?: string | null; custEmail?: string | null } | null
@@ -36,7 +36,7 @@ export function FollowupTable<T extends FollowupTableRow>({ rows, page, pageSize
           const lastOutcome = formatContactOutcome(row.followupInquiry?.[0]?.contactOutcome)
           return <tr key={row.inquiryId} className="transition hover:bg-gray-50">
             <td className="px-2 py-3 text-center font-semibold text-gray-700">{((page - 1) * pageSize) + index + 1}</td>
-            <td className="px-2 py-3"><DetailCell items={[['Inquiry No', row.inquiryNo], ['Inquiry Date', fmtDate(row.dateOfInquiry)], ['Source', `${row.website ?? ''}${row.sourceDetail ? ` (${row.sourceDetail})` : ''}`]]} /></td>
+            <td className="px-2 py-3"><DetailCell items={[['Inquiry No', row.inquiryNo], ['Inquiry Date', fmtDate(row.dateOfInquiry)], ['Source', `${row.website ?? ''}${row.sourceDetail ? ` (${row.sourceDetail})` : ''}`], ['Location', row.location]]} /></td>
             <td className="px-2 py-3"><DetailCell items={[['Customer', name], ['Mobile', mobile], ['Email', email]]} /></td>
             <td className="px-2 py-3"><div className="space-y-2">{row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails.map(car => <DetailCell key={car.inquiryCarDetailsId ?? `${car.makeLegacy}-${car.modelLegacy}-${car.variantLegacy}-${car.year ?? 'na'}`} items={[['Make', clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy)], ['Model', clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy)], ['Variant', clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || clean(car.subVariant)], ['Year', car.year]]} />) : <DetailCell items={[["Vehicle", '']]} />}</div></td>
             <td className="px-2 py-3"><div className={overdue ? 'text-red-600' : ''}>{row.status ? <div className="mb-1.5"><Badge label={row.status} /></div> : null}<DetailCell items={[['Sub-status', row.subStatus], ['Follow-up Date', fmtDate(row.followUpDate)]]} />{overdue ? <div className="mt-1 flex items-center gap-1 text-xs font-semibold"><AlertTriangle className="h-3.5 w-3.5" />Overdue</div> : null}</div></td>
