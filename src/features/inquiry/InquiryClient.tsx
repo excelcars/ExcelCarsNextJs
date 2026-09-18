@@ -114,6 +114,7 @@ interface PreviousInquiryMatch {
   classification: string | null
   status: string | null
   followUpDate: Date | string | null
+  inquiryOwner?: string
   customer: CustomerOption | null
   inquiryCarDetails: InquiryRow['inquiryCarDetails']
   matchReasons?: string[]
@@ -581,6 +582,7 @@ function FormDropdown({
   disabled = false,
   allowClear = false,
   allowCustom = false,
+  error = false,
 }: {
   label: ReactNode
   value: string
@@ -590,6 +592,7 @@ function FormDropdown({
   disabled?: boolean
   allowClear?: boolean
   allowCustom?: boolean
+  error?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -625,7 +628,7 @@ function FormDropdown({
         aria-expanded={open}
         disabled={disabled}
         onClick={() => { if (!disabled) { setOpen(current => !current); setQuery('') } }}
-        className="flex w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-800 outline-none focus:ring-1 focus:ring-[#1B2A6B] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+        className={`flex w-full items-center justify-between rounded-md border bg-white px-3 py-2 text-left text-sm text-gray-800 outline-none focus:ring-1 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200 focus:ring-[#1B2A6B]'}`}
       >
         <span className={value ? '' : 'text-gray-400'}>{availableOptions.find(option => option.value === value)?.label || placeholder}</span>
         <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -1430,7 +1433,13 @@ export function InquiryClient({
     setError('')
     const validation = validateInquiryFormInput(form)
     if (validation.error) {
-      setError(validation.error)
+      const labels: Record<string, string> = {
+        customer: 'Customer', mobileno: 'Customer Mobile No.', email: 'Customer Email', website: 'Reference Website / Source',
+        budgetOfCustomer: 'Budget of customer', inquiryCars: 'Car Details', dateOfInquiry: 'Date of Inquiry',
+        followUpDate: 'FollowUp Date', visitedDateOfCustomer: 'Visited Date of customer',
+      }
+      const invalidFields = Object.keys(validation.fieldErrors).map(key => labels[key] ?? (key.startsWith('carYear-') ? 'Car Year' : key))
+      setError(invalidFields.length > 0 ? `Complete or correct: ${invalidFields.join(', ')}.` : validation.error)
       setErrors(validation.fieldErrors)
       return
     }
@@ -1522,6 +1531,26 @@ export function InquiryClient({
     setSearchInput('')
     pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
   }
+
+  const previousInquiryAlert = previousInquiryError ? (
+    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{previousInquiryError}</div>
+  ) : previousInquiryLoading ? (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Checking existing inquiries for this customer...</div>
+  ) : previousInquiries.length > 0 ? (
+    <section className="rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-4 shadow-sm">
+      <div className="text-sm font-bold text-amber-950">Existing inquiries found for this customer ({previousInquiries.length})</div>
+      <div className="mt-1 text-xs text-amber-900">Review these before creating another inquiry. You can still continue if this is genuinely new.</div>
+      <div className="mt-3 space-y-2">
+        {previousInquiries.slice(0, 3).map(match => (
+          <div key={match.inquiryId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-white px-3 py-2 text-xs text-gray-700">
+            <div><span className="font-semibold text-gray-900">{match.inquiryNo ?? `Inquiry #${match.inquiryId}`}</span><span className="mx-1.5 text-gray-400">•</span>{summarizeInquiryVehicles(match.inquiryCarDetails) || 'Vehicle not specified'}<span className="mx-1.5 text-gray-400">•</span>{match.status ?? '—'}<span className="mx-1.5 text-gray-400">•</span>Owner: {match.inquiryOwner ?? 'Unassigned'}</div>
+            <a href={`/inquiry?view=${match.inquiryId}`} target="_blank" rel="noreferrer" className="font-medium text-amber-900 underline">View inquiry</a>
+          </div>
+        ))}
+        {previousInquiries.length > 3 ? <div className="text-xs font-medium text-amber-900">+ {previousInquiries.length - 3} more existing inquiries</div> : null}
+      </div>
+    </section>
+  ) : null
 
   return (
     <div>
@@ -1682,6 +1711,7 @@ export function InquiryClient({
               options={sourceOptions.map(source => ({ value: source.code, label: source.displayName }))}
               placeholder="Select source"
               allowClear
+              error={errors.website}
               onChange={value => {
                 const selected = sourceOptions.find(source => source.code === value)
                 setForm(previous => ({
@@ -1719,6 +1749,7 @@ export function InquiryClient({
             <Input label={fieldLabel('Customer Mobile No', true)} value={form.mobileno} onChange={e => f('mobileno', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.mobileno} />
             <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} />
           </div>
+          {previousInquiryAlert}
           <Input label="Location" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Pune, Dubai" />
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -1808,57 +1839,6 @@ export function InquiryClient({
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {isMissingFollowUpDate ? <div>Follow status needs a follow-up date.</div> : null}
               {isMissingVisitedDate ? <div>Visited sub-status needs a visited date.</div> : null}
-            </div>
-          ) : null}
-
-          {previousInquiryError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{previousInquiryError}</div>
-          ) : null}
-
-          {previousInquiryLoading ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Checking previous inquiries for this mobile number or linked customer...</div>
-          ) : null}
-
-          {!previousInquiryLoading && previousInquiries.length > 0 ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4">
-              <div className="text-sm font-semibold text-amber-900">Possible duplicate or overlapping inquiries found</div>
-              <div className="mt-1 text-xs text-amber-800">Please review before saving. This is only a warning — you can still continue if this is a genuine new inquiry.</div>
-              <div className="mt-3 space-y-3">
-                {previousInquiries.map(match => {
-                  const matchName = match.customer?.custName ?? match.customerNameLegacy ?? '—'
-                  const matchVehicle = summarizeInquiryVehicles(match.inquiryCarDetails)
-
-                  return (
-                    <div key={match.inquiryId} className="rounded-md border border-amber-100 bg-white px-3 py-3 text-xs text-gray-700">
-                      <div className="grid gap-2 md:grid-cols-3">
-                        <div><span className="font-medium text-gray-900">Inquiry:</span> {match.inquiryNo ?? `#${match.inquiryId}`}</div>
-                        <div><span className="font-medium text-gray-900">Date:</span> {fmtDate(match.dateOfInquiry) || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Customer:</span> {matchName}</div>
-                        <div><span className="font-medium text-gray-900">Vehicle:</span> {matchVehicle || '—'}</div>
-                        <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}{match.classification ? ` · ${match.classification}` : ''}</div>
-                        <div><span className="font-medium text-gray-900">Follow-up:</span> {fmtDate(match.followUpDate) || '—'}</div>
-                      </div>
-                      {match.matchReasons && match.matchReasons.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {match.matchReasons.map(reason => (
-                            <span key={`${match.inquiryId}-${reason}`} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                              {reason}
-                            </span>
-                          ))}
-                          <a
-                            href={`/inquiry?view=${match.inquiryId}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800 transition hover:bg-amber-50"
-                          >
-                            View
-                          </a>
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
             </div>
           ) : null}
 

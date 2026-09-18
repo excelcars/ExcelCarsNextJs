@@ -1193,8 +1193,8 @@ export function InventoryClient({
     onDealerSelect: (dealer: Dealer) => { setEmailSelectedDealer(dealer); setDealerOpen(false); setDealerQuery('') },
     onSelectedDealerClear: () => setEmailSelectedDealer(null),
     onSelectedCustomerChange: (customer: CustomerOption | null) => {
-      setEmailSelectedCustomer(customer)
       if (customer) addEmailRecipient({ key: `customer-${customer.custId}`, recipientType: 'customer', recipientId: customer.custId, name: customer.custName, email: customer.custEmail, meta: customer.custMobile ?? 'Customer' })
+      setEmailSelectedCustomer(null)
     },
     onAddRecipient: addEmailRecipient, onRemoveRecipient: removeEmailRecipient,
     onEditRecipient: (recipient: EmailRecipient) => { setEditingRecipientEmailKey(recipient.key); setRecipientEmailDraft(recipient.email ?? ''); setRecipientEmailError('') },

@@ -13,6 +13,7 @@ import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } f
 import { normalizeRegistrationNo, validateInventoryInput } from '@/lib/validation'
 import { getInventoryBulkEmailLimits } from './emailLimits'
 import { deleteFromFirebaseStorage, isFirebaseStoragePath } from '@/lib/firebase/storage'
+import { normalizeWhatsAppRecipient, sendEnquiryTemplate } from '@/lib/whatsapp/meta'
 
 export interface InventoryFormInput {
   registrationNo: string
@@ -402,6 +403,10 @@ export interface UpdateInventoryEmailRecipientInput {
   email: string
 }
 
+export interface SendInventoryWhatsAppInput {
+  mobiles: string[]
+}
+
 export interface SyncInventoryInquiryInput {
   inquiryId: number
 }
@@ -547,6 +552,40 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
     : `Email sent to ${sentCount} recipient${sentCount === 1 ? '' : 's'}.`
 
   return { success: true, message }
+}
+
+export async function sendInventoryWhatsApp(inventoryId: number, input: SendInventoryWhatsAppInput): Promise<ActionResult> {
+  if (!(await currentUserId())) return { success: false, error: 'Not authorized.' }
+  const recipients = [...new Set(input.mobiles.map(normalizeWhatsAppRecipient).filter((mobile): mobile is string => Boolean(mobile)))].slice(0, 20)
+  if (recipients.length === 0) return { success: false, error: 'Enter at least one valid 10-digit WhatsApp number.' }
+
+  const vehicle = await prisma.inventoryManagement.findUnique({ where: { inventoryId }, include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } } })
+  if (!vehicle) return { success: false, error: 'Vehicle not found.' }
+  const make = vehicle.carVariantMaster?.carMakeMaster?.make ?? vehicle.makeLegacy ?? ''
+  const model = vehicle.carVariantMaster?.carModelMaster?.model ?? vehicle.modelLegacy ?? ''
+  const variant = vehicle.carVariantMaster?.variant ?? vehicle.variantLegacy ?? ''
+  const vehicleName = [vehicle.year ? String(vehicle.year) : '', make, model, variant].filter(Boolean).join(' ') || `Inventory ${vehicle.inventoryNumber ?? inventoryId}`
+  const slug = buildVehicleSlug({ make, model, variant, year: vehicle.year })
+  let sent = 0
+  const failed: string[] = []
+
+  for (const mobile of recipients) {
+    try {
+      const trackedLink = await createTrackedVehicleEmailLink({ inventoryId, customerId: null, recipientEmail: `whatsapp:${mobile}`, recipientName: 'Customer', slug })
+      const link = new URL(trackedLink.url)
+      const result = await sendEnquiryTemplate({ to: mobile, customerName: 'Customer', vehicleName, buttonUrlSuffix: `${link.pathname}${link.search}`.replace(/^\//, '') })
+      if (result.success) sent += 1
+      else {
+        failed.push(mobile)
+        await prisma.vehicleEmailLink.delete({ where: { vehicleEmailLinkId: trackedLink.vehicleEmailLinkId } }).catch(() => undefined)
+      }
+    } catch {
+      failed.push(mobile)
+    }
+  }
+
+  if (sent === 0) return { success: false, error: `WhatsApp could not be sent${failed.length ? ` to: ${failed.join(', ')}` : '.'}` }
+  return { success: true, message: `WhatsApp submitted to ${sent} recipient${sent === 1 ? '' : 's'}${failed.length ? `. Failed: ${failed.join(', ')}` : '.'}` }
 }
 
 export async function syncInventoryToInquiry(inventoryId: number, input: SyncInventoryInquiryInput): Promise<ActionResult> {
