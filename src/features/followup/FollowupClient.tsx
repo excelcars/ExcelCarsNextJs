@@ -1444,7 +1444,7 @@ export function FollowupClient({
                         <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{logRow.inquiryNo ?? `Inquiry/${logRow.inquiryId}`}</span>
                         {logRow.website ? <span className="rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-[#1B2A6B]">{logRow.website}</span> : null}
                       </div>
-                      <h2 className="mt-3 text-3xl font-bold text-gray-900">{logRow.customer?.custName ?? logRow.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
+                      <h2 className="mt-2 text-xl font-bold text-gray-900">{logRow.customer?.custName ?? logRow.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                         <span>Customer #{logRow.customer?.custId ?? logRow.customerId ?? '—'}</span>
                         <span>·</span>
@@ -1462,6 +1462,26 @@ export function FollowupClient({
                   </div>
                 </div>
 
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="mb-4 text-sm font-semibold text-[#1B2A6B]">Follow-up Details</div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormDropdown label="Classification" value={form.classification} options={CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => f('classification', value)} />
+                    <FormDropdown label="Follow-up outcome" value={form.contactOutcome} options={CONTACT_OUTCOME_OPTIONS.map(option => ({ value: option.value, label: option.title }))} placeholder="Select outcome" onChange={value => { const option = CONTACT_OUTCOME_OPTIONS.find(item => item.value === value); if (!option) return; const target = FRIENDLY_STATUS_OPTIONS.find(item => item.key === option.statusKey); f('contactOutcome', option.value); f('status', target?.status ?? form.status); f('subStatus', option.subStatus || target?.subStatus || ''); f('useOtherSubStatus', false); f('otherSubStatus', ''); if (target?.status === 'Closed') f('nextFollowUpDate', '') }} />
+                    <FormDropdown label="Status *" value={friendlyStatusKey} options={FRIENDLY_STATUS_OPTIONS.map(option => ({ value: option.key, label: option.label }))} placeholder="Select status" error={errors.status} onChange={value => { const selected = FRIENDLY_STATUS_OPTIONS.find(option => option.key === value); if (!selected) return; f('status', selected.status); f('subStatus', selected.subStatus); f('useOtherSubStatus', false); f('otherSubStatus', ''); if (selected.status === 'Closed') f('nextFollowUpDate', '') }} />
+                    <FormDropdown label="Sub-status" value={form.useOtherSubStatus ? FOLLOWUP_OTHER_SUB_STATUS_VALUE : form.subStatus} options={[...SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value })), { value: FOLLOWUP_OTHER_SUB_STATUS_VALUE, label: 'OTHER' }]} placeholder="Select sub-status" allowClear onChange={value => { if (value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) { f('useOtherSubStatus', true); f('subStatus', ''); return }; f('useOtherSubStatus', false); f('otherSubStatus', ''); f('subStatus', value) }} />
+                    <Input label={nextDateRequired ? 'Next Follow-up Date *' : 'Next Follow-up Date'} type="date" value={form.nextFollowUpDate} onChange={e => f('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} disabled={!nextDateRequired} />
+                    {form.useOtherSubStatus ? <Input label="Other Sub-status *" value={form.otherSubStatus ?? ''} onChange={e => f('otherSubStatus', e.target.value)} error={errors.otherSubStatus} placeholder="Enter sub-status" /> : null}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+                  <div className="text-sm font-semibold text-[#1B2A6B]">Remark</div>
+                  {logRow.remark?.trim() ? <div className="mt-2 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600"><span className="font-medium text-gray-800">Last remark:</span> {logRow.remark}</div> : null}
+                  <div className="mt-3"><Textarea label="" value={form.comments} onChange={event => f('comments', event.target.value)} placeholder="Write your remark here..." error={errors.comments} className="min-h-28" /></div>
+                </div>
+                {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+                <div className="sticky bottom-[-1rem] flex items-center justify-end gap-3 border-t border-gray-200 bg-white px-1 pb-1 pt-4"><Btn variant="outline" onClick={() => setLogRow(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Changes'}</Btn></div>
+
+                <div className="hidden">
                 <LogFollowupContactOutcome
                   options={CONTACT_OUTCOME_OPTIONS}
                   selectedValue={form.contactOutcome}
@@ -1648,6 +1668,7 @@ export function FollowupClient({
                     <Btn variant="outline" onClick={() => setLogRow(null)}>Cancel</Btn>
                     <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save follow-up'}</Btn>
                   </div>
+                </div>
                 </div>
               </div>
             )
