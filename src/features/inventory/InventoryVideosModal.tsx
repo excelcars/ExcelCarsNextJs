@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { Loader2, Play, Star, Trash2, Upload, Video } from 'lucide-react'
-import { Btn, Input, Modal } from '@/components/ui'
+import { Btn, ConfirmDialog, Input, Modal } from '@/components/ui'
 import type { InventoryRow } from './inventoryTypes'
 
 type InventoryVideo = {
@@ -32,6 +32,7 @@ export function InventoryVideosModal({ row, onClose, onVideoCountChange }: { row
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [playerVideo, setPlayerVideo] = useState<InventoryVideo | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<InventoryVideo | null>(null)
   const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number; percent: number } | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -152,12 +153,20 @@ export function InventoryVideosModal({ row, onClose, onVideoCountChange }: { row
             {video.sourceType === 'YOUTUBE' && video.youtubeVideoId ? <img src={`https://i.ytimg.com/vi/${video.youtubeVideoId}/hqdefault.jpg`} alt="YouTube video preview" className="h-full w-full object-cover" /> : video.url ? <video className="h-full w-full object-cover" muted preload="metadata" src={video.url} /> : null}
             <span className="absolute inset-0 grid place-items-center bg-black/25 transition group-hover:bg-black/40"><span className="grid h-12 w-12 place-items-center rounded-full bg-white/90 text-[#1B2A6B] shadow"><Play className="ml-0.5 h-6 w-6 fill-current" /></span></span>
           </button>
-          <div className="flex items-center justify-between gap-3 p-3"><div className="min-w-0"><div className="truncate text-xs font-medium text-gray-800">{video.sourceType === 'YOUTUBE' ? 'YouTube video' : video.fileName ?? 'Uploaded MP4'}</div>{video.isFeatured ? <div className="mt-1 text-[11px] font-medium text-amber-700">Featured on public page</div> : null}</div><div className="flex items-center gap-1"><button type="button" onClick={() => feature(video.inventoryVideoId)} disabled={pending || video.isFeatured} title="Set as featured" className="rounded p-1.5 text-gray-500 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-40"><Star className={`h-4 w-4 ${video.isFeatured ? 'fill-amber-400 text-amber-500' : ''}`} /></button><button type="button" onClick={() => remove(video.inventoryVideoId)} disabled={pending} title="Delete video" className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div></div>
+          <div className="flex items-center justify-between gap-3 p-3"><div className="min-w-0"><div className="truncate text-xs font-medium text-gray-800">{video.sourceType === 'YOUTUBE' ? 'YouTube video' : video.fileName ?? 'Uploaded MP4'}</div>{video.isFeatured ? <div className="mt-1 text-[11px] font-medium text-amber-700">Featured on public page</div> : null}</div><div className="flex items-center gap-1"><button type="button" onClick={() => feature(video.inventoryVideoId)} disabled={pending || video.isFeatured} title="Set as featured" className="rounded p-1.5 text-gray-500 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-40"><Star className={`h-4 w-4 ${video.isFeatured ? 'fill-amber-400 text-amber-500' : ''}`} /></button><button type="button" onClick={() => setDeleteTarget(video)} disabled={pending} title="Delete video" className="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"><Trash2 className="h-4 w-4" /></button></div></div>
         </div>)}
       </div>}
     </div> : null}
     <Modal title="Video Player" open={playerVideo !== null} onClose={() => setPlayerVideo(null)} width="max-w-4xl">
       {playerVideo?.sourceType === 'YOUTUBE' && playerVideo.youtubeVideoId ? <iframe className="aspect-video w-full rounded-lg bg-black" src={`https://www.youtube-nocookie.com/embed/${playerVideo.youtubeVideoId}?autoplay=1`} title="Vehicle video" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : playerVideo?.url ? <video className="aspect-video w-full rounded-lg bg-black" controls autoPlay src={playerVideo.url} /> : null}
     </Modal>
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      onClose={() => setDeleteTarget(null)}
+      onConfirm={() => { if (deleteTarget) remove(deleteTarget.inventoryVideoId) }}
+      title="Delete video?"
+      message={`Delete ${deleteTarget?.sourceType === 'YOUTUBE' ? 'this YouTube video' : deleteTarget?.fileName ?? 'this uploaded video'}? This cannot be undone.`}
+      confirmDisabled={pending}
+    />
   </Modal>
 }

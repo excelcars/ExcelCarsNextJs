@@ -7,6 +7,7 @@ export function InventoryConfirmDialogs({
   onDiscard,
   onCloseDelete,
   onDelete,
+  isDeleting,
 }: {
   discardOpen: boolean
   deleteOpen: boolean
@@ -14,11 +15,12 @@ export function InventoryConfirmDialogs({
   onDiscard: () => void
   onCloseDelete: () => void
   onDelete: () => void
+  isDeleting: boolean
 }) {
   return (
     <>
       <ConfirmDialog open={discardOpen} onClose={onCloseDiscard} onConfirm={onDiscard} title="Discard changes?" confirmLabel="Discard" message="You have unsaved changes in this vehicle form. Discard them and close?" />
-      <ConfirmDialog open={deleteOpen} onClose={onCloseDelete} onConfirm={onDelete} message="This will permanently delete the vehicle record. This action cannot be undone." />
+      <ConfirmDialog open={deleteOpen} onClose={onCloseDelete} onConfirm={onDelete} title="Delete vehicle?" message="This will permanently delete the vehicle record. This action cannot be undone." confirmLabel={isDeleting ? 'Deleting…' : 'Delete'} confirmDisabled={isDeleting} cancelDisabled={isDeleting} closeOnConfirm={false} isLoading={isDeleting} />
     </>
   )
 }
