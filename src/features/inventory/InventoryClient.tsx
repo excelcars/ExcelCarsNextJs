@@ -8,7 +8,7 @@ import { Upload, Loader2 } from 'lucide-react'
 import { Btn, Input, Modal } from '@/components/ui'
 import { deleteInventory, sendInventoryEmail, sendBulkInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryInquiry, updateInventoryEmailRecipient, getNextInventoryNumber } from './actions'
 import { isValidEmail, normalizeRegistrationNo } from '@/lib/validation'
-import type { CarMakeMaster, Dealer, CustomerOption, InventoryRow, InventoryPhoto, UploadQueueItem, InquiryOption, EmailRecipient, InventoryFilters } from './inventoryTypes'
+import type { CarMakeMaster, Dealer, InventoryRow, InventoryPhoto, UploadQueueItem, InquiryOption, EmailRecipient, InventoryFilters } from './inventoryTypes'
 import { InventoryTable } from './InventoryTable'
 import { InventoryPagination } from './InventoryPagination'
 import { InventoryFilters as InventoryFiltersPanel, type InventoryFilterChip } from './InventoryFilters'
@@ -308,6 +308,7 @@ export function InventoryClient({
   const { setForm, setEditId, setOriginalStatus, setCurrentInventoryNumber, setCurrentSku, setError, setErrors, setSelectedCustomer, setSelectedMakeId, setSelectedModelId, setCatalogMakeText, setCatalogModelText, setCatalogVariantText, setCatalogAddType, setCatalogAddValue, setModels, setVariants, fieldChange, onCustomerChange: formCustomerChange, addCatalogValue } = inventoryForm.actions
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isDeletingInventory, startInventoryDeleteTransition] = useTransition()
   const [viewRow, setViewRow] = useState<InventoryRow | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
@@ -1147,7 +1148,7 @@ export function InventoryClient({
 
   const del = () => {
     if (!deleteId) return
-    startTransition(async () => {
+    startInventoryDeleteTransition(async () => {
       const result = await deleteInventory(deleteId)
       if (result.success) {
         setData(prev => prev.filter(r => r.inventoryId !== deleteId))
@@ -1201,10 +1202,7 @@ export function InventoryClient({
     onDealerFocus: () => setDealerOpen(true),
     onDealerSelect: (dealer: Dealer) => { setEmailSelectedDealer(dealer); setDealerOpen(false); setDealerQuery('') },
     onSelectedDealerClear: () => setEmailSelectedDealer(null),
-    onSelectedCustomerChange: (customer: CustomerOption | null) => {
-      if (customer) addEmailRecipient({ key: `customer-${customer.custId}`, recipientType: 'customer', recipientId: customer.custId, name: customer.custName, email: customer.custEmail, meta: customer.custMobile ?? 'Customer' })
-      setEmailSelectedCustomer(null)
-    },
+    onSelectedCustomerChange: setEmailSelectedCustomer,
     onAddRecipient: addEmailRecipient, onRemoveRecipient: removeEmailRecipient,
     onEditRecipient: (recipient: EmailRecipient) => { setEditingRecipientEmailKey(recipient.key); setRecipientEmailDraft(recipient.email ?? ''); setRecipientEmailError('') },
     onRecipientEmailDraftChange: (value: string) => { setRecipientEmailDraft(value); setRecipientEmailError('') },
@@ -1301,6 +1299,7 @@ export function InventoryClient({
         onDiscard={closeModalImmediately}
         onCloseDelete={() => setDeleteId(null)}
         onDelete={del}
+        isDeleting={isDeletingInventory}
       />
 
       <InventoryEmailModal {...emailModalProps} />

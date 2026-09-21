@@ -216,6 +216,7 @@ interface ConfirmDialogProps {
   confirmDisabled?: boolean
   cancelDisabled?: boolean
   closeOnConfirm?: boolean
+  isLoading?: boolean
 }
 
 export function ConfirmDialog({
@@ -229,6 +230,7 @@ export function ConfirmDialog({
   confirmDisabled = false,
   cancelDisabled = false,
   closeOnConfirm = true,
+  isLoading = false,
 }: ConfirmDialogProps) {
   useEffect(() => {
     if (!open) return
@@ -260,7 +262,7 @@ export function ConfirmDialog({
             }}
             disabled={confirmDisabled}
           >
-            {confirmLabel}
+            {isLoading ? <><Loader2 className="h-4 w-4 animate-spin" />{confirmLabel}</> : confirmLabel}
           </Btn>
         </div>
       </div>
