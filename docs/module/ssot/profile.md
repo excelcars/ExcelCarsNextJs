@@ -1,5 +1,5 @@
 # SSOT - User Profile
-## Status: Next.js implemented; code-verified
+## Status: Next.js implemented; current-state behavior documented and code-verified
 
 **Module:** `/profile`  
 **Project:** ExcelCarsNextJs  
@@ -24,7 +24,7 @@ Primary files:
 - `auth.ts`
 - `auth.config.ts`
 - `middleware.ts`
-- `src/lib/validation.ts`
+- `src/lib/profileValidation.ts`
 - `src/lib/access/accessControl.ts`
 - `prisma/schema.prisma` (`UserTable`, `AddEmployee`, `ForgotPassword`)
 

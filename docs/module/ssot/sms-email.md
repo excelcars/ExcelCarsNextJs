@@ -69,3 +69,7 @@ The same exact-match rule also submits the existing vehicle-details email when t
 Template action failures are returned as generic action-specific strings; email configuration and SMTP errors are returned verbatim from `sendMail`. The UI shows save errors in the template modal (or after a delete attempt) and send errors in the send modal. There is no global error boundary or structured logging in this feature.
 
 A second review covered route authorization, direct action authorization, private attachment paths, Prisma relations, client-local filters, recipient search/re-resolution, all modal branches, and SMTP configuration. No additional SMS transport was found.
+
+## 8. SSOT rule
+
+Update this document whenever template authorization, recipient resolution, attachment handling, email delivery/retry behavior, or the inquiry-specific WhatsApp contract changes. Keep general SMS/template-sender capabilities distinct from the implemented inquiry automation.

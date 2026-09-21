@@ -2,10 +2,11 @@ import { randomUUID } from 'crypto'
 import path from 'path'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { deleteFromFirebaseStorage, firebasePublicUrl, isFirebaseStoragePath, uploadToFirebaseStorage } from '@/lib/firebase/storage'
+import { createFirebaseUploadUrl, deleteFromFirebaseStorage, firebasePublicUrl, firebaseStoragePath, getFirebaseStorageMetadata, isFirebaseStoragePath, uploadToFirebaseStorage } from '@/lib/firebase/storage'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024
+type UploadFile = { name?: unknown; size?: unknown; type?: unknown; storagePath?: unknown }
 
 function publicPath(storagePath: string | null) {
   if (!storagePath) return null
@@ -69,6 +70,8 @@ async function createVideo(req: NextRequest) {
   if (contentType.includes('application/json')) {
     const body = await req.json().catch(() => null)
     const inventoryId = Number(body?.inventoryId)
+    if (body?.action === 'prepareUpload') return prepareUploads(inventoryId, body?.files)
+    if (body?.action === 'completeUpload') return completeUploads(inventoryId, body?.files)
     const details = typeof body?.youtubeUrl === 'string' ? youtubeDetails(body.youtubeUrl) : null
     if (!inventoryId || !details) return NextResponse.json({ error: 'Enter a valid YouTube video link.' }, { status: 400 })
     const exists = await prisma.inventoryManagement.findUnique({ where: { inventoryId }, select: { inventoryId: true } })
@@ -98,6 +101,50 @@ async function createVideo(req: NextRequest) {
       results.push({ name: file.name, success: true, video: toResponse(video) })
     } catch (error) {
       results.push({ name: file.name, success: false, error: error instanceof Error ? error.message : 'Upload failed.' })
+    }
+  }
+  return NextResponse.json({ success: results.some(result => result.success), results })
+}
+
+function validUploadFile(file: UploadFile) {
+  return typeof file.name === 'string' && file.name.toLowerCase().endsWith('.mp4')
+    && file.type === 'video/mp4' && typeof file.size === 'number' && file.size > 11 && file.size <= MAX_VIDEO_SIZE
+}
+
+async function requireVehicle(inventoryId: number) {
+  if (!inventoryId) return null
+  return prisma.inventoryManagement.findUnique({ where: { inventoryId }, select: { inventoryId: true } })
+}
+
+async function prepareUploads(inventoryId: number, rawFiles: unknown) {
+  const files = Array.isArray(rawFiles) ? rawFiles as UploadFile[] : []
+  if (!await requireVehicle(inventoryId)) return NextResponse.json({ error: 'Vehicle not found.' }, { status: 404 })
+  if (files.length === 0 || files.length > 10 || files.some(file => !validUploadFile(file))) {
+    return NextResponse.json({ error: 'Select up to 10 MP4 videos, each no larger than 100 MB.' }, { status: 400 })
+  }
+  const uploads = await Promise.all(files.map(async file => {
+    const objectKey = `inventory/${inventoryId}/videos/${randomUUID()}.mp4`
+    return { name: file.name as string, storagePath: firebaseStoragePath(objectKey), uploadUrl: await createFirebaseUploadUrl(objectKey, 'video/mp4') }
+  }))
+  return NextResponse.json({ uploads })
+}
+
+async function completeUploads(inventoryId: number, rawFiles: unknown) {
+  const files = Array.isArray(rawFiles) ? rawFiles as UploadFile[] : []
+  if (!await requireVehicle(inventoryId)) return NextResponse.json({ error: 'Vehicle not found.' }, { status: 404 })
+  if (files.length === 0 || files.length > 10 || files.some(file => !validUploadFile(file) || typeof file.storagePath !== 'string' || !file.storagePath.startsWith(`firebase://inventory/${inventoryId}/videos/`))) {
+    return NextResponse.json({ error: 'Invalid uploaded video details.' }, { status: 400 })
+  }
+  const results: Array<{ name: string; success: boolean; error?: string; video?: unknown }> = []
+  let nextOrder = await prisma.inventoryVideo.count({ where: { fkInventoryId: inventoryId } })
+  for (const file of files) {
+    try {
+      const metadata = await getFirebaseStorageMetadata(file.storagePath as string)
+      if (metadata.contentType !== 'video/mp4' || Number(metadata.size) !== file.size) throw new Error('Uploaded file could not be verified.')
+      const video = await prisma.inventoryVideo.create({ data: { fkInventoryId: inventoryId, sourceType: 'UPLOAD', storagePath: file.storagePath as string, fileName: file.name as string, isFeatured: nextOrder === 0, sortOrder: nextOrder++ } })
+      results.push({ name: file.name as string, success: true, video: toResponse(video) })
+    } catch (error) {
+      results.push({ name: file.name as string, success: false, error: error instanceof Error ? error.message : 'Upload failed.' })
     }
   }
   return NextResponse.json({ success: results.some(result => result.success), results })

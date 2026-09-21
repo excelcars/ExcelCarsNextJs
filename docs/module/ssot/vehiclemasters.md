@@ -33,6 +33,8 @@ The page supports server-side search and pagination over Make rows, a user-orien
 
 The Configuration menu exposes the page as `Vehicle Masters`.
 
+`Vehicle_Master_Management` is registered in the access catalog for navigation metadata, but the current page and catalog mutation actions do not call `canCurrentUserAccessRoute` or a mutation authorization helper. The current implementation therefore relies on the authenticated dashboard boundary only.
+
 The page uses URL parameters for `search` and `page`.
 
 ## 4. Data Ownership

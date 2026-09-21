@@ -916,13 +916,22 @@ export function InventoryClient({
     otherRemarks: form.otherRemarks || null,
     fkVariantId: form.fkVariantId,
     customer: selectedCustomer,
-    _count: { inventoryPhotos: data.find(r => r.inventoryId === inventoryId)?._count.inventoryPhotos ?? 0 },
+    _count: {
+      inventoryPhotos: data.find(r => r.inventoryId === inventoryId)?._count.inventoryPhotos ?? 0,
+      inventoryVideos: data.find(r => r.inventoryId === inventoryId)?._count.inventoryVideos ?? 0,
+    },
     carVariantMaster: null,
   })
 
   const refreshPhotoCount = (inventoryId: number, delta: number) => {
     setData(prev => prev.map(row => row.inventoryId === inventoryId
-      ? { ...row, _count: { inventoryPhotos: Math.max(0, row._count.inventoryPhotos + delta) } }
+      ? { ...row, _count: { ...row._count, inventoryPhotos: Math.max(0, row._count.inventoryPhotos + delta) } }
+      : row))
+  }
+
+  const setVideoCount = (inventoryId: number, inventoryVideos: number) => {
+    setData(prev => prev.map(row => row.inventoryId === inventoryId
+      ? { ...row, _count: { ...row._count, inventoryVideos: Math.max(0, inventoryVideos) } }
       : row))
   }
 
@@ -1399,7 +1408,7 @@ export function InventoryClient({
         ) : null}
       </Modal>
 
-      <InventoryVideosModal row={videoRow} onClose={() => setVideoRow(null)} />
+      <InventoryVideosModal row={videoRow} onClose={() => setVideoRow(null)} onVideoCountChange={setVideoCount} />
 
       <InventoryInquiryModal {...inquiryModalProps} />
     </div>

@@ -2,6 +2,8 @@
 
 ## Status, route, and evidence
 
+**Status:** Next.js implemented; current-state behavior documented and code-verified.
+
 This document describes the actual current implementation only, after two code-review passes. Route: `/checklist`.
 
 The route page is a thin authorization/data-loading wrapper. The interactive feature composes focused UI components; the listing and pagination are implemented by `ChecklistTable.tsx` rather than embedded in the feature controller.
@@ -50,7 +52,7 @@ Delete first removes children, then the header; the UI presents a destructive co
 
 ## View and error behavior
 
-View retrieves fresh detail data and shows vehicle/customer snapshot, created/updated audit time and resolved actor, and the complete detail table. Detail fetch errors show in the modal. The API returns 401 for no session and 404 for missing/invalid IDs or missing records. There is no server validation of allowed document enum values, customer contact formats, year, or UI field requirements beyond inventory, registration, duplicate, and at-least-one-document rules.
+View retrieves fresh detail data and shows vehicle/customer snapshot, created/updated audit time and resolved actor, and the complete detail table. Detail fetch errors show in the modal. The API returns 401 for no session and 404 for missing/invalid IDs or missing records. Create and update run shared server validation for document enum values, customer contact formats, year, required vehicle snapshot fields, inventory/registration consistency, duplicate checklists, and at least one named document.
 
 ## SSOT rule
 

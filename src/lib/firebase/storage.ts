@@ -3,6 +3,7 @@ import { getStorage } from 'firebase-admin/storage'
 import fs from 'node:fs'
 
 const FIREBASE_PATH_PREFIX = 'firebase://'
+const corsConfiguredOrigins = new Set<string>()
 
 function serviceAccount() {
   const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
@@ -48,6 +49,55 @@ export async function uploadToFirebaseStorage(objectKey: string, bytes: Buffer, 
     metadata: { contentType, cacheControl: 'public,max-age=31536000,immutable' },
   })
   return firebaseStoragePath(objectKey)
+}
+
+function browserUploadOrigins() {
+  return [...new Set([
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    process.env.APP_URL,
+    process.env.NEXTAUTH_URL,
+  ].filter((value): value is string => Boolean(value?.startsWith('http'))).map(value => value.replace(/\/$/, '')))]
+}
+
+async function ensureBrowserUploadCors() {
+  const origins = browserUploadOrigins().filter(origin => !corsConfiguredOrigins.has(origin))
+  if (origins.length === 0) return
+
+  const storageBucket = bucket()
+  const [metadata] = await storageBucket.getMetadata()
+  const currentRules = Array.isArray(metadata.cors) ? metadata.cors : []
+  const missingOrigins = origins.filter(origin => !currentRules.some(rule => rule.origin?.includes(origin) && rule.method?.includes('PUT')))
+  if (missingOrigins.length > 0) {
+    await storageBucket.setCorsConfiguration([
+      ...currentRules,
+      {
+        origin: missingOrigins,
+        method: ['GET', 'HEAD', 'PUT'],
+        responseHeader: ['Content-Type'],
+        maxAgeSeconds: 3600,
+      },
+    ])
+  }
+  origins.forEach(origin => corsConfiguredOrigins.add(origin))
+}
+
+export async function createFirebaseUploadUrl(objectKey: string, contentType: string) {
+  await ensureBrowserUploadCors()
+  const [uploadUrl] = await bucket().file(objectKey).getSignedUrl({
+    version: 'v4',
+    action: 'write',
+    expires: Date.now() + 15 * 60 * 1000,
+    contentType,
+  })
+  return uploadUrl
+}
+
+export async function getFirebaseStorageMetadata(storedPath: string) {
+  const objectKey = firebaseObjectKey(storedPath)
+  if (!objectKey) throw new Error('Invalid Firebase Storage path.')
+  const [metadata] = await bucket().file(objectKey).getMetadata()
+  return metadata
 }
 
 export async function deleteFromFirebaseStorage(storedPath: string | null | undefined) {

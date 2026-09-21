@@ -1,5 +1,7 @@
 # Role Access Management - Improvement Gap Analysis
 
+## Status: Current implementation is documented in `roleaccess.md`; remaining items are deferred access-governance and audit-policy decisions
+
 ## Current improvement backlog
 
 | Priority | Gap or risk | Required improvement |

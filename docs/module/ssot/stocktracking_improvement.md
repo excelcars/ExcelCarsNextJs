@@ -1,11 +1,11 @@
 # SSOT - Stock Tracking Improvements
-## Status: Gap analysis for current Next.js module vs existing system; not yet merged into current-state SSOT
+## Status: Deferred legacy-parity backlog; current implemented behavior is in `stocktracking.md`
 
 **Module:** `reports/tracking`  
 **Project:** `ExcelCarsNextJs`  
 **Base current-state SSOT:** `C:\KhizarShaikh\Project\ExcelCarsNextJs\docs\module\ssot\stocktracking.md`  
 **Existing-system reference:** `C:\KhizarShaikh\Project\ExcelCarsNextJs\docs\module\existing_ssot\stocktracking.md`  
-**Purpose of this file:** Track missing functionality and business logic separately until explicitly approved for implementation and SSOT merge.
+**Purpose of this file:** Preserve optional legacy-parity work separately from the current implemented behavior. These are not release commitments and do not change the current-state SSOT.
 
 ## 1. Scope Of This Improvement Document
 This document lists functionality and business logic that is present, implied, or evidenced in the legacy/existing Stock Tracking Report module but is not fully represented in the current Next.js implementation.

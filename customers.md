@@ -69,7 +69,7 @@ It requires customer-module authority, then executes `prisma.customer.delete`, w
 
 The feature also supplies reusable customer selection behavior outside `/config/customers`.
 
-- `GET /api/customers/search?q=` requires a valid auth session, but does not call the function-permission resolver. It invokes `searchCustomers`, which returns at most 15 matching customer id/name/primary-mobile/email rows when trimmed query length is at least 2. It searches only name, primary mobile, and email case-insensitively; output is name ascending.
+- `GET /api/customers/search?q=` requires an authenticated user with either Customer Management or Feedback route access. It invokes `searchCustomers`, which returns at most 15 matching customer id/name/primary-mobile/email rows when trimmed query length is at least 2. It searches only name, primary mobile, and email case-insensitively; output is name ascending.
 - `CustomerPicker` is used by checklist, inquiry, inventory, loan, insurance, RTO, feedback, and message-template clients. It debounces this API by 300ms, provides selection/clear behavior, and offers an inline **Create new customer** form.
 - `quickCreateCustomer` runs the same normalized name/contact validation and duplicate decision as the administration form, then inserts a minimal `Customer`-type record. It requires `Customer_Management_Write`, including when invoked from a customer picker in another module.
 
@@ -82,12 +82,12 @@ The feature also supplies reusable customer selection behavior outside `/config/
 
 ## 8. Verification checklist
 
-- A user with `Customer_Management` sees the route/navigation and can CRUD customer master records; another signed-in user is redirected from the page and actions return Not authorized.
+- A user with `Customer_Management` sees the route/navigation; `Customer_Management_Write` is additionally required to create, edit, delete, or quick-create customer master records. Other signed-in users are redirected from the page and actions return Not authorized.
 - List order, search, type filtering, and 25-row pagination follow the URL parameters.
 - Add/edit require a name and reject an exact same-name/same-primary-mobile record only when a primary mobile is provided.
-- Deleting a referenced customer is blocked by a database foreign key, although the current list UI does not expose the returned failure message.
-- Picker search needs two characters and returns at most 15 basic customer matches; quick-create records are type `Individual` and can be authorized by a consumer module permission.
+- Deleting a referenced customer is blocked by a database foreign key, and the returned failure remains visible in the confirmation dialog.
+- Picker search needs two characters and returns at most 15 basic customer matches; quick-create records use type `Customer` and require Customer Management Write permission.
 
 ## 9. Review record
 
-Two implementation-review passes were completed across the page, client component, administration/query actions, picker/API paths, access resolver/catalog, schema, and consumer references. The second pass confirmed the picker’s broader authorization rule, the `Individual` type mismatch, query-specific field differences, hard-delete error visibility gap, and absence of server validation beyond name/duplicate checking.
+Two implementation-review passes were completed across the page, client component, administration/query actions, picker/API paths, access resolver/catalog, schema, and consumer references. The second pass confirmed the picker route authorization, its Customer-type quick-create contract, query-specific field differences, visible hard-delete failures, and the shared server validation policy.

@@ -1,6 +1,6 @@
 # RTO Agent Improvement / Gap Analysis
 
-**Status:** Pending review. This file remains separate from `rtoagent.md` until approved implementation is complete.
+**Status:** Shared-master scope decision recorded on 2026-09-21. This file remains separate from `rtoagent.md` for future parity decisions.
 
 ## 1. Align the Agent screen with RTO-only scope
 
@@ -10,9 +10,9 @@
 
 **Current Next.js Status:** `/config/agents` is a shared screen exposing Insurance Agent, RTO Agent, and DSA records in `PartnerMaster`.
 
-**Missing Functionality or Logic:** The current page is broader than the requested RTO Agent scope.
+**Decision:** The current release accepts `/config/agents` as a shared Partner Master. It is not a missing RTO-only screen and does not replace RTO transaction snapshots.
 
-**Required Improvement:** Restrict the page to RTO agents, or explicitly approve it as a separate shared master module. Under the requested model, use `RTO_Agent_Management` for add, edit, and delete access.
+**Required Improvement:** None for the accepted current scope. Revisit only if product later requires a dedicated RTO-only master.
 
 **Relevant Existing Code Location:** `app/(dashboard)/config/agents/page.tsx`; `src/features/agents/AgentsClient.tsx`; `src/features/agents/adminQueries.ts`; `src/lib/access/accessCatalog.ts`.
 
@@ -24,11 +24,11 @@
 
 **Existing System Behavior:** RTO agent add/edit/delete behavior was protected by `RTO_Agent_Management`. Autocomplete had no separate authorization filter. Notification usage required `Notification_Management`.
 
-**Current Next.js Status:** The RTO page uses its own route authorization, but the shared Agent Configuration page and its CRUD actions do not currently enforce the requested RTO permission boundary.
+**Current Next.js Status:** The RTO page uses its RTO route authorization. The shared Agent Configuration page and its CRUD actions use the `Agent_Management` route permission by design.
 
-**Missing Functionality or Logic:** A user’s ability to manage global `RTO Agent` records is not yet aligned with the stated RTO Management rule.
+**Decision:** Global shared-partner administration is intentionally separate from RTO transaction management.
 
-**Required Improvement:** If `/config/agents` becomes RTO-only, protect its page, query, create, update, and delete actions using the existing `RTO_Agent_Management` permission. Do not add a new RTO Agent permission.
+**Required Improvement:** None for the accepted current scope. If `/config/agents` later becomes RTO-only, protect its page, query, create, update, and delete actions using `RTO_Agent_Management`.
 
 **Relevant Existing Code Location:** `src/features/agents/adminActions.ts`; `app/(dashboard)/config/agents/page.tsx`; `src/lib/access/accessControl.ts`; `src/lib/access/accessCatalog.ts`.
 

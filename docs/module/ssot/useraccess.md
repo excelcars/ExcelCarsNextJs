@@ -1,6 +1,6 @@
 # SSOT - User Access Management
 
-## Status: Next.js implemented
+## Status: Next.js implemented; current-state behavior documented
 
 **Route:** `/config/user-access`
 

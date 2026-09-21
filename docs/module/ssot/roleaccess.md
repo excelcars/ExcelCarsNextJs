@@ -1,6 +1,6 @@
 # SSOT - Role Access Management
 
-## Status: Next.js implemented
+## Status: Next.js implemented; current-state behavior documented
 
 **Routes:** `/config/role-access` and `/config/role-access/history`
 

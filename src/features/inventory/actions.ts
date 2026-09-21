@@ -7,6 +7,7 @@ import path from 'path'
 import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { buildInquiryOwnershipWhere, getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 import { sendEmail } from '@/lib/email/sendMail'
 import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
@@ -204,12 +205,14 @@ async function createTrackedVehicleEmailLink({
   recipientEmail,
   recipientName,
   slug,
+  channel = 'Email',
 }: {
   inventoryId: number
   customerId: number | null
   recipientEmail: string
   recipientName: string
   slug: string
+  channel?: 'Email' | 'WhatsApp'
 }) {
   const { rawToken, tokenHash } = generateVehicleEmailToken()
   const row = await prisma.vehicleEmailLink.create({
@@ -218,6 +221,7 @@ async function createTrackedVehicleEmailLink({
       ...(customerId ? { customer: { connect: { custId: customerId } } } : {}),
       recipientEmail,
       recipientName: recipientName || null,
+      channel,
       tokenHash,
       emailSentAt: new Date(),
       isActive: true,
@@ -530,6 +534,7 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
       registrationNo: vehicle.registrationNo ?? '',
       kmsDriven: vehicle.kmsDriven ? vehicle.kmsDriven.toString() : null,
       price: vehicle.price ? vehicle.price.toString() : null,
+      remarks: vehicle.otherRemarks ?? '',
       signedBy: session?.user?.name || 'Excel Cars Team',
       viewDetailsUrl: trackedLink.url,
     })
@@ -569,20 +574,22 @@ export async function sendInventoryWhatsApp(inventoryId: number, input: SendInve
   let sent = 0
   const failed: string[] = []
 
-  for (const mobile of recipients) {
+  const deliveries = await Promise.all(recipients.map(async mobile => {
     try {
-      const trackedLink = await createTrackedVehicleEmailLink({ inventoryId, customerId: null, recipientEmail: `whatsapp:${mobile}`, recipientName: 'Customer', slug })
+      const trackedLink = await createTrackedVehicleEmailLink({ inventoryId, customerId: null, recipientEmail: `whatsapp:${mobile}`, recipientName: 'Customer', slug, channel: 'WhatsApp' })
       const link = new URL(trackedLink.url)
       const result = await sendEnquiryTemplate({ to: mobile, customerName: 'Customer', vehicleName, buttonUrlSuffix: `${link.pathname}${link.search}`.replace(/^\//, '') })
-      if (result.success) sent += 1
+      if (result.success) return { mobile, success: true }
       else {
-        failed.push(mobile)
         await prisma.vehicleEmailLink.delete({ where: { vehicleEmailLinkId: trackedLink.vehicleEmailLinkId } }).catch(() => undefined)
+        return { mobile, success: false }
       }
     } catch {
-      failed.push(mobile)
+      return { mobile, success: false }
     }
-  }
+  }))
+  sent = deliveries.filter(delivery => delivery.success).length
+  failed.push(...deliveries.filter(delivery => !delivery.success).map(delivery => delivery.mobile))
 
   if (sent === 0) return { success: false, error: `WhatsApp could not be sent${failed.length ? ` to: ${failed.join(', ')}` : '.'}` }
   return { success: true, message: `WhatsApp submitted to ${sent} recipient${sent === 1 ? '' : 's'}${failed.length ? `. Failed: ${failed.join(', ')}` : '.'}` }
@@ -591,6 +598,9 @@ export async function sendInventoryWhatsApp(inventoryId: number, input: SendInve
 export async function syncInventoryToInquiry(inventoryId: number, input: SyncInventoryInquiryInput): Promise<ActionResult> {
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
+
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/inventory')
+  if (!ownershipScope.userId) return { success: false, error: 'Not authorized.' }
 
   try {
     const inventory = await prisma.inventoryManagement.findUnique({
@@ -604,11 +614,18 @@ export async function syncInventoryToInquiry(inventoryId: number, input: SyncInv
     })
     if (!inventory) return { success: false, error: 'Vehicle not found.' }
 
-    const inquiry = await prisma.inquiry.findUnique({
-      where: { inquiryId: input.inquiryId },
+    const inquiry = await prisma.inquiry.findFirst({
+      where: {
+        AND: [
+          { inquiryId: input.inquiryId },
+          ...(ownershipScope.restrictToUserId
+            ? [buildInquiryOwnershipWhere(ownershipScope.restrictToUserId, ownershipScope.ownershipMode)]
+            : []),
+        ],
+      },
       include: { inquiryCarDetails: { take: 1, orderBy: [{ updatedDt: 'desc' }, { inquiryCarDetailsId: 'desc' }] } },
     })
-    if (!inquiry) return { success: false, error: 'Inquiry not found.' }
+    if (!inquiry) return { success: false, error: 'Inquiry not found or you do not have access to it.' }
 
     const isSold = inventory.status === 'Sold'
     const syncNote = [
@@ -624,7 +641,10 @@ export async function syncInventoryToInquiry(inventoryId: number, input: SyncInv
         where: { inquiryId: input.inquiryId },
         data: {
           customer: inventory.customerId ? { connect: { custId: inventory.customerId } } : inquiry.customerId ? undefined : { disconnect: true },
-          customerNameLegacy: inventory.customerName || inquiry.customerNameLegacy || null,
+          // A legacy compatibility name without a linked customer is not
+          // authoritative. Keep the inquiry's established name instead of
+          // overwriting it with potentially stale inventory text.
+          customerNameLegacy: inventory.customerId ? inventory.customerName || inquiry.customerNameLegacy || null : inquiry.customerNameLegacy || null,
           mobileno: inventory.mobileNoOwnedBy || inquiry.mobileno || null,
           email: inventory.emailIdOwnedBy || inquiry.email || null,
           classification: 'Hot',
@@ -673,6 +693,20 @@ export async function syncInventoryToInquiry(inventoryId: number, input: SyncInv
           inquiryCarDetailsId: { not: keepId },
         },
       })
+
+      // This is a stateful workflow link, not a history event. The partial
+      // unique index added with the inventory registration migration makes
+      // repeated synchronizations safe even when requests race.
+      await tx.$executeRaw`
+        INSERT INTO public.inquiry_inventory_links
+          (inquiry_id, inventory_id, link_type, is_active, created_at, created_by, updated_at, updated_by)
+        VALUES (${input.inquiryId}, ${inventory.inventoryId}, 'inventory-sync', TRUE, ${now}, ${userId}, ${now}, ${userId})
+        ON CONFLICT (inquiry_id, inventory_id) WHERE link_type = 'inventory-sync'
+        DO UPDATE SET
+          is_active = TRUE,
+          updated_at = EXCLUDED.updated_at,
+          updated_by = EXCLUDED.updated_by
+      `
     })
   } catch (err) {
     return { success: false, error: describeError(err) }

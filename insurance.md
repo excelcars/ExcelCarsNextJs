@@ -2,6 +2,8 @@
 
 ## Status and scope
 
+**Status:** Next.js implemented; current-state behavior documented and code-verified.
+
 Implemented `/insurance` module; two code-review passes completed. Evidence: `app/(dashboard)/insurance/page.tsx`, `src/features/insurance/InsuranceClient.tsx`, `actions.ts`, `queries.ts`, `app/api/insurance/{export,history}/route.ts`, `prisma/schema.prisma`, and `src/lib/access/accessControl.ts`.
 
 ## Access, navigation, and data model
@@ -15,7 +17,7 @@ PostgreSQL/Prisma models `InsuranceMain`, `InsurancePaymentDetails`, and `Insura
 - Server listing is newest ID first, 25 rows per page, with Previous/Next paging and page/total counters.
 - Search is debounced (350 ms) and case-insensitive partial matching across registration, legacy and linked customer/agent name/mobile/email, and legacy make/model/variant. From/To entry-date filters are debounced (250 ms), independently optional, and inclusive as implemented by `new Date(date)` bounds. Reset clears all filters.
 - The table shows registration; customer; agent; insurance/OD premiums; payout; total received; payout/policy badges; renewal/expiry; and Log Payment, View, Edit, Delete actions. There is no user-selected sort.
-- Export calls authenticated `GET /api/insurance/export`, retrieves the complete current filter result (not only the page), and generates a browser CSV with 29 IDs, links, dates, snapshots, financial/status, follow-up, and remark columns. The API requires authentication but only checks for a session, not the `Insurance_Management` grant.
+- Export calls authorized `GET /api/insurance/export`, retrieves the complete current filter result (not only the page), and generates a browser CSV with 29 IDs, links, dates, snapshots, financial/status, follow-up, and remark columns. The API enforces the same `Insurance_Management` route access as the page.
 
 ## Form, links, and operations
 

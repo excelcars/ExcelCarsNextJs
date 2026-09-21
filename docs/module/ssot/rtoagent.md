@@ -1,11 +1,11 @@
 # SSOT - RTO Agent
-## Status: Current Next.js implementation documented; RTO-only scope correction pending
+## Status: Current Next.js implementation documented; shared-master scope accepted for the current release
 
 ## 1. Purpose and scope
 
 In the legacy system, an RTO agent was not a separate master module. Agent name, mobile, and email were stored on each RTO record. Adding or editing those details happened as part of RTO Management.
 
-The intended Next.js scope is the same business concept: manage RTO-agent details for RTO transactions. It is not an Insurance Agent, DSA, or Loan Bank Contact module.
+The RTO transaction scope is to manage RTO-agent details for RTO transactions. The current release also has a separate shared Partner Master for reusable Insurance Agent, RTO Agent, and DSA contacts; that shared administrative surface is documented here only where it supplies RTO partners.
 
 ## 2. Access rules
 
@@ -28,7 +28,7 @@ The current repository also contains a newer shared Agent Configuration screen a
 - `src/features/agents/adminQueries.ts`
 - `src/features/agents/adminActions.ts`
 
-At present, that screen stores `PartnerMaster` records and exposes three types: `Insurance Agent`, `RTO Agent`, and `DSA`. This is broader than the RTO-only scope defined in this SSOT and must be resolved before claiming full RTO parity.
+This screen is the approved shared master for the current release. It stores `PartnerMaster` records and exposes three types: `Insurance Agent`, `RTO Agent`, and `DSA`. It is not a replacement for the legacy RTO transaction snapshot model; it supplies reusable RTO partners to that model.
 
 RTO transactions use the shared `PartnerPicker` with `partnerType="RTO Agent"`. The RTO transaction still retains legacy snapshot fields and a nullable `fkPartnerId` relationship.
 
@@ -68,9 +68,16 @@ The RTO screen displays the linked partner when available and falls back to the 
 
 RTO agents must not be treated as Insurance agents or DSA contacts merely because they share the `PartnerMaster` table.
 
-## 7. Known implementation gap
+## 7. Current scope and remaining parity decisions
 
-The current `/config/agents` page is a shared three-type master screen, while this SSOT defines the requested RTO-only scope. The implementation must either restrict that screen to RTO agents and apply `RTO_Agent_Management`, or be treated as a separate shared master module with separately approved access rules. Until that decision is implemented, this SSOT records the intended RTO behavior and the current mismatch.
+`/config/agents` remains a shared three-type Partner Master protected by the `Agent_Management` route permission. Its scope is intentionally broader than a legacy RTO-only screen. RTO transaction creation, editing, and deletion continue to use the RTO route permission; the shared master does not make a global partner deletion equivalent to deleting RTO transaction snapshots.
+
+The following are not implemented parity guarantees and require a separately approved business rule before code changes:
+
+- direct manual RTO snapshot entry without a selected `PartnerMaster`;
+- importing or reconciling snapshot-only historical RTO contacts into the shared master;
+- a dedicated RTO-agent notification-recipient workflow; and
+- changing the shared Agent Master authorization from `Agent_Management` to `RTO_Agent_Management`.
 
 ## 8. SSOT rule
 

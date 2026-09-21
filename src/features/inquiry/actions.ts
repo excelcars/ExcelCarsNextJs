@@ -705,6 +705,7 @@ async function sendInquiryCarEmail(inquiryId: number): Promise<ActionResult> {
     registrationNo: '',
     kmsDriven: null,
     price: null,
+    remarks: '',
     signedBy: session?.user?.name || 'Excel Cars Team',
   })
 
@@ -821,6 +822,7 @@ async function sendMatchedInventoryEmailToInquiryRecipient({
     registrationNo: inventory.registrationNo ?? '',
     kmsDriven: inventory.kmsDriven ? inventory.kmsDriven.toString() : null,
     price: inventory.price ? inventory.price.toString() : null,
+    remarks: inventory.otherRemarks ?? '',
     signedBy,
     viewDetailsUrl: trackedLink.url,
   })

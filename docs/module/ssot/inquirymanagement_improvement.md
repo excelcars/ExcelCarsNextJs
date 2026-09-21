@@ -1,5 +1,5 @@
 # Inquiry Management - Open Discussion Backlog
-## Status: Completed improvements merged into `inquirymanagement.md` on 2026-09-02
+## Status: Completed improvements are documented in the current, re-verified `inquirymanagement.md` SSOT as of 2026-09-21
 
 **Module:** `inquiry`  
 **Current-state SSOT:** `D:\projects\ExcelCarsNextJs\docs\module\ssot\inquirymanagement.md`

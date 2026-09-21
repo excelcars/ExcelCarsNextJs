@@ -1,5 +1,5 @@
 # SSOT - RTO Management Module
-## Status: Next.js implemented; current-state behavior documented
+## Status: Next.js implemented; current-state behavior documented and code-verified
 
 This document describes the behavior implemented in the Next.js application. It is implementation-backed documentation, not a redesign proposal. The legacy reference remains separate at `docs/module/existing_ssot/RTO_Management.md`.
 
@@ -22,7 +22,7 @@ The current module supports:
 
 It does not implement server-side search, pagination, table sorting controls, a dedicated RTO detail route, direct customer upsert during RTO save, or legacy MVC endpoints.
 
-RTO-specific user access control is also not yet implemented. For the current phase, the module is treated as authenticated-only, and finer-grained user/role/function access is deferred to a later implementation.
+The page and mutating server actions enforce the `RTO_Management` route permission. The history API still checks only for an authenticated session; this API-level gap is retained below as a current constraint.
 
 ## 2. Source Evidence
 
@@ -50,19 +50,19 @@ RTO-specific user access control is also not yet implemented. For the current ph
 
 | Path/endpoint | Behavior |
 |---|---|
-| `/rto` | Authenticated dashboard page; accepts `search` and `registrationNo` query parameters for initial filters. |
-| `/api/rto/history?rtoAgentMainId=...` | Authenticated GET endpoint returning payment and follow-up history. |
+| `/rto` | `RTO_Management`-authorized dashboard page; accepts `search` and `registrationNo` query parameters for initial filters. |
+| `/api/rto/history?rtoAgentMainId=...` | Authenticated GET endpoint returning payment and follow-up history; it does not yet repeat the route permission. |
 | `/api/customers/search?q=...` | Used by the shared customer picker. |
 | `/api/partners/search?partnerType=RTO%20Agent&q=...` | Used by the shared RTO-agent picker. |
 | Server actions in `src/features/rto/actions.ts` | Create, update, delete, and payment logging. |
 
-The Operations menu always renders an `RTO Management` link to `/rto`; it has no RTO-specific role/function-list check. The dashboard group layout and middleware require an authenticated NextAuth session. The RTO server actions and history API do not independently perform a role check; the actions obtain the current user only for audit fields. A user who can invoke the authenticated application surface is therefore not further restricted by an RTO permission in this implementation.
+The Operations menu is filtered by the shared access catalog. The dashboard group layout and middleware require an authenticated NextAuth session; `/rto` additionally calls `canCurrentUserAccessRoute('/rto')` and redirects unauthorized users to `/dashboard`. RTO server actions resolve their actor through `getAuthorizedUserIdForRoute('/rto')`, so create, update, delete, and payment logging require `RTO_Management` as well as an active session. Audit user IDs are captured from that authorized actor.
 
-This is an intentional current-phase limitation, not an undocumented omission: module-specific user access rules for RTO are planned for a later phase. Until that is implemented, the effective rule is:
+The effective current rule is:
 
-- any authenticated user who can access the dashboard can reach and use `/rto`
-- there is no separate RTO permission gate at menu, route, API, or server-action level
-- audit user IDs are still captured when a session user ID is available
+- users need `RTO_Management` to reach or mutate `/rto`;
+- there is no per-record ownership restriction, so an authorized user may act on any RTO record;
+- `/api/rto/history` is an authenticated-only endpoint and does not yet repeat `RTO_Management`.
 
 Related links:
 
@@ -257,8 +257,7 @@ Server actions do not independently validate email, phone, year, nonnegative cha
 - The payment client compares cumulative child history with main transfer charges; if history is absent or main charges are null, the computed limit uses zero.
 - The payment form's `Received` condition is unreachable with current payment-status options, making the next follow-up effectively required client-side.
 - The history API has no invalid-ID error handling and the client has no fetch error handling.
-- There is no RTO-specific authorization beyond authentication.
-- RTO-specific user/role/function access control is intentionally deferred; this SSOT should be updated once that later access model is implemented.
+- `/api/rto/history` does not repeat the `RTO_Management` permission check applied by the page and server actions.
 - Related reporting uses `findFirst`, so multiple RTO records with the same registration are not represented there.
 - Inventory deletion is blocked by the foreign-key relationship when an inventory vehicle has a related RTO record; the inventory action reports that the vehicle has related checklist, insurance, loan, RTO, or DSA entries and cannot be deleted.
 

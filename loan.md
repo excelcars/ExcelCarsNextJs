@@ -1,6 +1,6 @@
 # SSOT - Loan Management
 
-## Status: Next.js implemented; current-state behavior documented
+## Status: Next.js implemented; current-state behavior documented and code-verified
 
 **Route:** `/loan`  
 **Evidence:** `app/(dashboard)/loan/page.tsx`, `src/features/loan/LoanClient.tsx`, `src/features/loan/LoanCustomerLookup.tsx`, `actions.ts`, `queries.ts`, `customerLookup.ts`, `app/api/loan/history/route.ts`, `app/api/loan/customer-search/route.ts`, `src/lib/access/accessControl.ts`, and `prisma/schema.prisma`.
@@ -87,7 +87,7 @@ The only selectable statuses are `Pending` and `Paid`. A **Pending** payment req
 
 ## 7. SSOT rule
 
-This document describes actual current Next.js behavior, including client-only filters and validations, summary/history behavior, and authorization boundaries. Any change to the route permission, amounts, payment workflow, links, relationships, filters, export or deletion must update this file.
+This document describes actual current Next.js behavior, including URL-backed server-side filters, duplicated client/server validation, summary/history behavior, and authorization boundaries. Any change to the route permission, amounts, payment workflow, links, relationships, filters, export or deletion must update this file.
 
 ## 8. Approved migration decisions
 

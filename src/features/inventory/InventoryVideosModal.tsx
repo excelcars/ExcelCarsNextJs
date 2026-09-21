@@ -26,12 +26,13 @@ async function readResponsePayload(response: Response): Promise<{ payload: unkno
   }
 }
 
-export function InventoryVideosModal({ row, onClose }: { row: InventoryRow | null; onClose: () => void }) {
+export function InventoryVideosModal({ row, onClose, onVideoCountChange }: { row: InventoryRow | null; onClose: () => void; onVideoCountChange: (inventoryId: number, count: number) => void }) {
   const [videos, setVideos] = useState<InventoryVideo[]>([])
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [playerVideo, setPlayerVideo] = useState<InventoryVideo | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number; percent: number } | null>(null)
   const [pending, startTransition] = useTransition()
 
   const load = async () => {
@@ -43,7 +44,9 @@ export function InventoryVideosModal({ row, onClose }: { row: InventoryRow | nul
       const { payload, error: responseError } = await readResponsePayload(response)
       if (!response.ok) throw new Error(responseError ?? (payload as { error?: string } | null)?.error ?? 'Could not load videos.')
       if (!Array.isArray(payload)) throw new Error(responseError ?? 'Could not load videos.')
-      setVideos(payload as InventoryVideo[])
+      const loadedVideos = payload as InventoryVideo[]
+      setVideos(loadedVideos)
+      onVideoCountChange(row.inventoryId, loadedVideos.length)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load videos.')
     } finally {
@@ -65,6 +68,16 @@ export function InventoryVideosModal({ row, onClose }: { row: InventoryRow | nul
     })
   }
 
+  const uploadFile = (uploadUrl: string, file: File, onProgress: (loaded: number) => void) => new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('PUT', uploadUrl)
+    request.setRequestHeader('Content-Type', 'video/mp4')
+    request.upload.onprogress = event => { if (event.lengthComputable) onProgress(event.loaded) }
+    request.onerror = () => reject(new Error('The browser could not upload the video to storage. Check the Firebase bucket CORS configuration, then try again.'))
+    request.onload = () => request.status >= 200 && request.status < 300 ? resolve() : reject(new Error(`The video upload failed (${request.status}).`))
+    request.send(file)
+  })
+
   const upload = (files: FileList | null) => {
     if (!row || !files?.length) return
     const selected = Array.from(files)
@@ -74,14 +87,27 @@ export function InventoryVideosModal({ row, onClose }: { row: InventoryRow | nul
     }
     startTransition(async () => {
       setError('')
-      const body = new FormData()
-      body.append('inventoryId', String(row.inventoryId))
-      selected.forEach(file => body.append('files', file))
-      const response = await fetch('/api/inventory/videos', { method: 'POST', body })
+      setUploadProgress({ completed: 0, total: selected.reduce((total, file) => total + file.size, 0), percent: 0 })
+      const prepare = await fetch('/api/inventory/videos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'prepareUpload', inventoryId: row.inventoryId, files: selected.map(file => ({ name: file.name, size: file.size, type: file.type || 'video/mp4' })) }) })
+      const prepared = await readResponsePayload(prepare)
+      const uploads = (prepared.payload as { uploads?: Array<{ name: string; storagePath: string; uploadUrl: string }> } | null)?.uploads
+      if (!prepare.ok || !uploads || uploads.length !== selected.length) { setError(prepared.error ?? (prepared.payload as { error?: string } | null)?.error ?? 'Could not prepare video upload.'); setUploadProgress(null); return }
+      const loaded = selected.map(() => 0)
+      const total = selected.reduce((sum, file) => sum + file.size, 0)
+      try {
+        await Promise.all(uploads.map((item, index) => uploadFile(item.uploadUrl, selected[index], bytes => {
+          loaded[index] = bytes
+          const completed = loaded.reduce((sum, value) => sum + value, 0)
+          setUploadProgress({ completed, total, percent: Math.min(100, Math.round((completed / total) * 100)) })
+        })))
+      } catch (err) { setError(err instanceof Error ? err.message : 'Upload failed.'); setUploadProgress(null); return }
+      const response = await fetch('/api/inventory/videos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'completeUpload', inventoryId: row.inventoryId, files: uploads.map((item, index) => ({ name: selected[index].name, size: selected[index].size, type: selected[index].type || 'video/mp4', storagePath: item.storagePath })) }) })
       const { payload, error: responseError } = await readResponsePayload(response)
       const result = payload as { success?: boolean; error?: string; results?: Array<{ error?: string }> } | null
-      if (!response.ok || !result?.success) { setError(responseError ?? result?.error ?? result?.results?.find(item => item.error)?.error ?? 'Upload failed.'); return }
+      if (!response.ok || !result?.success) { setError(responseError ?? result?.error ?? result?.results?.find(item => item.error)?.error ?? 'Upload failed.'); setUploadProgress(null); return }
+      setUploadProgress({ completed: total, total, percent: 100 })
       await load()
+      setUploadProgress(null)
     })
   }
 
@@ -111,6 +137,7 @@ export function InventoryVideosModal({ row, onClose }: { row: InventoryRow | nul
         <Input label="YouTube video link" value={youtubeUrl} onChange={event => setYoutubeUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=..." disabled={pending} />
         <div className="flex items-end"><Btn onClick={addYoutube} disabled={pending || !youtubeUrl.trim()}><Video className="h-4 w-4" />Add YouTube Video</Btn></div>
       </div>
+      {uploadProgress ? <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"><div className="flex justify-between text-xs font-medium text-[#1B2A6B]"><span>Uploading videos…</span><span>{uploadProgress.percent}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-[#1B2A6B] transition-all" style={{ width: `${uploadProgress.percent}%` }} /></div><div className="mt-1 text-xs text-blue-800">{(uploadProgress.completed / 1024 / 1024).toFixed(1)} MB of {(uploadProgress.total / 1024 / 1024).toFixed(1)} MB</div></div> : null}
       <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-4">
         <div><div className="text-sm font-semibold text-gray-900">Upload MP4 videos</div><div className="text-xs text-gray-500">Maximum 100 MB per video. The first video is featured by default.</div></div>
         <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
