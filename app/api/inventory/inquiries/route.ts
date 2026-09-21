@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { buildInquiryOwnershipWhere, getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 
 export async function GET(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/inventory')
+  if (!ownershipScope.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   const make = req.nextUrl.searchParams.get('make')?.trim() ?? ''
@@ -32,6 +35,9 @@ export async function GET(req: NextRequest) {
   const inquiryCarWhere = vehicleConditions.length > 0 ? { AND: vehicleConditions } : undefined
 
   const where = {
+    ...(ownershipScope.restrictToUserId
+      ? { AND: [buildInquiryOwnershipWhere(ownershipScope.restrictToUserId, ownershipScope.ownershipMode)] }
+      : {}),
     ...(inquiryCarWhere ? { inquiryCarDetails: { some: inquiryCarWhere } } : {}),
     ...(q
       ? {

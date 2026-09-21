@@ -41,7 +41,7 @@ Both audit-user relationships reference `user_table`. The module reads paged/fil
 
 The server page accepts optional `search` and `page` URL query parameters and loads `listDealersPaged`. The query returns Name-ascending/dealer-ID-ascending pages of 25 records. The header subtitle reports the total matching count (`N dealers`). Previous/Next controls preserve the search query and the server clamps invalid page numbers to the available range.
 
-The table uses five compact columns: Name, Contact, Company, Address, and Actions. Contact stacks primary mobile, optional secondary mobile, and optional email; Company stacks company name and optional website. Address is truncated with its full value available as a hover title. Missing primary values render as an em dash. URL navigation, pagination, filtering, sorting, and successful saves refresh the server-rendered result data without a browser full-page reload.
+The table uses four compact columns: Dealer, Contact, Address, and Actions. The Dealer cell stacks name, optional company name, and optional website; Contact stacks primary mobile, optional secondary mobile, and optional email. Address is truncated with its full value available as a hover title. Missing primary values render as an em dash. URL navigation, pagination, filtering, sorting, and successful saves refresh the server-rendered result data without a browser full-page reload.
 
 The list has a responsive, labeled filter panel with URL-backed `search`, `field`, and `sort` controls. **Search in** chooses the field that the **Search value** box will query; selecting a field without typing a value does not narrow the result set. The Search value box has a dynamic placeholder (for example, “Type company name...”), is debounced by 400 ms, and requests a new server render using a trimmed value. The field selector defaults to **All fields** but can restrict the search to Name, Primary mobile, Mobile 2, Email, Company, Address, or Website. The sort selector defaults to **Name: A–Z** and also offers Name: Z–A, Newest added, and Oldest added. Both controls reset the page to one and apply identically to list pagination and export. **Reset Filters** appears whenever a search, field, or sort selection differs from the defaults; it restores the empty search, All fields, Name A–Z, and page one. The database query filters case-insensitively by:
 
@@ -124,3 +124,7 @@ Before validation and persistence, all dealer text fields are trimmed. Empty opt
 - Create sets both audit pairs; update retains creation audit values and updates modification audit values.
 - Edit uses the selected row; successful save refreshes server data and displays a dismissible success message.
 - Deletion requires a confirmation click, permanently deletes only when database relations allow it, and displays an inline error when deletion fails.
+
+## 9. SSOT rule
+
+Update this document whenever Dealer Management authorization, field validation, normalized duplicate handling, list/filter/sort/export behavior, or dealer-autocomplete API contracts change.

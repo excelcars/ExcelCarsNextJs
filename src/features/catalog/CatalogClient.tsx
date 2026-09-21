@@ -111,6 +111,7 @@ export function CatalogClient({
     name: string;
   } | null>(null);
   const [error, setError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -263,8 +264,8 @@ export function CatalogClient({
           : deleteTarget.kind === "model"
             ? await deleteModel(deleteTarget.id)
             : await deleteVariant(deleteTarget.id);
-      if (!result.success)
-        setError(result.error ?? "Could not delete this record.");
+      if (!result.success) setDeleteError(result.error ?? "Could not delete this record.");
+      else setDeleteError("");
       setDeleteTarget(null);
       router.refresh();
     });
@@ -383,6 +384,7 @@ export function CatalogClient({
         </div>
         <p className="mt-3 text-xs text-gray-500">Search across make, model, and variant names.</p>
       </div>
+      {deleteError ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</div> : null}
       <Table
         headers={["Make", "Model", "Variants", "Actions"]}
         minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[25%] [&_th:nth-child(3)]:w-[43%] [&_th:last-child]:w-[10%]"

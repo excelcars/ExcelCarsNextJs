@@ -29,7 +29,7 @@ It does not own:
 - creating or editing loan records directly inside the report page
 - export
 - pagination
-- report-specific role restrictions beyond authenticated dashboard access
+- API-level duplication of the report route permission check
 
 ## 2. Locked Current Scope
 - the page is served at `/reports/tracking`
@@ -171,7 +171,7 @@ No current contracts exist for:
 ## 5. Business Rules
 - authenticated session is required to reach the dashboard route group
 - the detail API route also enforces its own session check because middleware excludes `/api/*`
-- there is no report-specific role filter in this module
+- the page requires `Stock_Tracking_Report` through `canCurrentUserAccessRoute('/reports/tracking')`
 - the page loads all inventory rows, not only rows with downstream linked records
 - the search box filters only the already loaded client dataset
 - the search is case-insensitive
@@ -493,9 +493,9 @@ Current failure-mode note:
 - the detail API route performs its own `auth()` check and returns `401` when unauthorized
 
 Current report-specific access reality:
-- this module requires authentication
-- this module does not currently enforce per-role access
-- `roleName` is available in session but unused by this report
+- the dashboard route group requires an authenticated session
+- the page requires the `Stock_Tracking_Report` access-catalog function through `canCurrentUserAccessRoute('/reports/tracking')`; unauthorized users are redirected to `/dashboard`
+- the detail API currently requires an authenticated session but does not repeat the page-level access-function check
 
 ## 11. Known Current Constraints
 - there is no dedicated report export
@@ -517,6 +517,7 @@ Current report-specific access reality:
 - there is no explicit client error UI for detail fetch failures
 - failed detail fetches are not handled with `try/finally`, so loading state recovery is not guaranteed
 - zero-valued monetary fields display as `—` rather than `₹0`
+- the detail API does not repeat the page-level `Stock_Tracking_Report` permission check
 
 ## 12. Tests Required
 - unauthenticated access to `/reports/tracking` redirects to `/login`

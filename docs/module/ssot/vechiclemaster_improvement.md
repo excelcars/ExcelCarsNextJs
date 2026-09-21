@@ -2,7 +2,7 @@
 
 ## 1. Document status and scope
 
-This document records verified differences between the reviewed legacy implementation and the current Next.js implementation. It is intentionally separate from `vehiclemasters.md` and does not change that current-state SSOT.
+This document records deferred legacy-parity and hardening decisions. Current implemented behavior is documented in `vehiclemasters.md`; this file does not change that current-state SSOT.
 
 The comparison covered two passes:
 

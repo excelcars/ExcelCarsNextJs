@@ -78,9 +78,49 @@ async function saveVariant(variant: string, makeId: number, modelId: number, id?
   } catch (err) { return { success: false, error: describeError(err) } }
 }
 
-export async function deleteMake(id: number) { return deleteRecord(() => prisma.carMakeMaster.delete({ where: { pkMakeId: id } })) }
-export async function deleteModel(id: number) { return deleteRecord(() => prisma.carModelMaster.delete({ where: { pkModelId: id } })) }
+export async function deleteMake(id: number) {
+  return deleteRecord(async () => {
+    const variants = await prisma.carVariantMaster.findMany({ where: { fkMakeId: id }, select: { pkVariantId: true } })
+    const variantIds = variants.map(variant => variant.pkVariantId)
+    if (variantIds.length > 0 && await hasVariantDependencies(variantIds)) {
+      throw new Error('This make has vehicle variants that are in use and cannot be deleted.')
+    }
+    await prisma.$transaction([
+      prisma.carVariantMaster.deleteMany({ where: { fkMakeId: id } }),
+      prisma.carModelMaster.deleteMany({ where: { fkMakeId: id } }),
+      prisma.carMakeMaster.delete({ where: { pkMakeId: id } }),
+    ])
+  })
+}
+
+export async function deleteModel(id: number) {
+  return deleteRecord(async () => {
+    const variants = await prisma.carVariantMaster.findMany({ where: { fkModelId: id }, select: { pkVariantId: true } })
+    const variantIds = variants.map(variant => variant.pkVariantId)
+    if (variantIds.length > 0 && await hasVariantDependencies(variantIds)) {
+      throw new Error('This model has vehicle variants that are in use and cannot be deleted.')
+    }
+    await prisma.$transaction([
+      prisma.carVariantMaster.deleteMany({ where: { fkModelId: id } }),
+      prisma.carModelMaster.delete({ where: { pkModelId: id } }),
+    ])
+  })
+}
 export async function deleteVariant(id: number) { return deleteRecord(() => prisma.carVariantMaster.delete({ where: { pkVariantId: id } })) }
+
+async function hasVariantDependencies(variantIds: number[]) {
+  const where = { fkVariantId: { in: variantIds } }
+  const counts = await Promise.all([
+    prisma.inventoryManagement.count({ where }),
+    prisma.customerFeedback.count({ where }),
+    prisma.dsaManagement.count({ where }),
+    prisma.inquiryCarDetails.count({ where }),
+    prisma.insuranceMain.count({ where }),
+    prisma.loanManagement.count({ where }),
+    prisma.rtoAgent.count({ where }),
+  ])
+  return counts.some(Boolean)
+}
 
 async function deleteRecord(operation: () => Promise<unknown>): Promise<CatalogActionResult> {
   try { await operation(); revalidatePath('/config/catalog'); return { success: true } }
@@ -88,6 +128,7 @@ async function deleteRecord(operation: () => Promise<unknown>): Promise<CatalogA
 }
 
 function describeError(err: unknown, deleting = false) {
+  if (err instanceof Error && !('code' in err)) return err.message
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') return deleting ? 'This record is in use and cannot be deleted.' : 'This record could not be saved because a related record is missing.'
-  return 'Something went wrong saving this record.'
+  return deleting ? 'Could not delete this record.' : 'Something went wrong saving this record.'
 }

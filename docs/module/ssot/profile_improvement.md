@@ -4,7 +4,7 @@
 **Scope:** Profile settings and password behavior only  
 **Existing source:** legacy `ExcelCars` ASP.NET MVC application and its verified legacy SSOT  
 **Current source:** `ExcelCarsNextJs` implementation and its verified Next.js profile SSOT  
-**Status:** Gap analysis and implementation record. Approved improvements are recorded as implemented only where verified in the current Next.js source.
+**Status:** Current implementation is documented in `profile.md`; this file is a deferred security/product decision backlog. Approved improvements are recorded as implemented only where verified in the current Next.js source.
 
 ## Approved decisions
 

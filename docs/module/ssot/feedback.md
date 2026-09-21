@@ -1,6 +1,6 @@
 # SSOT - Feedback Management
 
-## Status: Next.js implemented
+## Status: Next.js implemented; current-state behavior documented and code-verified
 
 **Route:** `/config/feedback`  
 **Public response route:** `/feedback/[token]`
@@ -37,7 +37,7 @@ Delete permanently removes the feedback row. Successful staff mutations revalida
 
 ## Invitation and public response workflow
 
-A permitted operator can invite a customer only for an inventory purchase belonging to that customer and having an email address. Sending a new invitation invalidates the current unsubmitted invitation for the same customer/purchase. Invitations expire after seven days.
+A permitted operator can invite a customer only for a customer-linked inventory record when that customer has an email address. Sending a new invitation invalidates the current unsubmitted invitation for the same customer/inventory pair. Invitations expire after seven days.
 
 The email contains a single-use public link. A failed email send invalidates the newly created invitation. Public submission validates the token, expiry, and invalidation state, writes the response, marks the invitation submitted, and makes that feedback record read-only through the staff edit path.
 

@@ -165,9 +165,9 @@ Updating a recipient email lowercases and validates it (basic email format and m
 
 `sendInventoryEmail` rechecks authorization and vehicle existence, resolves each selected recipient from the database, ignores recipients without an email, deduplicates by lowercase email, creates a token-hashed tracked vehicle email link, renders personalized vehicle details, and calls `sendEmail`. Failed sends delete the newly created tracking link. `sendBulkInventoryEmail` is the server-authoritative bulk wrapper: it reads the environment limits, caps unique vehicles and recipients, rejects batches exceeding the total-message limit, then processes each vehicle and returns sent/failed inventory IDs. It returns a failure if no target has an email or all sends fail; partial sends return sent and failed recipients. Successful sends are shown in the modal.
 
-## Inquiry synchronization — Corrections and testing pending
+## Inquiry synchronization — Implemented; runtime testing pending
 
-The Inventory-to-Inquiry workflow is implemented, but **known corrections and testing are pending**. Before the workflow is considered complete, it must apply the approved Inquiry ownership/access rule, create the required `InquiryInventoryLink` in the same transaction, and define safe handling for historical records that already contain a compatibility customer name without a linked customer. The Inventory form now clears both values when a selected customer is removed. Testing must then confirm the search, link creation, inquiry update, multiple-vehicle behavior, and follow-up result against the approved business rule.
+The Inventory-to-Inquiry workflow applies the shared Inquiry ownership/access rule. Users restricted by the Inquiry policy see and can synchronize only inquiries they created or that are assigned to them; unrestricted Inventory users retain the broader inventory workflow access. The Inventory form clears both `customerId` and compatibility `customerName` when a selection is removed. For historical Inventory records that have only a stale compatibility name and no linked customer, synchronization does not overwrite the inquiry's existing customer relation or compatibility name with that untrusted text.
 
 In the current code, Update Inquiry opens a modal for any inventory row. The search input is debounced by 250 ms when non-empty. `GET /api/inventory/inquiries` searches inquiry number, legacy customer name, mobile, email, or linked customer using case-insensitive contains. Empty search returns 10 `FollowUp` inquiries; non-empty search returns up to 20 newest inquiries. Results show customer/contact, inquiry number, interested vehicle/year, classification, and status.
 
@@ -180,7 +180,7 @@ The user must select an inquiry. Synchronization is transactional. It:
 5. updates the newest inquiry car-detail row, or creates one when none exists, using inventory catalog/legacy vehicle identity and year; and
 6. deletes other car-detail rows for that inquiry.
 
-Success revalidates `/inventory` and `/inquiry`. After a status-triggered synchronization, the client refreshes the page when the modal is completed or skipped. The user can also open the workflow manually for any row. The current transaction does not yet create an `InquiryInventoryLink`, and inquiry search/synchronization do not yet apply the Inquiry module's ownership predicate. These behaviors remain pending correction and testing.
+Success revalidates `/inventory` and `/inquiry`. After a status-triggered synchronization, the client refreshes the page when the modal is completed or skipped. The user can also open the workflow manually for any row. The same transaction upserts an active `InquiryInventoryLink` with `linkType = inventory-sync`; its partial database unique index makes repeated synchronizations idempotent without changing the event-history behavior of other link types. Runtime testing remains required for the complete workflow.
 
 ## Downstream module links — On Hold
 
@@ -215,6 +215,7 @@ CSV columns now match the old Inventory export and use this order: Make, Model, 
 - Photo GET can return a row through either ID or legacy number, while POST requires both values and trusts the submitted inventory number for validation only as a required reference; it stores the database inventory number when available.
 - Email recipients without an address are silently excluded until no usable recipients remain.
 - Inquiry synchronization deletes additional inquiry car-detail rows by design.
+- The normalized-registration and `inventory-sync` unique indexes are supplied by migration `20260921123000_harden_inventory_registration_and_sync_link`; they take effect only after that migration is deployed.
 - No inventory-specific audit-history UI, bulk delete, or bulk export selection is implemented. Bulk email selection and sending are implemented through the shared Send Email modal.
 
 ## Pending implementation and deferred work
@@ -223,18 +224,15 @@ This section is part of the SSOT. Items marked **Pending implementation** are kn
 
 ### Pending implementation
 
-1. **P1 — Inquiry access and ownership:** Apply the approved Inquiry ownership rule to Inventory inquiry search and synchronization, or record an explicit business decision that Inventory permission grants access to every inquiry.
-2. **P1 — Normalized registration uniqueness:** Replace the pending raw-column partial unique index with a PostgreSQL partial unique expression index over the normalized registration value. Preserve the exception for null and normalized values of five or fewer characters, perform a normalized duplicate preflight, and then apply the migration.
-3. **P2 — Permanent inquiry link:** Create the approved `InquiryInventoryLink` inside the same transaction as inquiry synchronization. Use a database uniqueness constraint or link-type-aware upsert to make repeated synchronization idempotent.
-4. **P2 — Historical customer fallback:** The Inventory picker now clears both `customerId` and the compatibility `customerName`, and Sold inventory requires a linked customer. Inquiry synchronization must still define how to handle older records that already have a stale compatibility name without a customer relation.
-5. **P2 — Server validation audit:** Continue aligning direct server-action validation with the client contract, including normalization, numeric ranges, relation verification, and field-level errors. Required Year, registered-vehicle dependencies, and Sold-customer selection have been corrected.
+1. **P2 — Server validation audit:** Continue aligning direct server-action validation with the client contract, including normalization, numeric ranges, relation verification, and field-level errors. Required Year, registered-vehicle dependencies, and Sold-customer selection have been corrected.
 
 ### Implemented — verification or documentation pending
 
-1. **Inquiry synchronization:** Runtime testing remains pending after the three inquiry/customer corrections above. Testing must cover search authorization, repeated synchronization, multiple vehicle details, status mapping, history behavior, and permanent link creation.
-2. **Delete and photo cleanup:** Runtime testing is pending because the required server environment was unavailable. Confirm protected-dependency rejection, database rollback behavior, file deletion, missing-file tolerance, and cleanup-error logging.
-3. **Pagination sanitization:** The page now passes the sanitized `page` and `pageSize` returned by `listInventory` to `InventoryClient`. An out-of-range page is still not clamped to the final page.
-4. **Single and bulk email limits:** Both paths use environment-backed vehicle, recipient, and total-message limits. Runtime configuration should be verified in the deployed environment.
+1. **Inquiry synchronization:** The required migration was applied to the local development database on 2026-09-21. Runtime testing remains pending: test restricted-user search/selection, repeated synchronization, multiple vehicle details, status mapping, history behavior, and permanent-link idempotency. Deploy the migration before testing in any other environment.
+2. **Normalized registration uniqueness:** The required migration was applied to the local development database on 2026-09-21. Verify that values differing only by case or whitespace are rejected, while null and normalized values of five characters or fewer remain allowed. Deploy the migration before relying on this guarantee in any other environment.
+3. **Delete and photo cleanup:** Runtime testing is pending because the required server environment was unavailable. Confirm protected-dependency rejection, database rollback behavior, file deletion, missing-file tolerance, and cleanup-error logging.
+4. **Pagination sanitization:** The page now passes the sanitized `page` and `pageSize` returned by `listInventory` to `InventoryClient`. An out-of-range page is still not clamped to the final page.
+5. **Single and bulk email limits:** Both paths use environment-backed vehicle, recipient, and total-message limits. Runtime configuration should be verified in the deployed environment.
 
 ### Deferred / approval required
 

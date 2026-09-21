@@ -1,5 +1,7 @@
 # Feedback Management - Improvement Gap Analysis
 
+## Status: Current implementation documented in `feedback.md`; remaining items are deferred product, support, and compliance decisions
+
 ## Comparison basis
 
 Compare the legacy module in `docs/module/existing_ssot/feedback.md` with the current implementation in `docs/module/ssot/feedback.md`.

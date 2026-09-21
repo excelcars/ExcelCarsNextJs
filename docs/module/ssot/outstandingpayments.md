@@ -32,7 +32,7 @@ It does not own:
 - editing or settling RTO payouts
 - editing or settling insurance payouts
 - editing or settling loan payouts
-- report-specific role/permission enforcement beyond authenticated dashboard access
+- API-level duplication of the report route permission check
 - a payment-status filter
 - remark display in the visible table
 - saved filters, report presets, or report snapshots
@@ -63,7 +63,7 @@ Not in current locked scope:
 - `DSA`
 - status filter
 - remark column
-- report-specific role gating
+- additional report behavior beyond the `Outstanding_Payments_Report` route permission
 
 ## 3. Data Ownership
 
@@ -135,7 +135,7 @@ Required UI behaviors:
 
 ## 5. Business Rules
 - authenticated session is required to reach the dashboard route group
-- there is no additional Outstanding Payments role filter in this module
+- the page requires `Outstanding_Payments_Report` through `canCurrentUserAccessRoute('/reports/outstanding')`
 - the report includes all matching rows:
   - positive-balance rows
   - zero-balance rows
@@ -331,15 +331,15 @@ Row rendering rules:
   - `user.roleName`
 
 Current report-specific access reality:
-- this module requires authentication
-- this module does not currently enforce per-role access
-- `roleName` is available but unused by this module
+- the dashboard route group requires an authenticated session
+- the page requires the `Outstanding_Payments_Report` access-catalog function through `canCurrentUserAccessRoute('/reports/outstanding')`; unauthorized users are redirected to `/dashboard`
+- the export and autocomplete APIs currently require an authenticated session but do not repeat the page-level access-function check
 
 ## 10. Known Current Constraints
 - no status filter is implemented even though status is visible
 - no remark column is shown, even though source data can contain remarks
 - no explicit type-scope expansion beyond `RTO`, `Insurance`, and `Loan`
-- no report-specific role/permission enforcement
+- export and autocomplete APIs do not repeat the page-level `Outstanding_Payments_Report` permission check
 - no saved report presets or snapshots
 
 ## 11. Tests Required

@@ -10,12 +10,13 @@ interface VehicleDetailsEmailInput {
   registrationNo: string
   kmsDriven: string | number | null
   price: string | number | null
+  remarks: string
   signedBy: string
   viewDetailsUrl?: string | null
 }
 
 const row = (label: string, value: string) =>
-  `<tr><td style="padding:8px 14px;border:1px solid #dce4f2;background:#f4f7fc;color:#142b62;font-weight:600;">${label}</td><td style="padding:8px 14px;border:1px solid #dce4f2;color:#263651;">${value || '—'}</td></tr>`
+  `<tr><td style="padding:8px 14px;border:1px solid #dce4f2;background:#f4f7fc;color:#142b62;font-weight:600;">${escapeHtml(label)}</td><td style="padding:8px 14px;border:1px solid #dce4f2;color:#263651;white-space:pre-wrap;">${escapeHtml(value) || '—'}</td></tr>`
 
 export function vehicleDetailsSubject(input: Pick<VehicleDetailsEmailInput, 'make' | 'model' | 'variant' | 'colour'>) {
   const clean = (value: string) => value.replace(/\s+/g, ' ').trim()
@@ -59,6 +60,7 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
         ${row('Registration', maskedReg)}
         ${row('Kilometers', km)}
         ${row('Price', price)}
+        ${row('Remarks', input.remarks)}
       </table>
       ${ctaHtml}
       <p>Hope you have a splendid buying experience with Excel Cars' wide range and easy financing options.</p>

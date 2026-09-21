@@ -2,6 +2,8 @@
 
 ## 1. Status and evidence
 
+**Status:** Next.js implemented; current-state behavior documented and code-verified.
+
 This document records the current actual Next.js dashboard implementation after the approved command-center redesign.
 
 Current route: `/dashboard`  

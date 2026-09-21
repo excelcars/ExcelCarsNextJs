@@ -1,5 +1,7 @@
 # User Access Management - Improvement Gap Analysis
 
+## Status: Current implementation documented in `useraccess.md`; remaining items require separate security or lifecycle approval
+
 ## Comparison basis
 
 Compare `docs/module/existing_ssot/useraccess.md` with `docs/module/ssot/useraccess.md`.

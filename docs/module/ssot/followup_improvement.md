@@ -1,5 +1,5 @@
 # Follow-up Module - Open Discussion Backlog
-## Status: Completed improvements merged into `followup.md` on 2026-09-02
+## Status: Completed improvements are documented in the current, re-verified `followup.md` SSOT as of 2026-09-21
 
 **Module:** `followup`
 **Current-state SSOT:** `D:\projects\ExcelCarsNextJs\docs\module\ssot\followup.md`

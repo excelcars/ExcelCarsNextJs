@@ -35,6 +35,13 @@ interface CustomerOption { custId: number; custName: string; custMobile: string 
 interface CarMakeMaster { pkMakeId: number; make: string | null }
 interface CarModelMaster { pkModelId: number; model: string | null }
 interface CarVariantMaster { pkVariantId: number; variant: string | null }
+const VEHICLE_YEAR_OPTIONS = Array.from(
+  { length: new Date().getFullYear() - 1899 },
+  (_, index) => {
+    const year = String(new Date().getFullYear() + 1 - index)
+    return { value: year, label: year }
+  },
+)
 interface UserOption {
   userId: number
   userName: string | null
@@ -1055,8 +1062,12 @@ export function InquiryClient({
       setCarEditorError('Select make, model, and variant before adding the vehicle row.')
       return
     }
-    if (carEditor.carYear !== null && !isValidYear(carEditor.carYear)) {
-      setCarEditorError('Enter a valid 4-digit year for the vehicle row.')
+    if (carEditor.carYear === null) {
+      setCarEditorError('Select the vehicle year before adding the vehicle row.')
+      return
+    }
+    if (!isValidYear(carEditor.carYear)) {
+      setCarEditorError('Select a valid year for the vehicle row.')
       return
     }
 
@@ -1770,8 +1781,8 @@ export function InquiryClient({
                 setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                 setCarEditorError('')
               }} />
-              <Input label={fieldLabel('Year', true)} type="number" value={carEditor.carYear ?? ''} onChange={e => {
-                setCarEditor(prev => ({ ...prev, carYear: e.target.value ? Number(e.target.value) : null }))
+              <FormDropdown label={fieldLabel('Year', true)} value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear onChange={value => {
+                setCarEditor(prev => ({ ...prev, carYear: value ? Number(value) : null }))
                 setCarEditorError('')
               }} />
               <Input label="Sub Variant" value={carEditor.subVariant} onChange={e => {

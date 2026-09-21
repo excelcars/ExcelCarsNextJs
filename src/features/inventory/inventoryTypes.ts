@@ -34,7 +34,7 @@ export interface InventoryRow {
   otherRemarks: string | null
   fkVariantId: number | null
   customer: CustomerOption | null
-  _count: { inventoryPhotos: number }
+  _count: { inventoryPhotos: number; inventoryVideos: number }
   vehicleEmailLinks?: Array<{
     vehicleEmailLinkId: number
     recipientEmail: string

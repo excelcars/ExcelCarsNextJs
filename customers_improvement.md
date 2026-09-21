@@ -1,5 +1,7 @@
 # Customer Management Migration - Gap Analysis and Improvement Backlog
 
+## Status: Current implementation is documented in `customers.md`; remaining entries are deferred legacy-parity or product decisions
+
 ## Comparison basis
 
 - Legacy SSOT: [customers.md](docs/module/existing_ssot/customers.md)

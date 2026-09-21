@@ -1,6 +1,10 @@
-# Customer Module — Next.js Improvement / Gap Analysis
+# Customer Module — Deferred Legacy-Parity Backlog
+
+## Status: Current implementation documented in `customer.md`; legacy-parity items deferred on 2026-09-21
 
 ## Review scope and evidence
+
+This document preserves optional legacy-parity differences. It does not indicate that the current Customer Configuration module is incomplete: implemented behavior is documented in `customer.md`.
 
 This document compares:
 
