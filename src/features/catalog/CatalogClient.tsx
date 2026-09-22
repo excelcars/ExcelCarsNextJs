@@ -49,6 +49,7 @@ type ModelOption = {
   pkModelId: number;
   fkMakeId: number | null;
   model: string | null;
+  carVariantMaster?: VariantOption[];
 };
 type VariantOption = {
   pkVariantId: number;
@@ -231,6 +232,7 @@ export function CatalogClient({
       if (kind === "variant") {
         setNewVariant("");
         setAddingVariant(false);
+        setModal(false);
       }
       router.refresh();
     });
@@ -264,8 +266,22 @@ export function CatalogClient({
           : deleteTarget.kind === "model"
             ? await deleteModel(deleteTarget.id)
             : await deleteVariant(deleteTarget.id);
-      if (!result.success) setDeleteError(result.error ?? "Could not delete this record.");
-      else setDeleteError("");
+      if (!result.success) {
+        setDeleteError(result.error ?? "Could not delete this record.");
+      } else {
+        setDeleteError("");
+        if (deleteTarget.kind === "make") {
+          setManager(null);
+        } else {
+          setManager(current => {
+            if (!current || (deleteTarget.kind === "model" && current.kind !== "models") || (deleteTarget.kind === "variant" && current.kind !== "variants")) return current;
+            const items = current.items.filter(item => deleteTarget.kind === "model"
+              ? (item as ModelOption).pkModelId !== deleteTarget.id
+              : (item as VariantOption).pkVariantId !== deleteTarget.id);
+            return { ...current, items };
+          });
+        }
+      }
       setDeleteTarget(null);
       router.refresh();
     });
@@ -307,13 +323,7 @@ export function CatalogClient({
       items: Array.isArray(items) ? items : [],
     });
   };
-  const makeActions = (make: MakeSummary) => (
-    <div className="flex items-center gap-1">
-      <button type="button" onClick={() => openModels(make, true)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-600" title="View" aria-label={`View ${make.make ?? 'make'}`}><Eye className="h-3.5 w-3.5" /></button>
-      <button type="button" onClick={() => openModels(make)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-[#1B2A6B]" title="Edit" aria-label={`Edit ${make.make ?? 'make'}`}><Pencil className="h-3.5 w-3.5" /></button>
-      <button type="button" onClick={() => setDeleteTarget({ kind: 'make', id: make.pkMakeId, name: make.make ?? 'make' })} className="rounded p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-600" title="Delete" aria-label={`Delete ${make.make ?? 'make'}`}><Trash2 className="h-3.5 w-3.5" /></button>
-    </div>
-  );
+  const makeActions = (make: MakeSummary) => <button type="button" onClick={() => openModels(make)} className="rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-[#1B2A6B] hover:bg-blue-50">Manage</button>;
   const addControl = (kind: "make" | "model" | "variant", enabled = true) => (
     <div className="mt-2">
       {!{ make: addingMake, model: addingModel, variant: addingVariant }[
@@ -384,44 +394,21 @@ export function CatalogClient({
         </div>
         <p className="mt-3 text-xs text-gray-500">Search across make, model, and variant names.</p>
       </div>
-      {deleteError ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</div> : null}
+      {deleteError && !manager ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</div> : null}
       <Table
-        headers={["Make", "Model", "Variants", "Actions"]}
-        minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[25%] [&_th:nth-child(3)]:w-[43%] [&_th:last-child]:w-[10%]"
+        headers={["Make", "Models & Variants", "Actions"]}
+        minWidthClass="min-w-[900px] [&_th:first-child]:w-[22%] [&_th:nth-child(2)]:w-[68%] [&_th:last-child]:w-[10%]"
         empty={initialData.length === 0}
       >
-        {initialData.flatMap((row) =>
-          row.carModelMaster.length
-            ? row.carModelMaster.map((model, index) => (
-                <tr key={model.pkModelId} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 align-top">
-                    <div className="font-medium text-gray-900">{row.make ?? "—"}</div>
-                    {index === 0 && <div className="mt-1 text-xs text-gray-400">{row._count.carModelMaster} models · {row._count.carVariantMaster} variants</div>}
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="font-medium text-gray-800">{model.model ?? "—"}</div>
-                    {index === row.carModelMaster.length - 1 && row._count.carModelMaster > row.carModelMaster.length && <div className="mt-1 text-xs text-gray-500">+{row._count.carModelMaster - row.carModelMaster.length} more models</div>}
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {model.carVariantMaster.length ? <>
-                        {model.carVariantMaster.map((variant) => <span key={variant.pkVariantId} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{variant.variant ?? "—"}</span>)}
-                        {model._count.carVariantMaster > model.carVariantMaster.length && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1B2A6B]">+{model._count.carVariantMaster - model.carVariantMaster.length} more</span>}
-                      </> : <span className="text-sm text-gray-400">No variants yet</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">{index === 0 ? makeActions(row) : null}</td>
-                </tr>
-              ))
-            : [
-                <tr key={row.pkMakeId} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 align-top"><div className="font-medium text-gray-900">{row.make ?? "—"}</div><div className="mt-1 text-xs text-gray-400">No models yet</div></td>
-                  <td className="px-4 py-3 text-sm text-gray-400">—</td>
-                  <td className="px-4 py-3 text-sm text-gray-400">—</td>
-                  <td className="px-4 py-3 align-top">{makeActions(row)}</td>
-                </tr>,
-              ],
-        )}
+        {initialData.map(row => (
+          <tr key={row.pkMakeId} className="hover:bg-gray-50 transition">
+            <td className="px-4 py-3 align-top"><div className="font-medium text-gray-900">{row.make ?? "—"}</div><div className="mt-1 text-xs text-gray-400">{row._count.carModelMaster} models · {row._count.carVariantMaster} variants</div></td>
+            <td className="px-4 py-3 align-top">
+              {row.carModelMaster.length ? <div className="overflow-hidden rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">{row.carModelMaster.map(model => <div key={model.pkModelId} className="grid grid-cols-[minmax(130px,180px)_minmax(0,1fr)] gap-4 px-3 py-2.5"><div className="font-medium text-gray-800">{model.model ?? '—'}</div><div className="flex flex-wrap content-start gap-1.5">{model.carVariantMaster.length ? model.carVariantMaster.map(variant => <span key={variant.pkVariantId} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{variant.variant ?? '—'}</span>) : <span className="text-sm text-gray-400">No variants yet</span>}</div></div>)}</div> : <span className="text-sm text-gray-400">No models yet</span>}
+            </td>
+            <td className="px-4 py-3 align-top">{makeActions(row)}</td>
+          </tr>
+        ))}
       </Table>
       {pageCount > 1 && (
         <div className="flex items-center justify-between mt-4">
@@ -536,11 +523,12 @@ export function CatalogClient({
       <Modal
         title={manager?.title ?? ""}
         open={!!manager}
-        onClose={() => setManager(null)}
+        onClose={() => { setManager(null); setDeleteError(""); }}
       >
         {manager && (
           <div className="space-y-3">
-            {manager.kind === "models" && !manager.readOnly && <div className="flex gap-2"><Btn size="sm" variant="outline" onClick={() => openEdit({ kind: "make", id: manager.makeId, name: manager.makeName, makeId: 0, modelId: 0 })}><Pencil className="w-3.5 h-3.5" />Edit Make</Btn><Btn size="sm" variant="outline" onClick={() => setDeleteTarget({ kind: "make", id: manager.makeId, name: manager.makeName })}><Trash2 className="w-3.5 h-3.5" />Delete Make</Btn></div>}
+            {deleteError ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{deleteError}</div> : null}
+            {manager.kind === "models" && !manager.readOnly && <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Make</div><div className="text-sm font-semibold text-slate-800">{manager.makeName}</div></div><div className="flex gap-1"><button type="button" onClick={() => openEdit({ kind: "make", id: manager.makeId, name: manager.makeName, makeId: 0, modelId: 0 })} className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-blue-50 hover:text-[#1B2A6B]" title="Edit Make"><Pencil className="h-3.5 w-3.5" /></button><button type="button" onClick={() => setDeleteTarget({ kind: "make", id: manager.makeId, name: manager.makeName })} className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-700" title="Delete Make"><Trash2 className="h-3.5 w-3.5" /></button></div></div>}
             {manager.loading ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Loading {manager.kind}...</div>
             ) : manager.items.length === 0 ? (
@@ -557,14 +545,9 @@ export function CatalogClient({
                   ? (item as ModelOption).model
                   : (item as VariantOption).variant;
                 return (
-                  <div
-                    key={id}
-                    className="flex items-center justify-between border-b border-gray-100 py-2"
-                  >
-                    <span className="text-sm font-medium text-gray-800">
-                      {itemName ?? "—"}
-                    </span>
-                    {!manager.readOnly && <span className="flex gap-1">
+                  <div key={id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                    <div className="min-w-0"><div className="text-xs font-medium uppercase tracking-wide text-slate-400">{isModel ? 'Model' : 'Variant'}</div><div className="mt-0.5 text-sm font-semibold text-slate-800">{itemName ?? "—"}</div>{isModel && <div className="mt-2 flex flex-wrap gap-1.5">{(item as ModelOption).carVariantMaster?.length ? (item as ModelOption).carVariantMaster!.map(variant => <span key={variant.pkVariantId} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-2 pr-1 text-xs text-slate-600"><span>{variant.variant ?? '—'}</span>{!manager.readOnly && <><button type="button" onClick={() => openEditVariant(variant)} className="rounded p-0.5 hover:bg-white hover:text-[#1B2A6B]" title={`Edit ${variant.variant ?? 'variant'}`}><Pencil className="h-3 w-3" /></button><button type="button" onClick={() => setDeleteTarget({ kind: 'variant', id: variant.pkVariantId, name: variant.variant ?? 'variant' })} className="rounded p-0.5 hover:bg-white hover:text-red-700" title={`Delete ${variant.variant ?? 'variant'}`}><Trash2 className="h-3 w-3" /></button></>}</span>) : <span className="text-xs text-gray-400">No variants yet</span>}</div>}</div>
+                    {!manager.readOnly && <span className="flex flex-wrap justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() =>
@@ -572,10 +555,10 @@ export function CatalogClient({
                             ? openEditModel(item as ModelOption)
                             : openEditVariant(item as VariantOption)
                         }
-                        className="p-1.5 text-gray-400 hover:text-[#1B2A6B]"
+                        className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-blue-50 hover:text-[#1B2A6B]"
                         title="Edit"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
@@ -586,10 +569,10 @@ export function CatalogClient({
                             name: itemName ?? "record",
                           })
                         }
-                        className="p-1.5 text-gray-400 hover:text-red-600"
+                        className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-700"
                         title="Delete"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                       {isModel && (
                         <button
@@ -598,9 +581,10 @@ export function CatalogClient({
                             const model = item as ModelOption;
                             openVariants(manager.makeId, { ...model, _count: { carVariantMaster: 0 }, carVariantMaster: [] });
                           }}
-                          className="rounded px-2 py-1 text-xs font-medium text-[#1B2A6B] hover:bg-blue-50"
+                          className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-blue-50 hover:text-[#1B2A6B]"
+                          title="View or manage variants"
                         >
-                          Variants
+                          <Eye className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {isModel && (
@@ -610,10 +594,10 @@ export function CatalogClient({
                             setManager(null);
                             openAddVariant(manager.makeId, id);
                           }}
-                          className="p-1.5 text-gray-400 hover:text-[#1B2A6B]"
+                          className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-blue-50 hover:text-[#1B2A6B]"
                           title="Add variant"
                         >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Plus className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </span>}
@@ -638,7 +622,7 @@ export function CatalogClient({
       </Modal>
       <ConfirmDialog
         open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => { setDeleteTarget(null); setDeleteError(""); }}
         onConfirm={del}
         message={`Delete this ${deleteTarget?.kind ?? "record"}? This cannot be undone.`}
       />

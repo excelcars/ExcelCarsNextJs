@@ -43,7 +43,7 @@ function messageText(variables) {
   return `Your vehicle insurance for ${variables.registrationNo} expires on ${variables.expiryDate}. Please contact ${variables.agentName} at ${variables.agentMobile} to renew your policy.`
 }
 
-function recipientsFor(insurance) {
+function recipientsFor(insurance, includeSalespeople = false) {
   const customer = {
     type: 'Customer',
     name: insurance.customer?.custName || insurance.customerNameLegacy || 'Customer',
@@ -56,7 +56,26 @@ function recipientsFor(insurance) {
     email: insurance.partnerMaster?.email || insurance.agentEmailIdLegacy,
     mobile: insurance.partnerMaster?.mobile || insurance.agentMobileNoLegacy,
   }
-  return [customer, agent]
+  const salespeople = includeSalespeople
+    ? (insurance.customer?.inquiry ?? [])
+      .map(inquiry => inquiry.assignedToUser)
+      .filter(user => user?.status === 'Active')
+      .map(user => ({
+        type: 'Salesperson',
+        name: user.displayName || user.userName || 'Salesperson',
+        email: user.emailId || user.employee?.empEmailId,
+        mobile: user.employee?.empMobileNo,
+      }))
+    : []
+  return [customer, agent, ...salespeople]
+}
+
+function salespersonMessage(variables) {
+  return `Insurance renewal alert for ${variables.customerName}: vehicle ${variables.registrationNo} expires on ${variables.expiryDate}. Please follow up with the customer.`
+}
+
+function salespersonEmailHtml(recipientName, variables) {
+  return `<p>Hello ${escapeHtml(recipientName)},</p><p><strong>Insurance renewal alert:</strong> ${escapeHtml(variables.customerName)}'s vehicle <strong>${escapeHtml(variables.registrationNo)}</strong> expires on <strong>${escapeHtml(variables.expiryDate)}</strong>.</p><p>Please follow up with the customer.</p><p>Regards,<br>Excel Cars</p>`
 }
 
 function configuredMailer() {
@@ -156,7 +175,27 @@ export async function queueDailyInsuranceReminders(prisma) {
     prisma.messageTemplate.findFirst({ where: { messageSubject: TEMPLATE_SUBJECT } }),
     prisma.insuranceMain.findMany({
       where: { expiryDate: { gte: lower, lte: upper }, OR: [{ policyStatus: null }, { policyStatus: { notIn: ['Received', 'Renewed'] } }] },
-      include: { customer: true, partnerMaster: true },
+      include: {
+        customer: {
+          include: {
+            inquiry: {
+              where: { assignedTo: { not: null } },
+              select: {
+                assignedToUser: {
+                  select: {
+                    status: true,
+                    userName: true,
+                    displayName: true,
+                    emailId: true,
+                    employee: { select: { empMobileNo: true, empEmailId: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        partnerMaster: true,
+      },
     }),
   ])
   if (!template?.messageBody) throw new Error(`Insurance email template is missing: ${TEMPLATE_SUBJECT}`)
@@ -172,9 +211,12 @@ export async function queueDailyInsuranceReminders(prisma) {
       agentName: policy.partnerMaster?.name || policy.agentNameLegacy || 'our insurance agent',
       agentMobile: policy.partnerMaster?.mobile || policy.agentMobileNoLegacy || 'Excel Cars',
     }
-    const emailHtml = renderTemplate(template.messageBody, Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, escapeHtml(value)])))
-    const whatsAppMessage = messageText(variables)
-    for (const recipient of recipientsFor(policy)) {
+    const customerEmailHtml = renderTemplate(template.messageBody, Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, escapeHtml(value)])))
+    const customerWhatsAppMessage = messageText(variables)
+    for (const recipient of recipientsFor(policy, daysBeforeExpiry === 30)) {
+      const isSalesperson = recipient.type === 'Salesperson'
+      const emailHtml = isSalesperson ? salespersonEmailHtml(recipient.name, variables) : customerEmailHtml
+      const whatsAppMessage = isSalesperson ? salespersonMessage(variables) : customerWhatsAppMessage
       const email = normalizeEmail(recipient.email)
       if (email) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `email:${email}`, recipientAddress: email, channel: 'Email', daysBeforeExpiry, status: 'Queued', emailSubject: template.messageSubject || TEMPLATE_SUBJECT, emailHtml, whatsAppMessage: null }, mailer)
       const whatsApp = normalizeWhatsAppRecipient(recipient.mobile)

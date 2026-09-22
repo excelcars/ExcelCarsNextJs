@@ -106,7 +106,14 @@ export async function deleteModel(id: number) {
     ])
   })
 }
-export async function deleteVariant(id: number) { return deleteRecord(() => prisma.carVariantMaster.delete({ where: { pkVariantId: id } })) }
+export async function deleteVariant(id: number) {
+  return deleteRecord(async () => {
+    if (await hasVariantDependencies([id])) {
+      throw new Error('This variant is in use and cannot be deleted. Remove or change the linked vehicle records first.')
+    }
+    await prisma.carVariantMaster.delete({ where: { pkVariantId: id } })
+  })
+}
 
 async function hasVariantDependencies(variantIds: number[]) {
   const where = { fkVariantId: { in: variantIds } }

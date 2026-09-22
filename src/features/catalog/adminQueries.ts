@@ -14,9 +14,9 @@ export async function listCatalogSummary(search: string, page: number) {
   const [rows, total] = await Promise.all([
     prisma.carMakeMaster.findMany({ where, orderBy: { make: 'asc' }, skip, take: PAGE_SIZE, include: {
       _count: { select: { carModelMaster: true, carVariantMaster: true } },
-      carModelMaster: { orderBy: { model: 'asc' }, take: 3, include: {
+      carModelMaster: { orderBy: { model: 'asc' }, include: {
         _count: { select: { carVariantMaster: true } },
-        carVariantMaster: { orderBy: { variant: 'asc' }, take: 3, select: { pkVariantId: true, variant: true } },
+        carVariantMaster: { orderBy: { variant: 'asc' }, select: { pkVariantId: true, variant: true } },
       } },
     } }),
     prisma.carMakeMaster.count({ where }),
