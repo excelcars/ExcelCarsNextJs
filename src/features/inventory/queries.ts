@@ -357,6 +357,7 @@ export async function getModelsByMake(makeId: number) {
   return prisma.carModelMaster.findMany({
     where: { fkMakeId: makeId, model: { not: null } },
     orderBy: { model: 'asc' },
+    include: { carVariantMaster: { where: { variant: { not: null } }, orderBy: { variant: 'asc' }, select: { pkVariantId: true, variant: true, fkMakeId: true, fkModelId: true } } },
   })
 }
 

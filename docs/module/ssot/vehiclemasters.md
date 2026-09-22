@@ -49,7 +49,7 @@ Models reference a make through `fkMakeId`. Variants reference both a make throu
 
 ## 5. Listing, Search, And Pagination
 
-The server query returns at most 25 Make rows, orders by Make name, and returns total and page counts.
+The server query always fetches fresh data, returns at most 25 Make rows, orders by Make name, and returns total and page counts.
 
 Search is server-side and matches the active master name field case-insensitively:
 
@@ -59,7 +59,7 @@ Search is server-side and matches the active master name field case-insensitivel
 
 Search input is debounced by 400 ms and written to the URL. Search is applied server-side across Make, Model, and Variant names. The client only renders the returned Make page.
 
-The main table has one row per displayed Model with four columns: `Make`, `Model`, `Variants`, and `Actions`. Make rows with no models are still shown. The Make cell shows the make name and, once per make, the total model and variant counts. The Variants cell shows the first three variants as compact labels and appends the remaining count as `+N more`.
+The main table has one row per Make. Its `Models & Variants` column groups each Model with its Variant badges in a compact bordered list, so the complete hierarchy remains visible without repeating model names across separate columns. One `Manage` button per Make opens the manager containing the Edit and Delete actions.
 
 For example:
 

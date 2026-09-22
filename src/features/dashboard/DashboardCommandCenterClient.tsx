@@ -11,7 +11,7 @@ import {
   Sun,
   Users,
 } from 'lucide-react'
-import { Badge } from '@/components/ui'
+import { Badge, Modal } from '@/components/ui'
 import { LeadSourceChart } from './LeadSourceChart'
 
 type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'birthdays'
@@ -98,6 +98,16 @@ interface ExpiryPolicyRow {
   partnerMaster: { name: string; mobile: string | null } | null
 }
 
+interface AssignedExpiryPolicyRow {
+  insuranceMainId: number
+  customerNameLegacy: string | null
+  customerMobileLegacy: string | null
+  carRegistrationNo: string | null
+  expiryDate: DateValue
+  renewalDate: DateValue
+  customer: { custName: string; custMobile: string | null } | null
+}
+
 interface RtoPendingRow {
   rtoAgentMainId: number
   customerNameLegacy: string | null
@@ -154,6 +164,7 @@ export interface DashboardCommandCenterProps {
   reminders: ReminderRow[]
   pendingPolicies: PendingPolicyRow[]
   expiryRenewalPolicies: ExpiryPolicyRow[]
+  assignedExpiryRenewalPolicies: AssignedExpiryPolicyRow[]
   rtoPending: RtoPendingRow[]
   pendingPayments: PaymentRow[]
   followups: FollowupRow[]
@@ -186,11 +197,11 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)
 }
 
-function customerName(row: PendingPolicyRow | ExpiryPolicyRow | RtoPendingRow) {
+function customerName(row: PendingPolicyRow | ExpiryPolicyRow | AssignedExpiryPolicyRow | RtoPendingRow) {
   return row.customer?.custName ?? row.customerNameLegacy ?? '-'
 }
 
-function customerMobile(row: PendingPolicyRow | ExpiryPolicyRow | RtoPendingRow) {
+function customerMobile(row: PendingPolicyRow | ExpiryPolicyRow | AssignedExpiryPolicyRow | RtoPendingRow) {
   if ('customerMobileLegacy' in row) return row.customer?.custMobile ?? row.customerMobileLegacy ?? '-'
   return row.customer?.custMobile ?? row.customerMobLegacy ?? '-'
 }
@@ -511,6 +522,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('priority')
   const [page, setPage] = useState(1)
+  const [salespersonRenewalAlertOpen, setSalespersonRenewalAlertOpen] = useState(props.assignedExpiryRenewalPolicies.length > 0)
   const detailWorkspaceRef = useRef<HTMLElement>(null)
   const { permissions, stats } = props
 
@@ -736,6 +748,17 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
 
   return (
     <div className="min-h-full 2xl:h-full 2xl:min-h-0 2xl:overflow-hidden">
+      <Modal title="Insurance renewal alerts" open={salespersonRenewalAlertOpen} onClose={() => setSalespersonRenewalAlertOpen(false)} width="max-w-2xl">
+        <p className="text-sm text-gray-600">The following customers assigned to you have insurance policies expiring within the next 30 days.</p>
+        <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200">
+          <table className="min-w-[620px] w-full text-sm">
+            <thead><tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Registration</th><th className="px-3 py-2">Expiry date</th><th className="px-3 py-2">Renewal date</th></tr></thead>
+            <tbody className="divide-y divide-gray-100">
+              {props.assignedExpiryRenewalPolicies.map(row => <tr key={row.insuranceMainId}><td className="px-3 py-2 font-medium text-gray-900"><div>{customerName(row)}</div><div className="font-mono text-xs font-normal text-gray-500">{customerMobile(row)}</div></td><td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.expiryDate)}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.renewalDate)}</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
       <div className="min-h-full border border-black/20 bg-gradient-to-br from-[#10183d] via-[#123652] to-[#1f673d] p-3 shadow-2xl 2xl:h-full 2xl:overflow-hidden">
         <div className="grid gap-2 2xl:h-full 2xl:grid-rows-[auto_72px_235px_minmax(250px,1fr)]">
           <div className="flex flex-wrap items-start justify-between gap-3 px-1">

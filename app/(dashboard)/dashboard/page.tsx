@@ -2,6 +2,7 @@ import { auth } from '../../../auth'
 import {
   getBirthdayAnniversaryReminders,
   getDashboardStats,
+  getAssignedExpiryRenewalPolicies,
   getExpiryRenewalPolicies,
   getLeadSourceBreakdown,
   getLegacyLeadDetails,
@@ -59,6 +60,7 @@ export default async function DashboardPage({
     reminders,
     pendingPolicies,
     expiryRenewalPolicies,
+    assignedExpiryRenewalPolicies,
     rtoPending,
     pendingPayments,
   ] = await Promise.all([
@@ -83,6 +85,7 @@ export default async function DashboardPage({
     getBirthdayAnniversaryReminders(),
     permissions.canInsurance ? getPendingInsurancePolicies() : Promise.resolve([]),
     permissions.canInsurance ? getExpiryRenewalPolicies() : Promise.resolve([]),
+    profile ? getAssignedExpiryRenewalPolicies(profile.userId) : Promise.resolve([]),
     permissions.canRto ? getRtoTransferPendingRcPending() : Promise.resolve([]),
     getPendingPayments({ includeRto: permissions.canRto, includeLoan: permissions.canRto, includeInsurance: permissions.canRto }),
   ])
@@ -110,6 +113,7 @@ export default async function DashboardPage({
         reminders,
         pendingPolicies,
         expiryRenewalPolicies,
+        assignedExpiryRenewalPolicies,
         rtoPending,
         pendingPayments,
       })}

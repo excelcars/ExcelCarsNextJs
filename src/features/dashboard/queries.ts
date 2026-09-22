@@ -248,7 +248,7 @@ export async function getPendingInsurancePolicies() {
 
 export async function getExpiryRenewalPolicies() {
   const today = startOfToday()
-  const checkDate = addDays(today, 15)
+  const checkDate = addDays(today, 30)
   return prisma.insuranceMain.findMany({
     where: {
       expiryDate: {
@@ -442,6 +442,27 @@ export async function getLeadSourceBreakdown() {
   const otherSources = totalInquiries - topSources.reduce((total, row) => total + row.value, 0)
 
   return otherSources > 0 ? [...topSources, { name: 'Other', value: otherSources }] : topSources
+}
+
+export async function getAssignedExpiryRenewalPolicies(assignedUserId: number) {
+  const today = startOfToday()
+  const checkDate = addDays(today, 30)
+  return prisma.insuranceMain.findMany({
+    where: {
+      expiryDate: { gte: today, lte: checkDate },
+      customer: { inquiry: { some: { assignedTo: assignedUserId } } },
+    },
+    select: {
+      insuranceMainId: true,
+      customerNameLegacy: true,
+      customerMobileLegacy: true,
+      carRegistrationNo: true,
+      expiryDate: true,
+      renewalDate: true,
+      customer: { select: { custName: true, custMobile: true } },
+    },
+    orderBy: { expiryDate: 'asc' },
+  })
 }
 
 export async function getPendingFollowups(limit: number | null = 8) {
