@@ -33,7 +33,6 @@ export function validateChecklistInput(input: ChecklistValidationInput): string 
   if (input.year === null || input.year === undefined) return 'Vehicle year is required.'
   if (!isValidYear(input.year)) return 'Enter a valid vehicle year.'
   if (!input.fuelType.trim()) return 'Vehicle fuel type is required.'
-  if (!input.customerId && !input.customerNameLegacy.trim()) return 'Select a customer or provide a customer name.'
   if (!isValidPhone(input.customerMobileLegacy)) return 'Enter a valid customer mobile number.'
   if (!isValidEmail(input.customerEmailLegacy)) return 'Enter a valid customer email address.'
 

@@ -41,9 +41,9 @@ export function ChecklistTable({ data, total, page, pageCount, pageSize, pending
         ))}
       </Table>
     </div>
-    <div className="mt-4 flex items-center justify-between gap-3">
+    {pageCount > 1 && <div className="mt-4 flex items-center justify-between gap-3">
       <div className="text-sm text-gray-500">Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1}-{(page - 1) * pageSize + data.length} of {total}</div>
       <div className="flex items-center gap-2"><Btn variant="outline" size="sm" onClick={() => onPage(page - 1)} disabled={page <= 1 || pending}>Previous</Btn><Btn variant="outline" size="sm" onClick={() => onPage(page + 1)} disabled={page >= pageCount || pending}>Next</Btn></div>
-    </div>
+    </div>}
   </>
 }

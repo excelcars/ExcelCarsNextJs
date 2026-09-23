@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 
-export const PAYMENT_STATUSES = ['Pending', 'Paid'] as const
+export const PAYMENT_STATUSES = ['Pending', 'Partial', 'Paid'] as const
 export const CAR_TYPES = ['New', 'PreOwned'] as const
 
 export const LOAN_PAGE_SIZES = [25, 50, 100] as const

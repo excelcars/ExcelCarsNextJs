@@ -108,6 +108,15 @@ const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice
 const fmtDateTime = (d: Date | string | null) => d ? new Date(d).toLocaleString('en-IN') : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
 
+function paymentSummary(row: Pick<RtoRow, 'transferCharges' | 'amtPaid'>) {
+  const charges = Number(row.transferCharges ?? 0)
+  const paid = Number(row.amtPaid ?? 0)
+  const balance = Math.max(charges - paid, 0)
+  const status = paid <= 0 ? 'Pending' : charges > 0 && paid >= charges ? 'Fully Paid' : 'Partially Paid'
+  const progress = charges > 0 ? Math.min((paid / charges) * 100, 100) : 0
+  return { charges, paid, balance, status, progress }
+}
+
 function csvValue(value: string | number | boolean | null | undefined) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
@@ -387,7 +396,7 @@ export function RtoClient({
       if (filters.make && !make.toLowerCase().includes(filters.make.toLowerCase())) return false
       if (filters.model && !model.toLowerCase().includes(filters.model.toLowerCase())) return false
       if (filters.variant && !variant.toLowerCase().includes(filters.variant.toLowerCase())) return false
-      if (filters.paymentStatus !== 'All' && (r.paymentStatus ?? '') !== filters.paymentStatus) return false
+      if (filters.paymentStatus !== 'All' && paymentSummary(r).status !== filters.paymentStatus) return false
       if (filters.rcStatus !== 'All' && (r.rcStatus ?? '') !== filters.rcStatus) return false
       if (filters.transferStatus !== 'All' && (r.transferStatus ?? '') !== filters.transferStatus) return false
       if (filters.fromDate && (!entryDate || entryDate < filters.fromDate)) return false
@@ -772,15 +781,19 @@ export function RtoClient({
     setError('')
     const newErrors: Record<string, boolean> = {}
 
-    if (payForm.amountPaid !== null && payForm.amountPaid <= 0) {
+    if (payForm.amountPaid === null || payForm.amountPaid <= 0) {
       newErrors.amountPaid = true
     }
-    const totalPaidAlready = payments.reduce((sum, p) => sum + Number(p.amountPaid ?? 0), 0)
+    const totalPaidAlready = Number(payRow.amtPaid ?? 0)
     const charges = Number(payRow.transferCharges ?? 0)
-    if (payForm.amountPaid !== null && (totalPaidAlready + payForm.amountPaid > charges)) {
+    if (charges <= 0 || (payForm.amountPaid !== null && (totalPaidAlready + payForm.amountPaid > charges))) {
       newErrors.amountPaid = true
     }
-    if (payForm.paymentStatus !== 'Received') {
+    const resultingPayment = paymentSummary({
+      transferCharges: payRow.transferCharges,
+      amtPaid: String(totalPaidAlready + (payForm.amountPaid ?? 0)),
+    })
+    if (resultingPayment.status !== 'Fully Paid') {
       if (!payForm.nextFollowUpDate?.trim()) {
         newErrors.nextFollowUpDate = true
       } else {
@@ -904,39 +917,43 @@ export function RtoClient({
 
       {exportError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <Table headers={['Reg No', 'Customer', 'Agent', 'Charges', 'Paid', 'Payment', 'RC', 'Transfer', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
-        {filtered.map(r => (
-          <tr key={r.rtoAgentMainId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.carRegistrationNo ?? '—'}</td>
-            <td className="px-4 py-3">
-              <div className="font-medium text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
-              <div className="text-xs text-gray-500 font-mono">{r.customerMobLegacy ?? ''}</div>
-            </td>
-            <td className="px-4 py-3 text-sm text-gray-700">{r.partnerMaster?.name ?? '—'}</td>
-            <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.amtPaid)}</td>
-            <td className="px-4 py-3">{r.paymentStatus ? <Badge label={r.paymentStatus} /> : '—'}</td>
-            <td className="px-4 py-3">{r.rcStatus ? <Badge label={r.rcStatus} /> : '—'}</td>
-            <td className="px-4 py-3">{r.transferStatus ? <Badge label={r.transferStatus} /> : '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || '—'}</td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
-                <button onClick={() => void openView(r)} className="p-1.5 text-gray-400 hover:text-blue-900 hover:bg-gray-100 rounded transition" title="View Details">
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment">
-                  <IndianRupee className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        ))}
+      <Table headers={['Registration & Vehicle', 'Customer / Agent', 'Payment', 'RC', 'Transfer', 'Follow-up', 'Actions']} empty={filtered.length === 0} minWidthClass="min-w-full">
+        {filtered.map(r => {
+          const payment = paymentSummary(r)
+          return (
+            <tr key={r.rtoAgentMainId} className="transition hover:bg-gray-50">
+              <td className="px-3 py-3">
+                <div className="font-mono text-sm font-semibold text-gray-900">{r.carRegistrationNo ?? '—'}</div>
+                <div className="mt-0.5 text-xs text-gray-500">{[r.carMakeLegacy, r.carModelLegacy, r.carVariantLegacy, r.carYear].filter(Boolean).join(' · ') || '—'}</div>
+              </td>
+              <td className="px-3 py-3 text-xs">
+                <div className="font-medium text-gray-800">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
+                <div className="mt-0.5 text-gray-500">{r.customer?.custMobile ?? r.customerMobLegacy ?? '—'}</div>
+                <div className="mt-1 font-medium text-gray-700">{r.partnerMaster?.name ?? r.agentNameLegacy ?? '—'}</div>
+              </td>
+              <td className="px-3 py-3">
+                <div className="mb-1"><Badge label={payment.status} /></div>
+                <div className="grid grid-cols-3 gap-2 text-[11px] leading-4">
+                  <div><span className="block text-gray-400">Charges</span><span className="font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</span></div>
+                  <div><span className="block text-gray-400">Paid</span><span className="font-semibold text-green-700">{fmtMoney(r.amtPaid)}</span></div>
+                  <div><span className="block text-gray-400">Balance</span><span className="font-semibold text-amber-700">{payment.charges ? fmtMoney(payment.balance) : '—'}</span></div>
+                </div>
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div>
+              </td>
+              <td className="px-3 py-3">{r.rcStatus ? <Badge label={r.rcStatus} /> : '—'}</td>
+              <td className="px-3 py-3">{r.transferStatus ? <Badge label={r.transferStatus} /> : '—'}</td>
+              <td className="px-3 py-3 text-xs font-medium text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || 'Not scheduled'}</td>
+              <td className="px-3 py-3">
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => void openView(r)} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-900 rounded transition" title="View details"><Eye className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 rounded transition" title="Log payment"><IndianRupee className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </td>
+            </tr>
+          )
+        })}
       </Table>
 
       {/* View Modal */}
@@ -1224,6 +1241,28 @@ export function RtoClient({
       <Modal title={`Log Payment${payRow ? ` — ${payRow.carRegistrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
         {payRow && (
           <div className="space-y-4">
+            {(() => {
+              const paid = payments.length > 0
+                ? payments.reduce((sum, payment) => sum + Number(payment.amountPaid ?? 0), 0)
+                : Number(payRow.amtPaid ?? 0)
+              const summary = paymentSummary({ transferCharges: payRow.transferCharges, amtPaid: String(paid) })
+              return (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase text-gray-500">Transfer charges</div>
+                    <div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payRow.transferCharges)}</div>
+                  </div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase text-green-700">Amount paid</div>
+                    <div className="mt-1 flex items-center gap-2"><span className="text-sm font-bold text-green-800">{fmtMoney(paid)}</span><Badge label={summary.status} /></div>
+                  </div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2">
+                    <div className="text-[11px] font-semibold uppercase text-orange-700">Pending balance</div>
+                    <div className="mt-1 text-sm font-bold text-orange-800">{summary.charges ? fmtMoney(summary.balance) : '—'}</div>
+                  </div>
+                </div>
+              )
+            })()}
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
@@ -1247,19 +1286,16 @@ export function RtoClient({
                 </div>
               )}
               {followups.length > 0 && (
-                <div className="mt-2 space-y-1 text-xs text-gray-500">
-                  {followups.slice(0, 3).map(fu => (
+                <div className="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50 p-2 text-xs text-gray-500">
+                  {followups.map(fu => (
                     <div key={fu.rtoFollowupId}>{fmtDate(fu.followupDate)} — {fu.remark ?? ''}</div>
                   ))}
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} error={errors.amountPaid} />
-              <Select label="Payment Status *" value={payForm.paymentStatus} onChange={e => pf('paymentStatus', e.target.value)}>
-                {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
-              </Select>
               <Select label="RC Status *" value={payForm.rcStatus} onChange={e => pf('rcStatus', e.target.value)}>
                 {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>

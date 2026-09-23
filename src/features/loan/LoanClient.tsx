@@ -127,12 +127,12 @@ function emptyForm(): LoanFormInput {
     inventoryId: null, fkVariantId: null, registrationNo: '', carType: 'PreOwned', carMake: '', carModel: '', carVariant: '', carYear: null,
     entryDate: today,
     loanAmount: null, percentagePayoutAmount: null, payoutAmount: null, initialAmountReceived: null,
-    paymentStatus: 'Pending', paymentDate: today, followupDate: today, remarks: '',
+    paymentStatus: 'Partial', paymentDate: today, followupDate: today, remarks: '',
   }
 }
 
 function emptyPayment(): LogLoanPaymentInput {
-  return { amountPaid: null, paymentStatus: 'Pending', nextFollowUpDate: '', remark: '' }
+  return { amountPaid: null, paymentStatus: 'Partial', nextFollowUpDate: '', remark: '' }
 }
 
 function emptyFilters(): LoanFilters {
@@ -210,7 +210,7 @@ export function LoanClient({
   const [discardOpen, setDiscardOpen] = useState(false)
   const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
   const [error, setError] = useState('')
-  const [errors, setErrors] = useState<Record<string, boolean>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [isPending, startTransition] = useTransition()
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
@@ -384,9 +384,10 @@ export function LoanClient({
     setForm(f => ({
       ...f,
       partnerId: p?.partnerId ?? null,
-      bankPersonName: p?.name ?? f.bankPersonName,
-      bankPersonMobileNo: p?.mobile ?? f.bankPersonMobileNo,
-      bankPersonEmailId: p?.email ?? f.bankPersonEmailId,
+      bankName: p?.name ?? '',
+      bankPersonName: p?.name ?? '',
+      bankPersonMobileNo: p?.mobile ?? '',
+      bankPersonEmailId: p?.email ?? '',
     }))
   }
 
@@ -426,49 +427,55 @@ export function LoanClient({
 
   const save = () => {
     setError('')
-    const newErrors: Record<string, boolean> = {}
+    const newErrors: Record<string, string> = {}
 
     if (!form.registrationNo?.trim()) {
-      newErrors.registrationNo = true
+      newErrors.registrationNo = 'Registration number is required.'
     }
-    if (!form.bankName?.trim()) {
-      newErrors.bankName = true
+    if (!form.partnerId) {
+      newErrors.partnerId = 'Select a bank from the Bank Master list.'
     }
     if (!form.customerId) {
-      newErrors.customer = true
+      newErrors.customer = 'Select or create the customer first.'
     }
-    if (!form.carMake.trim()) newErrors.carMake = true
-    if (!form.carModel.trim()) newErrors.carModel = true
-    if (!form.carVariant.trim()) newErrors.carVariant = true
-    if (form.carYear === null) newErrors.carYear = true
-    if (form.loanAmount !== null && form.loanAmount <= 0) {
-      newErrors.loanAmount = true
+    if (!form.carMake.trim()) newErrors.carMake = 'Car make is required.'
+    if (!form.carModel.trim()) newErrors.carModel = 'Car model is required.'
+    if (!form.carVariant.trim()) newErrors.carVariant = 'Car variant is required.'
+    if (form.carYear === null) newErrors.carYear = 'Car year is required.'
+    if (form.loanAmount === null) {
+      newErrors.loanAmount = 'Loan amount is required.'
+    } else if (form.loanAmount <= 0) {
+      newErrors.loanAmount = 'Loan amount must be greater than zero.'
     }
-    if (form.percentagePayoutAmount !== null && (form.percentagePayoutAmount < 0 || form.percentagePayoutAmount > 100)) {
-      newErrors.percentagePayoutAmount = true
+    if (form.percentagePayoutAmount === null) {
+      newErrors.percentagePayoutAmount = 'Payout percentage is required.'
+    } else if (form.percentagePayoutAmount < 0 || form.percentagePayoutAmount > 100) {
+      newErrors.percentagePayoutAmount = 'Use a percentage from 0 to 100.'
     }
     if (!editId) {
       const payout = form.loanAmount !== null && form.percentagePayoutAmount !== null
         ? Math.round((form.loanAmount * form.percentagePayoutAmount) / 100 * 100) / 100
         : null
       if (form.initialAmountReceived === null || form.initialAmountReceived <= 0 || (payout !== null && form.initialAmountReceived > payout)) {
-        newErrors.initialAmountReceived = true
+        newErrors.initialAmountReceived = payout !== null && form.initialAmountReceived !== null && form.initialAmountReceived > payout
+          ? 'Initial received amount cannot exceed payout.'
+          : 'Initial received amount is required.'
       }
     }
     if (form.carYear !== null && !isValidYear(form.carYear)) {
-      newErrors.carYear = true
+      newErrors.carYear = 'Enter a valid car year.'
     }
     if (form.bankPersonMobileNo && !isValidPhone(form.bankPersonMobileNo)) {
-      newErrors.bankPersonMobileNo = true
+      newErrors.bankPersonMobileNo = 'Enter a valid 10-digit bank mobile number.'
     }
     if (form.bankPersonEmailId && !isValidEmail(form.bankPersonEmailId)) {
-      newErrors.bankPersonEmailId = true
+      newErrors.bankPersonEmailId = 'Enter a valid bank email address.'
     }
     if (form.customerMobileLegacy && !isValidPhone(form.customerMobileLegacy)) {
-      newErrors.customerMobileLegacy = true
+      newErrors.customerMobileLegacy = 'Enter a valid 10-digit customer mobile number.'
     }
     if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
-      newErrors.customerEmailLegacy = true
+      newErrors.customerEmailLegacy = 'Enter a valid customer email address.'
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -508,7 +515,9 @@ export function LoanClient({
   const openPay = async (r: LoanRow) => {
     const requestId = ++historyRequestRef.current
     setPayRow(r)
-    setPayForm({ ...emptyPayment(), paymentStatus: r.paymentStatus ?? 'Pending' })
+    const received = Number(r.totalAmountReceived ?? 0)
+    const payout = Number(r.payoutAmount ?? 0)
+    setPayForm({ ...emptyPayment(), paymentStatus: payout > 0 && received > 0 && received < payout ? 'Partial' : r.paymentStatus ?? 'Partial' })
     setError('')
     setErrors({})
     setPayments([])
@@ -535,28 +544,34 @@ export function LoanClient({
   const savePayment = () => {
     if (!payRow) return
     setError('')
-    const newErrors: Record<string, boolean> = {}
+    const newErrors: Record<string, string> = {}
 
-    if (payForm.amountPaid !== null && payForm.amountPaid <= 0) {
-      newErrors.amountPaid = true
+    if (payForm.amountPaid === null) {
+      newErrors.amountPaid = 'Amount paid is required.'
+    } else if (payForm.amountPaid <= 0) {
+      newErrors.amountPaid = 'Amount paid must be greater than zero.'
     }
     const totalPaidAlready = payments.reduce((sum, p) => sum + Number(p.amountPaid ?? 0), 0)
     const payoutAmt = Number(payRow.payoutAmount ?? 0)
     if (payForm.amountPaid !== null && (totalPaidAlready + payForm.amountPaid > payoutAmt)) {
-      newErrors.amountPaid = true
+      newErrors.amountPaid = 'Amount paid cannot exceed the pending payout.'
     }
-    if (payForm.paymentStatus === 'Pending') {
+    if (payForm.amountPaid !== null && payoutAmt > 0 && totalPaidAlready + payForm.amountPaid <= payoutAmt) {
+      const expectedStatus = totalPaidAlready + payForm.amountPaid === payoutAmt ? 'Paid' : 'Partial'
+      if (payForm.paymentStatus !== expectedStatus) newErrors.paymentStatus = `Select ${expectedStatus} for this payment total.`
+    }
+    if (payForm.paymentStatus === 'Pending' || payForm.paymentStatus === 'Partial') {
       if (!payForm.nextFollowUpDate?.trim()) {
-        newErrors.nextFollowUpDate = true
+        newErrors.nextFollowUpDate = 'Next follow-up date is required.'
       } else {
         const today = new Date().toISOString().slice(0, 10)
         if (payForm.nextFollowUpDate < today) {
-          newErrors.nextFollowUpDate = true
+          newErrors.nextFollowUpDate = 'Next follow-up date cannot be in the past.'
         }
       }
     }
-    if (payForm.paymentStatus === 'Pending' && !payForm.remark?.trim()) {
-      newErrors.remark = true
+    if ((payForm.paymentStatus === 'Pending' || payForm.paymentStatus === 'Partial') && !payForm.remark?.trim()) {
+      newErrors.remark = 'Remark is required for pending or partial payment.'
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -632,7 +647,7 @@ export function LoanClient({
       }} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <Table headers={['Reg No', 'Customer', 'Bank', 'Loan Amount', 'Payout', 'Received', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
+      <Table minWidthClass="min-w-full" headers={['Reg No', 'Customer', 'Bank', 'Loan Amount', 'Payout', 'Received', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
         {filtered.map(r => (
           <tr key={r.loanManagementId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.registrationNo ?? '—'}</td>
@@ -646,7 +661,7 @@ export function LoanClient({
             </td>
             <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.loanAmount)}</td>
             <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.payoutAmount)}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.totalAmountReceived)}</td>
+            <td className="px-4 py-3 text-sm text-gray-600"><div>{fmtMoney(r.totalAmountReceived)}</div><div className="mt-1 text-xs font-medium text-orange-700">{fmtMoney(Math.max(0, Number(r.payoutAmount ?? 0) - Number(r.totalAmountReceived ?? 0)))} pending</div></td>
             <td className="px-4 py-3">{r.paymentStatus ? <Badge label={r.paymentStatus} /> : '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || '—'}</td>
             <td className="px-4 py-3">
@@ -664,23 +679,20 @@ export function LoanClient({
 
       <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Bank Name" value={form.bankName} onChange={e => f('bankName', e.target.value)} placeholder="HDFC Bank, SBI..." error={errors.bankName} />
+          <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Bank Contact Person</label>
-              <PartnerPicker partnerType="Bank" label="Bank Contact" value={selectedBankContact} onChange={onBankContactChange} error={errors.partnerId} />
+              <label className="text-xs font-medium text-gray-600 mb-1 block">Bank *</label>
+              <PartnerPicker partnerType="Bank" label="Bank" value={selectedBankContact} onChange={onBankContactChange} error={!!errors.partnerId} allowCreate={false} />
+              {errors.partnerId && <p className="mt-1 text-xs text-red-600">{errors.partnerId}</p>}
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <Input label="Bank Person Name" value={form.bankPersonName} onChange={e => f('bankPersonName', e.target.value)} />
-            <Input label="Bank Person Mobile No" value={form.bankPersonMobileNo} onChange={e => f('bankPersonMobileNo', e.target.value)} error={errors.bankPersonMobileNo} />
-            <Input label="Bank Person Email ID" value={form.bankPersonEmailId} onChange={e => f('bankPersonEmailId', e.target.value)} error={errors.bankPersonEmailId} />
-          </div>
+          {selectedBankContact && <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-[#1B2A6B]">Bank details come from Bank Master: {selectedBankContact.name}{selectedBankContact.mobile ? ` · ${selectedBankContact.mobile}` : ''}{selectedBankContact.email ? ` · ${selectedBankContact.email}` : ''}</div>}
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
+            <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={!!errors.customer} />
+            {errors.customer && <p className="mt-1 text-xs text-red-600">{errors.customer}</p>}
           </div>
 
           <div>
@@ -701,7 +713,7 @@ export function LoanClient({
                   value={vehicleQuery}
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}
-                  error={errors.inventoryId}
+                  error={!!errors.inventoryId}
                 />
                 {vehicleOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
@@ -720,15 +732,15 @@ export function LoanClient({
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)}>
+            <Select label="Car Type *" value={form.carType} onChange={e => f('carType', e.target.value)}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>
-            <Input label="Make *" value={form.carMake} onChange={e => f('carMake', e.target.value)} error={errors.carMake} />
-            <Input label="Model *" value={form.carModel} onChange={e => f('carModel', e.target.value)} error={errors.carModel} />
-            <Input label="Variant *" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} error={errors.carVariant} />
-            <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
+            <Input label="Make *" value={form.carMake} onChange={e => f('carMake', e.target.value)} error={!!errors.carMake} errorMessage={errors.carMake} />
+            <Input label="Model *" value={form.carModel} onChange={e => f('carModel', e.target.value)} error={!!errors.carModel} errorMessage={errors.carModel} />
+            <Input label="Variant *" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} error={!!errors.carVariant} errorMessage={errors.carVariant} />
+            <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={!!errors.carYear} errorMessage={errors.carYear} />
             <div className="space-y-1">
-              <Input label="Registration No" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.registrationNo} />
+              <Input label="Registration No *" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={!!errors.registrationNo} errorMessage={errors.registrationNo} />
               <div className="flex items-center gap-2">
                 <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
                   Find by Registration
@@ -740,11 +752,11 @@ export function LoanClient({
 
           <div className="grid grid-cols-3 gap-4">
             <Input label="Entry Date" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} />
-            <Input label="Loan Amount (₹)" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} error={errors.loanAmount} />
-            <Input label="Payout % of Loan" type="number" value={form.percentagePayoutAmount ?? ''} onChange={e => f('percentagePayoutAmount', e.target.value ? +e.target.value : null)} error={errors.percentagePayoutAmount} />
+            <Input label="Loan Amount (₹) *" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} error={!!errors.loanAmount} errorMessage={errors.loanAmount} />
+            <Input label="Payout % of Loan *" type="number" value={form.percentagePayoutAmount ?? ''} onChange={e => f('percentagePayoutAmount', e.target.value ? +e.target.value : null)} error={!!errors.percentagePayoutAmount} errorMessage={errors.percentagePayoutAmount} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
-            {!editId && <Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={errors.initialAmountReceived} />}
-            <Select label="Payment Status" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
+            {!editId && <Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={!!errors.initialAmountReceived} errorMessage={errors.initialAmountReceived} />}
+            <Select label="Payment Status *" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
             <Input label="Payment Date" type="date" value={form.paymentDate} onChange={e => f('paymentDate', e.target.value)} />
@@ -883,6 +895,16 @@ export function LoanClient({
       <Modal title={`Log Payment${payRow ? ` — ${payRow.registrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
         {payRow && (
           <div className="space-y-4">
+            {(() => {
+              const payout = Number(payRow.payoutAmount ?? 0)
+              const received = payments.length > 0 ? payments.reduce((sum, payment) => sum + Number(payment.amountPaid ?? 0), 0) : Number(payRow.totalAmountReceived ?? 0)
+              const pending = Math.max(0, payout - received)
+              return <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase text-gray-500">Payout</div><div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payout)}</div></div>
+                <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase text-green-700">Received</div><div className="mt-1 text-sm font-bold text-green-800">{fmtMoney(received)}</div></div>
+                <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase text-orange-700">Pending payout</div><div className="mt-1 text-sm font-bold text-orange-800">{fmtMoney(pending)}</div></div>
+              </div>
+            })()}
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
@@ -913,13 +935,13 @@ export function LoanClient({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} error={errors.amountPaid} />
-              <Select label="Payment Status *" value={payForm.paymentStatus} onChange={e => pf('paymentStatus', e.target.value)}>
+              <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} error={!!errors.amountPaid} errorMessage={errors.amountPaid} />
+              <Select label="Payment Status *" value={payForm.paymentStatus} onChange={e => pf('paymentStatus', e.target.value)} error={!!errors.paymentStatus} errorMessage={errors.paymentStatus}>
                 {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Input label={`Next Follow-up Date${payForm.paymentStatus === 'Pending' ? ' *' : ''}`} type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
+              <Input label={`Next Follow-up Date${payForm.paymentStatus === 'Pending' || payForm.paymentStatus === 'Partial' ? ' *' : ''}`} type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={!!errors.nextFollowUpDate} errorMessage={errors.nextFollowUpDate} />
             </div>
-            <Textarea label={`Remark${payForm.paymentStatus === 'Pending' ? ' *' : ''}`} value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
+            <Textarea label={`Remark${payForm.paymentStatus === 'Pending' || payForm.paymentStatus === 'Partial' ? ' *' : ''}`} value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={!!errors.remark} errorMessage={errors.remark} />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

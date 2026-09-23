@@ -6,6 +6,7 @@ import { Plus, X, Car, Download, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader, ConfirmDialog } from '@/components/ui'
 import { InsuranceFilters } from './InsuranceFilters'
 import { InsuranceTable } from './InsuranceTable'
+import { InsurancePaymentSummary } from './InsurancePaymentSummary'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
 import {
@@ -105,6 +106,9 @@ const INSURANCE_VALIDATION_MESSAGES: Record<string, string> = {
   agentEmailIdLegacy: 'Enter a valid agent email address.',
   customerMobileLegacy: 'Customer mobile must contain 10 digits.',
   customerEmailLegacy: 'Enter a valid customer email address.',
+  amountReceived: 'Enter an amount greater than zero that does not exceed the remaining balance.',
+  nextFollowUpDate: 'Select a follow-up date today or later for a pending payout.',
+  remark: 'Add a follow-up remark for a pending payout.',
 }
 
 function csvValue(value: string | number | boolean | null | undefined) {
@@ -615,14 +619,23 @@ export function InsuranceClient({
     }
   }
 
-  const pf = <K extends keyof LogPaymentInput>(k: K, v: LogPaymentInput[K]) => setPayForm(prev => ({ ...prev, [k]: v }))
+  const pf = <K extends keyof LogPaymentInput>(k: K, v: LogPaymentInput[K]) => {
+    setPayForm(prev => ({ ...prev, [k]: v }))
+    setError('')
+    setErrors(prev => {
+      if (!prev[k]) return prev
+      const next = { ...prev }
+      delete next[k]
+      return next
+    })
+  }
 
   const savePayment = () => {
     if (!payRow) return
     setError('')
     const newErrors: Record<string, boolean> = {}
 
-    if (payForm.amountReceived !== null && payForm.amountReceived <= 0) {
+    if (payForm.amountReceived === null || payForm.amountReceived <= 0) {
       newErrors.amountReceived = true
     }
     const totalReceivedAlready = payments.reduce((sum, p) => sum + Number(p.amountReceived ?? 0), 0)
@@ -993,17 +1006,22 @@ export function InsuranceClient({
               )}
             </div>
 
+            <InsurancePaymentSummary
+              payoutAmount={payRow.payoutAmount}
+              totalAmountReceived={payments.reduce((sum, payment) => sum + Number(payment.amountReceived ?? 0), 0)}
+            />
+
             <div className="grid grid-cols-2 gap-4">
-              <Input label="Amount Received (₹) *" type="number" value={payForm.amountReceived ?? ''} onChange={e => pf('amountReceived', e.target.value ? +e.target.value : null)} error={errors.amountReceived} />
+              <div><Input label="Amount Received (₹) *" type="number" value={payForm.amountReceived ?? ''} onChange={e => pf('amountReceived', e.target.value ? +e.target.value : null)} error={errors.amountReceived} />{fieldError('amountReceived')}</div>
               <Select label="Payout Status *" value={payForm.payoutPaymentStatus} onChange={e => pf('payoutPaymentStatus', e.target.value)}>
                 {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
               <Select label="Policy Status *" value={payForm.policyStatus} onChange={e => pf('policyStatus', e.target.value)}>
                 {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
+              <div><Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />{fieldError('nextFollowUpDate')}</div>
             </div>
-            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
+            <div><Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />{fieldError('remark')}</div>
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 

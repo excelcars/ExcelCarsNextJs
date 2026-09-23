@@ -6,7 +6,7 @@
 
 This document describes the actual current implementation only, after two code-review passes. Route: `/checklist`.
 
-The route page is a thin authorization/data-loading wrapper. The interactive feature composes focused UI components; the listing and pagination are implemented by `ChecklistTable.tsx` rather than embedded in the feature controller.
+The route page is a thin authorization/data-loading wrapper. The interactive feature composes focused UI components; the listing is implemented by `ChecklistTable.tsx` rather than embedded in the feature controller.
 
 Evidence: `app/(dashboard)/checklist/page.tsx`, `src/features/checklist/ChecklistClient.tsx`, `actions.ts`, `queries.ts`, `app/api/checklist/detail/route.ts`, `app/api/checklist/export/route.ts`, `src/lib/access/accessControl.ts`, and `prisma/schema.prisma`.
 
@@ -56,7 +56,7 @@ View retrieves fresh detail data and shows vehicle/customer snapshot, created/up
 
 ## SSOT rule
 
-`Authorized Checklist_Management user → sold Inventory record + normalized registration match → one checklist per Inventory ID → replaceable document-detail set.`
+`Authorized Checklist_Management user → selected Inventory record (sold or unsold) or manually entered registration → validated vehicle snapshot → replaceable document-detail set.`
 
 ## Approved modernization decisions
 

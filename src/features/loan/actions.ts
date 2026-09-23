@@ -162,6 +162,8 @@ function validateInitialPayment(input: LoanFormInput): string | null {
   if (new Prisma.Decimal(input.initialAmountReceived).gt(payoutAmount)) {
     return 'Initial amount received cannot exceed the payout amount.'
   }
+  const expectedStatus = new Prisma.Decimal(input.initialAmountReceived).equals(payoutAmount) ? 'Paid' : 'Partial'
+  if (input.paymentStatus !== expectedStatus) return `Select ${expectedStatus} for the initial received amount.`
   return null
 }
 
@@ -194,7 +196,11 @@ function buildData(input: LoanFormInput) {
 
 export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
   const partnerId = input.partnerId
-  if (partnerId !== null && (!Number.isInteger(partnerId) || partnerId <= 0)) return { success: false, error: 'Select a valid bank contact.' }
+  if (partnerId === null || !Number.isInteger(partnerId) || partnerId <= 0) return { success: false, error: 'Select a bank from the Bank Master list.' }
+  const bankPartnerId = partnerId as number
+  const bankPartner = await prisma.partnerMaster.findFirst({ where: { partnerId: bankPartnerId, partnerType: 'Bank' }, select: { partnerId: true, name: true, mobile: true, email: true } })
+  if (!bankPartner) return { success: false, error: 'Select a valid bank from the Bank Master list.' }
+  input = { ...input, bankName: bankPartner.name, bankPersonName: bankPartner.name, bankPersonMobileNo: bankPartner.mobile ?? '', bankPersonEmailId: bankPartner.email ?? '' }
   const validationError = validateLoanInput(input, { requireCustomerLink: true })
   if (validationError) return { success: false, error: validationError }
   const initialPaymentError = validateInitialPayment(input)
@@ -217,7 +223,7 @@ export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
       const loan = await tx.loanManagement.create({
         data: {
           ...buildData(input),
-          ...(partnerId ? { partnerMaster: { connect: { partnerId } } } : {}),
+          partnerMaster: { connect: { partnerId: bankPartnerId } },
           ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
           ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
           ...(input.fkVariantId ? { carVariantMaster: { connect: { pkVariantId: input.fkVariantId } } } : {}),
@@ -267,7 +273,11 @@ export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
 export async function updateLoan(id: number, input: LoanFormInput): Promise<ActionResult> {
   if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'A valid loan record is required.' }
   const partnerId = input.partnerId
-  if (partnerId !== null && (!Number.isInteger(partnerId) || partnerId <= 0)) return { success: false, error: 'Select a valid bank contact.' }
+  if (partnerId === null || !Number.isInteger(partnerId) || partnerId <= 0) return { success: false, error: 'Select a bank from the Bank Master list.' }
+  const bankPartnerId = partnerId as number
+  const bankPartner = await prisma.partnerMaster.findFirst({ where: { partnerId: bankPartnerId, partnerType: 'Bank' }, select: { partnerId: true, name: true, mobile: true, email: true } })
+  if (!bankPartner) return { success: false, error: 'Select a valid bank from the Bank Master list.' }
+  input = { ...input, bankName: bankPartner.name, bankPersonName: bankPartner.name, bankPersonMobileNo: bankPartner.mobile ?? '', bankPersonEmailId: bankPartner.email ?? '' }
   const validationError = validateLoanInput(input, { requireCustomerLink: true })
   if (validationError) return { success: false, error: validationError }
 
@@ -283,7 +293,7 @@ export async function updateLoan(id: number, input: LoanFormInput): Promise<Acti
       where: { loanManagementId: id },
       data: {
         ...buildData(input),
-        fkPartnerId: partnerId,
+        fkPartnerId: bankPartnerId,
         customerId: input.customerId,
         inventoryId: input.inventoryId,
         fkVariantId: input.fkVariantId,
@@ -358,6 +368,9 @@ export async function logLoanPayment(loanManagementId: number, input: LogLoanPay
       if (sum._sum.amountPaid && sum._sum.amountPaid.gt(main.payoutAmount)) {
         throw new Error('PAYMENT_EXCEEDS_PAYOUT')
       }
+      const totalReceived = sum._sum.amountPaid ?? new Prisma.Decimal(0)
+      const expectedStatus = totalReceived.equals(main.payoutAmount) ? 'Paid' : 'Partial'
+      if (input.paymentStatus !== expectedStatus) throw new Error('PAYMENT_STATUS_DOES_NOT_MATCH_TOTAL')
 
       if (nextFollowUpDate) {
         await tx.loanFollowupDetails.create({
@@ -375,7 +388,7 @@ export async function logLoanPayment(loanManagementId: number, input: LogLoanPay
       await tx.loanManagement.update({
         where: { loanManagementId },
         data: {
-          totalAmountReceived: sum._sum.amountPaid ?? 0,
+          totalAmountReceived: totalReceived,
           paymentStatus: input.paymentStatus,
           paymentDate: now,
           // A completed payment may have no next follow-up. Retain the current
@@ -397,6 +410,9 @@ export async function logLoanPayment(loanManagementId: number, input: LogLoanPay
     }
     if (err instanceof Error && err.message === 'PAYMENT_EXCEEDS_PAYOUT') {
       return { success: false, error: 'This payment would make the total received exceed the payout amount.' }
+    }
+    if (err instanceof Error && err.message === 'PAYMENT_STATUS_DOES_NOT_MATCH_TOTAL') {
+      return { success: false, error: 'Use Paid only when the full payout is received; otherwise use Partial.' }
     }
     return { success: false, error: 'Something went wrong logging this payment.' }
   }

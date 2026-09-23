@@ -55,6 +55,13 @@ function toDate(v: string): Date | null {
   return v ? new Date(v) : null
 }
 
+function paymentStatusFor(transferCharges: Prisma.Decimal | number | null, amountPaid: Prisma.Decimal | number | null) {
+  const charges = Number(transferCharges ?? 0)
+  const paid = Number(amountPaid ?? 0)
+  if (paid <= 0) return 'Pending'
+  return charges > 0 && paid >= charges ? 'Fully Paid' : 'Partially Paid'
+}
+
 async function getLatestRtoPaymentDate(rtoAgentMainId: number): Promise<Date | null> {
   const latestPayment = await prisma.rtoPaymentDetails.findFirst({
     where: { fkRtoAgentMainId: rtoAgentMainId },
@@ -140,6 +147,7 @@ export async function createRto(input: RtoFormInput): Promise<ActionResult> {
   const hasInitialFollowup = !!input.followupDate.trim()
   const paymentDate = hasInitialPayment ? toDate(input.paymentDate) : null
   const followupDate = hasInitialFollowup ? toDate(input.followupDate) : null
+  const calculatedPaymentStatus = paymentStatusFor(input.transferCharges, input.amountPaid)
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -154,6 +162,7 @@ export async function createRto(input: RtoFormInput): Promise<ActionResult> {
         data: {
           ...buildData({
             ...input,
+            paymentStatus: calculatedPaymentStatus,
             paymentDate: hasInitialPayment ? input.paymentDate : '',
             followupDate: hasInitialFollowup ? input.followupDate : '',
           }),
@@ -174,7 +183,7 @@ export async function createRto(input: RtoFormInput): Promise<ActionResult> {
             fkRtoAgentMainId: created.rtoAgentMainId,
             transferCharges: input.transferCharges,
             amountPaid: input.amountPaid,
-            paymentStatus: input.paymentStatus,
+            paymentStatus: calculatedPaymentStatus,
             paymentDate,
             rcStatus: input.rcStatus,
             transferStatus: input.transferStatus,
@@ -207,6 +216,7 @@ export async function createRto(input: RtoFormInput): Promise<ActionResult> {
         where: { rtoAgentMainId: created.rtoAgentMainId },
         data: {
           amtPaid: sum._sum.amountPaid ?? 0,
+          paymentStatus: paymentStatusFor(input.transferCharges, sum._sum.amountPaid),
           paymentDate,
           followupDate,
           remark: input.remark || null,
@@ -245,12 +255,20 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
       if (dup) return { success: false, error: 'An RTO record already exists for this registration number.' }
     }
 
-    const latestPaymentDate = await getLatestRtoPaymentDate(id)
+    const [latestPaymentDate, current] = await Promise.all([
+      getLatestRtoPaymentDate(id),
+      prisma.rtoAgent.findUnique({ where: { rtoAgentMainId: id }, select: { amtPaid: true } }),
+    ])
+    const totalPaid = current?.amtPaid ?? 0
+    if (input.transferCharges !== null && Number(totalPaid) > Number(input.transferCharges)) {
+      return { success: false, error: 'Transfer charges cannot be less than the amount already paid.' }
+    }
 
     await prisma.rtoAgent.update({
       where: { rtoAgentMainId: id },
       data: {
         ...buildData(input),
+        paymentStatus: paymentStatusFor(input.transferCharges, totalPaid),
         paymentDate: latestPaymentDate ?? toDate(input.paymentDate),
         fkPartnerId: input.partnerId,
         customerId: input.customerId,
@@ -284,8 +302,11 @@ export async function deleteRto(id: number): Promise<ActionResult> {
 }
 
 export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPaymentInput): Promise<ActionResult> {
-  if (!input.paymentStatus || !input.rcStatus || !input.transferStatus) {
-    return { success: false, error: 'Payment, RC, and transfer status are all required.' }
+  if (!input.rcStatus || !input.transferStatus) {
+    return { success: false, error: 'RC and transfer status are required.' }
+  }
+  if (input.amountPaid === null || input.amountPaid <= 0) {
+    return { success: false, error: 'Enter a payment amount greater than zero.' }
   }
 
   const userId = await currentUserId()
@@ -295,13 +316,24 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
   try {
     const main = await prisma.rtoAgent.findUnique({ where: { rtoAgentMainId } })
     if (!main) return { success: false, error: 'RTO record not found.' }
+    const charges = Number(main.transferCharges ?? 0)
+    const paidBefore = Number(main.amtPaid ?? 0)
+    if (charges <= 0) return { success: false, error: 'Set transfer charges before logging a payment.' }
+    if (paidBefore + input.amountPaid > charges) return { success: false, error: 'Payment cannot exceed the remaining RTO balance.' }
+    const calculatedPaymentStatus = paymentStatusFor(main.transferCharges, paidBefore + input.amountPaid)
+    if (calculatedPaymentStatus !== 'Fully Paid') {
+      if (!input.nextFollowUpDate || new Date(input.nextFollowUpDate) < new Date(new Date().toDateString())) {
+        return { success: false, error: 'A current or future follow-up date is required for a pending balance.' }
+      }
+      if (!input.remark.trim()) return { success: false, error: 'Add a remark for the pending balance.' }
+    }
 
     await prisma.rtoPaymentDetails.create({
       data: {
         fkRtoAgentMainId: rtoAgentMainId,
         transferCharges: main.transferCharges,
         amountPaid: input.amountPaid,
-        paymentStatus: input.paymentStatus,
+        paymentStatus: calculatedPaymentStatus,
         paymentDate: now,
         rcStatus: input.rcStatus,
         transferStatus: input.transferStatus,
@@ -338,7 +370,7 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
       where: { rtoAgentMainId },
       data: {
         amtPaid: sum._sum.amountPaid ?? 0,
-        paymentStatus: input.paymentStatus,
+        paymentStatus: paymentStatusFor(main.transferCharges, sum._sum.amountPaid),
         paymentDate: latestPaymentDate,
         rcStatus: input.rcStatus,
         transferStatus: input.transferStatus,

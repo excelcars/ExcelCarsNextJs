@@ -63,7 +63,7 @@ function validDocs(docs: DocRow[]) {
 
 async function validateChecklistInventory(input: ChecklistFormInput, currentDocumentId?: number): Promise<string | null> {
   if (!input.inventoryId) {
-    return 'Select a vehicle.'
+    return null
   }
 
   const inventory = await prisma.inventoryManagement.findUnique({
@@ -81,15 +81,11 @@ async function validateChecklistInventory(input: ChecklistFormInput, currentDocu
     return 'This vehicle no longer exists.'
   }
 
-  if ((inventory.status ?? '').trim() !== 'Sold') {
-    return 'Checklist can only be created for sold vehicles.'
-  }
-
-  if (input.customerId !== inventory.customerId) {
+  if (inventory.customerId !== null && input.customerId !== inventory.customerId) {
     return 'Checklist customer must match the selected vehicle customer.'
   }
 
-  if (inventory.customerId === null && input.customerNameLegacy.trim() !== (inventory.customerName ?? '').trim()) {
+  if (inventory.customerId === null && input.customerNameLegacy.trim() && input.customerNameLegacy.trim() !== (inventory.customerName ?? '').trim()) {
     return 'Checklist customer must match the selected vehicle customer.'
   }
 
@@ -118,8 +114,6 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
 
   const validationError = await validateChecklistInventory(input)
   if (validationError) return { success: false, error: validationError }
-  const inventoryId = input.inventoryId as number
-
   const docs = validDocs(input.docs)
 
   const userId = await currentUserId()
@@ -129,7 +123,7 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
     await prisma.checkListDocMain.create({
       data: {
         ...buildMainData(input),
-        inventoryManagement: { connect: { inventoryId } },
+        ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
         ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
         createdDate: new Date(),
         updatedDate: new Date(),
