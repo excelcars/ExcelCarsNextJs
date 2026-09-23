@@ -111,8 +111,8 @@ async function mapChecklistSummaryRows(rows: Array<{
 export async function listChecklists({ search = '', registration = '', page = 1 }: { search?: string; registration?: string; page?: number }) {
   const where = buildChecklistWhere(search, registration)
   const total = await prisma.checkListDocMain.count({ where })
-  const pageCount = Math.max(1, Math.ceil(total / CHECKLIST_PAGE_SIZE))
-  const safePage = Math.min(Math.max(1, page || 1), pageCount)
+  const pageCount = 1
+  const safePage = 1
 
   const rows = await prisma.checkListDocMain.findMany({
     where,
@@ -140,8 +140,6 @@ export async function listChecklists({ search = '', registration = '', page = 1 
       },
     },
     orderBy: { documentId: 'desc' },
-    skip: (safePage - 1) * CHECKLIST_PAGE_SIZE,
-    take: CHECKLIST_PAGE_SIZE,
   })
 
   return {

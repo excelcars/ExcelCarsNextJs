@@ -18,12 +18,14 @@ export function PartnerPicker({
   value,
   onChange,
   error,
+  allowCreate = true,
 }: {
   partnerType: string
   label: string
   value: PartnerOption | null
   onChange: (partner: PartnerOption | null) => void
   error?: boolean
+  allowCreate?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PartnerOption[]>([])
@@ -121,13 +123,13 @@ export function PartnerPicker({
               <div className="text-xs text-gray-500">{p.mobile ?? '—'}</div>
             </button>
           ))}
-          <button
+          {allowCreate && <button
             type="button"
             onClick={() => { setShowCreate(true); setOpen(false) }}
             className="w-full text-left px-3 py-2 text-sm text-[#1B2A6B] font-medium hover:bg-gray-50 flex items-center gap-1.5"
           >
             <UserPlus className="w-3.5 h-3.5" /> Add new {label.toLowerCase()}
-          </button>
+          </button>}
         </div>
       )}
 

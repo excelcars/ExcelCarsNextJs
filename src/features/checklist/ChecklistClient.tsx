@@ -302,6 +302,7 @@ export function ChecklistClient({
   const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteDocIndex, setDeleteDocIndex] = useState<number | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
   const [errors, setErrors] = useState<Record<string, boolean>>({})
@@ -527,10 +528,6 @@ export function ChecklistClient({
     if (!form.registrationNo?.trim()) {
       newErrors.registrationNo = true
     }
-    if (!form.customerId && !form.customerNameLegacy?.trim()) {
-      newErrors.customer = true
-      setError('The selected vehicle has no linked customer. Link a customer in Inventory before creating a checklist.')
-    }
     if (form.customerMobileLegacy && !isValidPhone(form.customerMobileLegacy)) {
       newErrors.customerMobileLegacy = true
     }
@@ -648,9 +645,7 @@ export function ChecklistClient({
             <Input value={registration} onChange={e => setRegistration(e.target.value)} placeholder="Exact registration no..." disabled={isRoutePending} />
           </div>
         </div>
-        <div className="text-xs text-gray-500">
-          Page {page} of {pageCount} · {pageSize} per page
-        </div>
+        <div className="text-xs text-gray-500">{total} checklist records</div>
       </div>
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
@@ -737,14 +732,18 @@ export function ChecklistClient({
             )}
           </div>
 
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <div className={`border ${errors.customer ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-gray-50'} rounded-md px-3 py-2`}>
-              <div className={`text-sm font-medium ${form.customerNameLegacy ? 'text-gray-800' : 'text-red-700'}`}>{form.customerNameLegacy || 'No customer linked to this vehicle'}</div>
-              <div className="text-xs text-gray-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>
+          <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-900">Car details</h3><p className="text-xs text-slate-500">Confirm or enter the vehicle information for this checklist.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">{selectedVehicle ? 'Inventory vehicle' : 'Manual vehicle'}</span></div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Input label="Make *" value={form.make} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
+              <Input label="Model *" value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+              <Input label="Variant *" value={form.variant} onChange={e => setForm(f => ({ ...f, variant: e.target.value }))} />
+              <Input label="Colour *" value={form.colour} onChange={e => setForm(f => ({ ...f, colour: e.target.value }))} />
+              <Input label="Year *" type="number" value={form.year ?? ''} onChange={e => setForm(f => ({ ...f, year: e.target.value ? Number(e.target.value) : null }))} />
+              <Input label="Fuel Type *" value={form.fuelType} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value }))} />
             </div>
-            <div className={`mt-1 text-xs ${form.customerNameLegacy ? 'text-gray-500' : 'text-red-600'}`}>{form.customerNameLegacy ? 'Customer details are derived from the selected vehicle.' : 'Link a customer in Inventory before saving this checklist.'}</div>
-          </div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Linked customer</div><div className={`mt-0.5 text-sm font-medium ${form.customerNameLegacy ? 'text-slate-800' : 'text-amber-700'}`}>{form.customerNameLegacy || 'No customer linked'}</div>{form.customerNameLegacy && <div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>}</div>
+          </section>
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -758,7 +757,7 @@ export function ChecklistClient({
                       <ChecklistYesNoToggle label={i === 0 ? 'Applicable' : undefined} value={d.applicable} onChange={value => updateDoc(i, { applicable: value })} />
                       <ChecklistYesNoToggle label={i === 0 ? 'Received' : undefined} value={d.received} onChange={value => updateDoc(i, { received: value })} />
                       <ChecklistDocumentTypeToggle label={i === 0 ? 'Document type' : undefined} value={d.originalCopy} onChange={value => updateDoc(i, { originalCopy: value })} />
-                  <button type="button" onClick={() => removeDoc(i)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => setDeleteDocIndex(i)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Remove document"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ))}
               <datalist id="doc-name-suggestions">
@@ -885,6 +884,14 @@ export function ChecklistClient({
         confirmDisabled={isPending}
         cancelDisabled={isPending}
         closeOnConfirm={false}
+      />
+      <ConfirmDialog
+        open={deleteDocIndex !== null}
+        onClose={() => setDeleteDocIndex(null)}
+        onConfirm={() => { if (deleteDocIndex !== null) removeDoc(deleteDocIndex); setDeleteDocIndex(null) }}
+        title="Remove document?"
+        message="Remove this document from the checklist?"
+        confirmLabel="Remove"
       />
       <ConfirmDialog
         open={discardOpen}

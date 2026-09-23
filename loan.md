@@ -20,7 +20,7 @@ The module manages loan-referral records, their linked customer, bank partner/co
 The main model is `loanManagement`. It stores bank/contact and customer/vehicle snapshot data, relationship ids, amounts, current payment/follow-up summary, remarks, and audit ids/dates.
 
 - `customerId` links `customer` for every newly created loan; linked customer display values take precedence in reading the UI/export. Legacy rows may still have only snapshot fields until they are edited and linked.
-- `fkPartnerId` optionally links `partnerMaster`; a selected Bank partner fills the contact snapshot, but a verified manual bank-contact snapshot may be saved when no partner record exists.
+- `fkPartnerId` links the required `partnerMaster` Bank record. Bank name and contact snapshots are derived from that master record; free-text bank entry is not available.
 - `inventoryId` and `fkVariantId` may link an inventory vehicle/variant. The UI treats vehicle linkage as optional if a registration is entered manually.
 - `loanPaymentDetails` contains appended payment entries; `loanFollowupDetails` contains appended follow-up entries.
 - `createdBy`/`updatedBy` are populated from the authorized actor. Listing separately resolves those user names for the view dialog.
@@ -42,19 +42,19 @@ Reset clears all filters. Filtered count is the subtitle. All filters are URL-ba
 
 ### Create and edit
 
-**Add Loan** and **Edit** open a modal. The form exposes bank name; required Bank partner/contact picker; editable contact snapshot fields; a mobile-first customer lookup; optional inventory picker/registration lookup; vehicle fields; commercial/payment fields; and remarks. **Add Loan** also requires an initial amount received.
+**Add Loan** and **Edit** open a modal. The form exposes a required live Bank Master picker; a mobile-first customer lookup; optional inventory picker/registration lookup; vehicle fields; commercial/payment fields; and remarks. **Add Loan** also requires an initial amount received.
 
 - The customer section searches Customer Master and Inquiry Management by mobile number. It returns each Customer Master person and inquiry separately, even when they share a mobile number, so the operator chooses the correct named person. Inquiry results show their number and available vehicle context.
 - An inquiry already linked to a Customer Master record can be selected directly. An unlinked inquiry can only become a customer through the explicit **Create Customer from Loan** confirmation; it pre-fills the inquiry identity and vehicle context but never creates a master record silently. Customer creation validates name/contact and prevents a same-name/same-primary-contact duplicate.
 - New loans require a Customer Master link. Selecting an inquiry vehicle copies its linked stock vehicle, or its inquiry car make/model/variant/year, into the loan form; the loan schema has no inquiry-id relation, so the inquiry itself is displayed as lookup context rather than persisted as a fabricated link. Existing legacy loans without a customer link must be linked to a selected or newly created customer before an edit can be saved.
-- Selecting a Bank partner copies partner id/name/mobile/email. It is optional; `Bank Name` remains client-required and manual contact fields remain editable.
+- Selecting a Bank record copies partner id/name/mobile/email. It is required; creation and update independently verify that the selected id is an existing `Bank` Partner Master record and derive the stored bank/contact snapshot from it.
 - Selecting stock vehicle fills inventory/variant id, make/model/variant/year and registration. A user may enter vehicle details manually, but registration is required in every case.
 - Vehicle lookup normalizes registration by stripping non-alphanumerics and uppercasing; no match is informational and does not block manual continuation.
 - Car type options are `New` and `PreOwned`; default is `PreOwned`.
 - Payout is displayed as a client-recomputed two-decimal value whenever both loan amount and percentage are present: `round(loanAmount * percentage / 100, 2)`. On create/update, the server independently performs that calculation and ignores the submitted payout amount.
-- Payment status options are `Pending` and `Paid`; entry, initial-payment, and follow-up dates default to today. Initial amount received must be positive and no greater than the computed payout.
+- Payment status options are `Pending`, `Partial`, and `Paid`; entry, initial-payment, and follow-up dates default to today. Initial amount received must be positive and no greater than the computed payout. New positive-but-not-full receipt is recorded as `Partial`; an exact full payout is `Paid`.
 
-Client and server validation require a Customer Master selection, vehicle make, model, variant, and valid year, and reject nonpositive entered loan amount, payout percentage outside 0–100, and invalid optional phone/email fields. They do not require entry date, payment date, follow-up date, or a partner link. Both create and update enforce a customer link, so a legacy snapshot-only row must be linked before it can be saved. Both paths enforce registration, bank name, car-type, vehicle make/model/variant/year, optional selected-partner validity, optional contact formats, amount/percentage range, paired amount-and-percentage, and payment-status rules. The server calculates the payout from validated amount/percentage; it never trusts the submitted payout field.
+Client and server validation require a Bank Master selection, a Customer Master selection, vehicle make, model, variant, valid year, loan amount, and payout percentage. Field-level messages state what needs correction. Both create and update enforce the master links, so legacy snapshot-only rows must be linked before they can be saved. Both paths enforce registration, bank, car-type, vehicle make/model/variant/year, contact formats, amount/percentage range, paired amount-and-percentage, and payment-status rules. The server calculates the payout from validated amount/percentage; it never trusts the submitted payout field.
 
 Create and update require registration. The value is canonicalized by stripping whitespace and uppercasing before storage. Duplicate lookup applies that same whitespace-stripped uppercase normalization to stored legacy values before comparison, so it catches case/spacing variations without rewriting existing data. Create then atomically creates the main row, an initial payment-detail row, and an initial follow-up-detail row. Main `totalAmountReceived` is initialized from the validated initial payment; its payment/follow-up dates default to the current server time when a date was not supplied. Update overwrites the main row’s data/relations without creating another initial payment. Both paths revalidate `/loan`.
 
@@ -67,7 +67,7 @@ Create and update require registration. The value is canonicalized by stripping 
 
 ## 5. Payment and follow-up workflow
 
-**Log Payment** opens a modal, fetches `/api/loan/history?loanManagementId=<id>`, and displays the complete payment and follow-up histories, each sorted newest first in a scrollable area.
+**Log Payment** opens a modal, fetches `/api/loan/history?loanManagementId=<id>`, shows Payout, Received, and Pending payout cards, and displays the complete payment and follow-up histories, each sorted newest first in a scrollable area.
 
 The operator enters amount paid, a status, optional next follow-up date, and remark. UI validation:
 
@@ -75,7 +75,7 @@ The operator enters amount paid, a status, optional next follow-up date, and rem
 - requires a future-or-today next follow-up if status is not exactly `Received`;
 - requires a nonblank remark.
 
-The only selectable statuses are `Pending` and `Paid`. A **Pending** payment requires a non-past next follow-up date and a remark; a **Paid** payment may omit both. The server independently requires a positive finite amount and one of those two statuses, and enforces the Pending-specific follow-up rule. It also rejects a loan with no positive payout amount and, within a serializable transaction, rejects a payment whose resulting detail-payment sum exceeds the current payout. It appends a follow-up only when a date was supplied, aggregates all detail payments, then updates the main total/current status/payment date. A supplied next follow-up replaces the main follow-up/remarks summary; without one, the existing main summary is retained. A failure in any operation rolls back the whole payment workflow.
+The selectable statuses are `Pending`, `Partial`, and `Paid`. A **Pending** or **Partial** payment requires a non-past next follow-up date and a remark; a **Paid** payment may omit both. A logged payment is server-validated as `Partial` until the aggregate equals the payout, then as `Paid`; it cannot exceed payout. The server independently requires a positive finite amount and, within a serializable transaction, appends the payment/follow-up, aggregates the payment history, and updates the main total/current status/payment date atomically. A supplied next follow-up replaces the main follow-up/remarks summary; without one, the existing main summary is retained.
 
 ## 6. Error handling and constraints
 
@@ -83,7 +83,7 @@ The only selectable statuses are `Pending` and `Paid`. A **Pending** payment req
 - Client errors render in the active modal or export banner. Payment-history load failure shows a generic error and clears history.
 - API history returns `401` when unauthenticated, `403` without the Loan permission, and `400` for an invalid/missing numeric id. Database errors bubble from that route.
 - `listLoans()` and page load errors bubble to Next.js route handling.
-- `src/features/loan/paymentValidation.test.ts` covers the canonical Pending/Paid payment-policy boundary: Pending follow-up/remark requirements, Paid completion without follow-up, invalid amounts, and invalid statuses. `src/features/loan/loanRules.test.ts` covers canonical registration whitespace/case normalization. Both run through `npm test`. Database transaction, authorization, duplicate-registration, filter, export, and deletion integration tests are still absent.
+- `src/features/loan/paymentValidation.test.ts` covers Pending/Partial follow-up/remark requirements, Paid completion without follow-up, invalid amounts, and invalid statuses. `src/features/loan/loanRules.test.ts` covers canonical registration whitespace/case normalization. Both run through `npm test`. Database transaction, authorization, duplicate-registration, filter, export, and deletion integration tests are still absent.
 
 ## 7. SSOT rule
 
@@ -92,11 +92,11 @@ This document describes actual current Next.js behavior, including URL-backed se
 ## 8. Approved migration decisions
 
 - Payment and deletion mutations are atomic database transactions.
-- Pending payments require a nonpast next follow-up and remark; Paid payments may omit them and retain the existing follow-up summary.
+- Pending and Partial payments require a nonpast next follow-up and remark; Paid payments may omit them and retain the existing follow-up summary. The aggregate received amount determines Partial versus Paid.
 - Creating a loan creates its initial payment and follow-up history entries atomically.
 - Loan registration is mandatory, whitespace-stripped/uppercased, and duplicate-checked against normalized legacy values.
 - Loan list filters, pagination, and full CSV export are server-side and URL-backed.
 - Module permission is intentionally broad: any user with `/loan` access can act on all loan records.
-- Bank partners remain optional. New loan referrals require an explicit Customer Master link, selected mobile-first from Customer Master/Inquiry Management or created through the explicit Loan customer action. Legacy customer snapshots remain readable for migration only.
+- A Bank Master record is required; the loan UI and server both derive bank/contact data from its dynamic partner lookup rather than accepting free text. New loan referrals also require an explicit Customer Master link, selected mobile-first from Customer Master/Inquiry Management or created through the explicit Loan customer action. Legacy customer snapshots remain readable for migration only.
 - Make, model, variant, and model year are mandatory. Monetary zero is displayed as `₹0`.
 - Focused unit tests cover payment status/follow-up validation and registration normalization; broader database integration testing remains future quality work, not a functional requirement.
