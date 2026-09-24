@@ -225,6 +225,7 @@ function inquiryListSelect() {
         variantLegacy: true,
         subVariant: true,
         year: true,
+        noOfOwners: true,
         carVariantMaster: {
           select: {
             variant: true,

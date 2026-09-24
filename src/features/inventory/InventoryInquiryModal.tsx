@@ -35,7 +35,7 @@ export function InventoryInquiryModal({ row, query, matches, selected, loading, 
     setSubStatus(selected?.subStatus ?? '')
     setFollowUpDate(selected?.followUpDate ? new Date(selected.followUpDate).toISOString().slice(0, 10) : '')
     setRemark(selected?.remark ?? '')
-  }, [selected?.inquiryId])
+  }, [selected])
 
   return <Modal title={`Update Inquiry${row ? ` — ${row.registrationNo ?? row.inventoryNumber ?? ''}` : ''}`} open={!!row} onClose={onClose} width="max-w-4xl">
     {row ? <div className="space-y-4">

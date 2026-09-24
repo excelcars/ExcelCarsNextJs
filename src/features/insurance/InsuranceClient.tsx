@@ -884,7 +884,7 @@ export function InsuranceClient({
         {viewRow && (
           <>
             <InsuranceViewDetails row={viewRow} onEdit={() => { setViewRow(null); openEdit(viewRow) }} onLogPayment={() => { setViewRow(null); void openPay(viewRow) }} />
-            {false && (<div className="space-y-5">
+            {viewRow && Boolean(0) && (<div className="space-y-5">
             <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>

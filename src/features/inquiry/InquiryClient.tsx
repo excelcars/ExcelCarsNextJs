@@ -1366,7 +1366,7 @@ export function InquiryClient({
     return () => {
       if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
     }
-  }, [carEditor.fkVariantId, carEditor.selectedMakeId, carEditor.selectedModelId, carEditor.carYear, carEditor.noOfOwners, editingCarIndex, form.budgetOfCustomer, form.inquiryCars, modal])
+  }, [carEditor, editingCarIndex, form.budgetOfCustomer, form.inquiryCars, modal])
 
   const customerSnapshot = (customer: CustomerOption | null) => JSON.stringify(customer ? {
     custId: customer.custId,

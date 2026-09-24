@@ -8,7 +8,6 @@ import { LoanFiltersPanel } from './LoanFiltersPanel'
 import { LoanPagination } from './LoanPagination'
 import { LoanCustomerLookup, type LoanCustomerOption } from './LoanCustomerLookup'
 import type { LoanCustomerVehicleContext } from './customerLookup'
-import { PartnerPicker } from '@/components/PartnerPicker'
 import {
   createLoan, updateLoan, deleteLoan, logLoanPayment,
   type LoanFormInput, type LogLoanPaymentInput,
@@ -396,18 +395,6 @@ export function LoanClient({
       setSelectedCustomer(null)
       setForm(current => ({ ...current, customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '' }))
     }
-  }
-
-  const onBankContactChange = (p: PartnerOption | null) => {
-    setSelectedBankContact(p)
-    setForm(f => ({
-      ...f,
-      partnerId: p?.partnerId ?? null,
-      bankName: p?.name ?? '',
-      bankPersonName: p?.name ?? '',
-      bankPersonMobileNo: p?.mobile ?? '',
-      bankPersonEmailId: p?.email ?? '',
-    }))
   }
 
   const findVehicleByRegistration = () => {
