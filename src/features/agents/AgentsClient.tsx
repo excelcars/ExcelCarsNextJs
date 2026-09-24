@@ -89,16 +89,12 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
       </div>
     </div>
 
-    <Table headers={['Agent', 'Contact', 'Actions']} minWidthClass="min-w-[620px]" empty={initialData.length === 0}>
+    <Table headers={['Agent', 'Agent Type', 'Mobile', 'Email', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
       {initialData.map(row => <tr key={row.partnerId} className="hover:bg-gray-50 transition">
-        <td className="px-4 py-3">
-          <div className="font-medium text-gray-900">{row.name}</div>
-          <div className="mt-1"><span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-[#1B2A6B]">{row.partnerType}</span></div>
-        </td>
-        <td className="px-4 py-3">
-          <div className="font-mono text-sm text-gray-700">{row.mobile ?? '—'}</div>
-          {row.email && <div className="mt-0.5 text-xs text-gray-500">{row.email}</div>}
-        </td>
+        <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
+        <td className="px-4 py-3 text-sm text-gray-700">{row.partnerType}</td>
+        <td className="px-4 py-3 font-mono text-sm text-gray-700">{row.mobile ?? '—'}</td>
+        <td className="px-4 py-3 text-sm text-gray-600">{row.email ?? '—'}</td>
         <td className="px-4 py-3"><div className="flex items-center gap-1">
           <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
           <button onClick={() => setDeleteId(row.partnerId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>

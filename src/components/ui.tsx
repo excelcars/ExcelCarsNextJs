@@ -36,7 +36,8 @@ export function Badge({ label }: { label: string }) {
     'Expiring Soon': 'bg-orange-100 text-orange-700',
     Draft: 'bg-gray-100 text-gray-500',
   }
-  const cls = map[label] || 'bg-gray-100 text-gray-600'
+  const status = label.replace(/^(Payment|RC|Transfer):\s*/, '')
+  const cls = map[status] || 'bg-gray-100 text-gray-600'
   return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${cls}`}>{label}</span>
 }
 

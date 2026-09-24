@@ -94,6 +94,9 @@ function validateInsuranceInput(input: InsuranceFormInput): string | null {
   const followupDate = toDate(input.followupDate)
   if (!entryDate || !renewalDate || !expiryDate || !followupDate) return 'Entry, renewal, expiry, and follow-up dates are required.'
   if (expiryDate <= entryDate) return 'Expiry date must be after entry date.'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (followupDate < today) return 'Follow-up date cannot be in the past.'
   if (!Number.isFinite(input.insurancePremium ?? NaN) || input.insurancePremium === null || input.insurancePremium <= 0) return 'Insurance premium must be greater than zero.'
   if (!Number.isFinite(input.oDPremium ?? NaN) || input.oDPremium === null || input.oDPremium <= 0) return 'OD premium must be greater than zero.'
   if (input.oDPremium > input.insurancePremium) return 'OD premium cannot exceed insurance premium.'

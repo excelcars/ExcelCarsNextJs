@@ -85,10 +85,6 @@ async function validateChecklistInventory(input: ChecklistFormInput, currentDocu
     return 'Checklist customer must match the selected vehicle customer.'
   }
 
-  if (inventory.customerId === null && input.customerNameLegacy.trim() && input.customerNameLegacy.trim() !== (inventory.customerName ?? '').trim()) {
-    return 'Checklist customer must match the selected vehicle customer.'
-  }
-
   if (normalizeRegistration(input.registrationNo) !== normalizeRegistration(inventory.registrationNo)) {
     return 'Selected vehicle does not match the registration number.'
   }
@@ -120,6 +116,9 @@ export async function createChecklist(input: ChecklistFormInput): Promise<Action
   if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
+    if (input.inventoryId && input.customerId) {
+      await prisma.inventoryManagement.update({ where: { inventoryId: input.inventoryId }, data: { customerId: input.customerId, customerName: input.customerNameLegacy || null } })
+    }
     await prisma.checkListDocMain.create({
       data: {
         ...buildMainData(input),
@@ -163,6 +162,9 @@ export async function updateChecklist(id: number, input: ChecklistFormInput): Pr
 
   try {
     await prisma.$transaction(async tx => {
+      if (input.inventoryId && input.customerId) {
+        await tx.inventoryManagement.update({ where: { inventoryId: input.inventoryId }, data: { customerId: input.customerId, customerName: input.customerNameLegacy || null } })
+      }
       await tx.checklistDocDetails.deleteMany({ where: { fkDocumentId: id } })
 
       await tx.checkListDocMain.update({
