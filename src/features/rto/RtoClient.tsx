@@ -107,6 +107,10 @@ const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
 const fmtDateTime = (d: Date | string | null) => d ? new Date(d).toLocaleString('en-IN') : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+const todayForInput = () => {
+  const today = new Date()
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+}
 
 function paymentSummary(row: Pick<RtoRow, 'transferCharges' | 'amtPaid'>) {
   const charges = Number(row.transferCharges ?? 0)
@@ -315,6 +319,7 @@ export function RtoClient({
   const [vehicleOpen, setVehicleOpen] = useState(false)
   const vehiclePickerRef = useRef<HTMLDivElement>(null)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [vehicleEntryMode, setVehicleEntryMode] = useState<'existing' | 'manual'>('manual')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
@@ -538,6 +543,7 @@ export function RtoClient({
     setModels([])
     setVariants([])
     resetVehicle()
+    setVehicleEntryMode('manual')
     setEditId(null)
     setError('')
     setSavedFormSnapshot(JSON.stringify(empty))
@@ -577,6 +583,7 @@ export function RtoClient({
     setSelectedCustomer(cust)
     setSelectedAgent(partner)
     setSelectedVehicle(veh)
+    setVehicleEntryMode(veh ? 'existing' : 'manual')
     setSelectedMakeId(null)
     setSelectedModelId(null)
     setModels([])
@@ -592,6 +599,7 @@ export function RtoClient({
   }
 
   const selectVehicle = (v: Vehicle) => {
+    setVehicleEntryMode('existing')
     setSelectedVehicle(v)
     setVehicleOpen(false)
     setVehicleQuery('')
@@ -630,6 +638,10 @@ export function RtoClient({
   }
 
   const onRegistrationChange = (value: string) => {
+    if (vehicleEntryMode === 'manual') {
+      setForm(prev => ({ ...prev, registrationNo: value, inventoryId: null, variantId: null }))
+      return
+    }
     const normalized = normalizeRegistrationNo(value)
     const match = normalized
       ? vehicles.find(vehicle => normalizeRegistrationNo(vehicle.registrationNo) === normalized) ?? null
@@ -657,10 +669,8 @@ export function RtoClient({
     const amountPaid = form.amountPaid ?? 0
     const hasInitialPayment = !editId && amountPaid > 0
 
-    if (!form.inventoryId && !form.registrationNo?.trim()) {
-      newErrors.inventoryId = true
-      newErrors.registrationNo = true
-    }
+    if (vehicleEntryMode === 'existing' && !form.inventoryId) newErrors.inventoryId = true
+    if (vehicleEntryMode === 'manual' && !form.registrationNo?.trim()) newErrors.registrationNo = true
     if (!form.partnerId && !form.agentNameLegacy?.trim()) {
       newErrors.partnerId = true
     }
@@ -781,29 +791,29 @@ export function RtoClient({
     setError('')
     const newErrors: Record<string, boolean> = {}
 
-    if (payForm.amountPaid === null || payForm.amountPaid <= 0) {
-      newErrors.amountPaid = true
-    }
     const totalPaidAlready = Number(payRow.amtPaid ?? 0)
     const charges = Number(payRow.transferCharges ?? 0)
-    if (charges <= 0 || (payForm.amountPaid !== null && (totalPaidAlready + payForm.amountPaid > charges))) {
-      newErrors.amountPaid = true
+    const statusOnlyUpdate = payForm.amountPaid === null && charges > 0 && totalPaidAlready >= charges
+    if (!statusOnlyUpdate) {
+      if (payForm.amountPaid === null || payForm.amountPaid <= 0 || charges <= 0 || (payForm.amountPaid !== null && totalPaidAlready + payForm.amountPaid > charges)) {
+        newErrors.amountPaid = true
+      }
     }
     const resultingPayment = paymentSummary({
       transferCharges: payRow.transferCharges,
       amtPaid: String(totalPaidAlready + (payForm.amountPaid ?? 0)),
     })
-    if (resultingPayment.status !== 'Fully Paid') {
+    if (!statusOnlyUpdate && resultingPayment.status !== 'Fully Paid') {
       if (!payForm.nextFollowUpDate?.trim()) {
         newErrors.nextFollowUpDate = true
       } else {
-        const today = new Date().toISOString().slice(0, 10)
+        const today = todayForInput()
         if (payForm.nextFollowUpDate < today) {
           newErrors.nextFollowUpDate = true
         }
       }
     }
-    if (!payForm.remark?.trim()) {
+    if (!statusOnlyUpdate && resultingPayment.status !== 'Fully Paid' && !payForm.remark?.trim()) {
       newErrors.remark = true
     }
 
@@ -1122,38 +1132,46 @@ export function RtoClient({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">From Inventory (optional)</label>
-            {selectedVehicle ? (
-              <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
-                <div className="flex items-center gap-2 text-sm text-gray-800">
-                  <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
-                </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, variantId: null })) }} className="text-gray-400 hover:text-red-600">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div ref={vehiclePickerRef} className="relative">
-                <Input
-                  placeholder="Search inventory by reg no, make, model..."
-                  value={vehicleQuery}
-                  onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
-                  onFocus={() => setVehicleOpen(true)}
-                  onBlur={() => window.setTimeout(() => {
-                    if (!vehiclePickerRef.current?.contains(document.activeElement)) setVehicleOpen(false)
-                  }, 120)}
-                  error={errors.inventoryId}
-                />
-                {vehicleOpen && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                    {vehicleMatches.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
-                    ) : vehicleMatches.map(v => (
-                      <button key={v.inventoryId} type="button" onClick={() => selectVehicle(v)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-50 last:border-0">
-                        {vehicleLabel(v)}
-                      </button>
-                    ))}
+            <label className="mb-2 block text-xs font-medium text-gray-600">Vehicle source *</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setVehicleEntryMode('existing')}
+                className={`rounded-lg border px-3 py-2.5 text-left transition ${vehicleEntryMode === 'existing' ? 'border-[#1B2A6B] bg-blue-50 ring-1 ring-[#1B2A6B]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-800"><Car className="h-4 w-4 text-[#1B2A6B]" />Existing inventory</div>
+                <div className="mt-0.5 text-xs text-gray-500">Search and link a stock vehicle</div>
+              </button>
+              <button type="button" onClick={() => { setVehicleEntryMode('manual'); resetVehicle(); setForm(fm => ({ ...fm, inventoryId: null, variantId: null })) }}
+                className={`rounded-lg border px-3 py-2.5 text-left transition ${vehicleEntryMode === 'manual' ? 'border-[#1B2A6B] bg-blue-50 ring-1 ring-[#1B2A6B]' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <div className="text-sm font-semibold text-gray-800">Manual registration</div>
+                <div className="mt-0.5 text-xs text-gray-500">Enter the registration and vehicle details</div>
+              </button>
+            </div>
+
+            {vehicleEntryMode === 'existing' && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-gray-600">Select inventory vehicle *</label>
+                {selectedVehicle ? (
+                  <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
+                    <div className="flex items-center gap-2 text-sm text-gray-800"><Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}</div>
+                    <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, variantId: null })) }} className="text-gray-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                  </div>
+                ) : (
+                  <div ref={vehiclePickerRef} className="relative">
+                    <Input
+                      placeholder="Search inventory by reg no, make, model..."
+                      value={vehicleQuery}
+                      onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
+                      onFocus={() => setVehicleOpen(true)}
+                      onBlur={() => window.setTimeout(() => { if (!vehiclePickerRef.current?.contains(document.activeElement)) setVehicleOpen(false) }, 120)}
+                      error={errors.inventoryId}
+                      errorMessage={errors.inventoryId ? 'Select an inventory vehicle or switch to manual registration.' : undefined}
+                    />
+                    {vehicleOpen && (
+                      <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                        {vehicleMatches.length === 0 ? <div className="px-3 py-2 text-sm text-gray-400">No matches</div> : vehicleMatches.map(v => (
+                          <button key={v.inventoryId} type="button" onClick={() => selectVehicle(v)} className="w-full border-b border-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-50 last:border-0">{vehicleLabel(v)}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1185,14 +1203,11 @@ export function RtoClient({
               onChange={value => f('carVariantLegacy', value)}
               options={variantOptions}
             />
-            <CatalogTextPicker
-              label="Registration No"
-              placeholder="Search registration..."
-              value={form.registrationNo}
-              onChange={onRegistrationChange}
-              options={registrationOptions}
-              error={errors.registrationNo}
-            />
+            {vehicleEntryMode === 'manual' ? (
+              <Input label="Registration No *" placeholder="Enter registration number" value={form.registrationNo} onChange={e => onRegistrationChange(e.target.value)} error={errors.registrationNo} errorMessage={errors.registrationNo ? 'Registration number is required for a manual entry.' : undefined} />
+            ) : (
+              <CatalogTextPicker label="Registration No" placeholder="Search registration..." value={form.registrationNo} onChange={onRegistrationChange} options={registrationOptions} error={errors.registrationNo} />
+            )}
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
           </div>
 
@@ -1224,7 +1239,7 @@ export function RtoClient({
             <Select label="Transfer Status" value={form.transferStatus} onChange={e => f('transferStatus', e.target.value)} error={errors.transferStatus}>
               {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Follow-up Date" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
+            <Input label="Follow-up Date" type="date" min={todayForInput()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
           </div>
           <Textarea label="Remark" rows={5} value={form.remark} onChange={e => f('remark', e.target.value)} />
 
@@ -1263,6 +1278,24 @@ export function RtoClient({
                 </div>
               )
             })()}
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">Workflow status</div>
+                {(payRow.rcStatus === 'Pending' || payRow.transferStatus === 'Pending') ? (
+                  <span className="text-xs font-medium text-amber-700">Action needed</span>
+                ) : <span className="text-xs font-medium text-green-700">All steps complete</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className={`rounded-md border px-3 py-2 ${payRow.rcStatus === 'Pending' ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50'}`}>
+                  <div className="text-gray-500">RC status</div>
+                  <div className="mt-1 flex items-center gap-2"><Badge label={payRow.rcStatus ?? 'Pending'} />{payRow.rcStatus === 'Pending' && <span className="text-amber-700">Mark received</span>}</div>
+                </div>
+                <div className={`rounded-md border px-3 py-2 ${payRow.transferStatus === 'Pending' ? 'border-amber-200 bg-amber-50' : 'border-green-200 bg-green-50'}`}>
+                  <div className="text-gray-500">Transfer status</div>
+                  <div className="mt-1 flex items-center gap-2"><Badge label={payRow.transferStatus ?? 'Pending'} />{payRow.transferStatus === 'Pending' && <span className="text-amber-700">Mark done</span>}</div>
+                </div>
+              </div>
+            </div>
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
@@ -1278,9 +1311,9 @@ export function RtoClient({
                     <div key={p.rtoPaymentId} className="text-xs text-gray-600 flex gap-2 flex-wrap">
                       <span className="text-gray-400 whitespace-nowrap">{fmtDate(p.paymentDate ?? p.createdDt)}</span>
                       <span className="font-medium">{fmtMoney(p.amountPaid)}</span>
-                      {p.paymentStatus && <Badge label={p.paymentStatus} />}
-                      {p.rcStatus && <Badge label={p.rcStatus} />}
-                      {p.transferStatus && <Badge label={p.transferStatus} />}
+                      {p.paymentStatus && <Badge label={`Payment: ${p.paymentStatus}`} />}
+                      {p.rcStatus && <Badge label={`RC: ${p.rcStatus}`} />}
+                      {p.transferStatus && <Badge label={`Transfer: ${p.transferStatus}`} />}
                     </div>
                   ))}
                 </div>
@@ -1295,22 +1328,48 @@ export function RtoClient({
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} error={errors.amountPaid} />
+              {paymentSummary(payRow).status === 'Fully Paid' && (
+                <div className="sm:col-span-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  Payment is complete. Leave the amount blank to update the RC or transfer status only.
+                </div>
+              )}
+              <Input
+                label={`Amount Paid (₹)${paymentSummary(payRow).status === 'Fully Paid' ? '' : ' *'}`}
+                type="number"
+                value={payForm.amountPaid ?? ''}
+                onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)}
+                error={errors.amountPaid}
+                errorMessage={errors.amountPaid ? 'Enter a positive amount that does not exceed the pending balance.' : undefined}
+              />
               <Select label="RC Status *" value={payForm.rcStatus} onChange={e => pf('rcStatus', e.target.value)}>
                 {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
               <Select label="Transfer Status *" value={payForm.transferStatus} onChange={e => pf('transferStatus', e.target.value)}>
                 {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />
+              <Input
+                label="Next Follow-up Date"
+                type="date"
+                min={todayForInput()}
+                value={payForm.nextFollowUpDate}
+                onChange={e => pf('nextFollowUpDate', e.target.value)}
+                error={errors.nextFollowUpDate}
+                errorMessage={errors.nextFollowUpDate ? 'Select today or a future date while a balance is pending.' : undefined}
+              />
             </div>
-            <Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />
+            <Textarea
+              label="Remark"
+              value={payForm.remark}
+              onChange={e => pf('remark', e.target.value)}
+              error={errors.remark}
+              errorMessage={errors.remark ? 'Add a remark while a balance is pending.' : undefined}
+            />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
             <div className="flex gap-3 justify-end pt-2">
               <Btn variant="outline" onClick={() => setPayRow(null)}>Cancel</Btn>
-              <Btn onClick={savePayment} disabled={isPending}>{isPending ? 'Saving...' : 'Save Payment'}</Btn>
+              <Btn onClick={savePayment} disabled={isPending}>{isPending ? 'Saving...' : payForm.amountPaid === null && paymentSummary(payRow).status === 'Fully Paid' ? 'Update Status' : 'Save Payment'}</Btn>
             </div>
           </div>
         )}

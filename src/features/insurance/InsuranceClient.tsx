@@ -84,6 +84,12 @@ const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
 const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+const todayLocalDate = () => {
+  const date = new Date()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
 
 const INSURANCE_VALIDATION_MESSAGES: Record<string, string> = {
   agentPartnerId: 'Select an insurance agent.',
@@ -97,7 +103,7 @@ const INSURANCE_VALIDATION_MESSAGES: Record<string, string> = {
   entryDate: 'Entry date is required and must be before the expiry date.',
   renewalDate: 'Renewal date is required.',
   expiryDate: 'Expiry date is required and must be after the entry date.',
-  followupDate: 'Follow-up date is required.',
+  followupDate: 'Follow-up date is required and cannot be in the past.',
   insurancePremium: 'Insurance premium must be greater than zero.',
   oDPremium: 'OD premium must be greater than zero and cannot exceed the insurance premium.',
   payoutPercentageOdPremium: 'Payout percentage must be between 0 and 100.',
@@ -536,7 +542,7 @@ export function InsuranceClient({
     if (!form.entryDate) newErrors.entryDate = true
     if (!form.renewalDate) newErrors.renewalDate = true
     if (!form.expiryDate) newErrors.expiryDate = true
-    if (!form.followupDate) newErrors.followupDate = true
+    if (!form.followupDate || form.followupDate < todayLocalDate()) newErrors.followupDate = true
     if (form.entryDate && form.expiryDate && form.expiryDate <= form.entryDate) {
       newErrors.expiryDate = true
       newErrors.entryDate = true
@@ -647,7 +653,7 @@ export function InsuranceClient({
       if (!payForm.nextFollowUpDate?.trim()) {
         newErrors.nextFollowUpDate = true
       } else {
-        const today = new Date().toISOString().slice(0, 10)
+        const today = todayLocalDate()
         if (payForm.nextFollowUpDate < today) {
           newErrors.nextFollowUpDate = true
         }
@@ -854,7 +860,7 @@ export function InsuranceClient({
             </Select>
             <div><Input label="Renewal Date *" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} error={errors.renewalDate} />{fieldError('renewalDate')}</div>
             <div><Input label="Expiry Date *" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} error={errors.expiryDate} />{fieldError('expiryDate')}</div>
-            <div><Input label="Follow-up Date *" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} />{fieldError('followupDate')}</div>
+            <div><Input label="Follow-up Date *" type="date" min={todayLocalDate()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} />{fieldError('followupDate')}</div>
           </div>
           <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} />
 
@@ -1019,7 +1025,7 @@ export function InsuranceClient({
               <Select label="Policy Status *" value={payForm.policyStatus} onChange={e => pf('policyStatus', e.target.value)}>
                 {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
               </Select>
-              <div><Input label="Next Follow-up Date" type="date" value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />{fieldError('nextFollowUpDate')}</div>
+              <div><Input label="Next Follow-up Date" type="date" min={todayLocalDate()} value={payForm.nextFollowUpDate} onChange={e => pf('nextFollowUpDate', e.target.value)} error={errors.nextFollowUpDate} />{fieldError('nextFollowUpDate')}</div>
             </div>
             <div><Textarea label="Remark" value={payForm.remark} onChange={e => pf('remark', e.target.value)} error={errors.remark} />{fieldError('remark')}</div>
 

@@ -196,12 +196,8 @@ function buildData(input: LoanFormInput) {
 
 export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
   const partnerId = input.partnerId
-  if (partnerId === null || !Number.isInteger(partnerId) || partnerId <= 0) return { success: false, error: 'Select a bank from the Bank Master list.' }
-  const bankPartnerId = partnerId as number
-  const bankPartner = await prisma.partnerMaster.findFirst({ where: { partnerId: bankPartnerId, partnerType: 'Bank' }, select: { partnerId: true, name: true, mobile: true, email: true } })
-  if (!bankPartner) return { success: false, error: 'Select a valid bank from the Bank Master list.' }
-  input = { ...input, bankName: bankPartner.name, bankPersonName: bankPartner.name, bankPersonMobileNo: bankPartner.mobile ?? '', bankPersonEmailId: bankPartner.email ?? '' }
-  const validationError = validateLoanInput(input, { requireCustomerLink: true })
+  if (partnerId !== null && (!Number.isInteger(partnerId) || partnerId <= 0)) return { success: false, error: 'Select a valid bank contact.' }
+  const validationError = validateLoanInput(input)
   if (validationError) return { success: false, error: validationError }
   const initialPaymentError = validateInitialPayment(input)
   if (initialPaymentError) return { success: false, error: initialPaymentError }
@@ -223,7 +219,7 @@ export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
       const loan = await tx.loanManagement.create({
         data: {
           ...buildData(input),
-          partnerMaster: { connect: { partnerId: bankPartnerId } },
+          ...(partnerId ? { partnerMaster: { connect: { partnerId } } } : {}),
           ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
           ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
           ...(input.fkVariantId ? { carVariantMaster: { connect: { pkVariantId: input.fkVariantId } } } : {}),
@@ -273,12 +269,8 @@ export async function createLoan(input: LoanFormInput): Promise<ActionResult> {
 export async function updateLoan(id: number, input: LoanFormInput): Promise<ActionResult> {
   if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'A valid loan record is required.' }
   const partnerId = input.partnerId
-  if (partnerId === null || !Number.isInteger(partnerId) || partnerId <= 0) return { success: false, error: 'Select a bank from the Bank Master list.' }
-  const bankPartnerId = partnerId as number
-  const bankPartner = await prisma.partnerMaster.findFirst({ where: { partnerId: bankPartnerId, partnerType: 'Bank' }, select: { partnerId: true, name: true, mobile: true, email: true } })
-  if (!bankPartner) return { success: false, error: 'Select a valid bank from the Bank Master list.' }
-  input = { ...input, bankName: bankPartner.name, bankPersonName: bankPartner.name, bankPersonMobileNo: bankPartner.mobile ?? '', bankPersonEmailId: bankPartner.email ?? '' }
-  const validationError = validateLoanInput(input, { requireCustomerLink: true })
+  if (partnerId !== null && (!Number.isInteger(partnerId) || partnerId <= 0)) return { success: false, error: 'Select a valid bank contact.' }
+  const validationError = validateLoanInput(input)
   if (validationError) return { success: false, error: validationError }
 
   const userId = await currentUserId()
@@ -293,7 +285,7 @@ export async function updateLoan(id: number, input: LoanFormInput): Promise<Acti
       where: { loanManagementId: id },
       data: {
         ...buildData(input),
-        fkPartnerId: bankPartnerId,
+        fkPartnerId: partnerId,
         customerId: input.customerId,
         inventoryId: input.inventoryId,
         fkVariantId: input.fkVariantId,

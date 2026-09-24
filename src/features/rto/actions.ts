@@ -55,6 +55,14 @@ function toDate(v: string): Date | null {
   return v ? new Date(v) : null
 }
 
+function isPastDate(value: string) {
+  if (!value) return false
+  const selected = new Date(`${value}T00:00:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return selected < today
+}
+
 function paymentStatusFor(transferCharges: Prisma.Decimal | number | null, amountPaid: Prisma.Decimal | number | null) {
   const charges = Number(transferCharges ?? 0)
   const paid = Number(amountPaid ?? 0)
@@ -115,6 +123,9 @@ function validateCreateInput(input: RtoFormInput): string | null {
   }
   if (input.transferCharges !== null && input.transferCharges < 0) {
     return 'Transfer charges cannot be negative.'
+  }
+  if (isPastDate(input.followupDate)) {
+    return 'Follow-up date cannot be in the past.'
   }
   if (amountPaid > 0) {
     if (input.transferCharges === null) {
@@ -243,6 +254,9 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
   if (!input.partnerId) {
     return { success: false, error: 'Select an RTO agent.' }
   }
+  if (isPastDate(input.followupDate)) {
+    return { success: false, error: 'Follow-up date cannot be in the past.' }
+  }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
@@ -305,10 +319,6 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
   if (!input.rcStatus || !input.transferStatus) {
     return { success: false, error: 'RC and transfer status are required.' }
   }
-  if (input.amountPaid === null || input.amountPaid <= 0) {
-    return { success: false, error: 'Enter a payment amount greater than zero.' }
-  }
-
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
@@ -319,10 +329,26 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
     const charges = Number(main.transferCharges ?? 0)
     const paidBefore = Number(main.amtPaid ?? 0)
     if (charges <= 0) return { success: false, error: 'Set transfer charges before logging a payment.' }
+    if (input.amountPaid === null) {
+      if (paidBefore < charges) return { success: false, error: 'Enter a payment amount greater than zero.' }
+      await prisma.rtoAgent.update({
+        where: { rtoAgentMainId },
+        data: {
+          paymentStatus: paymentStatusFor(main.transferCharges, main.amtPaid),
+          rcStatus: input.rcStatus,
+          transferStatus: input.transferStatus,
+          updatedDt: now,
+          ...(userId ? { updatedBy: userId } : {}),
+        },
+      })
+      revalidatePath('/rto')
+      return { success: true }
+    }
+    if (input.amountPaid <= 0) return { success: false, error: 'Enter a payment amount greater than zero.' }
     if (paidBefore + input.amountPaid > charges) return { success: false, error: 'Payment cannot exceed the remaining RTO balance.' }
     const calculatedPaymentStatus = paymentStatusFor(main.transferCharges, paidBefore + input.amountPaid)
     if (calculatedPaymentStatus !== 'Fully Paid') {
-      if (!input.nextFollowUpDate || new Date(input.nextFollowUpDate) < new Date(new Date().toDateString())) {
+      if (!input.nextFollowUpDate || isPastDate(input.nextFollowUpDate)) {
         return { success: false, error: 'A current or future follow-up date is required for a pending balance.' }
       }
       if (!input.remark.trim()) return { success: false, error: 'Add a remark for the pending balance.' }
@@ -380,8 +406,8 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
         ...(userId ? { updatedBy: userId } : {}),
       },
     })
-  } catch {
-    return { success: false, error: 'Something went wrong logging this payment.' }
+  } catch (err) {
+    return { success: false, error: describeError(err) }
   }
 
   revalidatePath('/rto')

@@ -199,6 +199,8 @@ export function LoanClient({
   const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
   const [selectedCustomer, setSelectedCustomer] = useState<LoanCustomerOption | null>(null)
   const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
+  const [loanMode, setLoanMode] = useState<'existing' | 'manual'>('existing')
+  const [savedLoanMode, setSavedLoanMode] = useState<'existing' | 'manual'>('existing')
   const [selectedBankContact, setSelectedBankContact] = useState<PartnerOption | null>(null)
   const [savedBankContactSnapshot, setSavedBankContactSnapshot] = useState('')
   const [vehicleQuery, setVehicleQuery] = useState('')
@@ -250,16 +252,19 @@ export function LoanClient({
     if (!modal) return false
     return (
       JSON.stringify(form) !== savedFormSnapshot ||
+      loanMode !== savedLoanMode ||
       optionSnapshot(selectedCustomer) !== savedCustomerSnapshot ||
       optionSnapshot(selectedBankContact) !== savedBankContactSnapshot ||
       optionSnapshot(selectedVehicle) !== savedVehicleSnapshot
     )
   }, [
     form,
+    loanMode,
     modal,
     savedBankContactSnapshot,
     savedCustomerSnapshot,
     savedFormSnapshot,
+    savedLoanMode,
     savedVehicleSnapshot,
     selectedBankContact,
     selectedCustomer,
@@ -283,6 +288,8 @@ export function LoanClient({
     setSavedFormSnapshot(JSON.stringify(nextForm))
     setSelectedCustomer(null)
     setSavedCustomerSnapshot('')
+    setLoanMode('existing')
+    setSavedLoanMode('existing')
     setSelectedBankContact(null)
     setSavedBankContactSnapshot('')
     resetVehicle()
@@ -317,12 +324,15 @@ export function LoanClient({
       remarks: r.remarks ?? '',
     }
     const nextCustomer = r.customer
+    const nextLoanMode = nextCustomer ? 'existing' : 'manual'
     const nextBankContact = r.partnerMaster
     const nextVehicle = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
     setForm(nextForm)
     setSavedFormSnapshot(JSON.stringify(nextForm))
     setSelectedCustomer(nextCustomer)
     setSavedCustomerSnapshot(optionSnapshot(nextCustomer))
+    setLoanMode(nextLoanMode)
+    setSavedLoanMode(nextLoanMode)
     setSelectedBankContact(nextBankContact)
     setSavedBankContactSnapshot(optionSnapshot(nextBankContact))
     setSelectedVehicle(nextVehicle)
@@ -357,6 +367,7 @@ export function LoanClient({
 
   const onCustomerChange = (c: LoanCustomerOption | null, lookupVehicle?: LoanCustomerVehicleContext | null) => {
     setSelectedCustomer(c)
+    if (c) setLoanMode('existing')
     setForm(f => ({
       ...f,
       customerId: c?.custId ?? null,
@@ -376,6 +387,14 @@ export function LoanClient({
     if (lookupVehicle?.inventoryId) {
       setSelectedVehicle(vehicles.find(vehicle => vehicle.inventoryId === lookupVehicle.inventoryId) ?? null)
       setVehicleLookupMessage(`Copied vehicle details from the selected inquiry.`)
+    }
+  }
+
+  const selectLoanMode = (mode: 'existing' | 'manual') => {
+    setLoanMode(mode)
+    if (mode === 'manual') {
+      setSelectedCustomer(null)
+      setForm(current => ({ ...current, customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '' }))
     }
   }
 
@@ -432,11 +451,14 @@ export function LoanClient({
     if (!form.registrationNo?.trim()) {
       newErrors.registrationNo = 'Registration number is required.'
     }
-    if (!form.partnerId) {
-      newErrors.partnerId = 'Select a bank from the Bank Master list.'
+    if (!form.bankName?.trim()) {
+      newErrors.bankName = 'Bank name is required.'
     }
-    if (!form.customerId) {
+    if (loanMode === 'existing' && !form.customerId) {
       newErrors.customer = 'Select or create the customer first.'
+    }
+    if (loanMode === 'manual' && !form.customerNameLegacy.trim()) {
+      newErrors.customerNameLegacy = 'Customer name is required for a manual customer.'
     }
     if (!form.carMake.trim()) newErrors.carMake = 'Car make is required.'
     if (!form.carModel.trim()) newErrors.carModel = 'Car model is required.'
@@ -679,21 +701,34 @@ export function LoanClient({
 
       <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Bank *</label>
-              <PartnerPicker partnerType="Bank" label="Bank" value={selectedBankContact} onChange={onBankContactChange} error={!!errors.partnerId} allowCreate={false} />
-              {errors.partnerId && <p className="mt-1 text-xs text-red-600">{errors.partnerId}</p>}
-            </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Bank Name *" value={form.bankName} onChange={e => f('bankName', e.target.value)} placeholder="HDFC Bank, SBI..." error={!!errors.bankName} errorMessage={errors.bankName} />
+            <Input label="Bank Person Name" value={form.bankPersonName} onChange={e => f('bankPersonName', e.target.value)} />
           </div>
 
-          {selectedBankContact && <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-[#1B2A6B]">Bank details come from Bank Master: {selectedBankContact.name}{selectedBankContact.mobile ? ` · ${selectedBankContact.mobile}` : ''}{selectedBankContact.email ? ` · ${selectedBankContact.email}` : ''}</div>}
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Bank Person Mobile No" value={form.bankPersonMobileNo} onChange={e => f('bankPersonMobileNo', e.target.value)} error={!!errors.bankPersonMobileNo} errorMessage={errors.bankPersonMobileNo} />
+            <Input label="Bank Person Email ID" type="email" value={form.bankPersonEmailId} onChange={e => f('bankPersonEmailId', e.target.value)} error={!!errors.bankPersonEmailId} errorMessage={errors.bankPersonEmailId} />
+          </div>
 
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Customer Source *</label>
+            <div className="flex gap-2">
+              <Btn type="button" size="sm" variant={loanMode === 'existing' ? 'primary' : 'outline'} onClick={() => selectLoanMode('existing')}>Existing Customer</Btn>
+              <Btn type="button" size="sm" variant={loanMode === 'manual' ? 'primary' : 'outline'} onClick={() => selectLoanMode('manual')}>Manual Customer Entry</Btn>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Choose a Customer Master record or enter this customer manually. Every loan has a customer.</p>
+          </div>
+
+          {loanMode === 'existing' ? <div>
+            <label className="text-xs font-medium text-gray-600 mb-1 block">Customer *</label>
             <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={!!errors.customer} />
             {errors.customer && <p className="mt-1 text-xs text-red-600">{errors.customer}</p>}
-          </div>
+          </div> : <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <Input label="Customer Name *" value={form.customerNameLegacy} onChange={event => f('customerNameLegacy', event.target.value)} error={!!errors.customerNameLegacy} errorMessage={errors.customerNameLegacy} />
+            <Input label="Customer Mobile" inputMode="numeric" maxLength={10} value={form.customerMobileLegacy} onChange={event => f('customerMobileLegacy', event.target.value.replace(/\D/g, ''))} error={!!errors.customerMobileLegacy} errorMessage={errors.customerMobileLegacy} />
+            <Input label="Customer Email" type="email" value={form.customerEmailLegacy} onChange={event => f('customerEmailLegacy', event.target.value)} error={!!errors.customerEmailLegacy} errorMessage={errors.customerEmailLegacy} />
+          </div>}
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
@@ -717,6 +752,10 @@ export function LoanClient({
                 />
                 {vehicleOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-3 py-2 text-xs text-gray-500">
+                      <span>Matching stock vehicles</span>
+                      <button type="button" onClick={() => setVehicleOpen(false)} className="font-medium text-[#1B2A6B] hover:underline">Close</button>
+                    </div>
                     {vehicleMatches.length === 0 ? (
                       <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
                     ) : vehicleMatches.map(v => (
@@ -729,6 +768,11 @@ export function LoanClient({
                 )}
               </div>
             )}
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+              <Input label="Registration No * (manual or stock)" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={!!errors.registrationNo} errorMessage={errors.registrationNo} />
+              <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>Find Stock</Btn>
+            </div>
+            {vehicleLookupMessage && <p className="mt-1 text-xs text-gray-500">{vehicleLookupMessage}</p>}
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -739,15 +783,6 @@ export function LoanClient({
             <Input label="Model *" value={form.carModel} onChange={e => f('carModel', e.target.value)} error={!!errors.carModel} errorMessage={errors.carModel} />
             <Input label="Variant *" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} error={!!errors.carVariant} errorMessage={errors.carVariant} />
             <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={!!errors.carYear} errorMessage={errors.carYear} />
-            <div className="space-y-1">
-              <Input label="Registration No *" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={!!errors.registrationNo} errorMessage={errors.registrationNo} />
-              <div className="flex items-center gap-2">
-                <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
-                  Find by Registration
-                </Btn>
-                {vehicleLookupMessage && <span className="text-xs text-gray-500">{vehicleLookupMessage}</span>}
-              </div>
-            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">

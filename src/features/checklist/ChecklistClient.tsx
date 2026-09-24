@@ -7,6 +7,7 @@ import { Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/compo
 import { ChecklistTable } from './ChecklistTable'
 import { ChecklistYesNoToggle } from './ChecklistYesNoToggle'
 import { ChecklistDocumentTypeToggle } from './ChecklistDocumentTypeToggle'
+import { CustomerPicker } from '@/components/CustomerPicker'
 import { createChecklist, updateChecklist, deleteChecklist, type ChecklistFormInput, type DocRow } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
@@ -289,6 +290,7 @@ export function ChecklistClient({
   const [search, setSearch] = useState(initialSearch)
   const [registration, setRegistration] = useState(initialRegistration)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
+  const [entryMode, setEntryMode] = useState<'existing' | 'manual'>('existing')
   const [viewOpen, setViewOpen] = useState(false)
   const [viewRow, setViewRow] = useState<ChecklistDetailRow | null>(null)
   const [form, setForm] = useState<ChecklistFormInput>(emptyForm())
@@ -360,12 +362,14 @@ export function ChecklistClient({
     setVehicleQuery('')
     setRegistrationOpen(false)
     setEditId(null)
+    setEntryMode('existing')
     setError('')
     setModal('add')
   }
 
   const applyDetailToForm = (r: ChecklistDetailRow) => {
     const nextVehicle = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
+    setEntryMode(nextVehicle ? 'existing' : 'manual')
     const vehicleCustomer = nextVehicle ? customerSnapshotForVehicle(nextVehicle) : null
     const nextForm: ChecklistFormInput = {
       inventoryId: r.inventoryId,
@@ -497,6 +501,11 @@ export function ChecklistClient({
     }))
   }
 
+  const onCustomerChange = (customer: CustomerOption | null) => {
+    setSelectedCustomer(customer)
+    setForm(f => ({ ...f, customerId: customer?.custId ?? null, customerNameLegacy: customer?.custName ?? '', customerMobileLegacy: customer?.custMobile ?? '', customerEmailLegacy: customer?.custEmail ?? '' }))
+  }
+
   const updateDoc = (i: number, patch: Partial<DocRow>) => {
     setForm(f => ({ ...f, docs: f.docs.map((d, idx) => idx === i ? { ...d, ...patch } : d) }))
   }
@@ -540,6 +549,11 @@ export function ChecklistClient({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      if (newErrors.registrationNo) setError('Registration number is required.')
+      else if (newErrors.customerMobileLegacy) setError('Customer mobile must contain exactly 10 digits.')
+      else if (newErrors.customerEmailLegacy) setError('Enter a valid customer email address.')
+      else if (newErrors.year) setError('Enter a valid vehicle year.')
+      else setError('Complete the required checklist information.')
       return
     }
     setErrors({})
@@ -649,8 +663,7 @@ export function ChecklistClient({
       </div>
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <ChecklistTable data={data} total={total} page={page} pageCount={pageCount} pageSize={pageSize} pending={isRoutePending}
-        onView={openView} onEdit={openEdit} onDelete={setDeleteId} onPage={nextPage => pushQuery({ search, registration, page: String(nextPage) })} />
+      <ChecklistTable data={data} pending={isRoutePending} onView={openView} onEdit={openEdit} onDelete={setDeleteId} />
 
       <Modal title={editId ? 'Edit Checklist' : 'Add Checklist'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         {detailLoading && editId ? (
@@ -667,17 +680,23 @@ export function ChecklistClient({
           </div>
         ) : (
         <div className="space-y-4">
+          <div className="inline-flex rounded-lg bg-slate-100 p-1">
+            <button type="button" onClick={() => setEntryMode('existing')} className={`rounded-md px-3 py-2 text-sm font-medium ${entryMode === 'existing' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600'}`}>Existing vehicle</button>
+            <button type="button" onClick={() => { setEntryMode('manual'); setSelectedVehicle(null); setSelectedCustomer(null); setForm(f => ({ ...f, inventoryId: null, customerId: null })) }} className={`rounded-md px-3 py-2 text-sm font-medium ${entryMode === 'manual' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600'}`}>Manual entry</button>
+          </div>
+          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
           <div className="relative">
             <Input
-              label="Registration No *"
-              placeholder="Start typing registration no..."
+              label={entryMode === 'existing' ? 'Registration No *' : 'Registration No *'}
+              placeholder={entryMode === 'existing' ? 'Search existing registration...' : 'Enter registration number...'}
               value={form.registrationNo}
-              onChange={e => { onRegistrationChange(e.target.value); setRegistrationOpen(true) }}
-              onFocus={() => setRegistrationOpen(true)}
+              onChange={e => entryMode === 'existing' ? (onRegistrationChange(e.target.value), setRegistrationOpen(true)) : setForm(f => ({ ...f, registrationNo: e.target.value }))}
+              onFocus={() => entryMode === 'existing' && setRegistrationOpen(true)}
               error={errors.registrationNo}
             />
-            {registrationOpen && !selectedVehicle && (
+            {entryMode === 'existing' && registrationOpen && !selectedVehicle && (
               <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div className="sticky top-0 flex justify-end border-b border-gray-100 bg-white px-2 py-1"><button type="button" onClick={() => setRegistrationOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" title="Close selector"><X className="h-4 w-4" /></button></div>
                 {registrationMatches.length === 0 ? (
                   <div className="px-3 py-2 text-sm text-gray-400">No matching registrations</div>
                 ) : registrationMatches.map(v => (
@@ -688,16 +707,16 @@ export function ChecklistClient({
                 ))}
               </div>
             )}
-            <div className="mt-1 text-xs text-gray-500">
+            {entryMode === 'existing' && <div className="mt-1 text-xs text-gray-500">
               {selectedVehicle
                 ? `Linked vehicle: ${vehicleLabel(selectedVehicle)}`
                 : form.registrationNo.trim()
                   ? 'Select an existing registration number to auto-fill vehicle details.'
                   : 'Search by registration number first, or use the vehicle picker below.'}
-            </div>
+            </div>}
           </div>
 
-          <div>
+          {entryMode === 'existing' && <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle *</label>
             {selectedVehicle ? (
               <div className="flex items-center justify-between border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
@@ -730,19 +749,20 @@ export function ChecklistClient({
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
           <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-900">Car details</h3><p className="text-xs text-slate-500">Confirm or enter the vehicle information for this checklist.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">{selectedVehicle ? 'Inventory vehicle' : 'Manual vehicle'}</span></div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <Input label="Make *" value={form.make} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
-              <Input label="Model *" value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
-              <Input label="Variant *" value={form.variant} onChange={e => setForm(f => ({ ...f, variant: e.target.value }))} />
-              <Input label="Colour *" value={form.colour} onChange={e => setForm(f => ({ ...f, colour: e.target.value }))} />
-              <Input label="Year *" type="number" value={form.year ?? ''} onChange={e => setForm(f => ({ ...f, year: e.target.value ? Number(e.target.value) : null }))} />
-              <Input label="Fuel Type *" value={form.fuelType} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value }))} />
+              <Input label="Make *" value={form.make} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
+              <Input label="Model *" value={form.model} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+              <Input label="Variant *" value={form.variant} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, variant: e.target.value }))} />
+              <Input label="Colour *" value={form.colour} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, colour: e.target.value }))} />
+              <Input label="Year *" type="number" value={form.year ?? ''} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, year: e.target.value ? Number(e.target.value) : null }))} />
+              <Input label="Fuel Type *" value={form.fuelType} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value }))} />
             </div>
-            <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Linked customer</div><div className={`mt-0.5 text-sm font-medium ${form.customerNameLegacy ? 'text-slate-800' : 'text-amber-700'}`}>{form.customerNameLegacy || 'No customer linked'}</div>{form.customerNameLegacy && <div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>}</div>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Linked customer</div><div className={`mt-0.5 text-sm font-medium ${form.customerNameLegacy ? 'text-slate-800' : 'text-amber-700'}`}>{form.customerNameLegacy || 'No customer linked'}</div>{form.customerNameLegacy && <div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>}{entryMode === 'existing' && !form.customerNameLegacy && <div className="mt-2"><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} /></div>}</div>
+            {entryMode === 'manual' && <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3"><Input label="Customer name" value={form.customerNameLegacy} onChange={e => setForm(f => ({ ...f, customerNameLegacy: e.target.value }))} /><Input label="Customer mobile" value={form.customerMobileLegacy} error={errors.customerMobileLegacy} onChange={e => setForm(f => ({ ...f, customerMobileLegacy: e.target.value.replace(/\D/g, '') }))} /><Input label="Customer email" type="email" value={form.customerEmailLegacy} error={errors.customerEmailLegacy} onChange={e => setForm(f => ({ ...f, customerEmailLegacy: e.target.value }))} /></div>}
           </section>
 
           <div>
@@ -765,8 +785,6 @@ export function ChecklistClient({
               </datalist>
             </div>
           </div>
-
-          {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
             <Btn variant="outline" onClick={requestCloseForm} disabled={isPending}>Cancel</Btn>
