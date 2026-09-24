@@ -127,6 +127,9 @@ function validateCreateInput(input: RtoFormInput): string | null {
   if (isPastDate(input.followupDate)) {
     return 'Follow-up date cannot be in the past.'
   }
+  if (!input.remark.trim()) {
+    return 'Remark is required.'
+  }
   if (amountPaid > 0) {
     if (input.transferCharges === null) {
       return 'Enter transfer charges before adding an initial payment.'
@@ -257,6 +260,9 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
   if (isPastDate(input.followupDate)) {
     return { success: false, error: 'Follow-up date cannot be in the past.' }
   }
+  if (!input.remark.trim()) {
+    return { success: false, error: 'Remark is required.' }
+  }
 
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
@@ -319,6 +325,9 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
   if (!input.rcStatus || !input.transferStatus) {
     return { success: false, error: 'RC and transfer status are required.' }
   }
+  if (!input.remark.trim()) {
+    return { success: false, error: 'Remark is required.' }
+  }
   const userId = await currentUserId()
   if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
@@ -337,6 +346,7 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
           paymentStatus: paymentStatusFor(main.transferCharges, main.amtPaid),
           rcStatus: input.rcStatus,
           transferStatus: input.transferStatus,
+          remark: input.remark.trim(),
           updatedDt: now,
           ...(userId ? { updatedBy: userId } : {}),
         },

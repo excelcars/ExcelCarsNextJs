@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
+import { isValidEmail, isValidPhone } from '@/lib/validation'
 import { createAgent, updateAgent, deleteAgent, type AgentFormInput } from './adminActions'
 import { AGENT_TYPES } from './adminQueries'
 
@@ -35,6 +36,7 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AgentFormInput, string>>>({})
   const [isPending, startTransition] = useTransition()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -52,15 +54,29 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const openAdd = () => { setForm(emptyForm()); setEditId(null); setError(''); setModal('add') }
+  const openAdd = () => { setForm(emptyForm()); setEditId(null); setError(''); setFieldErrors({}); setModal('add') }
   const openEdit = (row: AgentRow) => {
     setForm({ partnerType: row.partnerType, name: row.name, mobile: row.mobile ?? '', email: row.email ?? '' })
-    setEditId(row.partnerId); setError(''); setModal('edit')
+    setEditId(row.partnerId); setError(''); setFieldErrors({}); setModal('edit')
   }
-  const f = <K extends keyof AgentFormInput>(key: K, value: AgentFormInput[K]) => setForm(prev => ({ ...prev, [key]: value }))
+  const f = <K extends keyof AgentFormInput>(key: K, value: AgentFormInput[K]) => {
+    setForm(prev => ({ ...prev, [key]: value }))
+    setFieldErrors(prev => ({ ...prev, [key]: undefined }))
+  }
 
   const save = () => {
     setError('')
+    const errors: Partial<Record<keyof AgentFormInput, string>> = {}
+    if (!form.name.trim()) errors.name = 'Name is required.'
+    if (!form.mobile.trim() && !form.email.trim()) {
+      errors.mobile = 'Enter a mobile number or email address.'
+      errors.email = 'Enter a mobile number or email address.'
+    } else {
+      if (form.mobile.trim() && !isValidPhone(form.mobile)) errors.mobile = 'Mobile number must contain 10 digits.'
+      if (form.email.trim() && !isValidEmail(form.email)) errors.email = 'Enter a valid email address.'
+    }
+    if (Object.keys(errors).length) { setFieldErrors(errors); return }
+
     startTransition(async () => {
       const result = editId ? await updateAgent(editId, form) : await createAgent(form)
       if (!result.success) { setError(result.error ?? 'Something went wrong.'); return }
@@ -109,7 +125,7 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
 
     <Modal title={editId ? 'Edit Agent' : 'Add Agent'} open={!!modal} onClose={() => setModal(null)}><div className="space-y-4">
       <div className="grid grid-cols-2 gap-4"><FormDropdown label="Type" value={form.partnerType} options={AGENT_TYPES.map(value => ({ value, label: value }))} placeholder="Select type" onChange={value => f('partnerType', value)} />
-        <Input label="Name *" value={form.name} onChange={e => f('name', e.target.value)} /><Input label="Mobile" value={form.mobile} onChange={e => f('mobile', e.target.value)} /><Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} /></div>
+        <Input label="Name *" value={form.name} onChange={e => f('name', e.target.value)} error={!!fieldErrors.name} errorMessage={fieldErrors.name} /><Input label="Mobile" value={form.mobile} inputMode="numeric" maxLength={10} onChange={e => f('mobile', e.target.value.replace(/\D/g, ''))} error={!!fieldErrors.mobile} errorMessage={fieldErrors.mobile} /><Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} error={!!fieldErrors.email} errorMessage={fieldErrors.email} /></div>
       {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
       <div className="flex gap-3 justify-end pt-2"><Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Agent'}</Btn></div>
     </div></Modal>
