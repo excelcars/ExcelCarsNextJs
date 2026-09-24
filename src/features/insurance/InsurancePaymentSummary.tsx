@@ -1,5 +1,7 @@
 'use client'
 
+import { Badge } from '@/components/ui'
+
 type PaymentSummaryProps = {
   payoutAmount: string | number | null
   totalAmountReceived: string | number | null
@@ -20,20 +22,29 @@ export function getInsurancePaymentState(payoutAmount: string | number | null, t
 export function InsurancePaymentSummary({ payoutAmount, totalAmountReceived }: PaymentSummaryProps) {
   const payment = getInsurancePaymentState(payoutAmount, totalAmountReceived)
   return (
-    <section className="rounded-xl border border-gray-200 bg-gray-50 p-3" aria-label="Payment summary">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">Payout progress</div>
-        <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${payment.tone}`}>{payment.label}</span>
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div><div className="text-[11px] uppercase tracking-wide text-gray-500">Payout</div><div className="mt-0.5 text-sm font-semibold text-gray-900">{money(payment.payout)}</div></div>
-        <div><div className="text-[11px] uppercase tracking-wide text-gray-500">Received</div><div className="mt-0.5 text-sm font-semibold text-emerald-700">{money(payment.received)}</div></div>
-        <div><div className="text-[11px] uppercase tracking-wide text-gray-500">Balance</div><div className="mt-0.5 text-sm font-semibold text-amber-700">{money(payment.balance)}</div></div>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200" aria-label={`${payment.percentage}% received`}>
-        <div className={`h-full rounded-full ${payment.label === 'Paid' ? 'bg-emerald-500' : payment.label === 'Partial' ? 'bg-blue-500' : 'bg-amber-400'}`} style={{ width: `${payment.percentage}%` }} />
-      </div>
-      <div className="mt-1 text-right text-[11px] text-gray-500">{payment.percentage}% received</div>
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Payment summary">
+      <SummaryCard label="Payout amount" value={money(payment.payout)} className="border-gray-200 bg-gray-50 text-gray-900" />
+      <SummaryCard label="Amount paid" value={money(payment.received)} className="border-emerald-100 bg-emerald-50 text-emerald-800" badge={payment.label === 'Partial' ? 'Partially Paid' : payment.label === 'Paid' ? 'Paid' : undefined} />
+      <SummaryCard label="Pending balance" value={money(payment.balance)} className="border-orange-100 bg-orange-50 text-orange-800" />
     </section>
   )
+}
+
+export function InsurancePaymentWorkflow({ payoutPaymentStatus, policyStatus }: { payoutPaymentStatus: string | null; policyStatus: string | null }) {
+  const isActionNeeded = payoutPaymentStatus !== 'Paid' || (policyStatus !== 'Received' && policyStatus !== 'Renewed')
+  return <section className="rounded-lg border border-gray-200 bg-gray-50 p-3" aria-label="Insurance workflow status">
+    <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wide text-gray-600">Workflow status</div><span className={`text-xs font-medium ${isActionNeeded ? 'text-orange-600' : 'text-emerald-700'}`}>{isActionNeeded ? 'Action needed' : 'Completed'}</span></div>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <WorkflowItem label="Payout status" status={payoutPaymentStatus || 'Pending'} action={payoutPaymentStatus === 'Paid' ? 'Payout complete' : 'Record payment'} />
+      <WorkflowItem label="Policy status" status={policyStatus || 'Pending'} action={policyStatus === 'Received' || policyStatus === 'Renewed' ? 'Policy complete' : 'Mark received / renewed'} />
+    </div>
+  </section>
+}
+
+function SummaryCard({ label, value, className, badge }: { label: string; value: string; className: string; badge?: string }) {
+  return <div className={`rounded-lg border px-3 py-2.5 ${className}`}><div className="text-[10px] font-semibold uppercase tracking-wide opacity-75">{label}</div><div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-bold"><span>{value}</span>{badge && <Badge label={badge} />}</div></div>
+}
+
+function WorkflowItem({ label, status, action }: { label: string; status: string; action: string }) {
+  return <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 flex flex-wrap items-center gap-2"><Badge label={status} /><span className="text-xs text-orange-700">{action}</span></div></div>
 }

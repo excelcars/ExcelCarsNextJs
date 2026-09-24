@@ -43,6 +43,7 @@ export interface InquiryCarInput {
   fkVariantId: number | null
   subVariant: string
   carYear: number | null
+  noOfOwners: number | null
 }
 
 export interface ActionResult {
@@ -264,7 +265,7 @@ async function resolveInquiryContact(input: InquiryFormInput) {
 }
 
 function hasMeaningfulInquiryCar(input: InquiryCarInput) {
-  return Boolean(input.fkVariantId || input.subVariant.trim() || input.carYear)
+  return Boolean(input.fkVariantId || input.subVariant.trim() || input.carYear || input.noOfOwners !== null)
 }
 
 async function resolveInquiryCarDetail(input: InquiryCarInput) {
@@ -276,6 +277,7 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
       variantLegacy: null,
       subVariant: input.subVariant.trim() || null,
       year: input.carYear,
+      noOfOwners: input.noOfOwners,
     }
   }
 
@@ -295,6 +297,7 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
       variantLegacy: null,
       subVariant: input.subVariant.trim() || null,
       year: input.carYear,
+      noOfOwners: input.noOfOwners,
     }
   }
 
@@ -305,6 +308,7 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
     variantLegacy: variant.variant?.trim() || null,
     subVariant: input.subVariant.trim() || null,
     year: input.carYear,
+    noOfOwners: input.noOfOwners,
   }
 }
 
@@ -370,6 +374,7 @@ function summarizeInquiryCarForLog(car: {
   variantLegacy: string | null
   subVariant: string | null
   year: number | null
+  noOfOwners?: number | null
 }) {
   const parts = [
     normalizeOptionalText(car.makeLegacy),
@@ -378,7 +383,7 @@ function summarizeInquiryCarForLog(car: {
     normalizeOptionalText(car.subVariant),
   ].filter(Boolean)
 
-  return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}`.trim() || 'Vehicle requirement'
+  return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}${car.noOfOwners !== null && car.noOfOwners !== undefined ? ` · ${car.noOfOwners} owner${car.noOfOwners === 1 ? '' : 's'}` : ''}`.trim() || 'Vehicle requirement'
 }
 
 function summarizeFollowupLog(input: {
@@ -896,6 +901,7 @@ function buildInventoryMatchWhere(car: Awaited<ReturnType<typeof resolveInquiryC
   const where: Prisma.InventoryManagementWhereInput = {
     status: { equals: 'In Stock', mode: 'insensitive' },
     ...(car.year ? { year: car.year } : {}),
+    ...(car.noOfOwners !== null ? { noOfOwners: car.noOfOwners } : {}),
   }
 
   if (car.fkVariantId) {
@@ -1509,6 +1515,7 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
                       variantLegacy: car.variantLegacy,
                       subVariant: car.subVariant,
                       year: car.year,
+                      noOfOwners: car.noOfOwners,
                       createdDt: now,
                       updatedDt: now,
                       ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
@@ -1668,6 +1675,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
             variantLegacy: true,
             subVariant: true,
             year: true,
+            noOfOwners: true,
           },
         },
       },
@@ -1720,6 +1728,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
             variantLegacy: car.variantLegacy,
             subVariant: car.subVariant,
             year: car.year,
+            noOfOwners: car.noOfOwners,
             createdDt: now,
             updatedDt: now,
             ...(userId ? { createdBy: userId, updatedBy: userId } : {}),

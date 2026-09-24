@@ -42,6 +42,7 @@ const VEHICLE_YEAR_OPTIONS = Array.from(
     return { value: year, label: year }
   },
 )
+const OWNER_COUNT_OPTIONS = Array.from({ length: 11 }, (_, value) => ({ value: String(value), label: String(value) }))
 interface UserOption {
   userId: number
   userName: string | null
@@ -105,6 +106,7 @@ interface InquiryCarDetailRow {
   variantLegacy?: string | null
   subVariant?: string | null
   year: number | null
+  noOfOwners: number | null
   carVariantMaster: {
     variant: string | null
     carMakeMaster: { pkMakeId: number; make: string | null } | null
@@ -150,6 +152,61 @@ interface InventoryMatch {
     carMakeMaster: { pkMakeId: number; make: string | null } | null
     carModelMaster: { pkModelId: number; model: string | null } | null
   } | null
+}
+
+function InventoryMatchPanel({
+  hasRequirements,
+  loading,
+  error,
+  matches,
+}: {
+  hasRequirements: boolean
+  loading: boolean
+  error: string
+  matches: InventoryMatch[]
+}) {
+  if (!hasRequirements && !error) return null
+
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-sm font-semibold text-blue-900">Matching Inventory</div>
+        {!loading && !error ? <div className="text-xs font-medium text-blue-800">{matches.length} {matches.length === 1 ? 'vehicle' : 'vehicles'} found</div> : null}
+      </div>
+      <div className="mt-1 text-xs text-blue-800">Live matches update as you select the customer’s vehicle and budget requirements.</div>
+      {error ? (
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+      ) : loading ? (
+        <div className="mt-3 text-sm text-blue-800">Checking matching inventory...</div>
+      ) : matches.length === 0 ? (
+        <div className="mt-3 text-sm text-blue-800">No in-stock inventory matches the selected requirements.</div>
+      ) : (
+        <div className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
+          {matches.map(match => {
+            const vehicle = [
+              clean(match.carVariantMaster?.carMakeMaster?.make),
+              clean(match.carVariantMaster?.carModelMaster?.model),
+              clean(match.carVariantMaster?.variant),
+            ].filter(Boolean).join(' ') || '—'
+            return (
+              <div key={match.inventoryId} className="rounded-md border border-blue-100 bg-white px-3 py-3 text-xs text-gray-700">
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
+                  <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}${match.month ? ` ${match.month}` : ''}` : ''}</div>
+                  <div><span className="font-medium text-gray-900">Colour / Fuel:</span> {[match.colour, match.fuelType].filter(Boolean).join(' / ') || '—'}</div>
+                  <div><span className="font-medium text-gray-900">KM / Owners:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match.noOfOwners ?? '—'}</div>
+                  <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
+                  <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched because:</span> {match.matchReasons?.join(' · ') || 'In-stock match'}</div>
+                  <div><span className="font-medium text-gray-900">State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function buildInventoryWorkflowStateMap(
@@ -563,6 +620,7 @@ function emptyInquiryCar(): InquiryCarInput {
     fkVariantId: null,
     subVariant: '',
     carYear: null,
+    noOfOwners: null,
   }
 }
 
@@ -729,17 +787,19 @@ export function InquiryClient({
     selectedMakeId?: number | null
     selectedModelId?: number | null
     carYear?: number | null
+    noOfOwners?: number | null
     carVariantMaster?: {
       carMakeMaster: { pkMakeId: number; make: string | null } | null
       carModelMaster: { pkModelId: number; model: string | null } | null
     } | null
-  }>) => {
+  }>, budget?: number | null) => {
     const requests = cars
       .map(car => {
         const variantId = car.fkVariantId ?? null
         const makeId = car.selectedMakeId ?? car.carVariantMaster?.carMakeMaster?.pkMakeId ?? null
         const modelId = car.selectedModelId ?? car.carVariantMaster?.carModelMaster?.pkModelId ?? null
         const year = car.carYear ?? null
+        const noOfOwners = car.noOfOwners ?? null
 
         if (!variantId && !modelId && !makeId) return null
 
@@ -748,6 +808,8 @@ export function InquiryClient({
         if (modelId) params.set('modelId', String(modelId))
         if (variantId) params.set('variantId', String(variantId))
         if (year) params.set('year', String(year))
+        if (noOfOwners !== null) params.set('noOfOwners', String(noOfOwners))
+        if (budget && budget > 0) params.set('budget', String(budget))
         return params
       })
       .filter((params): params is URLSearchParams => params !== null)
@@ -780,8 +842,9 @@ export function InquiryClient({
     return loadInventoryMatches(row.inquiryCarDetails.map(car => ({
       fkVariantId: car.fkVariantId,
       carYear: car.year,
+      noOfOwners: car.noOfOwners,
       carVariantMaster: car.carVariantMaster,
-    })))
+    })), Number(row.budgetOfCustomer) || null)
   }
 
   const openEmailModal = (row: InquiryRow) => {
@@ -920,6 +983,10 @@ export function InquiryClient({
   const customerDetailsLocked = Boolean(selectedCustomer || form.customerId)
   const isMissingFollowUpDate = followUpSelected && !form.followUpDate.trim()
   const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
+  const hasInventoryRequirements = Boolean(
+    carEditor.selectedMakeId || carEditor.selectedModelId || carEditor.fkVariantId ||
+    form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId),
+  )
   const activeFilterCount = [
     search.trim() ? 1 : 0,
     status !== 'All' ? 1 : 0,
@@ -1041,6 +1108,7 @@ export function InquiryClient({
       fkVariantId: row.fkVariantId ?? null,
       subVariant: row.subVariant ?? '',
       carYear: row.carYear ?? null,
+      noOfOwners: row.noOfOwners ?? null,
     })
     setCarEditorError('')
 
@@ -1078,6 +1146,7 @@ export function InquiryClient({
       fkVariantId: carEditor.fkVariantId ?? null,
       subVariant: carEditor.subVariant,
       carYear: carEditor.carYear,
+      noOfOwners: carEditor.noOfOwners,
     }
 
     setForm(prev => {
@@ -1261,7 +1330,16 @@ export function InquiryClient({
 
     if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
 
-    if (!form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId)) {
+    const requirementCars = [...form.inquiryCars]
+    const draftRequirement = carEditor.selectedMakeId || carEditor.selectedModelId || carEditor.fkVariantId
+      ? carEditor
+      : null
+    if (draftRequirement) {
+      if (editingCarIndex !== null) requirementCars[editingCarIndex] = draftRequirement
+      else requirementCars.push(draftRequirement)
+    }
+
+    if (!requirementCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId)) {
       setInventoryMatches([])
       setInventoryMatchError('')
       setInventoryMatchLoading(false)
@@ -1273,7 +1351,7 @@ export function InquiryClient({
       setInventoryMatchLoading(true)
       setInventoryMatchError('')
       try {
-        const matches = await loadInventoryMatches(form.inquiryCars)
+        const matches = await loadInventoryMatches(requirementCars, form.budgetOfCustomer)
         if (inventoryMatchRequestRef.current !== requestId) return
         setInventoryMatches(matches)
       } catch {
@@ -1288,7 +1366,7 @@ export function InquiryClient({
     return () => {
       if (inventoryMatchDebounceRef.current) clearTimeout(inventoryMatchDebounceRef.current)
     }
-  }, [form.inquiryCars, modal])
+  }, [carEditor.fkVariantId, carEditor.selectedMakeId, carEditor.selectedModelId, carEditor.carYear, carEditor.noOfOwners, editingCarIndex, form.budgetOfCustomer, form.inquiryCars, modal])
 
   const customerSnapshot = (customer: CustomerOption | null) => JSON.stringify(customer ? {
     custId: customer.custId,
@@ -1383,6 +1461,7 @@ export function InquiryClient({
         fkVariantId: car.fkVariantId ?? null,
         subVariant: car.subVariant ?? '',
         carYear: car.year ?? null,
+        noOfOwners: car.noOfOwners ?? null,
       })) : []
       const nextForm = {
         inquiryNo: detail.inquiryNo ?? '',
@@ -1449,7 +1528,7 @@ export function InquiryClient({
         budgetOfCustomer: 'Budget of customer', inquiryCars: 'Car Details', dateOfInquiry: 'Date of Inquiry',
         followUpDate: 'FollowUp Date', visitedDateOfCustomer: 'Visited Date of customer',
       }
-      const invalidFields = Object.keys(validation.fieldErrors).map(key => labels[key] ?? (key.startsWith('carYear-') ? 'Car Year' : key))
+      const invalidFields = Object.keys(validation.fieldErrors).map(key => labels[key] ?? (key.startsWith('carYear-') ? 'Car Year' : key.startsWith('noOfOwners-') ? 'Number of Owners' : key))
       setError(invalidFields.length > 0 ? `Complete or correct: ${invalidFields.join(', ')}.` : validation.error)
       setErrors(validation.fieldErrors)
       return
@@ -1713,6 +1792,12 @@ export function InquiryClient({
           </div>
         ) : (
         <div className="space-y-4">
+          <InventoryMatchPanel
+            hasRequirements={hasInventoryRequirements}
+            loading={inventoryMatchLoading}
+            error={inventoryMatchError}
+            matches={inventoryMatches}
+          />
           <div className="grid grid-cols-3 gap-4">
             <Input label={fieldLabel('Inquiry No', true)} value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
             <Input label={fieldLabel('Date of Inquiry', true)} type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
@@ -1774,7 +1859,7 @@ export function InquiryClient({
               ) : null}
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,1.1fr)_auto]">
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,.8fr)_minmax(0,1.1fr)_auto]">
               <FormDropdown label={fieldLabel('Make', true)} value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
               <FormDropdown label={fieldLabel('Model', true)} value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
               <FormDropdown label={fieldLabel('Variant', true)} value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
@@ -1783,6 +1868,10 @@ export function InquiryClient({
               }} />
               <FormDropdown label={fieldLabel('Year', true)} value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear onChange={value => {
                 setCarEditor(prev => ({ ...prev, carYear: value ? Number(value) : null }))
+                setCarEditorError('')
+              }} />
+              <FormDropdown label="Number of Owners" value={carEditor.noOfOwners === null ? '' : String(carEditor.noOfOwners)} options={OWNER_COUNT_OPTIONS} placeholder="Any" allowClear onChange={value => {
+                setCarEditor(prev => ({ ...prev, noOfOwners: value === '' ? null : Number(value) }))
                 setCarEditorError('')
               }} />
               <Input label="Sub Variant" value={carEditor.subVariant} onChange={e => {
@@ -1850,49 +1939,6 @@ export function InquiryClient({
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {isMissingFollowUpDate ? <div>Follow status needs a follow-up date.</div> : null}
               {isMissingVisitedDate ? <div>Visited sub-status needs a visited date.</div> : null}
-            </div>
-          ) : null}
-
-          {inventoryMatchError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{inventoryMatchError}</div>
-          ) : null}
-
-          {form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId) ? (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
-              <div className="text-sm font-semibold text-blue-900">Matching Inventory</div>
-              <div className="mt-1 text-xs text-blue-800">Based on all selected vehicle rows, here is matching stock currently in the system.</div>
-              {inventoryMatchLoading ? (
-                <div className="mt-3 text-sm text-blue-800">Checking matching inventory...</div>
-              ) : inventoryMatches.length === 0 ? (
-                <div className="mt-3 text-sm text-blue-800">No matching inventory found.</div>
-              ) : (
-                <div className="mt-3 space-y-3">
-                  {inventoryMatches.map(match => {
-                    const vehicle = [
-                      clean(match.carVariantMaster?.carMakeMaster?.make),
-                      clean(match.carVariantMaster?.carModelMaster?.model),
-                      clean(match.carVariantMaster?.variant),
-                    ].filter(Boolean).join(' ') || '—'
-                    return (
-                      <div key={match.inventoryId} className="rounded-md border border-blue-100 bg-white px-3 py-3 text-xs text-gray-700">
-                        <div className="grid gap-2 md:grid-cols-3">
-                          <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
-                          <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}${match.month ? ` ${match.month}` : ''}` : ''}</div>
-                          <div><span className="font-medium text-gray-900">Colour / Fuel:</span> {[match.colour, match.fuelType].filter(Boolean).join(' / ') || '—'}</div>
-                          <div><span className="font-medium text-gray-900">KM / Owners:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match.noOfOwners ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Status:</span> {match.status ?? '—'}</div>
-                          <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
-                          <div><span className="font-medium text-gray-900">Photos:</span> {match._count.inventoryPhotos}</div>
-                          <div className="md:col-span-3"><span className="font-medium text-gray-900">Remarks:</span> {clean(match.otherRemarks) || '—'}</div>
-                          <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched Because:</span> {match.matchReasons?.join(' · ') || 'In stock match'}</div>
-                          <div><span className="font-medium text-gray-900">Current State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           ) : null}
 

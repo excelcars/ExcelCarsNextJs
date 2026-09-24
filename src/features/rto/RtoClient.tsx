@@ -303,6 +303,7 @@ export function RtoClient({
 
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [viewRow, setViewRow] = useState<RtoRow | null>(null)
+  const [viewTab, setViewTab] = useState<'overview' | 'activity' | 'record'>('overview')
   const [discardOpen, setDiscardOpen] = useState(false)
   const [savedFormSnapshot, setSavedFormSnapshot] = useState(JSON.stringify(emptyForm()))
   const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState('')
@@ -310,6 +311,7 @@ export function RtoClient({
   const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [form, setForm] = useState<RtoFormInput>(emptyForm())
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
+  const [customerEntryMode, setCustomerEntryMode] = useState<'existing' | 'manual'>('existing')
   const [selectedAgent, setSelectedAgent] = useState<PartnerOption | null>(null)
   const [selectedMakeId, setSelectedMakeId] = useState<number | null>(null)
   const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
@@ -537,6 +539,7 @@ export function RtoClient({
     const empty = emptyForm()
     setForm(empty)
     setSelectedCustomer(null)
+    setCustomerEntryMode('existing')
     setSelectedAgent(null)
     setSelectedMakeId(null)
     setSelectedModelId(null)
@@ -581,6 +584,7 @@ export function RtoClient({
     const partner = r.partnerMaster
     const veh = vehicles.find(v => v.inventoryId === r.inventoryId) ?? null
     setSelectedCustomer(cust)
+    setCustomerEntryMode(cust ? 'existing' : 'manual')
     setSelectedAgent(partner)
     setSelectedVehicle(veh)
     setVehicleEntryMode(veh ? 'existing' : 'manual')
@@ -616,6 +620,7 @@ export function RtoClient({
   }
 
   const onCustomerChange = (c: CustomerOption | null) => {
+    setCustomerEntryMode('existing')
     setSelectedCustomer(c)
     setForm(f => ({
       ...f,
@@ -674,14 +679,16 @@ export function RtoClient({
     if (!form.partnerId && !form.agentNameLegacy?.trim()) {
       newErrors.partnerId = true
     }
-    if (!form.customerId && !form.customerNameLegacy?.trim()) {
-      newErrors.customer = true
-    }
+    if (customerEntryMode === 'existing' && !form.customerId) newErrors.customer = true
+    if (customerEntryMode === 'manual' && !form.customerNameLegacy?.trim()) newErrors.customerNameLegacy = true
     if (form.transferCharges !== null && form.transferCharges < 0) {
       newErrors.transferCharges = true
     }
     if (form.amountPaid !== null && form.amountPaid < 0) {
       newErrors.amountPaid = true
+    }
+    if (form.followupDate && form.followupDate < todayForInput()) {
+      newErrors.followupDate = true
     }
     if (hasInitialPayment) {
       if (form.transferCharges === null) {
@@ -711,10 +718,10 @@ export function RtoClient({
     if (form.agentEmailIdLegacy && !isValidEmail(form.agentEmailIdLegacy)) {
       newErrors.agentEmailIdLegacy = true
     }
-    if (form.customerMobLegacy && !isValidPhone(form.customerMobLegacy)) {
+    if (customerEntryMode === 'manual' && form.customerMobLegacy && !isValidPhone(form.customerMobLegacy)) {
       newErrors.customerMobLegacy = true
     }
-    if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
+    if (customerEntryMode === 'manual' && form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
       newErrors.customerEmailLegacy = true
     }
 
@@ -767,6 +774,7 @@ export function RtoClient({
 
   const openView = async (r: RtoRow) => {
     setViewRow(r)
+    setViewTab('overview')
     setError('')
     await loadHistory(r.rtoAgentMainId)
   }
@@ -970,6 +978,44 @@ export function RtoClient({
       <Modal title={`View RTO Job — ${viewRow?.carRegistrationNo ?? ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
         {viewRow && (
           <div className="space-y-5">
+            <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-[#1B2A6B] shadow-sm">{viewRow.carRegistrationNo ?? 'RTO job'}</span><span className="rounded-md bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">{viewRow.carType ?? 'Vehicle'}</span></div>
+                  <div className="mt-3 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
+                  <div className="mt-1 text-sm text-gray-600">{[clean(viewRow.carMakeLegacy), clean(viewRow.carModelLegacy), clean(viewRow.carVariantLegacy), viewRow.carYear].filter(Boolean).join(' · ') || 'Vehicle details unavailable'} <span className="mx-1 text-gray-300">•</span> RTO job #{viewRow.rtoAgentMainId}</div>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-1"><Badge label={paymentSummary(viewRow).status} /><Badge label={`RC: ${viewRow.rcStatus ?? 'Pending'}`} /><Badge label={`Transfer: ${viewRow.transferStatus ?? 'Pending'}`} /></div>
+                  <div className="flex flex-wrap gap-2"><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); openEdit(viewRow) }}>Edit</Btn><Btn size="sm" onClick={() => { setViewRow(null); void openPay(viewRow) }}>Log payment</Btn></div>
+                </div>
+              </div>
+            </div>
+
+            {(() => {
+              const payment = paymentSummary(viewRow)
+              const pendingSteps = [payment.balance > 0 ? 'payment balance' : '', viewRow.rcStatus === 'Pending' ? 'RC receipt' : '', viewRow.transferStatus === 'Pending' ? 'transfer completion' : ''].filter(Boolean)
+              return pendingSteps.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3 border-y border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"><span><span className="font-semibold">Action needed:</span> Pending {pendingSteps.join(', ')}.</span><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); void openPay(viewRow) }}>Update status</Btn></div> : null
+            })()}
+
+            {(() => {
+              const payment = paymentSummary(viewRow)
+              return (
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div></div>
+                </div>
+              )
+            })()}
+
+            <div className="flex gap-5 border-b border-gray-200 px-1">
+              {([['overview', 'Overview'], ['activity', `Activity (${payments.length + followups.length})`], ['record', 'Record']] as const).map(([tab, label]) => <button key={tab} type="button" onClick={() => setViewTab(tab)} className={`border-b-2 px-1 pb-3 text-sm font-medium transition ${viewTab === tab ? 'border-[#1B2A6B] text-[#1B2A6B]' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{label}</button>)}
+            </div>
+
+            {viewTab === 'overview' && <>
+            <div className="text-sm font-semibold text-gray-800">Vehicle details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
@@ -989,6 +1035,7 @@ export function RtoClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Customer details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer</div>
@@ -1004,6 +1051,7 @@ export function RtoClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">RTO agent</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">RTO Agent</div>
@@ -1019,6 +1067,7 @@ export function RtoClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Job dates and notes</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
@@ -1054,7 +1103,9 @@ export function RtoClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-4 space-y-4">
+            </>}
+
+            {viewTab === 'activity' && <div className="border-t border-gray-100 pt-4 space-y-4">
               <div>
                 <div className="text-sm font-semibold text-gray-800">Payment History</div>
                 {historyLoading ? (
@@ -1094,10 +1145,10 @@ export function RtoClient({
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* Audit Log Details */}
-            <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
+            {viewTab === 'record' && <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
               <div>
                 Created By: <span className="font-medium text-gray-500">{viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? 'System'}</span>
                 {viewRow.createdDt && <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.createdDt)}</span></>}
@@ -1108,9 +1159,11 @@ export function RtoClient({
                   <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.updatedDt)}</span></>
                 </div>
               )}
-            </div>
+            </div>}
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Btn variant="outline" onClick={() => { setViewRow(null); openEdit(viewRow) }}><Pencil className="h-4 w-4" />Edit Job</Btn>
+              <Btn onClick={() => { setViewRow(null); void openPay(viewRow) }}><IndianRupee className="h-4 w-4" />Log Payment</Btn>
               <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
             </div>
           </div>
@@ -1124,10 +1177,30 @@ export function RtoClient({
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">RTO Agent *</label>
               <PartnerPicker partnerType="RTO Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.partnerId} />
+              {errors.partnerId && <p className="mt-1 text-xs text-red-600">Select an RTO agent.</p>}
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-              <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">Customer Source *</label>
+              <div className="inline-flex rounded-lg bg-gray-100 p-1">
+                <button type="button" onClick={() => setCustomerEntryMode('existing')}
+                  className={`rounded-md px-3 py-2 text-xs font-medium transition ${customerEntryMode === 'existing' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}>
+                  Existing customer
+                </button>
+                <button type="button" onClick={() => { setCustomerEntryMode('manual'); setSelectedCustomer(null); setForm(fm => ({ ...fm, customerId: null })) }}
+                  className={`rounded-md px-3 py-2 text-xs font-medium transition ${customerEntryMode === 'manual' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}>
+                  Manual entry
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-gray-500">Choose a Customer Master record or enter this customer manually.</p>
+              {customerEntryMode === 'existing' ? (
+                <div className="mt-2"><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />{errors.customer && <p className="mt-1 text-xs text-red-600">Select an existing customer or switch to manual entry.</p>}</div>
+              ) : (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div className="sm:col-span-2"><Input label="Customer Name *" value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} error={errors.customerNameLegacy} errorMessage={errors.customerNameLegacy ? 'Customer name is required for a manual entry.' : undefined} /></div>
+                  <Input label="Mobile No." value={form.customerMobLegacy} onChange={e => f('customerMobLegacy', e.target.value)} error={errors.customerMobLegacy} errorMessage={errors.customerMobLegacy ? 'Enter a valid mobile number.' : undefined} />
+                  <Input label="Email" type="email" value={form.customerEmailLegacy} onChange={e => f('customerEmailLegacy', e.target.value)} error={errors.customerEmailLegacy} errorMessage={errors.customerEmailLegacy ? 'Enter a valid email address.' : undefined} />
+                </div>
+              )}
             </div>
           </div>
 
@@ -1208,12 +1281,12 @@ export function RtoClient({
             ) : (
               <CatalogTextPicker label="Registration No" placeholder="Search registration..." value={form.registrationNo} onChange={onRegistrationChange} options={registrationOptions} error={errors.registrationNo} />
             )}
-            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} />
+            <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} errorMessage={errors.carYear ? 'Enter a valid vehicle year.' : undefined} />
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <Input label="Entry Date" type="date" value={form.dateOfEntry} onChange={e => f('dateOfEntry', e.target.value)} />
-            <Input label="Transfer Charges (₹)" type="number" value={form.transferCharges ?? ''} onChange={e => f('transferCharges', e.target.value ? +e.target.value : null)} error={errors.transferCharges} />
+            <Input label="Transfer Charges (₹)" type="number" value={form.transferCharges ?? ''} onChange={e => f('transferCharges', e.target.value ? +e.target.value : null)} error={errors.transferCharges} errorMessage={errors.transferCharges ? 'Enter transfer charges greater than or equal to zero.' : undefined} />
             {!editId ? (
               <Input
                 label="Amount Paid (₹)"
@@ -1221,25 +1294,26 @@ export function RtoClient({
                 value={form.amountPaid ?? ''}
                 onChange={e => f('amountPaid', e.target.value ? +e.target.value : null)}
                 error={errors.amountPaid}
+                errorMessage={errors.amountPaid ? 'Amount paid cannot be negative or exceed transfer charges.' : undefined}
               />
             ) : <div />}
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <Select label={!editId ? 'Initial Payment Status' : 'Payment Status'} value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)} error={errors.paymentStatus}>
+            <Select label={!editId ? 'Initial Payment Status' : 'Payment Status'} value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)} error={errors.paymentStatus} errorMessage={errors.paymentStatus ? 'Select a payment status.' : undefined}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label={!editId ? 'Initial Payment Date' : 'Payment Date'} type="date" value={form.paymentDate} onChange={e => f('paymentDate', e.target.value)} error={errors.paymentDate} />
-            <Select label="RC Status" value={form.rcStatus} onChange={e => f('rcStatus', e.target.value)} error={errors.rcStatus}>
+            <Input label={!editId ? 'Initial Payment Date' : 'Payment Date'} type="date" value={form.paymentDate} onChange={e => f('paymentDate', e.target.value)} error={errors.paymentDate} errorMessage={errors.paymentDate ? 'Select the initial payment date.' : undefined} />
+            <Select label="RC Status" value={form.rcStatus} onChange={e => f('rcStatus', e.target.value)} error={errors.rcStatus} errorMessage={errors.rcStatus ? 'Select an RC status.' : undefined}>
               {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Select label="Transfer Status" value={form.transferStatus} onChange={e => f('transferStatus', e.target.value)} error={errors.transferStatus}>
+            <Select label="Transfer Status" value={form.transferStatus} onChange={e => f('transferStatus', e.target.value)} error={errors.transferStatus} errorMessage={errors.transferStatus ? 'Select a transfer status.' : undefined}>
               {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="Follow-up Date" type="date" min={todayForInput()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
+            <Input label="Follow-up Date" type="date" min={todayForInput()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} errorMessage={errors.followupDate ? 'Select today or a future date.' : undefined} />
           </div>
           <Textarea label="Remark" rows={5} value={form.remark} onChange={e => f('remark', e.target.value)} />
 

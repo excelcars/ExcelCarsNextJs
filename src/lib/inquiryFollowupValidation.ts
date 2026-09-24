@@ -7,6 +7,7 @@ type ValidationResult = {
 
 type InquiryCarLike = {
   carYear: number | null
+  noOfOwners?: number | null
 }
 
 type InquiryFormLike = {
@@ -110,6 +111,10 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
   const invalidCarIndex = input.inquiryCars.findIndex(car => car.carYear === null || !isValidYear(car.carYear))
   if (invalidCarIndex >= 0) {
     fieldErrors[`carYear-${invalidCarIndex}`] = true
+  }
+  const invalidOwnerIndex = input.inquiryCars.findIndex(car => car.noOfOwners != null && (!Number.isInteger(car.noOfOwners) || car.noOfOwners < 0))
+  if (invalidOwnerIndex >= 0) {
+    fieldErrors[`noOfOwners-${invalidOwnerIndex}`] = true
   }
 
   const status = input.status.trim()

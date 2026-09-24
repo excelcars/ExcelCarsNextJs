@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 export const PAYOUT_STATUSES = ['Pending', 'Paid'] as const
 export const POLICY_STATUSES = ['Pending', 'Received', 'Renewed'] as const
 export const CAR_TYPES = ['New', 'PreOwned'] as const
-const INSURANCE_PAGE_SIZE = 25
+export const INSURANCE_PAGE_SIZES = [25, 50, 100] as const
 
 function buildInsuranceWhere(search: string, fromDate = '', toDate = '') {
   const q = search.trim()
@@ -41,30 +41,30 @@ function buildInsuranceWhere(search: string, fromDate = '', toDate = '') {
   }
 }
 
-export async function listInsurance({ search = '', page = 1, fromDate = '', toDate = '' }: { search?: string; page?: number; fromDate?: string; toDate?: string }) {
+export async function listInsurance({ search = '', page = 1, pageSize, fromDate = '', toDate = '' }: { search?: string; page?: number; pageSize?: number; fromDate?: string; toDate?: string }) {
   const where = buildInsuranceWhere(search, fromDate, toDate)
-  const safePage = Math.max(1, page || 1)
+  const safePageSize = INSURANCE_PAGE_SIZES.includes(pageSize as 25 | 50 | 100) ? pageSize! : 25
+  const total = await prisma.insuranceMain.count({ where })
+  const pageCount = Math.max(1, Math.ceil(total / safePageSize))
+  const safePage = Math.min(Math.max(1, page || 1), pageCount)
 
-  const [rows, total] = await Promise.all([
-    prisma.insuranceMain.findMany({
-      where,
-      include: {
-        customer: true,
-        partnerMaster: true,
-      },
-      orderBy: { insuranceMainId: 'desc' },
-      skip: (safePage - 1) * INSURANCE_PAGE_SIZE,
-      take: INSURANCE_PAGE_SIZE,
-    }),
-    prisma.insuranceMain.count({ where }),
-  ])
+  const rows = await prisma.insuranceMain.findMany({
+    where,
+    include: {
+      customer: true,
+      partnerMaster: true,
+    },
+    orderBy: { insuranceMainId: 'desc' },
+    skip: (safePage - 1) * safePageSize,
+    take: safePageSize,
+  })
 
   return {
     rows,
     total,
     page: safePage,
-    pageCount: Math.max(1, Math.ceil(total / INSURANCE_PAGE_SIZE)),
-    pageSize: INSURANCE_PAGE_SIZE,
+    pageCount,
+    pageSize: safePageSize,
   }
 }
 

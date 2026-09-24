@@ -466,6 +466,7 @@ function emptyInquiryCar(): InquiryCarInput {
     fkVariantId: null,
     subVariant: '',
     carYear: null,
+    noOfOwners: null,
   }
 }
 
@@ -836,6 +837,7 @@ export function FollowupClient({
       fkVariantId: row.fkVariantId ?? null,
       subVariant: row.subVariant ?? '',
       carYear: row.carYear ?? null,
+      noOfOwners: row.noOfOwners ?? null,
     })
     setCarEditorError('')
 
@@ -869,6 +871,7 @@ export function FollowupClient({
       fkVariantId: carEditor.fkVariantId ?? null,
       subVariant: carEditor.subVariant,
       carYear: carEditor.carYear,
+      noOfOwners: carEditor.noOfOwners,
     }
 
     setEditInquiryForm(prev => {
@@ -1054,6 +1057,7 @@ export function FollowupClient({
           fkVariantId: car.fkVariantId ?? null,
           subVariant: car.subVariant ?? '',
           carYear: car.year ?? null,
+          noOfOwners: car.noOfOwners ?? null,
         })) : []
 
         setEditInquiryForm({
@@ -1920,7 +1924,7 @@ export function FollowupClient({
                 {editingCarIndex !== null ? <Btn variant="outline" size="sm" onClick={resetCarEditor}>Cancel Edit</Btn> : null}
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-6">
+              <div className="mt-4 grid gap-3 md:grid-cols-7">
                 <FormDropdown label="Make *" value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
                 <FormDropdown label="Model *" value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
                 <FormDropdown label="Variant *" value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
@@ -1931,6 +1935,10 @@ export function FollowupClient({
                   setCarEditor(prev => ({ ...prev, carYear: e.target.value ? Number(e.target.value) : null }))
                   setCarEditorError('')
                 }} />
+                <Input label="Number of Owners" type="number" min="0" step="1" value={carEditor.noOfOwners ?? ''} onChange={e => {
+                  setCarEditor(prev => ({ ...prev, noOfOwners: e.target.value === '' ? null : Number(e.target.value) }))
+                  setCarEditorError('')
+                }} placeholder="Optional" />
                 <Input label="Sub Variant" value={carEditor.subVariant} onChange={e => {
                   setCarEditor(prev => ({ ...prev, subVariant: e.target.value }))
                   setCarEditorError('')
@@ -1952,13 +1960,14 @@ export function FollowupClient({
                       <th className="px-3 py-2">Variant</th>
                       <th className="px-3 py-2">Sub Variant</th>
                       <th className="px-3 py-2">Year</th>
+                      <th className="px-3 py-2">Owners</th>
                       <th className="px-3 py-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {editInquiryForm.inquiryCars.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-6 text-center text-sm text-gray-500">No vehicle rows added yet.</td>
+                        <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">No vehicle rows added yet.</td>
                       </tr>
                     ) : editInquiryForm.inquiryCars.map((car, index) => {
                       const makeName = makes.find(item => item.pkMakeId === car.selectedMakeId)?.make ?? '—'
@@ -1972,6 +1981,7 @@ export function FollowupClient({
                           <td className="px-3 py-2 text-gray-700">{variantName}</td>
                           <td className="px-3 py-2 text-gray-700">{car.subVariant.trim() || '—'}</td>
                           <td className="px-3 py-2 text-gray-700">{car.carYear ?? '—'}</td>
+                          <td className="px-3 py-2 text-gray-700">{car.noOfOwners ?? 'Any'}</td>
                           <td className="px-3 py-2">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <button type="button" onClick={() => moveInquiryCar(index, -1)} disabled={index === 0} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Up</button>

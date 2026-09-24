@@ -9,6 +9,7 @@ export default async function InsurancePage({
   searchParams: Promise<{
     search?: string
     page?: string
+    pageSize?: string
     fromDate?: string
     toDate?: string
   }>
@@ -17,9 +18,10 @@ export default async function InsurancePage({
   const sp = await searchParams
   const search = sp.search ?? ''
   const page = Math.max(1, Number(sp.page) || 1)
+  const pageSize = Number(sp.pageSize) || 25
   const fromDate = sp.fromDate ?? ''
   const toDate = sp.toDate ?? ''
-  const [result, vehicles] = await Promise.all([listInsurance({ search, page, fromDate, toDate }), getVehicles()])
+  const [result, vehicles] = await Promise.all([listInsurance({ search, page, pageSize, fromDate, toDate }), getVehicles()])
 
   const data = result.rows.map((r) => ({
     ...r,

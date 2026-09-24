@@ -526,6 +526,7 @@ model InquiryCarDetails {
   variantLegacy       String?           @map("variant_legacy")
   subVariant          String?           @map("sub_variant")
   year                Int?
+  noOfOwners          Int?              @map("no_of_owners")
   createdDt           DateTime?         @map("created_dt") @db.Timestamptz(6)
   createdBy           Int?              @map("created_by")
   updatedDt           DateTime?         @map("updated_dt") @db.Timestamptz(6)

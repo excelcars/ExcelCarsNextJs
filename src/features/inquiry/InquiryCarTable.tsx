@@ -22,12 +22,12 @@ export function InquiryCarTable({
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
           <tr>
-            <th className="px-3 py-2">Make</th><th className="px-3 py-2">Model</th><th className="px-3 py-2">Variant</th><th className="px-3 py-2">Sub Variant</th><th className="px-3 py-2">Year</th><th className="px-3 py-2">Actions</th>
+            <th className="px-3 py-2">Make</th><th className="px-3 py-2">Model</th><th className="px-3 py-2">Variant</th><th className="px-3 py-2">Sub Variant</th><th className="px-3 py-2">Year</th><th className="px-3 py-2">Owners</th><th className="px-3 py-2">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 bg-white">
           {cars.length === 0 ? (
-            <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-gray-500">No vehicle rows added yet.</td></tr>
+            <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">No vehicle rows added yet.</td></tr>
           ) : cars.map((car, index) => (
             <tr key={car.inquiryCarDetailsId ?? `inquiry-car-${index}`}>
               <td className="px-3 py-2 text-gray-700">{car.selectedMakeId ? makeNames[car.selectedMakeId] ?? '—' : '—'}</td>
@@ -35,6 +35,7 @@ export function InquiryCarTable({
               <td className="px-3 py-2 text-gray-700">{car.fkVariantId ? variantNames[car.fkVariantId] ?? '—' : '—'}</td>
               <td className="px-3 py-2 text-gray-700">{car.subVariant.trim() || '—'}</td>
               <td className="px-3 py-2 text-gray-700">{car.carYear ?? '—'}</td>
+              <td className="px-3 py-2 text-gray-700">{car.noOfOwners ?? 'Any'}</td>
               <td className="px-3 py-2"><div className="flex flex-wrap items-center gap-1.5">
                 <button type="button" onClick={() => onMove(index, -1)} disabled={index === 0} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Up</button>
                 <button type="button" onClick={() => onMove(index, 1)} disabled={index === cars.length - 1} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Down</button>

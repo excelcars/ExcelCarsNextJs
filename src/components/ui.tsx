@@ -32,7 +32,9 @@ export function Badge({ label }: { label: string }) {
     Completed: 'bg-green-100 text-green-700',
     'Fully Paid': 'bg-green-100 text-green-700',
     'Partially Paid': 'bg-blue-100 text-blue-700',
+    Paid: 'bg-green-100 text-green-700',
     Received: 'bg-green-100 text-green-700',
+    Renewed: 'bg-green-100 text-green-700',
     'Expiring Soon': 'bg-orange-100 text-orange-700',
     Draft: 'bg-gray-100 text-gray-500',
   }
