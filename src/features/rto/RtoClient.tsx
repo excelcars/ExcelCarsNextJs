@@ -690,6 +690,9 @@ export function RtoClient({
     if (form.followupDate && form.followupDate < todayForInput()) {
       newErrors.followupDate = true
     }
+    if (!form.remark.trim()) {
+      newErrors.remark = true
+    }
     if (hasInitialPayment) {
       if (form.transferCharges === null) {
         newErrors.transferCharges = true
@@ -821,7 +824,7 @@ export function RtoClient({
         }
       }
     }
-    if (!statusOnlyUpdate && resultingPayment.status !== 'Fully Paid' && !payForm.remark?.trim()) {
+    if (!payForm.remark?.trim()) {
       newErrors.remark = true
     }
 
@@ -1315,7 +1318,7 @@ export function RtoClient({
             </Select>
             <Input label="Follow-up Date" type="date" min={todayForInput()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} errorMessage={errors.followupDate ? 'Select today or a future date.' : undefined} />
           </div>
-          <Textarea label="Remark" rows={5} value={form.remark} onChange={e => f('remark', e.target.value)} />
+          <Textarea label="Remark *" rows={5} value={form.remark} onChange={e => f('remark', e.target.value)} error={errors.remark} errorMessage={errors.remark ? 'Remark is required.' : undefined} />
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
@@ -1432,11 +1435,11 @@ export function RtoClient({
               />
             </div>
             <Textarea
-              label="Remark"
+              label="Remark *"
               value={payForm.remark}
               onChange={e => pf('remark', e.target.value)}
               error={errors.remark}
-              errorMessage={errors.remark ? 'Add a remark while a balance is pending.' : undefined}
+              errorMessage={errors.remark ? 'Remark is required.' : undefined}
             />
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}

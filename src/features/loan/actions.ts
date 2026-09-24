@@ -71,6 +71,12 @@ function toDate(v: string): Date | null {
   return v ? new Date(v) : null
 }
 
+function todayDateValue(now = new Date()) {
+  const local = new Date(now)
+  local.setMinutes(local.getMinutes() - local.getTimezoneOffset())
+  return local.toISOString().slice(0, 10)
+}
+
 /** Creates a Customer Master record only after the Loan operator explicitly chooses this action. */
 export async function createCustomerFromLoan(input: CreateLoanCustomerInput): Promise<CreateLoanCustomerResult> {
   const validation = validateCustomerInput({
@@ -142,6 +148,11 @@ function validateLoanInput(input: LoanFormInput, { requireCustomerLink = false }
   if (!input.carModel.trim()) return 'Car model is required.'
   if (!input.carVariant.trim()) return 'Car variant is required.'
   if (input.carYear === null || !Number.isInteger(input.carYear) || !isValidYear(input.carYear)) return 'Enter a valid car year.'
+  if (input.followupDate) {
+    const followup = new Date(`${input.followupDate}T00:00:00`)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.followupDate) || Number.isNaN(followup.getTime())) return 'Enter a valid follow-up date.'
+    if (input.followupDate < todayDateValue()) return 'Follow-up date cannot be in the past.'
+  }
   if (input.bankPersonMobileNo && !isValidPhone(input.bankPersonMobileNo)) return 'Bank contact mobile must contain 10 digits.'
   if (input.bankPersonEmailId && !isValidEmail(input.bankPersonEmailId)) return 'Enter a valid bank contact email address.'
   if (input.customerMobileLegacy && !isValidPhone(input.customerMobileLegacy)) return 'Customer mobile must contain 10 digits.'

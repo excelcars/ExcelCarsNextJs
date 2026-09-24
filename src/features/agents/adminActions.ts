@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { AGENT_TYPES } from './adminQueries'
+import { isValidEmail, isValidPhone } from '@/lib/validation'
 
 export interface AgentFormInput {
   partnerType: string
@@ -21,6 +22,8 @@ export async function createAgent(input: AgentFormInput): Promise<ActionResult> 
   if (!AGENT_TYPES.includes(input.partnerType as typeof AGENT_TYPES[number])) return { success: false, error: 'Select a valid agent type.' }
   if (!input.name.trim()) return { success: false, error: 'Name is required.' }
   if (!input.mobile.trim() && !input.email.trim()) return { success: false, error: 'Enter mobile or email.' }
+  if (input.mobile.trim() && !isValidPhone(input.mobile)) return { success: false, error: 'Mobile number must contain 10 digits.' }
+  if (input.email.trim() && !isValidEmail(input.email)) return { success: false, error: 'Enter a valid email address.' }
 
   try {
     const duplicate = await prisma.partnerMaster.findFirst({
@@ -48,6 +51,8 @@ export async function updateAgent(id: number, input: AgentFormInput): Promise<Ac
   if (!AGENT_TYPES.includes(input.partnerType as typeof AGENT_TYPES[number])) return { success: false, error: 'Select a valid agent type.' }
   if (!input.name.trim()) return { success: false, error: 'Name is required.' }
   if (!input.mobile.trim() && !input.email.trim()) return { success: false, error: 'Enter mobile or email.' }
+  if (input.mobile.trim() && !isValidPhone(input.mobile)) return { success: false, error: 'Mobile number must contain 10 digits.' }
+  if (input.email.trim() && !isValidEmail(input.email)) return { success: false, error: 'Enter a valid email address.' }
 
   try {
     const duplicate = await prisma.partnerMaster.findFirst({

@@ -94,6 +94,11 @@ export interface LoanFilters {
 
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
+const todayDateValue = () => {
+  const local = new Date()
+  local.setMinutes(local.getMinutes() - local.getTimezoneOffset())
+  return local.toISOString().slice(0, 10)
+}
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
 const fmtDateTime = (value: Date | string | null | undefined) => {
   if (!value) return '—'
@@ -474,6 +479,9 @@ export function LoanClient({
     if (form.carYear !== null && !isValidYear(form.carYear)) {
       newErrors.carYear = 'Enter a valid car year.'
     }
+    if (form.followupDate && form.followupDate < todayDateValue()) {
+      newErrors.followupDate = 'Follow-up date cannot be in the past.'
+    }
     if (form.bankPersonMobileNo && !isValidPhone(form.bankPersonMobileNo)) {
       newErrors.bankPersonMobileNo = 'Enter a valid 10-digit bank mobile number.'
     }
@@ -756,20 +764,20 @@ export function LoanClient({
               </div>
             )}
             <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-              <Input label="Registration No * (manual or stock)" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={!!errors.registrationNo} errorMessage={errors.registrationNo} />
-              <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>Find Stock</Btn>
+              <Input label="Registration No * (manual or stock)" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={!!errors.registrationNo} errorMessage={errors.registrationNo} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
+              <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration} disabled={!!selectedVehicle}>Find Stock</Btn>
             </div>
-            {vehicleLookupMessage && <p className="mt-1 text-xs text-gray-500">{vehicleLookupMessage}</p>}
+            {selectedVehicle ? <p className="mt-1 text-xs text-gray-500">Vehicle fields are locked from stock. Remove the selected vehicle above to enter them manually.</p> : vehicleLookupMessage && <p className="mt-1 text-xs text-gray-500">{vehicleLookupMessage}</p>}
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <Select label="Car Type *" value={form.carType} onChange={e => f('carType', e.target.value)}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>
-            <Input label="Make *" value={form.carMake} onChange={e => f('carMake', e.target.value)} error={!!errors.carMake} errorMessage={errors.carMake} />
-            <Input label="Model *" value={form.carModel} onChange={e => f('carModel', e.target.value)} error={!!errors.carModel} errorMessage={errors.carModel} />
-            <Input label="Variant *" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} error={!!errors.carVariant} errorMessage={errors.carVariant} />
-            <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={!!errors.carYear} errorMessage={errors.carYear} />
+            <Input label="Make *" value={form.carMake} onChange={e => f('carMake', e.target.value)} error={!!errors.carMake} errorMessage={errors.carMake} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
+            <Input label="Model *" value={form.carModel} onChange={e => f('carModel', e.target.value)} error={!!errors.carModel} errorMessage={errors.carModel} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
+            <Input label="Variant *" value={form.carVariant} onChange={e => f('carVariant', e.target.value)} error={!!errors.carVariant} errorMessage={errors.carVariant} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
+            <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={!!errors.carYear} errorMessage={errors.carYear} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -782,7 +790,7 @@ export function LoanClient({
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
             <Input label="Payment Date" type="date" value={form.paymentDate} onChange={e => f('paymentDate', e.target.value)} />
-            <Input label="Follow-up Date" type="date" value={form.followupDate} onChange={e => f('followupDate', e.target.value)} />
+            <Input label="Follow-up Date" type="date" min={todayDateValue()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={!!errors.followupDate} errorMessage={errors.followupDate} />
           </div>
           <Textarea label="Remarks" value={form.remarks} onChange={e => f('remarks', e.target.value)} />
 
