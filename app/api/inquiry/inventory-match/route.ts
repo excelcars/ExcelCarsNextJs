@@ -10,6 +10,9 @@ export async function GET(req: NextRequest) {
   const makeId = Number(req.nextUrl.searchParams.get('makeId'))
   const modelId = Number(req.nextUrl.searchParams.get('modelId'))
   const year = Number(req.nextUrl.searchParams.get('year'))
+  const budget = Number(req.nextUrl.searchParams.get('budget'))
+  const noOfOwnersParam = req.nextUrl.searchParams.get('noOfOwners')
+  const noOfOwners = noOfOwnersParam === null ? null : Number(noOfOwnersParam)
 
   if (!variantId && !modelId && !makeId) {
     return NextResponse.json([])
@@ -23,6 +26,8 @@ export async function GET(req: NextRequest) {
           ? { carVariantMaster: { fkModelId: modelId } }
           : { carVariantMaster: { fkMakeId: makeId } }),
       ...(year ? { year } : {}),
+      ...(budget > 0 ? { price: { lte: budget } } : {}),
+      ...(noOfOwners !== null && Number.isInteger(noOfOwners) && noOfOwners >= 0 ? { noOfOwners } : {}),
       status: { equals: 'In Stock', mode: 'insensitive' },
     },
     include: {
@@ -41,6 +46,8 @@ export async function GET(req: NextRequest) {
   const matchReasons = [
     variantId ? 'Exact variant match' : modelId ? 'Same model match' : makeId ? 'Same make match' : '',
     year ? 'Year matched' : '',
+    budget > 0 ? 'Within customer budget' : '',
+    noOfOwners !== null && Number.isInteger(noOfOwners) && noOfOwners >= 0 ? `Exactly ${noOfOwners} owner${noOfOwners === 1 ? '' : 's'}` : '',
     'Currently in stock',
   ].filter(Boolean)
 

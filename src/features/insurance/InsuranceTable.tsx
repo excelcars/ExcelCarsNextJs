@@ -25,8 +25,8 @@ export function InsuranceTable({ rows, onPay, onView, onEdit, onDelete }: {
           <td className="px-4 py-3"><div className="flex flex-wrap gap-1.5">{row.payoutPaymentStatus ? <Badge label={row.payoutPaymentStatus} /> : null}{row.policyStatus ? <Badge label={row.policyStatus} /> : null}</div></td>
           <td className="px-4 py-3 text-sm text-gray-600"><div>Renewal: {fmtDate(row.renewalDate) || '—'}</div><div className="mt-1">Expiry: {fmtDate(row.expiryDate) || '—'}</div></td>
           <td className="px-4 py-3"><div className="flex items-center gap-1">
-            <button onClick={() => onPay(row)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
             <button onClick={() => onView(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
+            <button onClick={() => onPay(row)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
             <button onClick={() => onEdit(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
             <button onClick={() => onDelete(row.insuranceMainId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
           </div></td>

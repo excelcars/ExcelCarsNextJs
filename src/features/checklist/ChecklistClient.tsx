@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Car, Download, Loader2 } from 'lucide-react'
+import { Plus, Trash2, X, Car, Download, Loader2, Pencil } from 'lucide-react'
 import { Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { ChecklistTable } from './ChecklistTable'
 import { ChecklistYesNoToggle } from './ChecklistYesNoToggle'
@@ -407,7 +407,7 @@ export function ChecklistClient({
     return body as ChecklistDetailRow
   }
 
-  const openEdit = (r: ChecklistListRow) => {
+  const openEdit = (r: Pick<ChecklistListRow, 'documentId'>) => {
     setEditId(r.documentId)
     setError('')
     setDetailError('')
@@ -752,7 +752,7 @@ export function ChecklistClient({
           </div>}
 
           <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-            <div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-900">Car details</h3><p className="text-xs text-slate-500">Confirm or enter the vehicle information for this checklist.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">{selectedVehicle ? 'Inventory vehicle' : 'Manual vehicle'}</span></div>
+            <div className="mb-3"><h3 className="text-sm font-semibold text-slate-900">Car details</h3><p className="text-xs text-slate-500">Confirm or enter the vehicle information for this checklist.</p></div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <Input label="Make *" value={form.make} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
               <Input label="Model *" value={form.model} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
@@ -761,8 +761,7 @@ export function ChecklistClient({
               <Input label="Year *" type="number" value={form.year ?? ''} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, year: e.target.value ? Number(e.target.value) : null }))} />
               <Input label="Fuel Type *" value={form.fuelType} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value }))} />
             </div>
-            <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Linked customer</div><div className={`mt-0.5 text-sm font-medium ${form.customerNameLegacy ? 'text-slate-800' : 'text-amber-700'}`}>{form.customerNameLegacy || 'No customer linked'}</div>{form.customerNameLegacy && <div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div>}{entryMode === 'existing' && !form.customerNameLegacy && <div className="mt-2"><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} /></div>}</div>
-            {entryMode === 'manual' && <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3"><Input label="Customer name" value={form.customerNameLegacy} onChange={e => setForm(f => ({ ...f, customerNameLegacy: e.target.value }))} /><Input label="Customer mobile" value={form.customerMobileLegacy} error={errors.customerMobileLegacy} onChange={e => setForm(f => ({ ...f, customerMobileLegacy: e.target.value.replace(/\D/g, '') }))} /><Input label="Customer email" type="email" value={form.customerEmailLegacy} error={errors.customerEmailLegacy} onChange={e => setForm(f => ({ ...f, customerEmailLegacy: e.target.value }))} /></div>}
+            {entryMode === 'existing' ? <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Customer</div>{form.customerNameLegacy ? <><div className="mt-0.5 text-sm font-medium text-slate-800">{form.customerNameLegacy}</div><div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div></> : <div className="mt-2"><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} /></div>}</div> : <div className="mt-3"><div className="mb-2 text-xs font-medium text-slate-600">Customer details</div><div className="grid grid-cols-1 gap-3 md:grid-cols-3"><Input label="Customer name" value={form.customerNameLegacy} onChange={e => setForm(f => ({ ...f, customerNameLegacy: e.target.value }))} /><Input label="Customer mobile" value={form.customerMobileLegacy} error={errors.customerMobileLegacy} onChange={e => setForm(f => ({ ...f, customerMobileLegacy: e.target.value.replace(/\D/g, '') }))} /><Input label="Customer email" type="email" value={form.customerEmailLegacy} error={errors.customerEmailLegacy} onChange={e => setForm(f => ({ ...f, customerEmailLegacy: e.target.value }))} /></div></div>}
           </section>
 
           <div>
@@ -809,6 +808,30 @@ export function ChecklistClient({
           </div>
         ) : viewRow ? (
           <div className="space-y-5">
+            {(() => {
+              const documents = viewRow.checklistDocDetails
+              const applicable = documents.filter(document => document.applicable === 'Yes').length
+              const received = documents.filter(document => document.applicable === 'Yes' && document.received === 'Yes').length
+              return <>
+                <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-[#1B2A6B]">Vehicle checklist</div>
+                      <div className="mt-1 font-mono text-xl font-bold text-gray-900">{viewRow.registrationNo ?? 'Registration not added'}</div>
+                      <div className="mt-1 text-sm text-gray-600">{[clean(viewRow.make), clean(viewRow.model), clean(viewRow.variant), viewRow.year].filter(Boolean).join(' · ') || 'Vehicle details unavailable'}</div>
+                    </div>
+                    <Btn size="sm" variant="outline" onClick={() => { setViewOpen(false); openEdit(viewRow) }}><Pencil className="h-3.5 w-3.5" />Edit Checklist</Btn>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Documents</div><div className="mt-1 text-xl font-bold text-gray-900">{documents.length}</div></div>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Applicable</div><div className="mt-1 text-xl font-bold text-blue-800">{applicable}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Received</div><div className="mt-1 text-xl font-bold text-green-800">{received}<span className="ml-1 text-sm font-medium">/ {applicable}</span></div></div>
+                </div>
+              </>
+            })()}
+
+            <div className="text-sm font-semibold text-gray-800">Vehicle and customer</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
@@ -840,6 +863,7 @@ export function ChecklistClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Record activity</div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Created</div>
@@ -858,7 +882,7 @@ export function ChecklistClient({
             </div>
 
             <div>
-              <div className="mb-2 text-sm font-semibold text-gray-900">Document Checklist</div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-semibold text-gray-900">Document Checklist</div><div className="text-xs font-medium text-gray-500">Received documents are marked in green.</div></div>
               <div className="overflow-x-auto rounded-xl border border-gray-200">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -878,8 +902,8 @@ export function ChecklistClient({
                       viewRow.checklistDocDetails.map(d => (
                         <tr key={d.checklistDetailsId}>
                           <td className="px-4 py-3 text-sm text-gray-800">{d.documentName ?? '—'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{d.applicable ?? '—'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{d.received ?? '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600"><span className={`rounded px-2 py-0.5 text-xs font-medium ${d.applicable === 'Yes' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{d.applicable ?? '—'}</span></td>
+                          <td className="px-4 py-3 text-sm text-gray-600"><span className={`rounded px-2 py-0.5 text-xs font-medium ${d.received === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{d.received ?? '—'}</span></td>
                           <td className="px-4 py-3 text-sm text-gray-600">{d.originalCopy ?? '—'}</td>
                         </tr>
                       ))
@@ -889,7 +913,8 @@ export function ChecklistClient({
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Btn variant="outline" onClick={() => { setViewOpen(false); openEdit(viewRow) }}><Pencil className="h-4 w-4" />Edit Checklist</Btn>
               <Btn variant="outline" onClick={() => { setViewOpen(false); setViewRow(null); setDetailError('') }}>Close</Btn>
             </div>
           </div>

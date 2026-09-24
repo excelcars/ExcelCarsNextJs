@@ -713,9 +713,9 @@ export function LoanClient({
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer Source *</label>
-            <div className="flex gap-2">
-              <Btn type="button" size="sm" variant={loanMode === 'existing' ? 'primary' : 'outline'} onClick={() => selectLoanMode('existing')}>Existing Customer</Btn>
-              <Btn type="button" size="sm" variant={loanMode === 'manual' ? 'primary' : 'outline'} onClick={() => selectLoanMode('manual')}>Manual Customer Entry</Btn>
+            <div className="inline-flex rounded-lg bg-slate-100 p-1">
+              <button type="button" onClick={() => selectLoanMode('existing')} className={`rounded-md px-3 py-2 text-sm font-medium transition ${loanMode === 'existing' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Existing customer</button>
+              <button type="button" onClick={() => selectLoanMode('manual')} className={`rounded-md px-3 py-2 text-sm font-medium transition ${loanMode === 'manual' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Manual entry</button>
             </div>
             <p className="mt-1 text-xs text-gray-500">Choose a Customer Master record or enter this customer manually. Every loan has a customer.</p>
           </div>
@@ -811,6 +811,56 @@ export function LoanClient({
       <Modal title={`View Loan${viewRow ? ` — ${viewRow.registrationNo ?? ''}` : ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
         {viewRow && (
           <div className="space-y-5">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap gap-2"><span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Loan #{viewRow.loanManagementId}</span><span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-[#1B2A6B]">{viewRow.customerId ? 'Customer Master' : 'Manual customer'}</span></div>
+                  <div className="mt-3 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
+                  <div className="mt-1 text-sm text-gray-600">Registration {viewRow.registrationNo ?? 'not added'} · Raised {fmtDate(viewRow.entryDate) || '—'} · { [clean(viewRow.carMake), clean(viewRow.carModel), clean(viewRow.carVariant)].filter(Boolean).join(' ') || 'Vehicle not added' }</div>
+                </div>
+                <div className="flex flex-col items-end gap-3">
+                  <Badge label={viewRow.paymentStatus ?? 'Pending'} />
+                  <div className="flex flex-wrap gap-2">
+                    <Btn size="sm" variant="outline" onClick={() => { setViewRow(null); openEdit(viewRow) }}><Pencil className="h-3.5 w-3.5" />Edit</Btn>
+                    <Btn size="sm" onClick={() => { setViewRow(null); void openPay(viewRow) }}><IndianRupee className="h-3.5 w-3.5" />Log Payment</Btn>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {(() => {
+              const followUp = viewRow.followupDate ? new Date(viewRow.followupDate) : null
+              const isOpen = Number(viewRow.payoutAmount ?? 0) > Number(viewRow.totalAmountReceived ?? 0)
+              if (!followUp || Number.isNaN(followUp.getTime()) || !isOpen) return null
+              const today = new Date(); today.setHours(0, 0, 0, 0)
+              const followUpDay = new Date(followUp); followUpDay.setHours(0, 0, 0, 0)
+              const overdueDays = Math.floor((today.getTime() - followUpDay.getTime()) / 86_400_000)
+              const message = overdueDays > 0 ? `Follow-up was due on ${fmtDate(followUp)} and is overdue by ${overdueDays} day${overdueDays === 1 ? '' : 's'}.` : `Next follow-up is scheduled for ${fmtDate(followUp)}.`
+              return <div className={`${overdueDays > 0 ? 'border-red-100 bg-red-50 text-red-700' : 'border-amber-100 bg-amber-50 text-amber-800'} flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm`}><span>{message}</span><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); void openPay(viewRow) }}>{overdueDays > 0 ? 'Log payment' : 'Update follow-up'}</Btn></div>
+            })()}
+
+            {(() => {
+              const payout = Number(viewRow.payoutAmount ?? 0)
+              const received = Number(viewRow.totalAmountReceived ?? 0)
+              const balance = Math.max(payout - received, 0)
+              const progress = payout > 0 ? Math.min((received / payout) * 100, 100) : 0
+              return <>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-gray-800">Payment workflow</div>{viewRow.paymentStatus !== 'Received' && <span className="text-xs font-medium text-amber-700">Action needed</span>}</div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[11px] uppercase tracking-wide text-gray-500">Payment status</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.paymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[11px] uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
+                  </div>
+                </div>
+              </>
+            })()}
+
+            <div className="text-sm font-semibold text-gray-800">Customer details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
@@ -830,6 +880,7 @@ export function LoanClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Bank contact</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Name</div>
@@ -849,6 +900,7 @@ export function LoanClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Vehicle details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Car Type</div>
@@ -864,6 +916,7 @@ export function LoanClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Loan details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
@@ -903,6 +956,7 @@ export function LoanClient({
               </div>
             </div>
 
+            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Record activity</div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Created</div>
@@ -920,7 +974,9 @@ export function LoanClient({
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Btn variant="outline" onClick={() => { setViewRow(null); openEdit(viewRow) }}><Pencil className="h-4 w-4" />Edit Loan</Btn>
+              <Btn onClick={() => { setViewRow(null); void openPay(viewRow) }}><IndianRupee className="h-4 w-4" />Log Payment</Btn>
               <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
             </div>
           </div>
@@ -934,11 +990,22 @@ export function LoanClient({
               const payout = Number(payRow.payoutAmount ?? 0)
               const received = payments.length > 0 ? payments.reduce((sum, payment) => sum + Number(payment.amountPaid ?? 0), 0) : Number(payRow.totalAmountReceived ?? 0)
               const pending = Math.max(0, payout - received)
-              return <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase text-gray-500">Payout</div><div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payout)}</div></div>
-                <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase text-green-700">Received</div><div className="mt-1 text-sm font-bold text-green-800">{fmtMoney(received)}</div></div>
-                <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase text-orange-700">Pending payout</div><div className="mt-1 text-sm font-bold text-orange-800">{fmtMoney(pending)}</div></div>
-              </div>
+              const settled = pending === 0 && payout > 0
+              const displayStatus = settled ? 'Paid' : received > 0 ? 'Partial' : 'Pending'
+              return <>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Payout Amount</div><div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payout)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount Paid</div><div className="mt-1 flex items-center gap-2 text-sm font-bold text-green-800">{fmtMoney(received)}<Badge label={displayStatus} /></div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending Balance</div><div className="mt-1 text-sm font-bold text-orange-800">{fmtMoney(pending)}</div></div>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Payment Workflow</div><div className={`text-xs font-medium ${settled ? 'text-green-700' : 'text-orange-700'}`}>{settled ? 'Completed' : 'Action needed'}</div></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2"><div className="text-xs text-gray-500">Payment status</div><div className="mt-1"><Badge label={displayStatus} /></div></div>
+                    <div className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2"><div className="text-xs text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-medium text-gray-800">{settled ? 'No follow-up needed' : fmtDate(payRow.followupDate) || 'Set follow-up date'}</div></div>
+                  </div>
+                </div>
+              </>
             })()}
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
@@ -952,18 +1019,18 @@ export function LoanClient({
               ) : (
                 <div className="space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                   {payments.map(p => (
-                    <div key={p.loanPaymentId} className="text-xs text-gray-600 flex gap-2">
+                    <div key={p.loanPaymentId} className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                       <span className="text-gray-400 whitespace-nowrap">{fmtDate(p.createdDt)}</span>
                       <span className="font-medium">{fmtMoney(p.amountPaid)}</span>
-                      {p.paymentStatus && <Badge label={p.paymentStatus} />}
+                      {p.paymentStatus && <span className="rounded bg-blue-100 px-2 py-0.5 font-medium text-blue-700">Payment: {p.paymentStatus}</span>}
                     </div>
                   ))}
                 </div>
               )}
               {followups.length > 0 && (
-                <div className="mt-2 space-y-1 text-xs text-gray-500 max-h-32 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
+                <div className="mt-2 space-y-1 border border-gray-100 rounded-lg bg-gray-50 p-2 text-xs text-gray-500 max-h-32 overflow-y-auto">
                   {followups.map(fu => (
-                    <div key={fu.loanFollowupId}>{fmtDate(fu.followupDate)} — {fu.remark ?? ''}</div>
+                    <div key={fu.loanFollowupId} className="flex flex-wrap items-center gap-2"><span>{fmtDate(fu.followupDate)}</span><span className="rounded bg-yellow-100 px-2 py-0.5 font-medium text-yellow-700">Follow-up</span><span>{fu.remark ?? '—'}</span></div>
                   ))}
                 </div>
               )}

@@ -233,7 +233,7 @@ function summarizeInquiryVehicles(cars: InquiryDetailData['inquiryCarDetails'] |
       clean(car.carVariantMaster?.variant) || clean(car.variantLegacy),
       clean(car.subVariant),
     ].filter(Boolean)
-    return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}`.trim()
+    return `${parts.join(' ')}${car.year ? ` · ${car.year}` : ''}${car.noOfOwners !== null && car.noOfOwners !== undefined ? ` · ${car.noOfOwners} owner${car.noOfOwners === 1 ? '' : 's'}` : ''}`.trim()
   }).filter(Boolean)
   if (labels.length === 0) return '-'
   if (labels.length === 1) return labels[0]
@@ -695,6 +695,7 @@ export function InquiryDetailView({
                               {clean(car.subVariant) || 'sub-variant not set'}
                               {' · '}
                               {car.year ? String(car.year) : 'year not set'}
+                              {car.noOfOwners !== null && car.noOfOwners !== undefined ? ` · ${car.noOfOwners} owner${car.noOfOwners === 1 ? '' : 's'}` : ''}
                             </div>
                           </div>
                         </div>
@@ -738,6 +739,7 @@ export function InquiryDetailView({
                             {clean(car.subVariant) || 'sub-variant not set'}
                             {' · '}
                             {car.year ? String(car.year) : 'year not set'}
+                            {car.noOfOwners !== null && car.noOfOwners !== undefined ? ` · ${car.noOfOwners} owner${car.noOfOwners === 1 ? '' : 's'}` : ''}
                           </div>
                         </div>
                       </div>

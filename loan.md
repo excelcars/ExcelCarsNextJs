@@ -67,7 +67,7 @@ Create and update require registration. The value is canonicalized by stripping 
 
 ## 5. Payment and follow-up workflow
 
-**Log Payment** opens a modal, fetches `/api/loan/history?loanManagementId=<id>`, shows Payout, Received, and Pending payout cards, and displays the complete payment and follow-up histories, each sorted newest first in a scrollable area.
+**Log Payment** opens a modal, fetches `/api/loan/history?loanManagementId=<id>`, shows Payout Amount, Amount Paid, and Pending Balance cards, plus a Payment Workflow panel for status and next follow-up. It displays the complete payment and follow-up histories, each sorted newest first in a scrollable area. RC/transfer controls are not shown because Loan Management has no persisted RC or transfer-status fields.
 
 The operator enters amount paid, a status, optional next follow-up date, and remark. UI validation:
 
