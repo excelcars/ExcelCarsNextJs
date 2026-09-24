@@ -26,6 +26,7 @@ interface InquiryDetailCar {
   variantLegacy?: string | null
   subVariant?: string | null
   year: number | null
+  noOfOwners?: number | null
   carVariantMaster: {
     variant: string | null
     carMakeMaster: { make: string | null } | null

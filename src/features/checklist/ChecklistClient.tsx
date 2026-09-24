@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, X, Car, Download, Loader2, Pencil } from 'lucide-react'
 import { Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ListPagination } from '@/components/ListPagination'
 import { ChecklistTable } from './ChecklistTable'
 import { ChecklistYesNoToggle } from './ChecklistYesNoToggle'
 import { ChecklistDocumentTypeToggle } from './ChecklistDocumentTypeToggle'
@@ -664,6 +665,14 @@ export function ChecklistClient({
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <ChecklistTable data={data} pending={isRoutePending} onView={openView} onEdit={openEdit} onDelete={setDeleteId} />
+      <ListPagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        showingText={`Showing ${total === 0 ? 0 : (page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)}`}
+        pending={isRoutePending}
+        onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
+      />
 
       <Modal title={editId ? 'Edit Checklist' : 'Add Checklist'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         {detailLoading && editId ? (
