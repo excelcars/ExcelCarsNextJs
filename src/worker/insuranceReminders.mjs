@@ -4,6 +4,9 @@ const REMINDER_DAYS = new Set([30, 15, 7, 1])
 const MAX_RETRIES = 2
 const TEMPLATE_SUBJECT = 'Insurance renewal reminder — policy expiry approaching'
 const INDIA_TIME_ZONE = 'Asia/Kolkata'
+const EXCEL_CARS_NAME = 'Excel Cars'
+const EXCEL_CARS_PHONE = process.env.PUBLIC_EXCEL_CARS_CONTACT_PHONE?.trim() || '82923002'
+const EXCEL_CARS_EMAIL = process.env.PUBLIC_EXCEL_CARS_EMAIL?.trim() || process.env.EMAIL_FROM_ADDRESS?.trim() || 'info@excelcars.com'
 
 function indiaDateKey(value = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: INDIA_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value)
@@ -32,7 +35,7 @@ function normalizeWhatsAppRecipient(value) {
 }
 
 function renderTemplate(template, variables) {
-  return template.replace(/{{(customerName|registrationNo|expiryDate|agentName|agentMobile)}}/g, (_, key) => variables[key] || '—')
+  return template.replace(/{{(customerName|registrationNo|expiryDate|agentName|agentMobile|excelCarsName|excelCarsPhone|excelCarsEmail)}}/g, (_, key) => variables[key] || '—')
 }
 
 function escapeHtml(value) {
@@ -40,7 +43,7 @@ function escapeHtml(value) {
 }
 
 function messageText(variables) {
-  return `Your vehicle insurance for ${variables.registrationNo} expires on ${variables.expiryDate}. Please contact ${variables.agentName} at ${variables.agentMobile} to renew your policy.`
+  return `Your vehicle insurance for ${variables.registrationNo} expires on ${variables.expiryDate}. Please contact ${variables.excelCarsName} at ${variables.excelCarsPhone} or ${variables.excelCarsEmail} to renew your policy.`
 }
 
 function recipientsFor(insurance, includeSalespeople = false) {
@@ -76,6 +79,10 @@ function salespersonMessage(variables) {
 
 function salespersonEmailHtml(recipientName, variables) {
   return `<p>Hello ${escapeHtml(recipientName)},</p><p><strong>Insurance renewal alert:</strong> ${escapeHtml(variables.customerName)}'s vehicle <strong>${escapeHtml(variables.registrationNo)}</strong> expires on <strong>${escapeHtml(variables.expiryDate)}</strong>.</p><p>Please follow up with the customer.</p><p>Regards,<br>Excel Cars</p>`
+}
+
+function excelCarsContactHtml() {
+  return `<p>For assistance, please contact ${escapeHtml(EXCEL_CARS_NAME)} at ${escapeHtml(EXCEL_CARS_PHONE)} or <a href="mailto:${escapeHtml(EXCEL_CARS_EMAIL)}">${escapeHtml(EXCEL_CARS_EMAIL)}</a>.</p><p>Regards,<br>${escapeHtml(EXCEL_CARS_NAME)}</p>`
 }
 
 function configuredMailer() {
@@ -208,10 +215,15 @@ export async function queueDailyInsuranceReminders(prisma) {
       customerName: policy.customer?.custName || policy.customerNameLegacy || 'Customer',
       registrationNo: policy.carRegistrationNo || 'your vehicle',
       expiryDate: indiaDateKey(policy.expiryDate),
-      agentName: policy.partnerMaster?.name || policy.agentNameLegacy || 'our insurance agent',
-      agentMobile: policy.partnerMaster?.mobile || policy.agentMobileNoLegacy || 'Excel Cars',
+      // Keep legacy template placeholders customer-safe: old agent fields now
+      // resolve to the company contact rather than an individual agent.
+      agentName: EXCEL_CARS_NAME,
+      agentMobile: EXCEL_CARS_PHONE,
+      excelCarsName: EXCEL_CARS_NAME,
+      excelCarsPhone: EXCEL_CARS_PHONE,
+      excelCarsEmail: EXCEL_CARS_EMAIL,
     }
-    const customerEmailHtml = renderTemplate(template.messageBody, Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, escapeHtml(value)])))
+    const customerEmailHtml = `${renderTemplate(template.messageBody, Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, escapeHtml(value)])))}${excelCarsContactHtml()}`
     const customerWhatsAppMessage = messageText(variables)
     for (const recipient of recipientsFor(policy, daysBeforeExpiry === 30)) {
       const isSalesperson = recipient.type === 'Salesperson'

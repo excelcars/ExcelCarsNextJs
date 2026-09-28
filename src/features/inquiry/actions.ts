@@ -14,6 +14,7 @@ import { normalizeWhatsAppRecipient, sendEnquiryTemplate, sendNoInventoryEnquiry
 import { getInquiryActivityEvents, logInquiryEvent } from './eventLog'
 import { INQUIRY_INVENTORY_WORKFLOW_OPTIONS, type InquiryInventoryWorkflowType } from './workflow'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
+import { ensureInquiryLocationMasterSeed } from './locationMaster.server'
 
 export interface InquiryFormInput {
   inquiryNo: string
@@ -21,6 +22,7 @@ export interface InquiryFormInput {
   website: string
   sourceCode: string
   sourceDetail: string
+  locationId: number | null
   location: string
   customerId: number | null
   customerNameLegacy: string
@@ -330,10 +332,22 @@ async function resolveInquirySource(input: InquiryFormInput) {
   return { source, error: null }
 }
 
+async function resolveInquiryLocation(input: InquiryFormInput) {
+  if (!input.locationId) return { location: null, error: null }
+  await ensureInquiryLocationMasterSeed()
+  const location = await prisma.inquiryLocationMaster.findUnique({
+    where: { locationId: input.locationId },
+    select: { locationId: true, displayName: true, region: true, isActive: true },
+  })
+  if (!location || !location.isActive) return { location: null, error: 'Select an active reporting location before saving the inquiry.' }
+  return { location, error: null }
+}
+
 function buildInquiryData(
   input: InquiryFormInput,
   resolvedContact: Awaited<ReturnType<typeof resolveInquiryContact>>,
   source: NonNullable<Awaited<ReturnType<typeof resolveInquirySource>>['source']>,
+  location: Awaited<ReturnType<typeof resolveInquiryLocation>>['location'],
 ) {
   const normalizedStatus = normalizeOptionalText(input.status)
   return {
@@ -342,6 +356,7 @@ function buildInquiryData(
     website: source.displayName,
     source: { connect: { sourceId: source.sourceId } },
     sourceDetail: normalizeOptionalText(input.sourceDetail),
+    ...(location ? { reportingLocation: { connect: { locationId: location.locationId } } } : {}),
     location: normalizeOptionalText(input.location),
     customerNameLegacy: resolvedContact.customerNameLegacy,
     mobileno: resolvedContact.mobileno,
@@ -711,7 +726,7 @@ async function sendInquiryCarEmail(inquiryId: number): Promise<ActionResult> {
     kmsDriven: null,
     price: null,
     remarks: '',
-    signedBy: session?.user?.name || 'Excel Cars Team',
+    signedBy: 'Excel Cars Team',
   })
 
   const result = await sendEmail({ to: toEmail, subject, html })
@@ -1085,11 +1100,10 @@ async function sendAutomatedInquiryInventoryEmail(inquiryId: number, inventoryId
   }
 
   try {
-    const session = await auth()
     const result = await sendMatchedInventoryEmailToInquiryRecipient({
       inquiryId,
       inventoryId,
-      signedBy: session?.user?.name || 'Excel Cars Team',
+      signedBy: 'Excel Cars Team',
       userId,
     })
     await prisma.inquiryInventoryEmailLog.update({
@@ -1342,7 +1356,7 @@ export async function sendInquiryInventoryEmail(inquiryId: number, inventoryId: 
   return sendMatchedInventoryEmailToInquiryRecipient({
     inquiryId,
     inventoryId,
-    signedBy: session?.user?.name || 'Excel Cars Team',
+    signedBy: 'Excel Cars Team',
     userId: session?.user?.id ? Number(session.user.id) : null,
   })
 }
@@ -1363,7 +1377,7 @@ export async function sendInquiryInventoryEmails(inquiryId: number, inventoryIds
     const result = await sendMatchedInventoryEmailToInquiryRecipient({
       inquiryId,
       inventoryId,
-      signedBy: session?.user?.name || 'Excel Cars Team',
+      signedBy: 'Excel Cars Team',
       userId: session?.user?.id ? Number(session.user.id) : null,
     })
     if (result.success) {
@@ -1485,6 +1499,10 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
   if (resolvedSource.error || !resolvedSource.source) {
     return { success: false, error: resolvedSource.error ?? 'Select a valid source before saving the inquiry.' }
   }
+  const resolvedLocation = await resolveInquiryLocation(input)
+  if (resolvedLocation.error || !resolvedLocation.location) {
+    return { success: false, error: resolvedLocation.error ?? 'Select a valid reporting location before saving the inquiry.' }
+  }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -1500,7 +1518,7 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
       try {
         const created = await prisma.inquiry.create({
           data: {
-            ...buildInquiryData({ ...input, inquiryNo }, resolvedContact, resolvedSource.source),
+            ...buildInquiryData({ ...input, inquiryNo }, resolvedContact, resolvedSource.source, resolvedLocation.location),
             ...(resolvedContact.customerId ? { customer: { connect: { custId: resolvedContact.customerId } } } : {}),
             createdDt: now,
             updatedDt: now,
@@ -1645,6 +1663,10 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
   if (resolvedSource.error || !resolvedSource.source) {
     return { success: false, error: resolvedSource.error ?? 'Select a valid source before saving the inquiry.' }
   }
+  const resolvedLocation = await resolveInquiryLocation(input)
+  if (resolvedLocation.error || (route === '/inquiry' && !resolvedLocation.location)) {
+    return { success: false, error: resolvedLocation.error ?? 'Select a valid reporting location before saving the inquiry.' }
+  }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
     return { success: false, error: resolvedContact.error }
@@ -1661,6 +1683,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
         website: true,
         sourceId: true,
         sourceDetail: true,
+        locationId: true,
         location: true,
         status: true,
         subStatus: true,
@@ -1697,7 +1720,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
       await tx.inquiry.update({
         where: { inquiryId: id },
         data: {
-          ...buildInquiryData(input, resolvedContact, resolvedSource.source),
+          ...buildInquiryData(input, resolvedContact, resolvedSource.source, resolvedLocation.location),
           customer: resolvedContact.customerId ? { connect: { custId: resolvedContact.customerId } } : { disconnect: true },
           updatedDt: now,
           ...(userId ? { updatedByUser: { connect: { userId } } } : {}),

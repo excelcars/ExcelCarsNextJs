@@ -477,6 +477,7 @@ function emptyInquiryForm(): InquiryFormInput {
     website: '',
     sourceCode: '',
     sourceDetail: '',
+    locationId: null,
     location: '',
     customerId: null,
     customerNameLegacy: '',
@@ -1066,6 +1067,7 @@ export function FollowupClient({
           website: detail.website ?? '',
           sourceCode: detail.source?.code ?? '',
           sourceDetail: detail.sourceDetail ?? '',
+          locationId: detail.locationId ?? null,
           location: detail.location ?? '',
           customerId: detail.customerId,
           customerNameLegacy: detail.customerNameLegacy ?? '',
@@ -1411,6 +1413,12 @@ export function FollowupClient({
             page={page}
             pageSize={25}
             onLogFollowup={openLog}
+            renderInlineCells={row => logRow?.inquiryId === row.inquiryId ? {
+              classification: <div className="space-y-2"><FormDropdown label="Classification" value={form.classification} options={CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select" error={errors.classification} onChange={value => f('classification', value)} /><FormDropdown label="Status" value={form.status} options={STATUSES.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up' : value }))} placeholder="Select" error={errors.status} onChange={value => { f('status', value); if (value === 'Closed') f('nextFollowUpDate', '') }} /><FormDropdown label="Sub-status" value={form.useOtherSubStatus ? FOLLOWUP_OTHER_SUB_STATUS_VALUE : form.subStatus} options={[...SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value })), { value: FOLLOWUP_OTHER_SUB_STATUS_VALUE, label: 'OTHER' }]} placeholder="Select" allowClear onChange={value => { if (value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) { f('useOtherSubStatus', true); f('subStatus', ''); return }; f('useOtherSubStatus', false); f('otherSubStatus', ''); f('subStatus', value) }} />{form.useOtherSubStatus ? <Input label="Other sub-status" value={form.otherSubStatus ?? ''} error={errors.otherSubStatus} onChange={event => f('otherSubStatus', event.target.value)} /> : null}</div>,
+              followup: <div className="space-y-2"><FormDropdown label="Outcome" value={form.contactOutcome} options={CONTACT_OUTCOME_OPTIONS.map(option => ({ value: option.value, label: option.title }))} placeholder="Select" error={errors.contactOutcome} onChange={value => { const outcome = CONTACT_OUTCOME_OPTIONS.find(option => option.value === value); const target = FRIENDLY_STATUS_OPTIONS.find(option => option.key === outcome?.statusKey); f('contactOutcome', value); f('status', target?.status ?? form.status); f('subStatus', outcome?.subStatus || target?.subStatus || ''); f('useOtherSubStatus', false); f('otherSubStatus', ''); if (target?.status === 'Closed') f('nextFollowUpDate', '') }} /><Input label="Follow-up date" type="date" value={form.nextFollowUpDate} error={errors.nextFollowUpDate} disabled={!isFollowupStatus(form.status)} onChange={event => f('nextFollowUpDate', event.target.value)} /><div className="pt-1 text-xs text-gray-500"><span className="font-semibold text-gray-700">Inquiry made by:</span> {row.createdByUser?.displayName ?? row.createdByUser?.userName ?? (row.createdBy ? `User #${row.createdBy}` : '—')}</div></div>,
+              remark: <div><Textarea label="Remark" value={form.comments} error={errors.comments} onChange={event => f('comments', event.target.value)} placeholder="Update..." className="min-h-20 min-w-44" />{error ? <div className="mt-2 text-xs font-medium text-red-600">{error}</div> : null}</div>,
+              actions: <><button type="button" onClick={save} disabled={isPending} className="rounded p-1.5 text-green-600 transition hover:bg-green-50 disabled:opacity-50" title="Save follow-up">{isPending ? '…' : '✓'}</button><button type="button" onClick={() => setLogRow(null)} disabled={isPending} className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100 disabled:opacity-50" title="Cancel inline edit">×</button></>,
+            } : null}
             onViewFollowup={openFollowupView}
             onViewInquiry={openInquiryView}
             onEditInquiry={openInquiryEdit}
@@ -1429,7 +1437,7 @@ export function FollowupClient({
         onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
       />
 
-      <LogFollowupModal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={!!logRow} onClose={() => setLogRow(null)}>
+      <LogFollowupModal title={`Log Follow-up${logRow ? ` — ${logRow.customer?.custName ?? logRow.customerNameLegacy ?? ''}` : ''}`} open={false} onClose={() => setLogRow(null)}>
         {logRow && (
           (() => {
             const today = new Date()

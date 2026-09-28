@@ -3,15 +3,15 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { N } from '@/components/ui'
 
-export function LeadSourceChart({ data, totalLeads }: { data: { name: string; value: number }[]; totalLeads: number }) {
+export function LeadSourceChart({ data, totalLeads, title = 'Leads by Source', emptyMessage = 'No inquiry source data yet.' }: { data: { name: string; value: number }[]; totalLeads: number; title?: string; emptyMessage?: string }) {
   if (data.length === 0) {
-    return <p className="text-sm text-gray-400 py-8 text-center">No inquiry source data yet.</p>
+    return <p className="py-8 text-center text-sm text-gray-400">{emptyMessage}</p>
   }
 
   return (
     <div className="h-full">
       <div className="flex items-center justify-between gap-3 px-1 text-xs">
-        <span className="font-semibold text-gray-700">Leads by Source</span>
+        <span className="font-semibold text-gray-700">{title}</span>
         <span className="text-gray-500">Total leads: <strong className="text-gray-800">{totalLeads.toLocaleString('en-IN')}</strong></span>
       </div>
       <div className="h-[calc(100%-24px)]">

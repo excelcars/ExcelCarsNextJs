@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get('status')?.trim() ?? 'All'
   const classification = req.nextUrl.searchParams.get('classification')?.trim() ?? 'All'
   const source = req.nextUrl.searchParams.get('source')?.trim() ?? 'All'
+  const locationId = req.nextUrl.searchParams.get('locationId')?.trim() ?? ''
+  const location = req.nextUrl.searchParams.get('location')?.trim() ?? ''
   const subStatus = req.nextUrl.searchParams.get('subStatus')?.trim() ?? 'All'
   const followUpDate = req.nextUrl.searchParams.get('followUpDate')?.trim() ?? ''
   const inquiryDate = req.nextUrl.searchParams.get('inquiryDate')?.trim() ?? ''
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
   const quickFilter: InquiryQuickFilter = INQUIRY_QUICK_FILTERS.includes(requestedQuickFilter as InquiryQuickFilter) ? requestedQuickFilter as InquiryQuickFilter : 'active'
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
-  const rows = await listInquiriesForExport({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId: ownershipScope.restrictToUserId })
+  const rows = await listInquiriesForExport({ search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId: ownershipScope.restrictToUserId })
 
   return NextResponse.json(rows.map(row => ({
     ...row,

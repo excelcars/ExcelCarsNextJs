@@ -6,6 +6,7 @@ import { FormDropdown } from '@/components/FormDropdown'
 import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import type { InquirySourceOption } from './sourceMaster'
+import type { InquiryLocationOption } from './locationMaster'
 
 type QuickFilter = 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
 
@@ -16,6 +17,8 @@ type CarVariantMaster = { pkVariantId: number; variant: string | null }
 type InquiryFiltersProps = {
   search: string
   source: string
+  locationId: string
+  location: string
   subStatus: string
   makeId: string
   modelId: string
@@ -30,6 +33,7 @@ type InquiryFiltersProps = {
   isRoutePending: boolean
   hasActiveFilters: boolean
   sourceOptions: InquirySourceOption[]
+  locationOptions: InquiryLocationOption[]
   subStatusSuggestions: string[]
   makes: CarMakeMaster[]
   models: CarModelMaster[]
@@ -38,6 +42,8 @@ type InquiryFiltersProps = {
   statuses: readonly string[]
   onSearchChange: (value: string) => void
   onSourceChange: (value: string) => void
+  onLocationIdChange: (value: string) => void
+  onLocationChange: (value: string) => void
   onSubStatusChange: (value: string) => void
   onMakeChange: (value: string) => void
   onModelChange: (value: string) => void
@@ -54,6 +60,8 @@ type InquiryFiltersProps = {
 export function InquiryFilters({
   search,
   source,
+  locationId,
+  location,
   subStatus,
   makeId,
   modelId,
@@ -68,6 +76,7 @@ export function InquiryFilters({
   isRoutePending,
   hasActiveFilters,
   sourceOptions,
+  locationOptions,
   subStatusSuggestions,
   makes,
   models,
@@ -76,6 +85,8 @@ export function InquiryFilters({
   statuses,
   onSearchChange,
   onSourceChange,
+  onLocationIdChange,
+  onLocationChange,
   onSubStatusChange,
   onMakeChange,
   onModelChange,
@@ -120,6 +131,8 @@ export function InquiryFilters({
           <SearchBar value={search} onChange={onSearchChange} placeholder="Name, mobile, email, source, vehicle..." disabled={isRoutePending} />
         </div>
         <FormDropdown label="Source" value={source === 'All' ? '' : source} options={sourceOptions.map(item => ({ value: item.code, label: item.displayName }))} placeholder="All Sources" allowClear disabled={isRoutePending} onChange={value => onSourceChange(value || 'All')} />
+        <FormDropdown label="City / Reporting Location" value={locationId} options={locationOptions.map(item => ({ value: String(item.locationId), label: item.displayName }))} placeholder="All locations" allowClear disabled={isRoutePending} onChange={onLocationIdChange} />
+        <Input label="Area / Locality" value={location} onChange={event => onLocationChange(event.target.value)} placeholder="Andheri, Kothrud, JLT..." disabled={isRoutePending} />
         <FormDropdown label="Sub-status" value={subStatus === 'All' ? '' : subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="All Sub-statuses" allowClear disabled={isRoutePending} onChange={value => onSubStatusChange(value || 'All')} />
         <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} labeled onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         <DateFilterInput label="Follow-up Date" value={followUpDate} onChange={onFollowUpDateChange} disabled={isRoutePending} />

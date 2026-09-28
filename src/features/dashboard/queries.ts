@@ -444,6 +444,58 @@ export async function getLeadSourceBreakdown() {
   return otherSources > 0 ? [...topSources, { name: 'Other', value: otherSources }] : topSources
 }
 
+export async function getLeadLocationBreakdown(range?: { start: Date; end: Date }) {
+  const rows = await prisma.inquiry.findMany({
+    where: { locationId: { not: null }, ...(range ? { dateOfInquiry: { gte: range.start, lt: range.end } } : {}) },
+    select: { reportingLocation: { select: { displayName: true } } },
+  })
+  return countLeadDimensions(rows.map(row => row.reportingLocation?.displayName))
+}
+
+function countLeadDimensions(values: Array<string | null | undefined>) {
+  const counts = new Map<string, number>()
+  for (const value of values) {
+    const name = value?.trim()
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return [...counts.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+}
+
+export async function getLeadRegionBreakdown(range?: { start: Date; end: Date }) {
+  const rows = await prisma.inquiry.findMany({
+    where: { locationId: { not: null }, ...(range ? { dateOfInquiry: { gte: range.start, lt: range.end } } : {}) },
+    select: { reportingLocation: { select: { region: true } } },
+  })
+  return countLeadDimensions(rows.map(row => row.reportingLocation?.region))
+}
+
+export async function getLeadLocationBreakdowns() {
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3
+  const quarterStart = new Date(now.getFullYear(), quarterStartMonth, 1)
+  const yearStart = new Date(now.getFullYear(), 0, 1)
+  const [month, quarter, year] = await Promise.all([
+    getLeadLocationBreakdown({ start: monthStart, end: now }),
+    getLeadLocationBreakdown({ start: quarterStart, end: now }),
+    getLeadLocationBreakdown({ start: yearStart, end: now }),
+  ])
+  return { month, quarter, year }
+}
+
+export async function getLeadRegionBreakdowns() {
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+  const yearStart = new Date(now.getFullYear(), 0, 1)
+  const [month, quarter, year] = await Promise.all([
+    getLeadRegionBreakdown({ start: monthStart, end: now }),
+    getLeadRegionBreakdown({ start: quarterStart, end: now }),
+    getLeadRegionBreakdown({ start: yearStart, end: now }),
+  ])
+  return { month, quarter, year }
+}
+
 export async function getAssignedExpiryRenewalPolicies(assignedUserId: number) {
   const today = startOfToday()
   const checkDate = addDays(today, 30)

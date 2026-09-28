@@ -22,6 +22,7 @@ import { InventoryViewModal } from './InventoryViewModal'
 import { InventoryEmailModal } from './InventoryEmailModal'
 import { InventoryInquiryModal } from './InventoryInquiryModal'
 import { InventoryVideosModal } from './InventoryVideosModal'
+import { InventoryDocumentsModal } from './InventoryDocumentsModal'
 import { buildDirtySnapshot, clean, emptyFilters, emptyForm, formatPriceInput } from './inventoryUtils'
 
 const INVENTORY_FUEL_TYPES = ['Petrol', 'Diesel', 'CNG']
@@ -321,6 +322,7 @@ export function InventoryClient({
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<number[]>([])
   const [photoRow, setPhotoRow] = useState<InventoryRow | null>(null)
   const [videoRow, setVideoRow] = useState<InventoryRow | null>(null)
+  const [documentRow, setDocumentRow] = useState<InventoryRow | null>(null)
   const [photos, setPhotos] = useState<InventoryPhoto[]>([])
   const [photoError, setPhotoError] = useState('')
   const [photoLoading, setPhotoLoading] = useState(false)
@@ -920,6 +922,7 @@ export function InventoryClient({
     _count: {
       inventoryPhotos: data.find(r => r.inventoryId === inventoryId)?._count.inventoryPhotos ?? 0,
       inventoryVideos: data.find(r => r.inventoryId === inventoryId)?._count.inventoryVideos ?? 0,
+      inventoryDocuments: data.find(r => r.inventoryId === inventoryId)?._count.inventoryDocuments ?? 0,
     },
     carVariantMaster: null,
   })
@@ -933,6 +936,12 @@ export function InventoryClient({
   const setVideoCount = (inventoryId: number, inventoryVideos: number) => {
     setData(prev => prev.map(row => row.inventoryId === inventoryId
       ? { ...row, _count: { ...row._count, inventoryVideos: Math.max(0, inventoryVideos) } }
+      : row))
+  }
+
+  const setDocumentCount = (inventoryId: number, inventoryDocuments: number) => {
+    setData(prev => prev.map(row => row.inventoryId === inventoryId
+      ? { ...row, _count: { ...row._count, inventoryDocuments: Math.max(0, inventoryDocuments) } }
       : row))
   }
 
@@ -1248,6 +1257,7 @@ export function InventoryClient({
           onInquirySync={openInquirySync}
         onPhotos={openPhotos}
         onVideos={setVideoRow}
+        onDocuments={setDocumentRow}
           onEmail={openEmail}
           onEdit={openEdit}
           onDelete={setDeleteId}
@@ -1408,6 +1418,8 @@ export function InventoryClient({
       </Modal>
 
       <InventoryVideosModal row={videoRow} onClose={() => setVideoRow(null)} onVideoCountChange={setVideoCount} />
+
+      <InventoryDocumentsModal row={documentRow} onClose={() => setDocumentRow(null)} onDocumentCountChange={setDocumentCount} />
 
       <InventoryInquiryModal {...inquiryModalProps} />
     </div>

@@ -13,11 +13,12 @@ import {
 } from 'lucide-react'
 import { Badge, Modal } from '@/components/ui'
 import { LeadSourceChart } from './LeadSourceChart'
+import { LeadLocationChart, type LeadLocationBreakdowns } from './LeadLocationChart'
 
-type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'birthdays'
+type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'loans' | 'birthdays' | 'anniversaries'
 type SortMode = 'priority' | 'dateAsc' | 'dateDesc'
 type DateValue = string | Date | null
-const DASHBOARD_WORKSPACES: Workspace[] = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays']
+const DASHBOARD_WORKSPACES: Workspace[] = ['leads', 'followups', 'insurance', 'rto', 'payments', 'loans', 'birthdays', 'anniversaries']
 
 function workspaceHref(workspace: Workspace) {
   return workspace === 'leads' ? '/dashboard' : `/dashboard?workspace=${workspace}`
@@ -160,6 +161,8 @@ export interface DashboardCommandCenterProps {
   stats: DashboardStats
   todayStats: TodayStats
   leadSources: { name: string; value: number }[]
+  leadLocationBreakdowns: LeadLocationBreakdowns
+  leadRegionBreakdowns: LeadLocationBreakdowns
   leadDetails: LeadRow[]
   reminders: ReminderRow[]
   pendingPolicies: PendingPolicyRow[]
@@ -672,15 +675,25 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     return sortByMode(rows, sort, row => row.followupDate, row => -row.balance)
   }, [props.pendingPayments, query, sort])
 
+  const filteredLoanRows = useMemo(() => {
+    const rows = props.pendingPayments.filter(row => row.type === 'Loan' && textMatches([row.registrationNo, row.customerName, row.customerMobile, row.agentName, row.agentMobile, row.balance, formatDate(row.followupDate)], query))
+    return sortByMode(rows, sort, row => row.followupDate, row => -row.balance)
+  }, [props.pendingPayments, query, sort])
+
   const filteredReminderRows = useMemo(() => {
     const rows = props.reminders.filter(row => textMatches([row.name, row.mobile, row.email, row.type], query))
     if (sort === 'dateDesc') return [...rows].sort((a, b) => b.name.localeCompare(a.name))
     return [...rows].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))
   }, [props.reminders, query, sort])
+  const filteredBirthdayRows = filteredReminderRows.filter(row => row.type === 'Birth Day')
+  const filteredAnniversaryRows = filteredReminderRows.filter(row => row.type === 'Anniversary')
+  const birthdayCount = props.reminders.filter(row => row.type === 'Birth Day').length
+  const anniversaryCount = props.reminders.filter(row => row.type === 'Anniversary').length
+  const loanCount = props.pendingPayments.filter(row => row.type === 'Loan').length
 
   const totalAttention =
     (permissions.canFollowup ? stats.overdueFollowups : 0) +
-    (permissions.canRto ? props.pendingPayments.length : 0) +
+    (permissions.canRto || permissions.canLoan ? props.pendingPayments.length : 0) +
     (permissions.canInsurance ? props.expiryRenewalPolicies.length + props.pendingPolicies.length : 0) +
     (permissions.canRto ? props.rtoPending.length : 0) +
     props.reminders.length
@@ -690,8 +703,10 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     { key: 'followups' as const, label: 'Follow-ups', count: stats.pendingFollowups, show: permissions.canFollowup },
     { key: 'insurance' as const, label: 'Insurance', count: props.pendingPolicies.length + props.expiryRenewalPolicies.length, show: permissions.canInsurance },
     { key: 'rto' as const, label: 'RTO', count: props.rtoPending.length, show: permissions.canRto },
-    { key: 'payments' as const, label: 'Payments', count: props.pendingPayments.length, show: permissions.canRto },
-    { key: 'birthdays' as const, label: 'Birthdays', count: props.reminders.length, show: true },
+    { key: 'payments' as const, label: 'Payments', count: props.pendingPayments.filter(row => row.type !== 'Loan').length, show: permissions.canRto || permissions.canInsurance },
+    { key: 'loans' as const, label: 'Loans', count: loanCount, show: permissions.canLoan },
+    { key: 'birthdays' as const, label: 'Birthdays', count: birthdayCount, show: true },
+    { key: 'anniversaries' as const, label: 'Anniversaries', count: anniversaryCount, show: true },
   ].filter(tab => tab.show)
 
   const pageSize = 8
@@ -871,7 +886,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
 
         <div className="min-h-0 flex-1">
         {workspace === 'leads' ? (
-          <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+          <div className="grid min-h-0 gap-3">
+            <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
             <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]" tableClass="w-auto min-w-[700px]">
               {filteredLeadDetails.map(row => (
                 <tr key={row.label} className="hover:bg-gray-50">
@@ -882,9 +898,18 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 </tr>
               ))}
             </WorkTable>
-            <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
-              <LeadSourceChart data={props.leadSources} totalLeads={stats.totalInquiries} />
-            </section>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
+                  <LeadSourceChart data={props.leadSources} totalLeads={stats.totalInquiries} />
+                </section>
+                <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
+                  <LeadLocationChart breakdowns={props.leadLocationBreakdowns} />
+                </section>
+                <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
+                  <LeadLocationChart breakdowns={props.leadRegionBreakdowns} title="Leads by Region" emptyMessage="No controlled location data for this period." />
+                </section>
+              </div>
+            </div>
           </div>
         ) : workspace === 'followups' ? (
           <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[760px]">
@@ -968,14 +993,40 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               </tr>
             ))}
           </WorkTable>
+        ) : workspace === 'loans' ? (
+          <WorkTable headers={['Registration', 'Customer', 'Customer Mobile', 'Bank Contact', 'Bank Mobile', 'Follow-up', 'Payout', 'Received', 'Balance', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[980px]">
+            {filteredLoanRows.map(row => (
+              <tr key={row.id} className="hover:bg-gray-50">
+                <td className="px-3 py-2 font-mono text-xs font-semibold">{row.registrationNo ?? '-'}</td>
+                <td className="px-3 py-2 font-medium text-gray-900">{row.customerName ?? '-'}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600">{row.customerMobile ?? '-'}</td>
+                <td className="px-3 py-2 text-gray-700">{row.agentName ?? '-'}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600">{row.agentMobile ?? '-'}</td>
+                <td className="px-3 py-2 text-gray-600">{formatDate(row.followupDate)}</td>
+                <td className="px-3 py-2 text-gray-700">{formatMoney(row.actual)}</td>
+                <td className="px-3 py-2 text-gray-700">{formatMoney(row.received)}</td>
+                <td className="px-3 py-2 font-semibold text-gray-900">{formatMoney(row.balance)}</td>
+                <td className="px-3 py-2"><a href={row.href} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+              </tr>
+            ))}
+          </WorkTable>
         ) : workspace === 'birthdays' ? (
-          <WorkTable headers={['Name', 'Mobile', 'Email', 'Type']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
-            {filteredReminderRows.map(row => (
+          <WorkTable headers={['Name', 'Mobile', 'Email']} empty="No birthdays today" maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
+            {filteredBirthdayRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.name}</td>
                 <td className="px-3 py-2 font-mono text-xs text-gray-600">{row.mobile ?? '-'}</td>
                 <td className="px-3 py-2 text-gray-700">{row.email ?? '-'}</td>
-                <td className="px-3 py-2"><Badge label={row.type} /></td>
+              </tr>
+            ))}
+          </WorkTable>
+        ) : workspace === 'anniversaries' ? (
+          <WorkTable headers={['Name', 'Mobile', 'Email']} empty="No anniversaries today" maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
+            {filteredAnniversaryRows.map(row => (
+              <tr key={row.id} className="hover:bg-gray-50">
+                <td className="px-3 py-2 font-medium text-gray-900">{row.name}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600">{row.mobile ?? '-'}</td>
+                <td className="px-3 py-2 text-gray-700">{row.email ?? '-'}</td>
               </tr>
             ))}
           </WorkTable>

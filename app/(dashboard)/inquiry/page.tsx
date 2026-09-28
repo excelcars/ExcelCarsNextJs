@@ -1,4 +1,4 @@
-import { INQUIRY_QUICK_FILTERS, listInquiries, getInquirySources, getInquirySubStatusSuggestions, getMakes, getInquiryAssistants, type InquiryQuickFilter } from '@/features/inquiry/queries'
+import { INQUIRY_QUICK_FILTERS, listInquiries, getInquirySources, getInquiryLocations, getInquirySubStatusSuggestions, getMakes, getInquiryAssistants, type InquiryQuickFilter } from '@/features/inquiry/queries'
 import { InquiryClient } from '@/features/inquiry/InquiryClient'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 export default async function InquiryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; subStatus?: string; followUpDate?: string; inquiryDate?: string; visitedDate?: string; budgetMin?: string; budgetMax?: string; makeId?: string; modelId?: string; variantId?: string; quickFilter?: string; view?: string; edit?: string; page?: string }>
+  searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; locationId?: string; location?: string; subStatus?: string; followUpDate?: string; inquiryDate?: string; visitedDate?: string; budgetMin?: string; budgetMax?: string; makeId?: string; modelId?: string; variantId?: string; quickFilter?: string; view?: string; edit?: string; page?: string }>
 }) {
   if (!(await canCurrentUserAccessRoute('/inquiry'))) redirect('/dashboard')
   const sp = await searchParams
@@ -15,6 +15,8 @@ export default async function InquiryPage({
   const status = sp.status ?? 'All'
   const classification = sp.classification ?? 'All'
   const source = sp.source ?? 'All'
+  const locationId = sp.locationId ?? ''
+  const location = sp.location ?? ''
   const subStatus = sp.subStatus ?? 'All'
   const followUpDate = sp.followUpDate ?? ''
   const inquiryDate = sp.inquiryDate ?? ''
@@ -30,10 +32,11 @@ export default async function InquiryPage({
   const page = Number(sp.page) || 1
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
-  const [{ rows, total, pageCount }, makes, sourceOptions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
-    listInquiries({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, restrictToUserId: ownershipScope.restrictToUserId }),
+  const [{ rows, total, pageCount }, makes, sourceOptions, locationOptions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
+    listInquiries({ search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, restrictToUserId: ownershipScope.restrictToUserId }),
     getMakes(),
     getInquirySources(),
+    getInquiryLocations(),
     getInquirySubStatusSuggestions(),
     getInquiryAssistants(),
   ])
@@ -48,6 +51,7 @@ export default async function InquiryPage({
       initialData={data}
       makes={makes}
       sourceOptions={sourceOptions}
+      locationOptions={locationOptions}
       subStatusSuggestions={subStatusSuggestions}
       inquiryAssistants={inquiryAssistants}
       total={total}
@@ -57,6 +61,8 @@ export default async function InquiryPage({
       status={status}
       classification={classification}
       source={source}
+      locationId={locationId}
+      location={location}
       subStatus={subStatus}
       followUpDate={followUpDate}
       inquiryDate={inquiryDate}
