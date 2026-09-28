@@ -232,7 +232,7 @@ function inventoryListInclude() {
       include: { carMakeMaster: true, carModelMaster: true },
     },
     _count: {
-      select: { inventoryPhotos: true, inventoryVideos: true },
+      select: { inventoryPhotos: true, inventoryVideos: true, inventoryDocuments: true },
     },
   } satisfies Prisma.InventoryManagementInclude
 }
@@ -310,7 +310,7 @@ export async function getInventoryById(id: number) {
         },
       },
       _count: {
-        select: { inventoryPhotos: true, inventoryVideos: true },
+        select: { inventoryPhotos: true, inventoryVideos: true, inventoryDocuments: true },
       },
     },
   })

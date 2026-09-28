@@ -14,6 +14,7 @@ import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { formatInquiryInventoryWorkflowLabel } from './workflow'
 import type { InquirySourceOption } from './sourceMaster'
+import type { InquiryLocationOption } from './locationMaster'
 import { InquiryFilters } from './InquiryFilters'
 import { InquiryRowActions } from './InquiryRowActions'
 import { InquiryTable } from './InquiryTable'
@@ -62,7 +63,9 @@ interface InquiryRow {
   dateOfInquiry: Date | string | null
   website: string | null
   sourceDetail: string | null
+  locationId: number | null
   location: string | null
+  reportingLocation?: { displayName: string; region: string } | null
   customerId: number | null
   customerNameLegacy: string | null
   mobileno: string | null
@@ -626,7 +629,7 @@ function emptyInquiryCar(): InquiryCarInput {
 
 function emptyForm(): InquiryFormInput {
   return {
-    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '', sourceCode: '', sourceDetail: '', location: '',
+    inquiryNo: '', dateOfInquiry: new Date().toISOString().slice(0, 10), website: '', sourceCode: '', sourceDetail: '', locationId: null, location: '',
     customerId: null, customerNameLegacy: '', mobileno: '', email: '',
     budgetOfCustomer: null, visitedDateOfCustomer: '',
     classification: 'Warm', status: 'Open', subStatus: '',
@@ -716,11 +719,12 @@ function FormDropdown({
 }
 
 export function InquiryClient({
-  initialData, makes, sourceOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceOptions, locationOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
   sourceOptions: InquirySourceOption[]
+  locationOptions: InquiryLocationOption[]
   subStatusSuggestions: string[]
   inquiryAssistants: UserOption[]
   total: number
@@ -730,6 +734,8 @@ export function InquiryClient({
   status: string
   classification: string
   source: string
+  locationId: string
+  location: string
   subStatus: string
   followUpDate: string
   inquiryDate: string
@@ -747,6 +753,8 @@ export function InquiryClient({
   const searchParams = useSearchParams()
   const [searchInput, setSearchInput] = useState(search)
   const debouncedSearchInput = useDebouncedValue(searchInput, LIST_FILTER_DEBOUNCE_MS)
+  const [locationInput, setLocationInput] = useState(location)
+  const debouncedLocationInput = useDebouncedValue(locationInput, LIST_FILTER_DEBOUNCE_MS)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [form, setForm] = useState<InquiryFormInput>(emptyForm())
   const [savedFormSnapshot, setSavedFormSnapshot] = useState<string>(JSON.stringify(emptyForm()))
@@ -992,6 +1000,8 @@ export function InquiryClient({
     status !== 'All' ? 1 : 0,
     classification !== 'All' ? 1 : 0,
     source !== 'All' ? 1 : 0,
+    locationId ? 1 : 0,
+    location.trim() ? 1 : 0,
     subStatus !== 'All' ? 1 : 0,
     followUpDate ? 1 : 0,
     visitedDate ? 1 : 0,
@@ -1194,7 +1204,7 @@ export function InquiryClient({
   }
 
   const pushQuery = (params: Record<string, string>) => {
-    const query = buildListQueryString({ search, status, classification, source, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
+    const query = buildListQueryString({ search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
     startRouteTransition(() => {
       router.push(`/inquiry${query ? `?${query}` : ''}`)
     })
@@ -1259,6 +1269,12 @@ export function InquiryClient({
     pushQuery({ search: debouncedSearchInput })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchInput])
+
+  useEffect(() => {
+    if (debouncedLocationInput === location) return
+    pushQuery({ location: debouncedLocationInput })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedLocationInput])
 
   useEffect(() => {
     if (modal && visitedSelected && !form.visitedDateOfCustomer) {
@@ -1469,6 +1485,7 @@ export function InquiryClient({
         website: detail.website ?? '',
         sourceCode: detail.source?.code ?? '',
         sourceDetail: detail.sourceDetail ?? '',
+        locationId: detail.locationId ?? null,
         location: detail.location ?? '',
         customerId: detail.customerId,
         customerNameLegacy: detail.customerNameLegacy ?? '',
@@ -1590,6 +1607,8 @@ export function InquiryClient({
         if (status !== 'All') params.set('status', status)
         if (classification !== 'All') params.set('classification', classification)
         if (source !== 'All') params.set('source', source)
+        if (locationId) params.set('locationId', locationId)
+        if (location.trim()) params.set('location', location)
         if (subStatus !== 'All') params.set('subStatus', subStatus)
         if (followUpDate) params.set('followUpDate', followUpDate)
         if (inquiryDate) params.set('inquiryDate', inquiryDate)
@@ -1614,12 +1633,14 @@ export function InquiryClient({
 
   const resetFilters = () => {
     setSearchInput('')
-    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
+    setLocationInput('')
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', locationId: '', location: '', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
   }
 
   const applyQuickFilter = (nextQuickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all') => {
     setSearchInput('')
-    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
+    setLocationInput('')
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', locationId: '', location: '', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
   }
 
   const previousInquiryAlert = previousInquiryError ? (
@@ -1650,7 +1671,7 @@ export function InquiryClient({
         action={
           <div className="flex items-center gap-2">
             <Btn variant="outline" size="sm" onClick={exportAllMatchingInquiries} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || !!followUpDate || !!visitedDate || !!budgetMin || !!budgetMax || !!makeId || !!modelId || !!variantId ? 'Export Filtered' : 'Export All'} (${total})`}
+              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || locationId || location.trim() || subStatus !== 'All' || !!followUpDate || !!visitedDate || !!budgetMin || !!budgetMax || !!makeId || !!modelId || !!variantId ? 'Export Filtered' : 'Export All'} (${total})`}
             </Btn>
             <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />New Inquiry</Btn>
           </div>
@@ -1664,6 +1685,8 @@ export function InquiryClient({
       <InquiryFilters
         search={searchInput}
         source={source}
+        locationId={locationId}
+        location={locationInput}
         subStatus={subStatus}
         makeId={makeId}
         modelId={modelId}
@@ -1676,8 +1699,9 @@ export function InquiryClient({
         status={status}
         quickFilter={quickFilter}
         isRoutePending={isRoutePending}
-        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || subStatus !== 'All' || followUpDate || visitedDate || budgetMin || budgetMax || makeId || modelId || variantId)}
+        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || locationId || location.trim() || subStatus !== 'All' || followUpDate || visitedDate || budgetMin || budgetMax || makeId || modelId || variantId)}
         sourceOptions={sourceOptions}
+        locationOptions={locationOptions}
         subStatusSuggestions={subStatusSuggestions}
         makes={makes}
         models={filterModels}
@@ -1686,6 +1710,8 @@ export function InquiryClient({
         statuses={INQUIRY_STATUSES}
         onSearchChange={setSearchInput}
         onSourceChange={source => pushQuery({ source })}
+        onLocationIdChange={locationId => pushQuery({ locationId })}
+        onLocationChange={setLocationInput}
         onSubStatusChange={subStatus => pushQuery({ subStatus })}
         onMakeChange={makeId => pushQuery({ makeId, modelId: '', variantId: '' })}
         onModelChange={modelId => pushQuery({ modelId, variantId: '' })}
@@ -1792,12 +1818,6 @@ export function InquiryClient({
           </div>
         ) : (
         <div className="space-y-4">
-          <InventoryMatchPanel
-            hasRequirements={hasInventoryRequirements}
-            loading={inventoryMatchLoading}
-            error={inventoryMatchError}
-            matches={inventoryMatches}
-          />
           <div className="grid grid-cols-3 gap-4">
             <Input label={fieldLabel('Inquiry No', true)} value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
             <Input label={fieldLabel('Date of Inquiry', true)} type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
@@ -1846,7 +1866,10 @@ export function InquiryClient({
             <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} />
           </div>
           {previousInquiryAlert}
-          <Input label="Location" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Pune, Dubai" />
+          <div className="grid grid-cols-2 gap-4">
+            <FormDropdown label={fieldLabel('City / Reporting Location', true)} value={String(form.locationId ?? '')} options={locationOptions.map(item => ({ value: String(item.locationId), label: `${item.displayName} · ${item.region}` }))} placeholder="Select reporting location" allowClear error={errors.locationId} onChange={value => f('locationId', Number(value) || null)} />
+            <Input label="Area / Locality" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Kothrud, JLT" />
+          </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
@@ -1899,6 +1922,13 @@ export function InquiryClient({
               onDelete={removeInquiryCar}
             />
           </div>
+
+          <InventoryMatchPanel
+            hasRequirements={hasInventoryRequirements}
+            loading={inventoryMatchLoading}
+            error={inventoryMatchError}
+            matches={inventoryMatches}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <Input

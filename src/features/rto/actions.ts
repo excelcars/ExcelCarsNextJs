@@ -426,9 +426,21 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
 
 function describeError(err: unknown): string {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === 'P2003') {
-      return 'This record references data that no longer exists.'
+    if (err.code === 'P2002') {
+      return 'An RTO record already exists with these unique details.'
     }
+    if (err.code === 'P2003') {
+      return 'The selected RTO agent, customer, inventory vehicle, or vehicle variant no longer exists. Refresh the page and select it again.'
+    }
+    if (err.code === 'P2025') {
+      return 'One of the selected linked records is no longer available. Refresh the page and select the RTO agent, customer, and vehicle again.'
+    }
+    if (err.code === 'P2004') {
+      return 'One of the selected statuses is not accepted by the database. Refresh the page and try again.'
+    }
+  }
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return 'The RTO record has an invalid value. Refresh the page and try again.'
   }
   return 'Something went wrong saving this record.'
 }

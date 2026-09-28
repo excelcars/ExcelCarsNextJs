@@ -5,7 +5,6 @@ import { Prisma } from '@prisma/client'
 import { unlink } from 'fs/promises'
 import path from 'path'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { buildInquiryOwnershipWhere, getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 import { sendEmail } from '@/lib/email/sendMail'
@@ -466,8 +465,6 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
   if (recipients.length > limits.maxMessages) {
     return { success: false, error: `This send would create ${recipients.length} emails. The limit is ${limits.maxMessages}.` }
   }
-  const session = await auth()
-
   const vehicle = await prisma.inventoryManagement.findUnique({
     where: { inventoryId },
     include: { carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } },
@@ -535,7 +532,7 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
       kmsDriven: vehicle.kmsDriven ? vehicle.kmsDriven.toString() : null,
       price: vehicle.price ? vehicle.price.toString() : null,
       remarks: vehicle.otherRemarks ?? '',
-      signedBy: session?.user?.name || 'Excel Cars Team',
+      signedBy: 'Excel Cars Team',
       viewDetailsUrl: trackedLink.url,
     })
 

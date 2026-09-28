@@ -67,7 +67,8 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
       <p>For more information and personal assistance, walk in to our showroom at:<br>
       Excel Cars, Gujral House, 167, CST Road, Kolivery Village,<br>
       MMRDA Area, Kalina, Santacruz East, Mumbai, Maharashtra 400098.<br>
-      <a href="https://maps.app.goo.gl/fh48FW9PvXE6WHzdA" style="color:#d7194a;text-decoration:underline;">Google Maps location</a>.</p>
+      <a href="https://maps.app.goo.gl/fh48FW9PvXE6WHzdA" style="color:#d7194a;text-decoration:underline;">Google Maps location</a>.<br>
+      Call Excel Cars: 82923002.</p>
       <p>Happy buying with Excel Cars.</p>
       <p>Best Regards,<br>${input.signedBy}</p>
     </div>

@@ -383,6 +383,7 @@ model Inquiry {
   website               String?
   sourceId              Int?                   @map("source_id")
   sourceDetail          String?                @map("source_detail")
+  locationId            Int?                   @map("location_id")
   location              String?
   customerId            Int?                   @map("customer_id")
   customerNameLegacy    String?                @map("customer_name_legacy")
@@ -413,10 +414,12 @@ model Inquiry {
   updatedByUser         UserTable?             @relation("inquiry_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_updated_by_user")
   inquiryCarDetails     InquiryCarDetails[]
   source                InquirySourceMaster?   @relation(fields: [sourceId], references: [sourceId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_source_id")
+  reportingLocation     InquiryLocationMaster? @relation(fields: [locationId], references: [locationId], onDelete: SetNull, onUpdate: NoAction, map: "fk_inquiry_location_id")
 
   @@index([assignedTo], map: "idx_16506_ix_inquiry_assigned_to")
   @@index([customerId], map: "idx_16506_ix_inquiry_customer_id")
   @@index([sourceId], map: "idx_inquiry_source_id")
+  @@index([locationId], map: "idx_inquiry_location_id")
   @@map("inquiry")
 }
 
@@ -675,6 +678,7 @@ model InventoryManagement {
   carVariantMaster      CarVariantMaster?      @relation(fields: [fkVariantId], references: [pkVariantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inventory_management_variant")
   inventoryPhotos       InventoryPhotos[]
   inventoryVideos       InventoryVideo[]
+  inventoryDocuments    InventoryDocument[]
   inquiryInventoryLinks InquiryInventoryLink[]
   inquiryEmailHistories InquiryEmailHistory[]
   vehicleEmailLinks     VehicleEmailLink[]
@@ -829,6 +833,36 @@ model InventoryPhotos {
 
   @@index([fkInventoryId], map: "idx_16548_ix_inventory_photos_inventory")
   @@map("inventory_photos")
+}
+
+model InquiryLocationMaster {
+  locationId   Int       @id @default(autoincrement()) @map("location_id")
+  displayName  String    @unique(map: "uq_inquiry_location_master_display_name") @map("display_name")
+  region       String
+  isActive     Boolean   @default(true) @map("is_active")
+  reportingSort Int     @default(999) @map("reporting_sort")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  inquiries    Inquiry[]
+
+  @@index([isActive, reportingSort], map: "idx_inquiry_location_master_active_sort")
+  @@index([region], map: "idx_inquiry_location_master_region")
+  @@map("inquiry_location_master")
+}
+
+model InventoryDocument {
+  inventoryDocumentId Int                 @id @default(autoincrement()) @map("inventory_document_id")
+  inventoryId         Int                 @map("inventory_id")
+  documentType        String?             @map("document_type")
+  originalName        String               @map("original_name")
+  storagePath         String               @map("storage_path")
+  contentType         String               @map("content_type")
+  sizeBytes           Int                  @map("size_bytes")
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  inventoryManagement InventoryManagement @relation(fields: [inventoryId], references: [inventoryId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inventory_documents_inventory")
+
+  @@index([inventoryId, createdAt], map: "ix_inventory_documents_inventory")
+  @@map("inventory_documents")
 }
 
 model InsuranceReminderDelivery {

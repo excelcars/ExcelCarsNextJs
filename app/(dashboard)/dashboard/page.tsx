@@ -4,6 +4,8 @@ import {
   getDashboardStats,
   getAssignedExpiryRenewalPolicies,
   getExpiryRenewalPolicies,
+  getLeadLocationBreakdowns,
+  getLeadRegionBreakdowns,
   getLeadSourceBreakdown,
   getLegacyLeadDetails,
   getPendingFollowups,
@@ -18,7 +20,7 @@ import {
 } from '@/features/dashboard/DashboardCommandCenterClient'
 import { getCurrentUserAccessProfile } from '@/lib/access/accessControl'
 
-const DASHBOARD_WORKSPACES = ['leads', 'followups', 'insurance', 'rto', 'payments', 'birthdays'] as const
+const DASHBOARD_WORKSPACES = ['leads', 'followups', 'insurance', 'rto', 'payments', 'loans', 'birthdays', 'anniversaries'] as const
 type DashboardWorkspace = typeof DASHBOARD_WORKSPACES[number]
 
 function isDashboardWorkspace(value: string | undefined): value is DashboardWorkspace {
@@ -55,6 +57,8 @@ export default async function DashboardPage({
     stats,
     todayStats,
     leadSources,
+    leadLocationBreakdowns,
+    leadRegionBreakdowns,
     followups,
     leadDetails,
     reminders,
@@ -80,6 +84,8 @@ export default async function DashboardPage({
       includeRto: permissions.canRto,
     }),
     permissions.canInquiry ? getLeadSourceBreakdown() : Promise.resolve([]),
+    permissions.canInquiry ? getLeadLocationBreakdowns() : Promise.resolve({ month: [], quarter: [], year: [] }),
+    permissions.canInquiry ? getLeadRegionBreakdowns() : Promise.resolve({ month: [], quarter: [], year: [] }),
     permissions.canFollowup ? getPendingFollowups(null) : Promise.resolve([]),
     profile && permissions.canFollowup ? getLegacyLeadDetails({ userId: profile.userId, roleId: profile.roleId }) : Promise.resolve([]),
     getBirthdayAnniversaryReminders(),
@@ -87,7 +93,7 @@ export default async function DashboardPage({
     permissions.canInsurance ? getExpiryRenewalPolicies() : Promise.resolve([]),
     profile ? getAssignedExpiryRenewalPolicies(profile.userId) : Promise.resolve([]),
     permissions.canRto ? getRtoTransferPendingRcPending() : Promise.resolve([]),
-    getPendingPayments({ includeRto: permissions.canRto, includeLoan: permissions.canRto, includeInsurance: permissions.canRto }),
+    getPendingPayments({ includeRto: permissions.canRto, includeLoan: permissions.canLoan, includeInsurance: permissions.canInsurance }),
   ])
 
   const todayLabel = new Date().toLocaleDateString('en-IN', {
@@ -108,6 +114,8 @@ export default async function DashboardPage({
         stats,
         todayStats,
         leadSources,
+        leadLocationBreakdowns,
+        leadRegionBreakdowns,
         followups,
         leadDetails,
         reminders,
