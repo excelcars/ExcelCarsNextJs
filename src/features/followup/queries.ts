@@ -15,6 +15,8 @@ export interface FollowupFilters {
   followUpDateTo: string
   visitedDateFrom: string
   visitedDateTo: string
+  budgetFrom: string
+  budgetTo: string
   status: string
   subStatus: string
   website: string
@@ -149,6 +151,8 @@ function buildFollowupWhere({
   followUpDateTo,
   visitedDateFrom,
   visitedDateTo,
+  budgetFrom,
+  budgetTo,
   status,
   subStatus,
   website,
@@ -168,6 +172,8 @@ function buildFollowupWhere({
   const parsedMakeId = Number(makeId)
   const parsedUserId = Number(userId)
   const parsedInquiryId = Number(inquiryId)
+  const parsedBudgetFrom = Number(budgetFrom)
+  const parsedBudgetTo = Number(budgetTo)
   const effectiveOwnershipUserId = restrictToUserId ?? (Number.isFinite(parsedUserId) && parsedUserId > 0 ? parsedUserId : null)
 
   if (Number.isFinite(parsedInquiryId) && parsedInquiryId > 0) {
@@ -240,6 +246,14 @@ function buildFollowupWhere({
           },
         }
       : {}),
+    ...((budgetFrom || budgetTo) && (Number.isFinite(parsedBudgetFrom) || Number.isFinite(parsedBudgetTo))
+      ? {
+          budgetOfCustomer: {
+            ...(budgetFrom && Number.isFinite(parsedBudgetFrom) ? { gte: parsedBudgetFrom } : {}),
+            ...(budgetTo && Number.isFinite(parsedBudgetTo) ? { lte: parsedBudgetTo } : {}),
+          },
+        }
+      : {}),
     ...(q
       ? {
           OR: [
@@ -282,6 +296,8 @@ export async function listFollowupQueue({
   followUpDateTo,
   visitedDateFrom,
   visitedDateTo,
+  budgetFrom,
+  budgetTo,
   status,
   subStatus,
   website,
@@ -307,6 +323,8 @@ export async function listFollowupQueue({
     followUpDateTo,
     visitedDateFrom,
     visitedDateTo,
+    budgetFrom,
+    budgetTo,
     status,
     subStatus,
     website,

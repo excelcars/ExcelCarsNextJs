@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
   const followUpDateTo = req.nextUrl.searchParams.get('followUpDateTo')?.trim() ?? ''
   const visitedDateFrom = req.nextUrl.searchParams.get('visitedDateFrom')?.trim() ?? ''
   const visitedDateTo = req.nextUrl.searchParams.get('visitedDateTo')?.trim() ?? ''
+  const budgetFrom = req.nextUrl.searchParams.get('budgetFrom')?.trim() ?? ''
+  const budgetTo = req.nextUrl.searchParams.get('budgetTo')?.trim() ?? ''
   const status = req.nextUrl.searchParams.get('status')?.trim() ?? 'FollowUp'
   const subStatus = req.nextUrl.searchParams.get('subStatus')?.trim() ?? ''
   const website = req.nextUrl.searchParams.get('website')?.trim() ?? ''
@@ -43,6 +45,8 @@ export async function GET(req: NextRequest) {
     followUpDateTo,
     visitedDateFrom,
     visitedDateTo,
+    budgetFrom,
+    budgetTo,
     status,
     subStatus,
     website,

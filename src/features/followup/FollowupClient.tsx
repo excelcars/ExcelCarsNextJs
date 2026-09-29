@@ -523,6 +523,8 @@ export function FollowupClient({
   followUpDateTo: initialFollowUpDateTo,
   visitedDateFrom: initialVisitedDateFrom,
   visitedDateTo: initialVisitedDateTo,
+  budgetFrom: initialBudgetFrom,
+  budgetTo: initialBudgetTo,
   restricted,
   currentUserId,
 }: {
@@ -554,6 +556,8 @@ export function FollowupClient({
   followUpDateTo: string
   visitedDateFrom: string
   visitedDateTo: string
+  budgetFrom: string
+  budgetTo: string
   restricted: boolean
   currentUserId: string
 }) {
@@ -577,6 +581,8 @@ export function FollowupClient({
   const [followUpDateTo, setFollowUpDateTo] = useState(initialFollowUpDateTo)
   const [visitedDateFrom, setVisitedDateFrom] = useState(initialVisitedDateFrom)
   const [visitedDateTo, setVisitedDateTo] = useState(initialVisitedDateTo)
+  const [budgetFrom, setBudgetFrom] = useState(initialBudgetFrom)
+  const [budgetTo, setBudgetTo] = useState(initialBudgetTo)
   const [logRow, setLogRow] = useState<FollowupRow | null>(null)
   const [form, setForm] = useState<LogFollowupInput>(emptyForm())
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -635,6 +641,8 @@ export function FollowupClient({
     followUpDateTo ? 1 : 0,
     visitedDateFrom ? 1 : 0,
     visitedDateTo ? 1 : 0,
+    budgetFrom ? 1 : 0,
+    budgetTo ? 1 : 0,
   ].reduce((sum, value) => sum + value, 0)
   const hasActiveFilters = Boolean(
     search.trim() ||
@@ -656,6 +664,8 @@ export function FollowupClient({
     followUpDateTo ||
     visitedDateFrom ||
     visitedDateTo ||
+    budgetFrom ||
+    budgetTo ||
     page > 1
   )
 
@@ -675,10 +685,12 @@ export function FollowupClient({
     setFollowUpDateTo(initialFollowUpDateTo)
     setVisitedDateFrom(initialVisitedDateFrom)
     setVisitedDateTo(initialVisitedDateTo)
+    setBudgetFrom(initialBudgetFrom)
+    setBudgetTo(initialBudgetTo)
     if (restricted && currentUserId) {
       setUserId(currentUserId)
     }
-  }, [currentUserId, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialSort, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
+  }, [currentUserId, initialBudgetFrom, initialBudgetTo, initialContactOutcome, initialCustomerMobile, initialCustomerName, initialFollowUpDateFrom, initialFollowUpDateTo, initialInquiryDateFrom, initialInquiryDateTo, initialSearch, initialSort, initialStatus, initialSubStatus, initialUserId, initialVisitedDateFrom, initialVisitedDateTo, initialWebsite, restricted])
 
   const pushQuery = (params: Record<string, string>) => {
     const query = buildListQueryString({
@@ -702,6 +714,8 @@ export function FollowupClient({
       followUpDateTo: initialFollowUpDateTo,
       visitedDateFrom: initialVisitedDateFrom,
       visitedDateTo: initialVisitedDateTo,
+      budgetFrom: initialBudgetFrom,
+      budgetTo: initialBudgetTo,
     }, params)
     startRouteTransition(() => {
       router.push(`/followup${query ? `?${query}` : ''}`)
@@ -735,6 +749,8 @@ export function FollowupClient({
         followUpDateTo !== initialFollowUpDateTo ||
         visitedDateFrom !== initialVisitedDateFrom ||
         visitedDateTo !== initialVisitedDateTo
+        || budgetFrom !== initialBudgetFrom
+        || budgetTo !== initialBudgetTo
       ) {
         pushQuery({
           inquiryDateFrom,
@@ -743,6 +759,8 @@ export function FollowupClient({
           followUpDateTo,
           visitedDateFrom,
           visitedDateTo,
+          budgetFrom,
+          budgetTo,
           page: '1',
         })
       }
@@ -762,6 +780,10 @@ export function FollowupClient({
     inquiryDateTo,
     visitedDateFrom,
     visitedDateTo,
+    budgetFrom,
+    budgetTo,
+    initialBudgetFrom,
+    initialBudgetTo,
   ])
 
   const resetCarEditor = () => {
@@ -1198,6 +1220,8 @@ export function FollowupClient({
         if (followUpDateTo) params.set('followUpDateTo', followUpDateTo)
         if (visitedDateFrom) params.set('visitedDateFrom', visitedDateFrom)
         if (visitedDateTo) params.set('visitedDateTo', visitedDateTo)
+        if (budgetFrom) params.set('budgetFrom', budgetFrom)
+        if (budgetTo) params.set('budgetTo', budgetTo)
 
         const res = await fetch(`/api/followup/export${params.toString() ? `?${params.toString()}` : ''}`)
         const payload = await res.json().catch(() => null)
@@ -1226,6 +1250,8 @@ export function FollowupClient({
     setFollowUpDateTo('')
     setVisitedDateFrom('')
     setVisitedDateTo('')
+    setBudgetFrom('')
+    setBudgetTo('')
     pushQuery({
       search: '',
       status: 'FollowUp',
@@ -1245,6 +1271,8 @@ export function FollowupClient({
       followUpDateTo: '',
       visitedDateFrom: '',
       visitedDateTo: '',
+      budgetFrom: '',
+      budgetTo: '',
       page: '1',
     })
   }
@@ -1258,7 +1286,7 @@ export function FollowupClient({
     tomorrow.setDate(tomorrow.getDate() + 1)
     const common = {
       search: '', classification: 'All', contactOutcome: '', customerName: '', subStatus: '', website: '', customerMobile: '', userId: '',
-      makeId: '', modelId: '', variantId: '', inquiryDateFrom: '', inquiryDateTo: '', visitedDateFrom: '', visitedDateTo: '', page: '1',
+      makeId: '', modelId: '', variantId: '', inquiryDateFrom: '', inquiryDateTo: '', visitedDateFrom: '', visitedDateTo: '', budgetFrom: '', budgetTo: '', page: '1',
     }
     const presets = {
       active: { status: 'FollowUp', sort: 'due', followUpDateFrom: '', followUpDateTo: '' },
@@ -1347,6 +1375,8 @@ export function FollowupClient({
         followUpDateTo={followUpDateTo}
         visitedDateFrom={visitedDateFrom}
         visitedDateTo={visitedDateTo}
+        budgetFrom={budgetFrom}
+        budgetTo={budgetTo}
         restricted={restricted}
         currentUserId={currentUserId}
         isRoutePending={isRoutePending}
@@ -1377,6 +1407,8 @@ export function FollowupClient({
         onFollowUpDateToChange={setFollowUpDateTo}
         onVisitedDateFromChange={setVisitedDateFrom}
         onVisitedDateToChange={setVisitedDateTo}
+        onBudgetFromChange={setBudgetFrom}
+        onBudgetToChange={setBudgetTo}
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
@@ -1866,7 +1898,7 @@ export function FollowupClient({
         </div>
       </FollowupInquiryViewModal>
 
-      <FollowupInquiryEditModal title={editInquiryId ? `Edit Inquiry — #${editInquiryId}` : 'Edit Inquiry'} open={editInquiryId !== null} onClose={closeInquiryEdit}>
+      <FollowupInquiryEditModal title={editInquiryId ? `Edit Follow-up — #${editInquiryId}` : 'Edit Follow-up'} open={editInquiryId !== null} onClose={closeInquiryEdit}>
         {editInquiryLoading ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -1917,8 +1949,8 @@ export function FollowupClient({
             ) : null}
 
             <div className="grid gap-4 md:grid-cols-3">
-              <Input label="Customer Name*#" value={editInquiryForm.customerNameLegacy} onChange={e => updateInquiryField('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.customer} />
-              <Input label="Customer Mobile No*#" value={editInquiryForm.mobileno} onChange={e => updateInquiryField('mobileno', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.mobileno} />
+              <Input label="Customer Name *" value={editInquiryForm.customerNameLegacy} onChange={e => updateInquiryField('customerNameLegacy', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.customer} />
+              <Input label="Customer Mobile No *" value={editInquiryForm.mobileno} onChange={e => updateInquiryField('mobileno', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.mobileno} />
               <Input label="Customer Email" type="email" value={editInquiryForm.email} onChange={e => updateInquiryField('email', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.email} />
             </div>
             <Input label="Location" value={editInquiryForm.location} onChange={e => updateInquiryField('location', e.target.value)} placeholder="e.g. Andheri West, Pune, Dubai" />
