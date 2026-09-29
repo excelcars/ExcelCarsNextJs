@@ -24,6 +24,7 @@ import { LogFollowupModal } from './LogFollowupModal'
 import { FollowupHistoryModal } from './FollowupHistoryModal'
 import { FollowupInquiryViewModal } from './FollowupInquiryViewModal'
 import { FollowupInquiryEditModal } from './FollowupInquiryEditModal'
+import { InquiryCarTable } from '@/features/inquiry/InquiryCarTable'
 import { LogFollowupRecentActivity } from './LogFollowupRecentActivity'
 import { FollowupHistoryTimeline } from './FollowupHistoryTimeline'
 import { LogFollowupContactOutcome } from './LogFollowupContactOutcome'
@@ -36,6 +37,14 @@ const CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 const STATUSES = ['Open', 'FollowUp', 'Closed'] as const
 const SUB_STATUS_SUGGESTIONS = [...FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS]
 const FOLLOWUP_OTHER_SUB_STATUS_VALUE = '__OTHER__'
+const VEHICLE_YEAR_OPTIONS = Array.from(
+  { length: new Date().getFullYear() - 1899 },
+  (_, index) => {
+    const year = String(new Date().getFullYear() + 1 - index)
+    return { value: year, label: year }
+  },
+)
+const OWNER_COUNT_OPTIONS = Array.from({ length: 11 }, (_, value) => ({ value: String(value), label: String(value) }))
 const FRIENDLY_STATUS_OPTIONS = [
   { key: 'open-new', status: 'Open', subStatus: '', label: 'Open — fresh lead / no date fixed' },
   { key: 'followup-working', status: 'FollowUp', subStatus: '', label: 'Follow-up — still working it' },
@@ -882,8 +891,12 @@ export function FollowupClient({
       setCarEditorError('Select make, model, and variant before adding the vehicle row.')
       return
     }
-    if (carEditor.carYear !== null && !isValidYear(carEditor.carYear)) {
-      setCarEditorError('Enter a valid 4-digit year for the vehicle row.')
+    if (carEditor.carYear === null) {
+      setCarEditorError('Select the vehicle year before adding the vehicle row.')
+      return
+    }
+    if (!isValidYear(carEditor.carYear)) {
+      setCarEditorError('Select a valid vehicle year before adding the vehicle row.')
       return
     }
 
@@ -1181,7 +1194,19 @@ export function FollowupClient({
     setEditInquiryError('')
     const validation = validateInquiryFormInput(editInquiryForm)
     if (validation.error) {
-      setEditInquiryError(validation.error)
+      const labels: Record<string, string> = {
+        customer: 'Customer',
+        mobileno: 'Customer Mobile No.',
+        email: 'Customer Email',
+        website: 'Reference Website / Source',
+        budgetOfCustomer: 'Budget of customer',
+        inquiryCars: 'Car Details',
+        dateOfInquiry: 'Date of Inquiry',
+        followUpDate: 'FollowUp Date',
+        visitedDateOfCustomer: 'Visited Date of customer',
+      }
+      const invalidFields = Object.keys(validation.fieldErrors).map(key => labels[key] ?? (key.startsWith('carYear-') ? 'Car Year' : key.startsWith('noOfOwners-') ? 'Number of Owners' : key))
+      setEditInquiryError(invalidFields.length > 0 ? `Complete or correct: ${invalidFields.join(', ')}.` : validation.error)
       setEditInquiryErrors(validation.fieldErrors)
       return
     }
@@ -1448,11 +1473,10 @@ export function FollowupClient({
             renderInlineCells={row => logRow?.inquiryId === row.inquiryId ? {
               classification: <div className="space-y-2"><FormDropdown label="Classification" value={form.classification} options={CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select" error={errors.classification} onChange={value => f('classification', value)} /><FormDropdown label="Status" value={form.status} options={STATUSES.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up' : value }))} placeholder="Select" error={errors.status} onChange={value => { f('status', value); if (value === 'Closed') f('nextFollowUpDate', '') }} /><FormDropdown label="Sub-status" value={form.useOtherSubStatus ? FOLLOWUP_OTHER_SUB_STATUS_VALUE : form.subStatus} options={[...SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value })), { value: FOLLOWUP_OTHER_SUB_STATUS_VALUE, label: 'OTHER' }]} placeholder="Select" allowClear onChange={value => { if (value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) { f('useOtherSubStatus', true); f('subStatus', ''); return }; f('useOtherSubStatus', false); f('otherSubStatus', ''); f('subStatus', value) }} />{form.useOtherSubStatus ? <Input label="Other sub-status" value={form.otherSubStatus ?? ''} error={errors.otherSubStatus} onChange={event => f('otherSubStatus', event.target.value)} /> : null}</div>,
               followup: <div className="space-y-2"><FormDropdown label="Outcome" value={form.contactOutcome} options={CONTACT_OUTCOME_OPTIONS.map(option => ({ value: option.value, label: option.title }))} placeholder="Select" error={errors.contactOutcome} onChange={value => { const outcome = CONTACT_OUTCOME_OPTIONS.find(option => option.value === value); const target = FRIENDLY_STATUS_OPTIONS.find(option => option.key === outcome?.statusKey); f('contactOutcome', value); f('status', target?.status ?? form.status); f('subStatus', outcome?.subStatus || target?.subStatus || ''); f('useOtherSubStatus', false); f('otherSubStatus', ''); if (target?.status === 'Closed') f('nextFollowUpDate', '') }} /><Input label="Follow-up date" type="date" value={form.nextFollowUpDate} error={errors.nextFollowUpDate} disabled={!isFollowupStatus(form.status)} onChange={event => f('nextFollowUpDate', event.target.value)} /><div className="pt-1 text-xs text-gray-500"><span className="font-semibold text-gray-700">Inquiry made by:</span> {row.createdByUser?.displayName ?? row.createdByUser?.userName ?? (row.createdBy ? `User #${row.createdBy}` : '—')}</div></div>,
-              remark: <div><Textarea label="Remark" value={form.comments} error={errors.comments} onChange={event => f('comments', event.target.value)} placeholder="Update..." className="min-h-20 min-w-44" />{error ? <div className="mt-2 text-xs font-medium text-red-600">{error}</div> : null}</div>,
+              remark: <div><Textarea label="Remark *" value={form.comments} error={errors.comments} onChange={event => f('comments', event.target.value)} placeholder="Update..." className="min-h-20 min-w-44" />{error ? <div className="mt-2 text-xs font-medium text-red-600">{error}</div> : null}</div>,
               actions: <><button type="button" onClick={save} disabled={isPending} className="rounded p-1.5 text-green-600 transition hover:bg-green-50 disabled:opacity-50" title="Save follow-up">{isPending ? '…' : '✓'}</button><button type="button" onClick={() => setLogRow(null)} disabled={isPending} className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100 disabled:opacity-50" title="Cancel inline edit">×</button></>,
             } : null}
             onViewFollowup={openFollowupView}
-            onViewInquiry={openInquiryView}
             onEditInquiry={openInquiryEdit}
           />
         </div>
@@ -1518,7 +1542,7 @@ export function FollowupClient({
                   </div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
-                  <div className="text-sm font-semibold text-[#1B2A6B]">Remark</div>
+                  <div className="text-sm font-semibold text-[#1B2A6B]">Remark <span className="text-red-600">*</span></div>
                   {logRow.remark?.trim() ? <div className="mt-2 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600"><span className="font-medium text-gray-800">Last remark:</span> {logRow.remark}</div> : null}
                   <div className="mt-3"><Textarea label="" value={form.comments} onChange={event => f('comments', event.target.value)} placeholder="Write your remark here..." error={errors.comments} className="min-h-28" /></div>
                 </div>
@@ -1898,7 +1922,7 @@ export function FollowupClient({
         </div>
       </FollowupInquiryViewModal>
 
-      <FollowupInquiryEditModal title={editInquiryId ? `Edit Follow-up — #${editInquiryId}` : 'Edit Follow-up'} open={editInquiryId !== null} onClose={closeInquiryEdit}>
+      <FollowupInquiryEditModal title={editInquiryId ? `Edit Inquiry — #${editInquiryId}` : 'Edit Inquiry'} open={editInquiryId !== null} onClose={closeInquiryEdit}>
         {editInquiryLoading ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-3 text-sm text-gray-500">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -1906,6 +1930,7 @@ export function FollowupClient({
           </div>
         ) : (
           <div className="space-y-4">
+            {editInquiryError ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{editInquiryError}</div> : null}
             <div className="grid gap-4 md:grid-cols-3">
               <Input label="Inquiry No*" value={editInquiryForm.inquiryNo} readOnly />
               <Input label="Date of Inquiry*" type="date" value={editInquiryForm.dateOfInquiry} onChange={e => updateInquiryField('dateOfInquiry', e.target.value)} error={editInquiryErrors.dateOfInquiry} />
@@ -1964,21 +1989,21 @@ export function FollowupClient({
                 {editingCarIndex !== null ? <Btn variant="outline" size="sm" onClick={resetCarEditor}>Cancel Edit</Btn> : null}
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-7">
+              <div className="mt-4 grid gap-3 md:grid-cols-3 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,.8fr)_minmax(0,1.1fr)_auto]">
                 <FormDropdown label="Make *" value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
                 <FormDropdown label="Model *" value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
                 <FormDropdown label="Variant *" value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
                   setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                   setCarEditorError('')
                 }} />
-                <Input label="Year#" type="number" value={carEditor.carYear ?? ''} onChange={e => {
-                  setCarEditor(prev => ({ ...prev, carYear: e.target.value ? Number(e.target.value) : null }))
+                <FormDropdown label="Year *" value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear onChange={value => {
+                  setCarEditor(prev => ({ ...prev, carYear: value ? Number(value) : null }))
                   setCarEditorError('')
                 }} />
-                <Input label="Number of Owners" type="number" min="0" step="1" value={carEditor.noOfOwners ?? ''} onChange={e => {
-                  setCarEditor(prev => ({ ...prev, noOfOwners: e.target.value === '' ? null : Number(e.target.value) }))
+                <FormDropdown label="Number of Owners" value={carEditor.noOfOwners === null ? '' : String(carEditor.noOfOwners)} options={OWNER_COUNT_OPTIONS} placeholder="Any" allowClear onChange={value => {
+                  setCarEditor(prev => ({ ...prev, noOfOwners: value === '' ? null : Number(value) }))
                   setCarEditorError('')
-                }} placeholder="Optional" />
+                }} />
                 <Input label="Sub Variant" value={carEditor.subVariant} onChange={e => {
                   setCarEditor(prev => ({ ...prev, subVariant: e.target.value }))
                   setCarEditorError('')
@@ -1991,51 +2016,15 @@ export function FollowupClient({
               {carEditorError ? <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{carEditorError}</div> : null}
               {editInquiryErrors.inquiryCars ? <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Add at least one car row.</div> : null}
 
-              <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    <tr>
-                      <th className="px-3 py-2">Make</th>
-                      <th className="px-3 py-2">Model</th>
-                      <th className="px-3 py-2">Variant</th>
-                      <th className="px-3 py-2">Sub Variant</th>
-                      <th className="px-3 py-2">Year</th>
-                      <th className="px-3 py-2">Owners</th>
-                      <th className="px-3 py-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
-                    {editInquiryForm.inquiryCars.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-500">No vehicle rows added yet.</td>
-                      </tr>
-                    ) : editInquiryForm.inquiryCars.map((car, index) => {
-                      const makeName = makes.find(item => item.pkMakeId === car.selectedMakeId)?.make ?? '—'
-                      const modelName = car.selectedModelId ? (modelNameCache[car.selectedModelId] ?? '—') : '—'
-                      const variantName = car.fkVariantId ? (variantNameCache[car.fkVariantId] ?? '—') : '—'
-
-                      return (
-                        <tr key={car.inquiryCarDetailsId ?? `inquiry-car-${index}`}>
-                          <td className="px-3 py-2 text-gray-700">{makeName}</td>
-                          <td className="px-3 py-2 text-gray-700">{modelName}</td>
-                          <td className="px-3 py-2 text-gray-700">{variantName}</td>
-                          <td className="px-3 py-2 text-gray-700">{car.subVariant.trim() || '—'}</td>
-                          <td className="px-3 py-2 text-gray-700">{car.carYear ?? '—'}</td>
-                          <td className="px-3 py-2 text-gray-700">{car.noOfOwners ?? 'Any'}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <button type="button" onClick={() => moveInquiryCar(index, -1)} disabled={index === 0} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Up</button>
-                              <button type="button" onClick={() => moveInquiryCar(index, 1)} disabled={index === editInquiryForm.inquiryCars.length - 1} className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">Down</button>
-                              <button type="button" onClick={() => editInquiryCar(index)} className="rounded border border-blue-200 px-2 py-1 text-xs text-blue-700 transition hover:bg-blue-50">Edit</button>
-                              <button type="button" onClick={() => removeInquiryCar(index)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 transition hover:bg-red-50">Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <InquiryCarTable
+                cars={editInquiryForm.inquiryCars}
+                makeNames={Object.fromEntries(makes.map(item => [item.pkMakeId, item.make]))}
+                modelNames={modelNameCache}
+                variantNames={variantNameCache}
+                onMove={moveInquiryCar}
+                onEdit={editInquiryCar}
+                onDelete={removeInquiryCar}
+              />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -2055,8 +2044,6 @@ export function FollowupClient({
             </div>
 
             <Textarea label="Remark" value={editInquiryForm.remark} onChange={e => updateInquiryField('remark', e.target.value)} placeholder="Notes about this inquiry..." />
-
-            {editInquiryError ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{editInquiryError}</div> : null}
 
             <div className="flex justify-end gap-3 pt-2">
               <Btn variant="outline" onClick={closeInquiryEdit}>Cancel</Btn>
