@@ -46,39 +46,14 @@ function messageText(variables) {
   return `Your vehicle insurance for ${variables.registrationNo} expires on ${variables.expiryDate}. Please contact ${variables.excelCarsName} at ${variables.excelCarsPhone} or ${variables.excelCarsEmail} to renew your policy.`
 }
 
-function recipientsFor(insurance, includeSalespeople = false) {
+function recipientsFor(insurance) {
   const customer = {
     type: 'Customer',
     name: insurance.customer?.custName || insurance.customerNameLegacy || 'Customer',
     email: insurance.customer?.custEmail || insurance.customerEmailLegacy,
     mobile: insurance.customer?.custMobile || insurance.customerMobileLegacy,
   }
-  const agent = {
-    type: 'AssignedAgent',
-    name: insurance.partnerMaster?.name || insurance.agentNameLegacy || 'Insurance agent',
-    email: insurance.partnerMaster?.email || insurance.agentEmailIdLegacy,
-    mobile: insurance.partnerMaster?.mobile || insurance.agentMobileNoLegacy,
-  }
-  const salespeople = includeSalespeople
-    ? (insurance.customer?.inquiry ?? [])
-      .map(inquiry => inquiry.assignedToUser)
-      .filter(user => user?.status === 'Active')
-      .map(user => ({
-        type: 'Salesperson',
-        name: user.displayName || user.userName || 'Salesperson',
-        email: user.emailId || user.employee?.empEmailId,
-        mobile: user.employee?.empMobileNo,
-      }))
-    : []
-  return [customer, agent, ...salespeople]
-}
-
-function salespersonMessage(variables) {
-  return `Insurance renewal alert for ${variables.customerName}: vehicle ${variables.registrationNo} expires on ${variables.expiryDate}. Please follow up with the customer.`
-}
-
-function salespersonEmailHtml(recipientName, variables) {
-  return `<p>Hello ${escapeHtml(recipientName)},</p><p><strong>Insurance renewal alert:</strong> ${escapeHtml(variables.customerName)}'s vehicle <strong>${escapeHtml(variables.registrationNo)}</strong> expires on <strong>${escapeHtml(variables.expiryDate)}</strong>.</p><p>Please follow up with the customer.</p><p>Regards,<br>Excel Cars</p>`
+  return [customer]
 }
 
 function excelCarsContactHtml() {
@@ -183,25 +158,7 @@ export async function queueDailyInsuranceReminders(prisma) {
     prisma.insuranceMain.findMany({
       where: { expiryDate: { gte: lower, lte: upper }, OR: [{ policyStatus: null }, { policyStatus: { notIn: ['Received', 'Renewed'] } }] },
       include: {
-        customer: {
-          include: {
-            inquiry: {
-              where: { assignedTo: { not: null } },
-              select: {
-                assignedToUser: {
-                  select: {
-                    status: true,
-                    userName: true,
-                    displayName: true,
-                    emailId: true,
-                    employee: { select: { empMobileNo: true, empEmailId: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-        partnerMaster: true,
+        customer: true,
       },
     }),
   ])
@@ -225,10 +182,9 @@ export async function queueDailyInsuranceReminders(prisma) {
     }
     const customerEmailHtml = `${renderTemplate(template.messageBody, Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, escapeHtml(value)])))}${excelCarsContactHtml()}`
     const customerWhatsAppMessage = messageText(variables)
-    for (const recipient of recipientsFor(policy, daysBeforeExpiry === 30)) {
-      const isSalesperson = recipient.type === 'Salesperson'
-      const emailHtml = isSalesperson ? salespersonEmailHtml(recipient.name, variables) : customerEmailHtml
-      const whatsAppMessage = isSalesperson ? salespersonMessage(variables) : customerWhatsAppMessage
+    for (const recipient of recipientsFor(policy)) {
+      const emailHtml = customerEmailHtml
+      const whatsAppMessage = customerWhatsAppMessage
       const email = normalizeEmail(recipient.email)
       if (email) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `email:${email}`, recipientAddress: email, channel: 'Email', daysBeforeExpiry, status: 'Queued', emailSubject: template.messageSubject || TEMPLATE_SUBJECT, emailHtml, whatsAppMessage: null }, mailer)
       const whatsApp = normalizeWhatsAppRecipient(recipient.mobile)
