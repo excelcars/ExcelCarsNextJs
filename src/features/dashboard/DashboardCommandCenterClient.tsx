@@ -161,7 +161,6 @@ export interface DashboardCommandCenterProps {
   stats: DashboardStats
   todayStats: TodayStats
   leadSources: { name: string; value: number }[]
-  leadLocationBreakdowns: LeadLocationBreakdowns
   leadRegionBreakdowns: LeadLocationBreakdowns
   leadDetails: LeadRow[]
   reminders: ReminderRow[]
@@ -901,9 +900,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
                   <LeadSourceChart data={props.leadSources} totalLeads={stats.totalInquiries} />
-                </section>
-                <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
-                  <LeadLocationChart breakdowns={props.leadLocationBreakdowns} />
                 </section>
                 <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
                   <LeadLocationChart breakdowns={props.leadRegionBreakdowns} title="Leads by Region" emptyMessage="No controlled location data for this period." />

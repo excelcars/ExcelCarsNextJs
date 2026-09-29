@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, Clock3, ExternalLink, Pencil, PhoneCall } from 'lucide-react'
+import { AlertTriangle, Clock3, ExternalLink, PenLine, PhoneCall } from 'lucide-react'
 import { Badge, Table } from '@/components/ui'
 
 type FollowupTableRow = {
@@ -28,7 +28,7 @@ type FollowupTableProps<T extends FollowupTableRow> = { rows: T[]; page: number;
 export function FollowupTable<T extends FollowupTableRow>({ rows, page, pageSize, onLogFollowup, renderInlineCells, onViewFollowup, onViewInquiry, onEditInquiry }: FollowupTableProps<T>) {
   return (
     <div className="[&_table]:min-w-[1480px] [&_th]:px-3 [&_td]:px-3 [&_input]:h-9 [&_input]:px-2 [&_label]:text-[11px] [&_label]:font-semibold [&_label]:uppercase [&_label]:tracking-wide [&_textarea]:px-2 [&_th:first-child]:w-16 [&_th:first-child]:min-w-16 [&_th:first-child]:max-w-16 [&_td:first-child]:w-16 [&_td:first-child]:min-w-16 [&_td:first-child]:max-w-16">
-      <Table headers={['Sr. No.', 'Inquiry', 'Customer Details', 'Vehicle', 'Follow-up', 'Classification / Outcome', 'Remark', 'Actions']} empty={rows.length === 0} minWidthClass="min-w-[1480px]">
+      <Table headers={['Sr. No.', 'Inquiry', 'Customer Details', 'Vehicle', 'Follow-up Status', 'Classification / Outcome', 'Remark', 'Actions']} empty={rows.length === 0} minWidthClass="min-w-[1480px]">
         {rows.map((row, index) => {
           const name = row.customer?.custName ?? row.customerNameLegacy ?? ''
           const mobile = row.customer?.custMobile ?? row.mobileno
@@ -42,12 +42,12 @@ export function FollowupTable<T extends FollowupTableRow>({ rows, page, pageSize
             <td className="px-2 py-3"><DetailCell items={[['Inquiry No', row.inquiryNo], ['Inquiry Date', fmtDate(row.dateOfInquiry)], ['Source', `${row.website ?? ''}${row.sourceDetail ? ` (${row.sourceDetail})` : ''}`], ['Location', row.location]]} /></td>
             <td className="px-2 py-3"><DetailCell items={[['Customer', name], ['Mobile', mobile], ['Email', email]]} /></td>
             <td className="px-2 py-3"><div className="space-y-2">{row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails.map(car => <DetailCell key={car.inquiryCarDetailsId ?? `${car.makeLegacy}-${car.modelLegacy}-${car.variantLegacy}-${car.year ?? 'na'}`} items={[['Make', clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy)], ['Model', clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy)], ['Variant', clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || clean(car.subVariant)], ['Year', car.year]]} />) : <DetailCell items={[["Vehicle", '']]} />}</div></td>
-            <td className="px-2 py-3">{inlineCells?.followup ?? <div className={overdue ? 'text-red-600' : ''}>{row.status ? <div className="mb-1.5"><Badge label={row.status} /></div> : null}<DetailCell items={[['Sub-status', row.subStatus], ['Follow-up Date', fmtDate(row.followUpDate)]]} />{overdue ? <div className="mt-1 flex items-center gap-1 text-xs font-semibold"><AlertTriangle className="h-3.5 w-3.5" />Overdue</div> : null}</div>}</td>
+            <td className="px-2 py-3">{inlineCells?.followup ?? <div className={overdue ? 'text-red-600' : ''}><DetailCell items={[['Status', row.status], ['Sub-status', row.subStatus], ['Follow-up Date', fmtDate(row.followUpDate)]]} />{overdue ? <div className="mt-1 flex items-center gap-1 text-xs font-semibold"><AlertTriangle className="h-3.5 w-3.5" />Overdue</div> : null}</div>}</td>
             <td className="px-2 py-3">
               {inlineCells?.classification ?? <><div className="mb-1.5">{row.classification ? <Badge label={row.classification} /> : null}</div><DetailCell items={[['Last Outcome', lastOutcome], ['Inquiry Made By', inquiryMadeBy]]} /></>}
             </td>
             <td className="px-2 py-3">{inlineCells?.remark ?? <div className="max-w-[190px] text-xs leading-5 text-gray-600">{row.remark ?? '—'}</div>}</td>
-            <td className="px-2 py-3"><div className="flex flex-wrap items-center gap-1">{inlineCells?.actions ?? <button onClick={() => onLogFollowup(row)} className="rounded p-1.5 text-gray-400 transition hover:bg-green-50 hover:text-green-600" title="Log Follow-up inline"><PhoneCall className="h-3.5 w-3.5" /></button>}<button onClick={() => onViewFollowup(row.inquiryId)} className="rounded p-1.5 text-gray-400 transition hover:bg-violet-50 hover:text-violet-600" title="View Follow-up History"><Clock3 className="h-3.5 w-3.5" /></button><button onClick={() => onViewInquiry(row.inquiryId)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-600" title="View Inquiry"><ExternalLink className="h-3.5 w-3.5" /></button><button onClick={() => onEditInquiry(row.inquiryId)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-[#1B2A6B]" title="Edit Inquiry"><Pencil className="h-3.5 w-3.5" /></button></div></td>
+            <td className="px-2 py-3"><div className="flex flex-wrap items-center gap-1">{inlineCells?.actions ?? <button onClick={() => onLogFollowup(row)} className="rounded p-1.5 text-gray-400 transition hover:bg-green-50 hover:text-green-600" title="Log Follow-up inline"><PhoneCall className="h-3.5 w-3.5" /></button>}<button onClick={() => onViewFollowup(row.inquiryId)} className="rounded p-1.5 text-gray-400 transition hover:bg-violet-50 hover:text-violet-600" title="View Follow-up History"><Clock3 className="h-3.5 w-3.5" /></button><button onClick={() => onViewInquiry(row.inquiryId)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-600" title="View Inquiry"><ExternalLink className="h-3.5 w-3.5" /></button><button onClick={() => onEditInquiry(row.inquiryId)} className="rounded p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-[#1B2A6B]" title="Edit Follow-up"><PenLine className="h-3.5 w-3.5" /></button></div></td>
           </tr>
         })}
       </Table>

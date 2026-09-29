@@ -41,6 +41,8 @@ type FollowupFiltersProps = {
   followUpDateTo: string
   visitedDateFrom: string
   visitedDateTo: string
+  budgetFrom: string
+  budgetTo: string
   restricted: boolean
   currentUserId: string
   isRoutePending: boolean
@@ -71,6 +73,8 @@ type FollowupFiltersProps = {
   onFollowUpDateToChange: (value: string) => void
   onVisitedDateFromChange: (value: string) => void
   onVisitedDateToChange: (value: string) => void
+  onBudgetFromChange: (value: string) => void
+  onBudgetToChange: (value: string) => void
 }
 
 export function FollowupFilters({
@@ -92,6 +96,8 @@ export function FollowupFilters({
   followUpDateTo,
   visitedDateFrom,
   visitedDateTo,
+  budgetFrom,
+  budgetTo,
   restricted,
   currentUserId,
   isRoutePending,
@@ -122,6 +128,8 @@ export function FollowupFilters({
   onFollowUpDateToChange,
   onVisitedDateFromChange,
   onVisitedDateToChange,
+  onBudgetFromChange,
+  onBudgetToChange,
 }: FollowupFiltersProps) {
   return (
     <>
@@ -153,6 +161,8 @@ export function FollowupFilters({
         <DateFilterInput label="Follow-up Date To" value={followUpDateTo} onChange={onFollowUpDateToChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date From" value={visitedDateFrom} onChange={onVisitedDateFromChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date To" value={visitedDateTo} onChange={onVisitedDateToChange} disabled={isRoutePending} />
+        <Input type="number" min="0" label="Budget From" value={budgetFrom} onChange={event => onBudgetFromChange(event.target.value)} disabled={isRoutePending} />
+        <Input type="number" min="0" label="Budget To" value={budgetTo} onChange={event => onBudgetToChange(event.target.value)} disabled={isRoutePending} />
       </div>
     </>
   )

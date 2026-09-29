@@ -31,6 +31,8 @@ export default async function FollowupPage({
     followUpDateTo?: string
     visitedDateFrom?: string
     visitedDateTo?: string
+    budgetFrom?: string
+    budgetTo?: string
   }>
 }) {
   if (!(await canCurrentUserAccessRoute('/followup'))) redirect('/dashboard')
@@ -56,6 +58,8 @@ export default async function FollowupPage({
   const followUpDateTo = sp.followUpDateTo ?? ''
   const visitedDateFrom = sp.visitedDateFrom ?? ''
   const visitedDateTo = sp.visitedDateTo ?? ''
+  const budgetFrom = sp.budgetFrom ?? ''
+  const budgetTo = sp.budgetTo ?? ''
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
 
   const parsedMakeId = Number(makeId)
@@ -84,6 +88,8 @@ export default async function FollowupPage({
       followUpDateTo,
       visitedDateFrom,
       visitedDateTo,
+      budgetFrom,
+      budgetTo,
       restrictToUserId: ownershipScope.restrictToUserId,
       ownershipMode: ownershipScope.ownershipMode,
     }),
@@ -129,6 +135,8 @@ export default async function FollowupPage({
       followUpDateTo={followUpDateTo}
       visitedDateFrom={visitedDateFrom}
       visitedDateTo={visitedDateTo}
+      budgetFrom={budgetFrom}
+      budgetTo={budgetTo}
       restricted={ownershipScope.restricted}
       currentUserId={ownershipScope.userId ? String(ownershipScope.userId) : ''}
     />
