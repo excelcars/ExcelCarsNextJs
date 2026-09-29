@@ -20,7 +20,7 @@ export function LogFollowupRemark({
           <div className="text-sm text-gray-500">Write the practical note the next person needs.</div>
           {lastRemark?.trim() ? <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"><span className="font-medium text-gray-900">Last remark:</span> {lastRemark}</div> : null}
           <div className="mt-4">
-            <Textarea label="Remark" value={value} onChange={event => onChange(event.target.value)} placeholder="Asking price, condition, kms, whether they spoke to anyone else, next expectation..." error={error} className="min-h-[120px]" />
+            <Textarea label="Remark *" value={value} onChange={event => onChange(event.target.value)} placeholder="Asking price, condition, kms, whether they spoke to anyone else, next expectation..." error={error} className="min-h-[120px]" />
             <div className="mt-1 text-xs text-gray-500">This is the main human note. Everything else is structured status.</div>
           </div>
         </div>
