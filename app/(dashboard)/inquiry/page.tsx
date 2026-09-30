@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 export default async function InquiryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; locationId?: string; location?: string; subStatus?: string; followUpDate?: string; inquiryDate?: string; visitedDate?: string; budgetMin?: string; budgetMax?: string; makeId?: string; modelId?: string; variantId?: string; quickFilter?: string; view?: string; edit?: string; page?: string }>
+  searchParams: Promise<{ search?: string; status?: string; classification?: string; source?: string; locationId?: string; location?: string; region?: string; regionPeriod?: string; subStatus?: string; followUpDate?: string; inquiryDate?: string; visitedDate?: string; budgetMin?: string; budgetMax?: string; makeId?: string; modelId?: string; variantId?: string; quickFilter?: string; view?: string; edit?: string; page?: string }>
 }) {
   if (!(await canCurrentUserAccessRoute('/inquiry'))) redirect('/dashboard')
   const sp = await searchParams
@@ -17,6 +17,8 @@ export default async function InquiryPage({
   const source = sp.source ?? 'All'
   const locationId = sp.locationId ?? ''
   const location = sp.location ?? ''
+  const region = sp.region ?? ''
+  const regionPeriod = sp.regionPeriod ?? ''
   const subStatus = sp.subStatus ?? 'All'
   const followUpDate = sp.followUpDate ?? ''
   const inquiryDate = sp.inquiryDate ?? ''
@@ -33,7 +35,7 @@ export default async function InquiryPage({
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
   const [{ rows, total, pageCount }, makes, sourceOptions, locationOptions, subStatusSuggestions, inquiryAssistants] = await Promise.all([
-    listInquiries({ search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, restrictToUserId: ownershipScope.restrictToUserId }),
+    listInquiries({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, restrictToUserId: ownershipScope.restrictToUserId }),
     getMakes(),
     getInquirySources(),
     getInquiryLocations(),
@@ -63,6 +65,8 @@ export default async function InquiryPage({
       source={source}
       locationId={locationId}
       location={location}
+      region={region}
+      regionPeriod={regionPeriod}
       subStatus={subStatus}
       followUpDate={followUpDate}
       inquiryDate={inquiryDate}
