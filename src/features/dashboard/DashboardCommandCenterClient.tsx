@@ -12,8 +12,8 @@ import {
   Users,
 } from 'lucide-react'
 import { Badge, Modal } from '@/components/ui'
-import { LeadSourceChart } from './LeadSourceChart'
-import { LeadLocationChart, type LeadLocationBreakdowns } from './LeadLocationChart'
+import { LeadSourceChart, type LeadSourceBreakdown } from './LeadSourceChart'
+import { LeadLocationChart, type LeadRegionBreakdowns } from './LeadLocationChart'
 
 type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'loans' | 'birthdays' | 'anniversaries'
 type SortMode = 'priority' | 'dateAsc' | 'dateDesc'
@@ -160,8 +160,8 @@ export interface DashboardCommandCenterProps {
   }
   stats: DashboardStats
   todayStats: TodayStats
-  leadSources: { name: string; value: number }[]
-  leadRegionBreakdowns: LeadLocationBreakdowns
+  leadSources: LeadSourceBreakdown[]
+  leadRegionBreakdowns: LeadRegionBreakdowns
   leadDetails: LeadRow[]
   reminders: ReminderRow[]
   pendingPolicies: PendingPolicyRow[]
@@ -524,6 +524,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('priority')
   const [page, setPage] = useState(1)
+  const [selectedLeadSource, setSelectedLeadSource] = useState<LeadSourceBreakdown | null>(null)
   const [salespersonRenewalAlertOpen, setSalespersonRenewalAlertOpen] = useState(props.assignedExpiryRenewalPolicies.length > 0)
   const detailWorkspaceRef = useRef<HTMLElement>(null)
   const { permissions, stats } = props
@@ -899,10 +900,22 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </WorkTable>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
-                  <LeadSourceChart data={props.leadSources} totalLeads={stats.totalInquiries} />
+                  <LeadSourceChart
+                    data={props.leadSources}
+                    totalLeads={stats.totalInquiries}
+                    selectedSourceCode={selectedLeadSource?.sourceCode}
+                    onSelectSource={source => setSelectedLeadSource(current => current?.sourceCode === source.sourceCode ? null : source)}
+                  />
                 </section>
                 <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
-                  <LeadLocationChart breakdowns={props.leadRegionBreakdowns} title="Leads by Region" emptyMessage="No controlled location data for this period." />
+                  <LeadLocationChart
+                    breakdowns={selectedLeadSource?.sourceCode ? props.leadRegionBreakdowns.bySource[selectedLeadSource.sourceCode] ?? { month: [], quarter: [], year: [] } : props.leadRegionBreakdowns.all}
+                    selectedSourceName={selectedLeadSource?.name}
+                    selectedSourceCode={selectedLeadSource?.sourceCode}
+                    onClearSource={() => setSelectedLeadSource(null)}
+                    title="Leads by Region"
+                    emptyMessage={selectedLeadSource ? `No controlled location data for ${selectedLeadSource.name} in this period.` : 'No controlled location data for this period.'}
+                  />
                 </section>
               </div>
             </div>

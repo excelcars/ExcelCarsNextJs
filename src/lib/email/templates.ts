@@ -68,7 +68,7 @@ export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject:
       Excel Cars, Gujral House, 167, CST Road, Kolivery Village,<br>
       MMRDA Area, Kalina, Santacruz East, Mumbai, Maharashtra 400098.<br>
       <a href="https://maps.app.goo.gl/fh48FW9PvXE6WHzdA" style="color:#d7194a;text-decoration:underline;">Google Maps location</a>.<br>
-      Call Excel Cars: 82923002.</p>
+      Call Excel Cars: 9820344002 or 9820344332, or email naziya@excelcarsmumbai.com.</p>
       <p>Happy buying with Excel Cars.</p>
       <p>Best Regards,<br>${input.signedBy}</p>
     </div>
@@ -85,6 +85,6 @@ export function noInventoryEnquiryEmail(customerName: string): { subject: string
   const name = escapeHtml(customerName || 'Customer')
   return {
     subject: 'We received your enquiry — Excel Cars',
-    html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#263651;line-height:1.6;max-width:560px;"><p>Hi ${name}, thank you for your enquiry with Excel Cars.</p><p>We have received your request and our team will get in touch with you shortly.</p><p>For any immediate assistance, you can contact us at 82923002.</p><p>We’ll be happy to assist you.</p></div>`,
+    html: `<div style="font-family:Arial,Helvetica,sans-serif;color:#263651;line-height:1.6;max-width:560px;"><p>Hi ${name}, thank you for your enquiry with Excel Cars.</p><p>We have received your request and our team will get in touch with you shortly.</p><p>For any immediate assistance, call us at 9820344002 or 9820344332, or email <a href="mailto:naziya@excelcarsmumbai.com">naziya@excelcarsmumbai.com</a>.</p><p>We’ll be happy to assist you.</p></div>`,
   }
 }

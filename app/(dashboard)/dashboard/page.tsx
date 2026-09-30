@@ -82,7 +82,7 @@ export default async function DashboardPage({
       includeRto: permissions.canRto,
     }),
     permissions.canInquiry ? getLeadSourceBreakdown() : Promise.resolve([]),
-    permissions.canInquiry ? getLeadRegionBreakdowns() : Promise.resolve({ month: [], quarter: [], year: [] }),
+    permissions.canInquiry ? getLeadRegionBreakdowns() : Promise.resolve({ all: { month: [], quarter: [], year: [] }, bySource: {} }),
     permissions.canFollowup ? getPendingFollowups(null) : Promise.resolve([]),
     profile && permissions.canFollowup ? getLegacyLeadDetails({ userId: profile.userId, roleId: profile.roleId }) : Promise.resolve([]),
     getBirthdayAnniversaryReminders(),
