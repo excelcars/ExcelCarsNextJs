@@ -432,13 +432,14 @@ export async function getLeadSourceBreakdown() {
     prisma.inquirySourceMaster.findMany({
       where: { inquiries: { some: {} } },
       select: {
+        code: true,
         displayName: true,
         _count: { select: { inquiries: true } },
       },
       orderBy: { inquiries: { _count: 'desc' } },
     }),
   ])
-  const topSources = rows.slice(0, 5).map(row => ({ name: row.displayName, value: row._count.inquiries }))
+  const topSources = rows.slice(0, 5).map(row => ({ name: row.displayName, sourceCode: row.code, value: row._count.inquiries }))
   const otherSources = totalInquiries - topSources.reduce((total, row) => total + row.value, 0)
 
   return otherSources > 0 ? [...topSources, { name: 'Other', value: otherSources }] : topSources
@@ -453,25 +454,48 @@ function countLeadDimensions(values: Array<string | null | undefined>) {
   return [...counts.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
 }
 
-export async function getLeadRegionBreakdown(range?: { start: Date; end: Date }) {
-  const rows = await prisma.inquiry.findMany({
-    where: { locationId: { not: null }, ...(range ? { dateOfInquiry: { gte: range.start, lt: range.end } } : {}) },
-    select: { reportingLocation: { select: { region: true } } },
-  })
-  return countLeadDimensions(rows.map(row => row.reportingLocation?.region))
-}
-
 export async function getLeadRegionBreakdowns() {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
   const yearStart = new Date(now.getFullYear(), 0, 1)
-  const [month, quarter, year] = await Promise.all([
-    getLeadRegionBreakdown({ start: monthStart, end: now }),
-    getLeadRegionBreakdown({ start: quarterStart, end: now }),
-    getLeadRegionBreakdown({ start: yearStart, end: now }),
-  ])
-  return { month, quarter, year }
+  const rows = await prisma.inquiry.findMany({
+    where: { locationId: { not: null }, dateOfInquiry: { gte: yearStart, lt: now } },
+    select: {
+      dateOfInquiry: true,
+      source: { select: { code: true } },
+      reportingLocation: { select: { region: true } },
+    },
+  })
+
+  const ranges = { month: monthStart, quarter: quarterStart, year: yearStart } as const
+  const all = { month: [] as string[], quarter: [] as string[], year: [] as string[] }
+  const bySource: Record<string, { month: string[]; quarter: string[]; year: string[] }> = {}
+
+  for (const row of rows) {
+    if (!row.dateOfInquiry || !row.reportingLocation?.region) continue
+    const sourceCode = row.source?.code
+    if (sourceCode && !bySource[sourceCode]) bySource[sourceCode] = { month: [], quarter: [], year: [] }
+
+    for (const [period, start] of Object.entries(ranges) as Array<[keyof typeof ranges, Date]>) {
+      if (row.dateOfInquiry < start) continue
+      all[period].push(row.reportingLocation.region)
+      if (sourceCode) bySource[sourceCode][period].push(row.reportingLocation.region)
+    }
+  }
+
+  return {
+    all: {
+      month: countLeadDimensions(all.month),
+      quarter: countLeadDimensions(all.quarter),
+      year: countLeadDimensions(all.year),
+    },
+    bySource: Object.fromEntries(Object.entries(bySource).map(([sourceCode, breakdowns]) => [sourceCode, {
+      month: countLeadDimensions(breakdowns.month),
+      quarter: countLeadDimensions(breakdowns.quarter),
+      year: countLeadDimensions(breakdowns.year),
+    }])),
+  }
 }
 
 export async function getAssignedExpiryRenewalPolicies(assignedUserId: number) {

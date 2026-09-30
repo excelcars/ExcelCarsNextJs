@@ -111,13 +111,13 @@ export function classifyVehicleEmailVisit(userAgent: string | null | undefined):
 }
 
 export function getPublicVehiclePhoneNumber() {
-  return process.env.PUBLIC_EXCEL_CARS_PHONE || '+91 98678 60586'
+  return process.env.PUBLIC_EXCEL_CARS_PHONE || '+91 98203 44002'
 }
 
 export function getPublicVehicleWhatsAppNumber() {
-  return process.env.PUBLIC_EXCEL_CARS_WHATSAPP || '919867860586'
+  return process.env.PUBLIC_EXCEL_CARS_WHATSAPP || '919820344332'
 }
 
 export function getPublicVehicleContactEmail() {
-  return process.env.PUBLIC_EXCEL_CARS_EMAIL || process.env.EMAIL_FROM_ADDRESS || 'info@excelcars.com'
+  return process.env.PUBLIC_EXCEL_CARS_EMAIL || 'naziya@excelcarsmumbai.com'
 }

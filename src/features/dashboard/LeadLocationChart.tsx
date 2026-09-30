@@ -11,13 +11,18 @@ export interface LeadLocationBreakdowns {
   year: { name: string; value: number }[]
 }
 
+export interface LeadRegionBreakdowns {
+  all: LeadLocationBreakdowns
+  bySource: Record<string, LeadLocationBreakdowns>
+}
+
 const PERIODS = [
   { key: 'month', label: 'Month' },
   { key: 'quarter', label: 'Quarter' },
   { key: 'year', label: 'Year' },
 ] as const
 
-export function LeadLocationChart({ breakdowns, title = 'Leads by Location', emptyMessage = 'No inquiry location data for this period.' }: { breakdowns: LeadLocationBreakdowns; title?: string; emptyMessage?: string }) {
+export function LeadLocationChart({ breakdowns, selectedSourceName, selectedSourceCode, onClearSource, title = 'Leads by Location', emptyMessage = 'No inquiry location data for this period.' }: { breakdowns: LeadLocationBreakdowns; selectedSourceName?: string | null; selectedSourceCode?: string | null; onClearSource?: () => void; title?: string; emptyMessage?: string }) {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]['key']>('month')
   const router = useRouter()
   const data = breakdowns[period]
@@ -25,8 +30,9 @@ export function LeadLocationChart({ breakdowns, title = 'Leads by Location', emp
 
   return (
     <div className="h-full">
-      <div className="mb-2 flex flex-wrap gap-1" aria-label="Location report period">
+      <div className="mb-2 flex flex-wrap items-center gap-1" aria-label="Location report period">
         {PERIODS.map(item => <button key={item.key} type="button" onClick={() => setPeriod(item.key)} aria-pressed={period === item.key} className={`rounded px-2 py-1 text-[11px] font-semibold transition ${period === item.key ? 'bg-[#1B2A6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>{item.label}</button>)}
+        {selectedSourceName ? <button type="button" onClick={onClearSource} className="ml-1 rounded px-2 py-1 text-[11px] font-semibold text-[#1B2A6B] hover:bg-blue-50" title="Show every lead source">{selectedSourceName} ×</button> : null}
       </div>
       {data.length === 0 ? <p className="py-8 text-center text-sm text-gray-400">{emptyMessage}</p> : <div className="h-[calc(100%-32px)]">
         <div className="flex items-center justify-between gap-3 px-1 text-xs">
@@ -42,7 +48,7 @@ export function LeadLocationChart({ breakdowns, title = 'Leads by Location', emp
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }} />
               <Bar dataKey="value" fill={N} radius={[0, 3, 3, 0]} barSize={16} cursor="pointer" onClick={(_, index: number) => {
                 const region = data[index]?.name
-                if (region) router.push(`/inquiry?region=${encodeURIComponent(region)}&regionPeriod=${period}&quickFilter=all`)
+                if (region) router.push(`/inquiry?region=${encodeURIComponent(region)}&regionPeriod=${period}${selectedSourceCode ? `&source=${encodeURIComponent(selectedSourceCode)}` : ''}&quickFilter=all`)
               }} />
             </BarChart>
           </ResponsiveContainer>

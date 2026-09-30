@@ -5,8 +5,8 @@ const MAX_RETRIES = 2
 const TEMPLATE_SUBJECT = 'Insurance renewal reminder — policy expiry approaching'
 const INDIA_TIME_ZONE = 'Asia/Kolkata'
 const EXCEL_CARS_NAME = 'Excel Cars'
-const EXCEL_CARS_PHONE = process.env.PUBLIC_EXCEL_CARS_CONTACT_PHONE?.trim() || '82923002'
-const EXCEL_CARS_EMAIL = process.env.PUBLIC_EXCEL_CARS_EMAIL?.trim() || process.env.EMAIL_FROM_ADDRESS?.trim() || 'info@excelcars.com'
+const EXCEL_CARS_PHONE = process.env.PUBLIC_EXCEL_CARS_CONTACT_PHONE?.trim() || '9820344002 / 9820344332'
+const EXCEL_CARS_EMAIL = process.env.PUBLIC_EXCEL_CARS_EMAIL?.trim() || 'naziya@excelcarsmumbai.com'
 
 function indiaDateKey(value = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: INDIA_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value)

@@ -1,9 +1,15 @@
 'use client'
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { N } from '@/components/ui'
 
-export function LeadSourceChart({ data, totalLeads, title = 'Leads by Source', emptyMessage = 'No inquiry source data yet.' }: { data: { name: string; value: number }[]; totalLeads: number; title?: string; emptyMessage?: string }) {
+export interface LeadSourceBreakdown {
+  name: string
+  sourceCode?: string
+  value: number
+}
+
+export function LeadSourceChart({ data, totalLeads, selectedSourceCode, onSelectSource, title = 'Leads by Source', emptyMessage = 'No inquiry source data yet.' }: { data: LeadSourceBreakdown[]; totalLeads: number; selectedSourceCode?: string | null; onSelectSource?: (source: LeadSourceBreakdown) => void; title?: string; emptyMessage?: string }) {
   if (data.length === 0) {
     return <p className="py-8 text-center text-sm text-gray-400">{emptyMessage}</p>
   }
@@ -21,7 +27,12 @@ export function LeadSourceChart({ data, totalLeads, title = 'Leads by Source', e
             <XAxis type="number" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
             <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB' }} />
-            <Bar dataKey="value" fill={N} radius={[0, 3, 3, 0]} barSize={16} />
+            <Bar dataKey="value" fill={N} radius={[0, 3, 3, 0]} barSize={16} cursor={onSelectSource ? 'pointer' : 'default'} onClick={(_, index: number) => {
+              const source = data[index]
+              if (source?.sourceCode) onSelectSource?.(source)
+            }}>
+              {data.map(source => <Cell key={source.name} fill={selectedSourceCode === source.sourceCode ? '#d7194a' : N} />)}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
