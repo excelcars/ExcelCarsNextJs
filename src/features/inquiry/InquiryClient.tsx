@@ -719,7 +719,7 @@ function FormDropdown({
 }
 
 export function InquiryClient({
-  initialData, makes, sourceOptions, locationOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
+  initialData, makes, sourceOptions, locationOptions, subStatusSuggestions, inquiryAssistants, total, page, pageCount, search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, autoOpenViewId, autoOpenEditId,
 }: {
   initialData: InquiryRow[]
   makes: CarMakeMaster[]
@@ -736,6 +736,8 @@ export function InquiryClient({
   source: string
   locationId: string
   location: string
+  region: string
+  regionPeriod: string
   subStatus: string
   followUpDate: string
   inquiryDate: string
@@ -1002,6 +1004,7 @@ export function InquiryClient({
     source !== 'All' ? 1 : 0,
     locationId ? 1 : 0,
     location.trim() ? 1 : 0,
+    region.trim() ? 1 : 0,
     subStatus !== 'All' ? 1 : 0,
     followUpDate ? 1 : 0,
     visitedDate ? 1 : 0,
@@ -1204,7 +1207,7 @@ export function InquiryClient({
   }
 
   const pushQuery = (params: Record<string, string>) => {
-    const query = buildListQueryString({ search, status, classification, source, locationId, location, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
+    const query = buildListQueryString({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page: '1' }, params, true)
     startRouteTransition(() => {
       router.push(`/inquiry${query ? `?${query}` : ''}`)
     })
@@ -1609,6 +1612,8 @@ export function InquiryClient({
         if (source !== 'All') params.set('source', source)
         if (locationId) params.set('locationId', locationId)
         if (location.trim()) params.set('location', location)
+        if (region.trim()) params.set('region', region)
+        if (regionPeriod) params.set('regionPeriod', regionPeriod)
         if (subStatus !== 'All') params.set('subStatus', subStatus)
         if (followUpDate) params.set('followUpDate', followUpDate)
         if (inquiryDate) params.set('inquiryDate', inquiryDate)
@@ -1634,7 +1639,7 @@ export function InquiryClient({
   const resetFilters = () => {
     setSearchInput('')
     setLocationInput('')
-    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', locationId: '', location: '', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
+    pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', locationId: '', location: '', region: '', regionPeriod: '', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
   }
 
   const applyQuickFilter = (nextQuickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all') => {
@@ -1699,7 +1704,7 @@ export function InquiryClient({
         status={status}
         quickFilter={quickFilter}
         isRoutePending={isRoutePending}
-        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || locationId || location.trim() || subStatus !== 'All' || followUpDate || visitedDate || budgetMin || budgetMax || makeId || modelId || variantId)}
+        hasActiveFilters={Boolean(search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || locationId || location.trim() || region.trim() || subStatus !== 'All' || followUpDate || visitedDate || budgetMin || budgetMax || makeId || modelId || variantId)}
         sourceOptions={sourceOptions}
         locationOptions={locationOptions}
         subStatusSuggestions={subStatusSuggestions}
