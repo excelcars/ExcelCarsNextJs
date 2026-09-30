@@ -202,6 +202,7 @@ function InventoryMatchPanel({
                   <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
                   <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched because:</span> {match.matchReasons?.join(' · ') || 'In-stock match'}</div>
                   <div><span className="font-medium text-gray-900">State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
+                  <div className="md:col-span-3 whitespace-pre-wrap"><span className="font-medium text-gray-900">Remarks:</span> {match.otherRemarks?.trim() || '—'}</div>
                 </div>
               </div>
             )
