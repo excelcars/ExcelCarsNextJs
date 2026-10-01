@@ -9,9 +9,9 @@ Those implemented behaviors are now documented in [outstandingpayments.md](outst
 ## Remaining intentional scope boundaries
 
 - The report covers RTO, Insurance, and Loan only. Financial and DSA are outside the locked current scope.
-- The report includes paid, zero-balance, and negative-balance rows; no payment-status filter is implemented.
+- The report includes paid, zero-balance, and negative-balance rows; its payment-status filter supports the status vocabulary used by RTO, Insurance, and Loan.
 - The accepted export format is CSV with a grand-total row.
-- The page enforces `Outstanding_Payments_Report`. Its export and autocomplete APIs require authentication but do not independently repeat that route-permission check.
+- The page and report APIs enforce `Outstanding_Payments_Report`; the shared customer autocomplete route recognizes the same permission.
 - Remarks, saved filters, snapshots, and additional report types are not in current scope.
 
 These are current product boundaries, not unimplemented behavior. Any change requires a new approved requirement and a corresponding update to the main SSOT.

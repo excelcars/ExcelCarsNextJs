@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     !(await canCurrentUserAccessRoute('/config/customers'))
     && !(await canCurrentUserAccessRoute('/config/feedback'))
     && !(await canCurrentUserAccessRoute('/inventory'))
+    && !(await canCurrentUserAccessRoute('/reports/outstanding'))
   ) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

@@ -20,6 +20,7 @@ It owns:
   - customer mobile
   - car registration number
   - payout type
+  - payment status
 - URL-backed filter state
 - paginated report rendering
 - visible total balance for the current filtered result set
@@ -32,9 +33,6 @@ It does not own:
 - editing or settling RTO payouts
 - editing or settling insurance payouts
 - editing or settling loan payouts
-- API-level duplication of the report route permission check
-- a payment-status filter
-- remark display in the visible table
 - saved filters, report presets, or report snapshots
 
 ## 2. Locked Current Scope
@@ -50,6 +48,7 @@ It does not own:
   - separate customer-mobile filter
   - separate registration-number filter
   - type filter
+  - payment-status filter
   - customer autocomplete
   - registration autocomplete
   - CSV export
@@ -61,8 +60,6 @@ It does not own:
 Not in current locked scope:
 - `Financial`
 - `DSA`
-- status filter
-- remark column
 - additional report behavior beyond the `Outstanding_Payments_Report` route permission
 
 ## 3. Data Ownership
@@ -72,11 +69,13 @@ Primary read sources used directly by this module:
 - `insuranceMain`
 - `loanManagement`
 - related `customer` rows
-- `inventoryManagement` for registration autocomplete
 
 Current report row shape:
 - `key`
 - `type`
+- `paymentStatus`
+- `followupDate`
+- `remark`
 - `registrationNo`
 - `customerName`
 - `customerMobile`
@@ -184,13 +183,14 @@ Required UI behaviors:
   - page metadata
 
 ### 6.2 Current filter semantics
-- all current filters use case-insensitive substring matching
+- customer, mobile, and registration filters use case-insensitive substring matching
+- `type` and `paymentStatus` use exact matching
 - current filters are:
   - `customerName`
   - `customerMobile`
   - `registrationNo`
   - `type`
-- no payment-status filter is currently implemented
+  - `paymentStatus` (exact match; `All`, `Pending`, `Partial`, `Paid`, `Partially Paid`, or `Fully Paid`)
 
 ### 6.3 Row normalization rules
 RTO:
@@ -270,11 +270,14 @@ Current visible filters:
 - `Customer Mobile`
 - `Car Registration No`
 - `Type`
+- `Payment Status`
+- `Next Follow-up`
+- `Remark`
 - `Rows Per Page`
 
 Autocomplete behaviors:
 - customer autocomplete uses the authenticated customer search route
-- registration autocomplete uses inventory-backed registration suggestions
+- registration autocomplete searches matching RTO, Insurance, and Loan source registrations
 
 ### 7.3 Table/listing behavior
 Displayed columns:
@@ -285,6 +288,8 @@ Displayed columns:
 - `Customer Email`
 - `Car Registration No`
 - `Payment Status`
+- `Next Follow-up`
+- `Remark`
 - `Total Amount`
 - `% of Payout`
 - `Payout Amount`
@@ -295,6 +300,7 @@ Row rendering rules:
 - `Type` is shown as a shared `Badge`
 - `Payment Status` is shown as a `Badge` when present
 - null display values fall back to `—`
+- remarks are truncated in the table and included in full in CSV export
 - registration is a drill-through link when present
 - money values are formatted as INR
 - positive balances render in red
@@ -315,6 +321,8 @@ Row rendering rules:
 
 ## 8. Validation And Error Handling
 - unauthenticated export and autocomplete routes return `401 Unauthorized`
+- authenticated callers without `Outstanding_Payments_Report` receive `403 Forbidden` from the export and report-registration autocomplete routes
+- the shared customer autocomplete route accepts `Outstanding_Payments_Report` as an authorized caller
 - null numeric values are normalized to `0` for calculation
 - null text values are normalized safely for display
 - export route returns a JSON error payload when unauthorized
@@ -333,13 +341,10 @@ Row rendering rules:
 Current report-specific access reality:
 - the dashboard route group requires an authenticated session
 - the page requires the `Outstanding_Payments_Report` access-catalog function through `canCurrentUserAccessRoute('/reports/outstanding')`; unauthorized users are redirected to `/dashboard`
-- the export and autocomplete APIs currently require an authenticated session but do not repeat the page-level access-function check
+- the export and report-registration autocomplete APIs require the same `Outstanding_Payments_Report` route access as the page; the shared customer autocomplete route also recognizes that grant
 
 ## 10. Known Current Constraints
-- no status filter is implemented even though status is visible
-- no remark column is shown, even though source data can contain remarks
 - no explicit type-scope expansion beyond `RTO`, `Insurance`, and `Loan`
-- export and autocomplete APIs do not repeat the page-level `Outstanding_Payments_Report` permission check
 - no saved report presets or snapshots
 
 ## 11. Tests Required
@@ -356,6 +361,7 @@ Current report-specific access reality:
 - customer-mobile filter works server-side
 - registration filter works server-side
 - type filter works server-side
+- payment-status filter works server-side
 - URL-backed filters restore state on reload
 - export uses the current filtered result set
 - export includes the grand total row
