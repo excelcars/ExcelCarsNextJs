@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/db/prisma'
 import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
+import { cleanListValue } from '@/lib/listFormatters'
+import { indiaDateRange } from './date'
+import { buildTodayFollowupWhere, TODAY_FOLLOWUP_ORDER } from './queryContract'
 
 export interface TodayFilters {
   fromDate: string
@@ -9,19 +12,15 @@ export interface TodayFilters {
 }
 
 export async function listTodayFollowups({ fromDate, toDate, userId, restrictToUserId }: TodayFilters) {
-  const from = new Date(fromDate)
-  const to = new Date(toDate)
-  to.setHours(23, 59, 59, 999)
+  const { from, to } = indiaDateRange(fromDate, toDate)
+  const restrictedInquiryWhere = restrictToUserId
+    ? buildInquiryOwnershipWhere(restrictToUserId, 'created-only')
+    : null
 
   const rows = await prisma.followupInquiry.findMany({
-    where: {
-      updatedDt: { gte: from, lte: to },
-      // an InquiryAssistant-role user is always restricted to inquiries they own,
-      // regardless of the "Updated By" filter picked in the UI (matches legacy row-security rule)
-      ...(restrictToUserId
-        ? { inquiry: buildInquiryOwnershipWhere(restrictToUserId) }
-        : userId ? { updatedBy: userId } : {}),
-    },
+    // Legacy role-4 users can only see follow-ups for inquiries they created,
+    // regardless of the "Updated By" filter picked in the UI.
+    where: buildTodayFollowupWhere({ from, to, userId, restrictedInquiryWhere }),
     include: {
       inquiry: {
         include: {
@@ -35,7 +34,8 @@ export async function listTodayFollowups({ fromDate, toDate, userId, restrictToU
       },
       updatedByUser: true,
     },
-    orderBy: { updatedDt: 'desc' },
+    // Preserve newest activity first and make same-timestamp rows stable.
+    orderBy: [...TODAY_FOLLOWUP_ORDER],
   })
 
   return rows.map(r => ({
@@ -49,21 +49,31 @@ export async function listTodayFollowups({ fromDate, toDate, userId, restrictToU
     updatedByName: r.updatedByUser?.displayName ?? r.updatedByUser?.userName ?? null,
     inquiryNo: r.inquiry?.inquiryNo ?? null,
     dateOfInquiry: r.inquiry?.dateOfInquiry ?? null,
+    website: r.inquiry?.website ?? null,
     customerName: r.inquiry?.customer?.custName ?? r.inquiry?.customerNameLegacy ?? null,
     mobileno: r.inquiry?.mobileno ?? null,
     email: r.inquiry?.email ?? null,
     budgetOfCustomer: r.inquiry?.budgetOfCustomer?.toString() ?? null,
+    visitedDateOfCustomer: r.inquiry?.visitedDateOfCustomer ?? null,
+    createdDt: r.inquiry?.createdDt ?? null,
     createdByName: r.inquiry?.createdByUser?.displayName ?? r.inquiry?.createdByUser?.userName ?? null,
     carDetails: (r.inquiry?.inquiryCarDetails ?? [])
-      .map(c => [c.carVariantMaster?.carMakeMaster?.make, c.carVariantMaster?.carModelMaster?.model, c.carVariantMaster?.variant, c.year].filter(Boolean).join(' '))
+      .map(c => [
+        cleanListValue(c.carVariantMaster?.carMakeMaster?.make) || cleanListValue(c.makeLegacy),
+        cleanListValue(c.carVariantMaster?.carModelMaster?.model) || cleanListValue(c.modelLegacy),
+        cleanListValue(c.carVariantMaster?.variant) || cleanListValue(c.variantLegacy),
+        c.year,
+      ].filter(Boolean).join(' '))
       .filter(Boolean)
       .join(', '),
   }))
 }
 
-export async function getUsersForFilter() {
+export async function getUsersForFilter(currentRoleId: number | null) {
+  if (currentRoleId == null) return []
+
   return prisma.userTable.findMany({
-    where: { status: 'Active' },
+    where: { roleId: { gte: currentRoleId } },
     select: { userId: true, displayName: true, userName: true },
     orderBy: { userId: 'asc' },
   })

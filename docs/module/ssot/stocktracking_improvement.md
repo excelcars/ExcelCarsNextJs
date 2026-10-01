@@ -1,6 +1,8 @@
 # SSOT - Stock Tracking Improvements
 ## Status: Deferred legacy-parity backlog; current implemented behavior is in `stocktracking.md`
 
+> Implementation update (2026-10-01): the first approved parity pass is implemented. The report now has URL-backed server-side search plus exact Make/Model/Variant/Colour/Fuel filters, pagination, authorized XLSX summary export, authorized XLSX per-vehicle export, an ID-keyed detail API that preserves all matching Checklist/Insurance/RTO/Loan rows, customer/owner context, checklist drill-through, downstream permission-aware links, normalized legacy-placeholder display, and a canonical `/reports/tracking/[inventoryId]` detail page. Dependent catalog selectors, a user-configurable column chooser, and the remaining field-by-field detail expansions are still backlog items.
+
 **Module:** `reports/tracking`  
 **Project:** `ExcelCarsNextJs`  
 **Base current-state SSOT:** `C:\KhizarShaikh\Project\ExcelCarsNextJs\docs\module\ssot\stocktracking.md`  

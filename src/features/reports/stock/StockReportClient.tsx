@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Image as ImageIcon, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, Btn, Input, Select, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
 import { INVENTORY_STATUSES } from '@/features/inventory/queries'
 
@@ -43,45 +43,13 @@ type StructuredFilterKey = (typeof STRUCTURED_FILTERS)[number][0]
 
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const STOCK_REPORT_PAGE_SIZES = [25, 50, 100] as const
-const STOCK_REPORT_SORTS = [
-  ['inventoryId_desc', 'Newest first'], ['registrationNo_asc', 'Registration A–Z'], ['year_desc', 'Year: newest first'],
-  ['kmsDriven_desc', 'KM: high to low'], ['price_desc', 'Price: high to low'], ['price_asc', 'Price: low to high'],
-] as const
 const OPTIONAL_COLUMNS = [
-  ['sku', 'SKU'], ['registrationNo', 'Reg No'], ['month', 'Month'], ['fuelType', 'Fuel'], ['owners', 'Owners'],
-  ['tax', 'Tax'], ['insurance', 'Insurance'], ['remarks', 'Remarks'], ['comments', 'Internal Comments'], ['owner', 'Owner'], ['photos', 'Photos'],
+  ['sku', 'SKU'], ['registrationNo', 'Reg No'], ['fuelType', 'Fuel'], ['ownerCount', 'Owner Count'], ['owner', 'Owner Name'],
+  ['tax', 'Tax'], ['insurance', 'Insurance'], ['remarks', 'Remarks'], ['comments', 'Internal Comments'], ['photos', 'Photos'],
 ] as const
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number][0]
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
-
-function toCsv(rows: StockRow[]): string {
-  const headers = [
-    'SKU', 'Reg No', 'Make', 'Model', 'Variant', 'Year', 'Month', 'Colour', 'Fuel', 'KM', 'No. of Owners',
-    'Tax', 'Insurance Type', 'Price', 'Status', 'Remarks', 'Internal Comments', 'Owner',
-  ]
-  const lines = [headers.join(',')]
-  for (const r of rows) {
-    const cells = [
-      r.sku, r.registrationNo,
-      clean(r.carVariantMaster?.carMakeMaster?.make), clean(r.carVariantMaster?.carModelMaster?.model), clean(r.carVariantMaster?.variant),
-      r.year, r.month, r.colour, r.fuelType, r.kmsDriven, r.noOfOwners, r.tax, r.insuranceType,
-      r.price, r.status, r.otherRemarks, r.internalComments, r.ownedBy,
-    ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`)
-    lines.push(cells.join(','))
-  }
-  return lines.join('\n')
-}
-
-function downloadCsv(rows: StockRow[]) {
-  const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'stock-report.csv'
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 interface StockReportClientProps {
   initialData: StockRow[]
@@ -93,13 +61,12 @@ interface StockReportClientProps {
   page: number
   pageSize: number
   pageCount: number
-  sort: string
   totalValue: string | null
   statusCounts: Array<{ status: string; count: number }>
   canAccessInventory: boolean
 }
 
-export function StockReportClient({ initialData, initialFilters, total, page, pageSize, pageCount, sort, totalValue, statusCounts, canAccessInventory }: StockReportClientProps) {
+export function StockReportClient({ initialData, initialFilters, total, page, pageSize, pageCount, totalValue, statusCounts, canAccessInventory }: StockReportClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState(initialFilters.search)
@@ -123,32 +90,23 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
     setFilters(initialFilters)
   }, [initialFilters])
 
-  const pushFilters = (next: typeof initialFilters, nextPage = 1, nextPageSize = pageSize, nextSort = sort) => {
+  const pushFilters = (next: typeof initialFilters, nextPage = 1, nextPageSize = pageSize) => {
     const params = new URLSearchParams()
     Object.entries(next).forEach(([key, value]) => {
       if (value && !(key === 'status' && value === 'All')) params.set(key, value.trim())
     })
     if (nextPage > 1) params.set('page', String(nextPage))
     if (nextPageSize !== 25) params.set('pageSize', String(nextPageSize))
-    if (nextSort !== 'inventoryId_desc') params.set('sort', nextSort)
     startTransition(() => router.push(`/reports/stock${params.size ? `?${params}` : ''}`))
   }
 
   const applyFilters = () => pushFilters({ ...filters, search, status: filterStatus })
-  const clearFilters = () => {
-    const empty = { search: '', status: 'All', make: '', model: '', variant: '', colour: '', fuelType: '', ownerType: '', ownerName: '', ownerMobile: '', registrationNo: '' }
-    setSearch('')
-    setFilterStatus('All')
-    setFilters(empty)
-    pushFilters(empty)
-  }
-
   const resetView = () => {
     const empty = { search: '', status: 'All', make: '', model: '', variant: '', colour: '', fuelType: '', ownerType: '', ownerName: '', ownerMobile: '', registrationNo: '' }
     setSearch('')
     setFilterStatus('All')
     setFilters(empty)
-    pushFilters(empty, 1, 25, 'inventoryId_desc')
+    pushFilters(empty, 1, 25)
   }
 
   const loadSuggestions = (key: StructuredFilterKey, value: string) => {
@@ -214,6 +172,23 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
     }
   }
 
+  const downloadPhoto = async (photo: Photo) => {
+    if (!photo.previewUrl) return
+    try {
+      const res = await fetch(photo.previewUrl)
+      if (!res.ok) throw new Error('Photo download failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = photo.fileName
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setPhotosError(`Could not download ${photo.fileName}. Please try again.`)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -239,7 +214,7 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
         </div>
       </div>
 
-      <div className="grid gap-3 mb-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 mb-4 md:grid-cols-2 xl:grid-cols-6">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-slate-600">Quick search</label>
           <SearchBar value={search} onChange={setSearch} placeholder="Reg no, make, model, owner..." />
@@ -259,27 +234,28 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
             </datalist>
           </div>
         ))}
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-medium text-gray-600">Actions</span>
+          <Btn onClick={applyFilters} disabled={isPending} className="justify-center">{isPending ? 'Applying...' : 'Apply filters'}</Btn>
+          <Btn variant="outline" onClick={resetView} disabled={isPending} className="justify-center">Reset filters</Btn>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex flex-wrap gap-1.5">
           {['All', ...INVENTORY_STATUSES].map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)} disabled={isPending}
+            <button key={s} onClick={() => {
+              setFilterStatus(s)
+              pushFilters({ ...filters, search, status: s })
+            }} disabled={isPending}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterStatus === s ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               style={filterStatus === s ? { backgroundColor: '#1B2A6B' } : {}}>
               {s}
             </button>
           ))}
         </div>
-        <Btn onClick={applyFilters} disabled={isPending}>{isPending ? 'Applying...' : 'Apply Filters'}</Btn>
-        <Btn variant="outline" onClick={clearFilters} disabled={isPending}>Clear</Btn>
-        <Btn variant="outline" onClick={resetView} disabled={isPending}>Reset view</Btn>
         <Select label="Rows per page" value={String(pageSize)} disabled={isPending}
           onChange={event => pushFilters(initialFilters, 1, Number(event.target.value))}>
           {STOCK_REPORT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
-        </Select>
-        <Select label="Sort by" value={sort} disabled={isPending}
-          onChange={event => pushFilters(initialFilters, 1, pageSize, event.target.value)}>
-          {STOCK_REPORT_SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </Select>
         <details className="relative">
           <summary className="cursor-pointer rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">Columns</summary>
@@ -301,9 +277,9 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
       {exportError ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div> : null}
 
       <Table headers={[
-        ...(visibleColumns.has('sku') ? ['SKU'] : []), ...(visibleColumns.has('registrationNo') ? ['Reg No'] : []), 'Vehicle', 'Year',
-        ...(visibleColumns.has('month') ? ['Month'] : []), ...(visibleColumns.has('fuelType') ? ['Fuel'] : []), 'KM',
-        ...(visibleColumns.has('owners') ? ['Owners'] : []), ...(visibleColumns.has('tax') ? ['Tax'] : []), ...(visibleColumns.has('insurance') ? ['Insurance'] : []),
+        ...(visibleColumns.has('sku') ? ['SKU'] : []), ...(visibleColumns.has('registrationNo') ? ['Reg No'] : []), 'Vehicle', 'Year / Month',
+        ...(visibleColumns.has('fuelType') ? ['Fuel'] : []), 'KM Driven',
+        ...(visibleColumns.has('ownerCount') ? ['Owner Count'] : []), ...(visibleColumns.has('owner') ? ['Owner Name'] : []), ...(visibleColumns.has('tax') ? ['Tax'] : []), ...(visibleColumns.has('insurance') ? ['Insurance'] : []),
         'Price', 'Status', ...(visibleColumns.has('remarks') ? ['Remarks'] : []), ...(visibleColumns.has('comments') ? ['Internal Comments'] : []),
         ...(visibleColumns.has('owner') ? ['Owner'] : []), ...(visibleColumns.has('photos') ? ['Photos'] : []), ...(canAccessInventory ? ['Actions'] : []),
       ]} empty={initialData.length === 0}>
@@ -315,18 +291,17 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
               <div className="font-medium text-gray-900">{clean(r.carVariantMaster?.carMakeMaster?.make)} {clean(r.carVariantMaster?.carModelMaster?.model)}</div>
               <div className="text-xs text-gray-500">{clean(r.carVariantMaster?.variant)} {r.colour ? `· ${r.colour}` : ''}</div>
             </td>
-            <td className="px-4 py-3 text-gray-700">{r.year ?? '—'}</td>
-            {visibleColumns.has('month') ? <td className="px-4 py-3 text-gray-700">{r.month ?? '—'}</td> : null}
+            <td className="px-4 py-3 text-gray-700">{[r.month, r.year].filter(Boolean).join(' ') || '—'}</td>
             {visibleColumns.has('fuelType') ? <td className="px-4 py-3 text-gray-700">{r.fuelType ?? '—'}</td> : null}
             <td className="px-4 py-3 text-gray-700">{r.kmsDriven ? Number(r.kmsDriven).toLocaleString('en-IN') : '—'}</td>
-            {visibleColumns.has('owners') ? <td className="px-4 py-3 text-gray-700">{r.noOfOwners ?? '—'}</td> : null}
+            {visibleColumns.has('ownerCount') ? <td className="px-4 py-3 text-gray-700">{r.noOfOwners ?? '—'}</td> : null}
+            {visibleColumns.has('owner') ? <td className="px-4 py-3 text-sm text-gray-600">{r.ownedBy ?? '—'}</td> : null}
             {visibleColumns.has('tax') ? <td className="px-4 py-3 text-gray-700">{r.tax ?? '—'}</td> : null}
             {visibleColumns.has('insurance') ? <td className="px-4 py-3 text-gray-700">{r.insuranceType ?? '—'}</td> : null}
             <td className="px-4 py-3 font-semibold text-gray-900">{fmtMoney(r.price)}</td>
             <td className="px-4 py-3">{r.status ? <Badge label={r.status} /> : '—'}</td>
             {visibleColumns.has('remarks') ? <td className="px-4 py-3 text-sm text-gray-600">{r.otherRemarks ?? '—'}</td> : null}
             {visibleColumns.has('comments') ? <td className="px-4 py-3 text-sm text-gray-600">{r.internalComments ?? '—'}</td> : null}
-            {visibleColumns.has('owner') ? <td className="px-4 py-3 text-sm text-gray-600">{r.ownedBy ?? '—'}</td> : null}
             {visibleColumns.has('photos') ? <td className="px-4 py-3">
               {r._count.inventoryPhotos > 0 ? (
                 <button onClick={() => openPhotos(r)} className="flex items-center gap-1 text-xs text-[#1B2A6B] hover:underline">
@@ -354,7 +329,7 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
 
       <Modal title={`Photos — ${photoRow?.registrationNo ?? ''}`} open={!!photoRow} onClose={() => setPhotoRow(null)}>
         <div className="space-y-2">
-          <p className="text-xs text-gray-500">Previews are shown when the stored image is accessible. Files unavailable in the current environment remain listed for reference.</p>
+          <p className="text-xs text-gray-500">Open any available image in full size or download it. Files unavailable in the current environment remain listed for reference.</p>
           {photosLoading ? (
             <div className="text-sm text-gray-400">Loading...</div>
           ) : photosError ? (
@@ -375,7 +350,15 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
                   ) : (
                     <div className="flex h-40 items-center justify-center px-3 text-center text-xs text-gray-400">Preview unavailable</div>
                   )}
-                  <div className="truncate px-3 py-2 text-xs font-mono text-gray-600" title={p.fileName}>{p.fileName}</div>
+                  <div className="space-y-2 px-3 py-2">
+                    <div className="truncate text-xs font-mono text-gray-600" title={p.fileName}>{p.fileName}</div>
+                    {p.previewUrl && !unavailablePhotoIds.has(p.documentId) ? (
+                      <div className="flex items-center gap-3">
+                        <a href={p.previewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#1B2A6B] hover:underline"><Eye className="h-3.5 w-3.5" />View</a>
+                        <button type="button" onClick={() => downloadPhoto(p)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#1B2A6B] hover:underline"><Download className="h-3.5 w-3.5" />Download</button>
+                      </div>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>

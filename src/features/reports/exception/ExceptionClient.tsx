@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Btn, Input, Select, Table, PageHeader } from '@/components/ui'
+import { formatExceptionDateTime } from './date'
 
 interface ExceptionRow {
   logginsId: number
@@ -17,10 +18,8 @@ interface ExceptionRow {
 }
 interface UserOption { userId: number; displayName: string | null; userName: string | null }
 
-const fmtDateTime = (d: Date | string | null) => d ? new Date(d).toLocaleString('en-IN') : '—'
-
 export function ExceptionClient({
-  initialData, users, total, page, pageCount, fromDate, toDate, userId,
+  initialData, users, total, page, pageCount, fromDate, toDate, userId, filterError,
 }: {
   initialData: ExceptionRow[]
   users: UserOption[]
@@ -30,6 +29,7 @@ export function ExceptionClient({
   fromDate: string
   toDate: string
   userId: number | null
+  filterError: string | null
 }) {
   const router = useRouter()
 
@@ -52,18 +52,25 @@ export function ExceptionClient({
           <option value="">All Users</option>
           {users.map(u => <option key={u.userId} value={u.userId}>{u.displayName ?? u.userName}</option>)}
         </Select>
-        {(fromDate || toDate || userId) && (
+        {(fromDate || toDate || userId || filterError) && (
           <Btn variant="outline" size="sm" onClick={() => pushQuery({ fromDate: '', toDate: '', userId: '' })}>Clear filters</Btn>
         )}
       </div>
 
-      <Table headers={['Date/Time', 'User', 'Code', 'Message', 'Source', 'URL']} empty={initialData.length === 0}>
+      {filterError && <p role="alert" className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{filterError}</p>}
+
+      <Table
+        headers={['Date/Time', 'User', 'Code', 'Message', 'Error', 'Source', 'URL']}
+        empty={initialData.length === 0}
+        emptyMessage={filterError ? 'Correct the filters above to load exception logs.' : 'No exception logs match the current filters.'}
+      >
         {initialData.map(r => (
           <tr key={r.logginsId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDateTime(r.datetime)}</td>
+            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatExceptionDateTime(r.datetime)}</td>
             <td className="px-4 py-3 text-sm text-gray-700">{r.userName ?? '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{r.code ?? '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={r.message ?? ''}>{r.message ?? '—'}</td>
+            <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={r.error ?? ''}>{r.error ?? '—'}</td>
             <td className="px-4 py-3 text-sm text-gray-600">{r.source ?? '—'}</td>
             <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate" title={r.url ?? ''}>{r.url ?? '—'}</td>
           </tr>

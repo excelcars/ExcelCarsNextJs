@@ -29,7 +29,6 @@ export default async function StockReportPage({
     filters,
     normalizeStockPage(Number(value('page'))),
     normalizeStockPageSize(Number(value('pageSize'))),
-    value('sort'),
   )
 
   const data = result.rows.map((r) => ({
@@ -45,7 +44,6 @@ export default async function StockReportPage({
     page={result.page}
     pageSize={result.pageSize}
     pageCount={result.pageCount}
-    sort={result.sort}
     totalValue={result.totalValue}
     statusCounts={result.statusCounts}
     canAccessInventory={canAccessInventory}

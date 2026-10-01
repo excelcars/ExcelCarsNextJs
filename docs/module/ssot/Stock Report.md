@@ -21,7 +21,7 @@ It owns:
 - client-side CSV export
 - photo-count display
 - lazy photo-metadata loading through `/api/reports/photos`
-- a modal that previews accessible images and lists their filenames
+- a modal that previews accessible images, opens them at full size, downloads them, and lists their filenames
 
 It does not own:
 
@@ -47,7 +47,7 @@ This is separate from the Stock Tracking report at `/reports/tracking`. Stock Re
 - The report has a photo-count action per row when the row has one or more photo records.
 - Photo details are loaded only after the user clicks a photo count.
 - The photo modal previews images when their current or configured legacy storage path is accessible.
-- The report has URL-backed server filters, pagination, and sorting, but no editable form, row navigation, or report-specific mutation action.
+- The report has URL-backed server filters and pagination, but no editable form, row navigation, sorting control, or report-specific mutation action.
 
 ## 3. Navigation and access
 
@@ -187,21 +187,20 @@ The displayed columns are, in order:
 1. `SKU`
 2. `Reg No`
 3. `Vehicle`
-4. `Year`
-5. `Month`
-6. `Fuel`
-7. `KM`
-8. `Owners`
+4. `Year / Month`
+5. `Fuel`
+6. `KM Driven`
+7. `Owner Count`
+8. `Owner Name`
 9. `Tax`
 10. `Insurance`
 11. `Price`
 12. `Status`
 13. `Remarks`
 14. `Internal Comments`
-15. `Owner`
-16. `Photos`
+15. `Photos`
 
-The core Vehicle, Year, KM, Price, and Status columns are always visible. A client-side **Columns** menu lets the user show or hide the remaining detail columns for the current browser session; this preference does not alter the query or export fields. Users who also have `/inventory` permission receive an **Open inventory** action that opens the matching registration in the Inventory module; users without that permission do not see the action.
+The core Vehicle, combined Year / Month, KM Driven, Price, and Status columns are always visible. Owner Count and Owner Name are adjacent when selected. A client-side **Columns** menu lets the user show or hide the remaining detail columns for the current browser session; this preference does not alter the query or export fields. Users who also have `/inventory` permission receive an **Open inventory** action that opens the matching registration in the Inventory module; users without that permission do not see the action.
 
 Rendering rules:
 
@@ -240,9 +239,9 @@ Quick search does not match variant, customer name, year, or price. The dedicate
 
 ### 7.2 Structured filters
 
-The report provides optional inputs for Make, Model, Variant, Colour, Fuel Type, Owner Type, Owner Name, Owner Mobile, and Registration No. They are URL-backed and server-filtered when **Apply Filters** is selected. Every filled field uses case-insensitive partial matching; all filled structured fields combine with AND semantics. **Clear** removes every filter and returns to the unfiltered report.
+The report provides optional inputs for Make, Model, Variant, Colour, Fuel Type, Owner Type, Owner Name, Owner Mobile, and Registration No. They are URL-backed and server-filtered when **Apply filters** is selected. Every filled field uses case-insensitive partial matching; all filled structured fields combine with AND semantics. **Reset filters** removes every filter and returns to the unfiltered report.
 
-Each structured input supplies native autocomplete suggestions after two typed characters. Suggestions are requested from `GET /api/reports/stock/suggestions`, debounced by 250 ms, and do not constrain manually typed values. Make, Model, and Variant suggestions combine normalized master records with legacy inventory text; the other fields use distinct inventory values. The endpoint requires the `Stock_Report` route permission. **Clear** removes filters while retaining the current sort and page size; **Reset view** also restores newest-first sorting and 25 rows per page.
+Each structured input supplies native autocomplete suggestions after two typed characters. Suggestions are requested from `GET /api/reports/stock/suggestions`, debounced by 250 ms, and do not constrain manually typed values. Make, Model, and Variant suggestions combine normalized master records with legacy inventory text; the other fields use distinct inventory values. The endpoint requires the `Stock_Report` route permission. Apply filters and Reset filters are grouped together in the filter grid; Reset filters clears all values and restores 25 rows per page.
 
 ### 7.3 Status buttons
 
@@ -255,7 +254,7 @@ The status control is a row of buttons generated from:
 - `Not Available`
 - `Sold`
 
-These values come from `INVENTORY_STATUSES` in `src/features/inventory/queries.ts`. The selected value is stored in `filterStatus`, added to the URL by **Apply Filters**, and filters the server query by exact status unless it is `All`.
+These values come from `INVENTORY_STATUSES` in `src/features/inventory/queries.ts`. Selecting a status immediately adds it to the URL and filters the server query by exact status unless it is `All`.
 
 The selected status button uses the navy active style; inactive buttons use the shared white/gray outline styling.
 
@@ -375,7 +374,7 @@ Visible controls:
 - Photo count button: opens the photo modal and loads photo metadata.
 - Modal close button: closes the photo modal.
 
-There are no reset, save, create, edit, delete, row-selection, or inventory-detail buttons. The page has rows-per-page selection, server-backed sorting, and Previous/Next pagination controls; there are no links in report table cells or modal content.
+There are no save, create, edit, delete, or row-selection controls. The page has grouped Apply filters and Reset filters controls, rows-per-page selection, and Previous/Next pagination controls; there are no links in report table cells or modal content.
 
 ## 12. Validation and error handling
 
@@ -417,7 +416,6 @@ Stock Report reads from `inventory_management`, vehicle-master relations, and `i
 
 ## 14. Current constraints and known gaps
 
-- A Sort by control is URL-backed and applied in the server query. It supports newest inventory first (default), registration A–Z, newest year first, KM high-to-low, and price high-to-low or low-to-high.
 - Export intentionally loads all matching rows and should be monitored if report sizes become exceptionally large.
 - There is no sorting control; rows remain in descending inventory ID order.
 - The report has no server-side export and export always uses the current browser-filtered data.
@@ -442,7 +440,7 @@ The implementation was reviewed a second time after the initial source trace by 
 - the `InventoryManagement` and `InventoryPhotos` Prisma model fields;
 - the dashboard middleware/layout interaction.
 
-The second pass confirmed that Stock Report is distinct from Stock Tracking and that all visible actions are covered above. Pagination, URL-backed filters, and server sorting are implemented; no additional Stock Report page or mutation path is present.
+The second pass confirmed that Stock Report is distinct from Stock Tracking and that all visible actions are covered above. Pagination and URL-backed filters are implemented; no additional Stock Report page or mutation path is present.
 
 ## 16. SSOT rule
 
