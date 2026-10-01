@@ -190,7 +190,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', disabled
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="new-password"
-        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full sm:w-72 disabled:opacity-60 disabled:cursor-not-allowed"
+        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full max-w-full disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </div>
   )

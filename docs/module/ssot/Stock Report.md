@@ -10,7 +10,7 @@
 
 ## 1. Purpose and scope
 
-Stock Report is an authenticated, read-only inventory report. It loads inventory rows, lets the user filter the loaded rows by free text and status, exports the currently filtered rows as a browser-generated CSV, and displays stored photo filenames for a selected inventory row.
+Stock Report is an authenticated, read-only inventory report. It applies URL-backed inventory filters, exports the matching rows as CSV, and previews accessible photos for a selected inventory row.
 
 It owns:
 
@@ -21,7 +21,7 @@ It owns:
 - client-side CSV export
 - photo-count display
 - lazy photo-metadata loading through `/api/reports/photos`
-- a modal that lists photo filenames
+- a modal that previews accessible images and lists their filenames
 
 It does not own:
 
@@ -46,8 +46,8 @@ This is separate from the Stock Tracking report at `/reports/tracking`. Stock Re
 - The report has a client-side `Export` button.
 - The report has a photo-count action per row when the row has one or more photo records.
 - Photo details are loaded only after the user clicks a photo count.
-- The photo modal lists filenames; it does not render image previews.
-- There is no pagination, sorting control, URL-backed filter state, editable form, row navigation, or report-specific mutation action.
+- The photo modal previews images when their current or configured legacy storage path is accessible.
+- The report has URL-backed server filters, pagination, and sorting, but no editable form, row navigation, or report-specific mutation action.
 
 ## 3. Navigation and access
 
@@ -65,26 +65,28 @@ There are no Stock Report links from the table rows to inventory editing or anot
 
 ### 3.2 Page-level authorization
 
-`app/(dashboard)/reports/stock/page.tsx` calls `canCurrentUserAccessRoute('/reports/stock')`. The access catalog maps this route to the function name `Stock_Report`. If access is denied, the page redirects to `/dashboard` before calling `listStock`.
+`app/(dashboard)/reports/stock/page.tsx` calls `canCurrentUserAccessRoute('/reports/stock')`. The access catalog maps this route to the function name `Stock_Report`. If access is denied, the page redirects to `/dashboard` before calling `listStockPage`.
 
 The dashboard layout separately requires an authenticated session and computes accessible routes from the current user's database role permissions. Middleware protects non-API routes from unauthenticated access and redirects unauthenticated users to `/login`.
 
 ### 3.3 Photo API authorization
 
-`GET /api/reports/photos` calls `auth()` and returns `401` with `{ error: 'Unauthorized' }` when there is no session. The API checks authentication only; it does not call `canCurrentUserAccessRoute('/reports/stock')` or enforce the `Stock_Report` function permission. An authenticated user who lacks the Stock Report route permission could therefore call the endpoint directly if they know its URL.
+`GET /api/reports/photos` calls `auth()` and returns `401` with `{ error: 'Unauthorized' }` when there is no session. It then calls `canCurrentUserAccessRoute('/reports/stock')` and returns `403` with `{ error: 'Forbidden' }` unless the user has the `Stock_Report` function permission. This matches the report page's authorization boundary.
 
 ## 4. Implementation surface
 
 | Surface | Implementation | Behavior |
 |---|---|---|
-| Page | `app/(dashboard)/reports/stock/page.tsx` | Checks access, loads initial inventory, serializes Decimal values, renders client component. |
+| Page | `app/(dashboard)/reports/stock/page.tsx` | Checks access, reads URL-backed report filters, loads matching inventory, serializes Decimal values, renders client component. |
 | Query module | `src/features/reports/stock/queries.ts` | Builds the inventory query and loads photo rows. |
-| Client component | `src/features/reports/stock/StockReportClient.tsx` | Owns search, status state, table, CSV export, photo modal, and client fetch. |
+| Client component | `src/features/reports/stock/StockReportClient.tsx` | Owns filter form state, table, CSV download, photo modal, and client fetch. |
 | Photo API | `app/api/reports/photos/route.ts` | Authenticated lookup of photos by inventory ID. |
+| Export API | `app/api/reports/stock/export/route.ts` | Re-runs the URL filters for an authorized user and returns rows for CSV download. |
+| Suggestions API | `app/api/reports/stock/suggestions/route.ts` | Returns permission-gated, prefix-matched suggestions for structured report filters. |
 | Shared layout | `src/components/Layout.tsx` | Sidebar navigation, active route state, profile menu, sign-out, and dashboard shell. |
 | Shared UI | `src/components/ui.tsx` | Page header, button, search input, badge, table, and modal primitives. |
 
-No Stock Report server action, route handler for report rows, report export endpoint, or report-specific database write exists.
+No Stock Report server action, row-query route handler, or report-specific database write exists.
 
 ## 5. Server page-load and query behavior
 
@@ -94,15 +96,15 @@ No Stock Report server action, route handler for report rows, report export endp
 
 1. Checks `canCurrentUserAccessRoute('/reports/stock')`.
 2. Redirects to `/dashboard` if the check is false.
-3. Calls `listStock({ search: '', status: 'All' })`.
+3. Reads the optional report filters, page, and page-size from the URL, then calls `listStockPage`.
 4. Converts truthy Prisma Decimal values for `kmsDriven` and `price` to strings; null/falsy values become `null`.
-5. Passes the resulting array to `StockReportClient` as `initialData`.
+5. Passes the result page, total count, pagination metadata, and applied filters to `StockReportClient`.
 
-The page does not read search parameters, cookies, form submissions, or client filter state. A browser refresh starts with the complete unfiltered dataset again.
+The report filters are URL-backed. A browser refresh preserves the applied filters; a route with no filter parameters loads the complete unfiltered dataset.
 
 ### 5.2 `listStock` filters
 
-The query function accepts `search` and `status`.
+The query function accepts quick `search`, `status`, and nine structured filters: `make`, `model`, `variant`, `colour`, `fuelType`, `ownerType`, `ownerName`, `ownerMobile`, and `registrationNo`.
 
 Status:
 
@@ -124,7 +126,7 @@ Search:
   - related vehicle make through `carVariantMaster.carMakeMaster.make`
   - related vehicle model through `carVariantMaster.carModelMaster.model`
 
-In the current page, the function is called only with an empty search and `All`, so these server-side filter branches are not used by the visible report workflow. The client applies its own narrower filter contract described below.
+Each filled structured filter uses trimmed, case-insensitive `contains` matching. Structured filters are combined with one another, status, and quick search using `AND` semantics. Make, model, and variant each match either the legacy text field or its normalized vehicle-master relation, so legacy inventory records remain searchable. Quick search remains an `OR` group across its supported fields.
 
 ### 5.3 Inventory query
 
@@ -137,7 +139,7 @@ In the current page, the function is called only with an empty search and `All`,
 
 There is no `select`, so Prisma returns all scalar fields of `InventoryManagement` in addition to the included vehicle-master relations and photo count. The client report consumes only the fields listed in Section 6.
 
-There is no `take`, `skip`, count query, pagination metadata, or aggregate query. The full matching result set is loaded into the server-rendered client payload.
+`listStockPage` first counts matching rows, then loads only the selected page with `skip` and `take`. The allowed page sizes are 25, 50, and 100; invalid page or page-size values are normalized to page 1 and 25 rows. A requested page beyond the final page is normalized to the final page. Export remains unpaged and uses `listStock` so it includes every matching row.
 
 ## 6. Data model and displayed fields
 
@@ -147,7 +149,7 @@ There is no `take`, `skip`, count query, pagination metadata, or aggregate query
 - `car_variant_master`: variant relation.
 - `car_make_master`: make relation.
 - `car_model_master`: model relation.
-- `inventory_photos`: photo count and modal filename lookup.
+- `inventory_photos`: photo count, filename, and preview lookup.
 
 The `InventoryManagement` model also contains legacy text fields such as `makeLegacy`, `modelLegacy`, and `variantLegacy`, but Stock Report display/search uses the normalized vehicle-master relations for make, model, and variant. Those legacy fields are not rendered by the client component.
 
@@ -160,10 +162,16 @@ Each row uses:
 - `registrationNo`
 - `colour`
 - `year`
+- `month`
 - `fuelType`
 - `kmsDriven`
+- `noOfOwners`
+- `tax`
+- `insuranceType`
 - `price`
 - `status`
+- `otherRemarks`
+- `internalComments`
 - `ownedBy`
 - `mobileNoOwnedBy` (typed in the row shape but not displayed or used by the client search)
 - `customerName` (typed in the row shape but not displayed or used by the client search)
@@ -180,12 +188,20 @@ The displayed columns are, in order:
 2. `Reg No`
 3. `Vehicle`
 4. `Year`
-5. `Fuel`
-6. `KM`
-7. `Price`
-8. `Status`
-9. `Owner`
-10. `Photos`
+5. `Month`
+6. `Fuel`
+7. `KM`
+8. `Owners`
+9. `Tax`
+10. `Insurance`
+11. `Price`
+12. `Status`
+13. `Remarks`
+14. `Internal Comments`
+15. `Owner`
+16. `Photos`
+
+The core Vehicle, Year, KM, Price, and Status columns are always visible. A client-side **Columns** menu lets the user show or hide the remaining detail columns for the current browser session; this preference does not alter the query or export fields. Users who also have `/inventory` permission receive an **Open inventory** action that opens the matching registration in the Inventory module; users without that permission do not see the action.
 
 Rendering rules:
 
@@ -210,7 +226,7 @@ The shared `SearchBar` is rendered with:
 - controlled value: `search`
 - setter: `setSearch`
 
-The client filter lowercases the entered string and uses substring matching against:
+When the user selects **Apply Filters**, the quick search is added to the URL and evaluated on the server as a case-insensitive, trimmed substring match against:
 
 - registration number
 - SKU
@@ -218,11 +234,17 @@ The client filter lowercases the entered string and uses substring matching agai
 - normalized model
 - owner name (`ownedBy`)
 
-The client search is case-insensitive but does not trim the entered value. Because the search term is used as-is after lowercasing, leading/trailing spaces generally prevent matches unless the data contains those spaces.
+The quick-search term is trimmed before querying. It is an OR group, but it is ANDed with every filled structured filter and with the selected status.
 
-The client search does not match variant, colour, fuel type, mobile number, customer name, year, price, or legacy make/model/variant text.
+Quick search does not match variant, customer name, year, or price. The dedicated structured filters cover variant, colour, fuel type, and owner mobile.
 
-### 7.2 Status buttons
+### 7.2 Structured filters
+
+The report provides optional inputs for Make, Model, Variant, Colour, Fuel Type, Owner Type, Owner Name, Owner Mobile, and Registration No. They are URL-backed and server-filtered when **Apply Filters** is selected. Every filled field uses case-insensitive partial matching; all filled structured fields combine with AND semantics. **Clear** removes every filter and returns to the unfiltered report.
+
+Each structured input supplies native autocomplete suggestions after two typed characters. Suggestions are requested from `GET /api/reports/stock/suggestions`, debounced by 250 ms, and do not constrain manually typed values. Make, Model, and Variant suggestions combine normalized master records with legacy inventory text; the other fields use distinct inventory values. The endpoint requires the `Stock_Report` route permission. **Clear** removes filters while retaining the current sort and page size; **Reset view** also restores newest-first sorting and 25 rows per page.
+
+### 7.3 Status buttons
 
 The status control is a row of buttons generated from:
 
@@ -233,26 +255,25 @@ The status control is a row of buttons generated from:
 - `Not Available`
 - `Sold`
 
-These values come from `INVENTORY_STATUSES` in `src/features/inventory/queries.ts`. The selected value is stored in `filterStatus`. A row passes the status filter when the selected value is `All` or the row’s `status` exactly equals the selected value.
+These values come from `INVENTORY_STATUSES` in `src/features/inventory/queries.ts`. The selected value is stored in `filterStatus`, added to the URL by **Apply Filters**, and filters the server query by exact status unless it is `All`.
 
-Status filtering is client-side and does not update the URL or trigger a new database request. The selected status button uses the navy active style; inactive buttons use the shared white/gray outline styling.
+The selected status button uses the navy active style; inactive buttons use the shared white/gray outline styling.
 
-### 7.3 Empty state
+### 7.4 Empty state
 
-The page header subtitle shows the number of currently filtered rows as `{filtered.length} vehicles`. The shared `Table` receives `empty={filtered.length === 0}` and displays `No records found` when the search/status combination yields no rows.
+The page header subtitle shows the number of server-filtered rows returned. The shared `Table` displays `No records found` when no rows match the applied filters.
 
 ## 8. Export behavior
 
 The header contains an `Export` button with a download icon. It is always rendered, including when the filtered result is empty.
 
-Export is entirely client-side:
+Export is server-backed and client-downloaded:
 
-1. The button passes the current `filtered` array to `downloadCsv`.
-2. `toCsv` creates a header row and one CSV row per filtered inventory row.
-3. Each cell is wrapped in double quotes and embedded quotes are doubled.
-4. A `Blob` is created with `text/csv;charset=utf-8;`.
-5. An object URL and temporary anchor are created, clicked, and revoked.
-6. The browser download filename is `stock-report.csv`.
+1. The client calls `GET /api/reports/stock/export` with the currently applied URL filters.
+2. The endpoint requires a session and the `/reports/stock` function permission, then calls `listStock` with the same normalized filter contract as the page.
+3. The client converts the returned rows into CSV; each cell is wrapped in double quotes and embedded quotes are doubled.
+4. A `Blob` is created with `text/csv;charset=utf-8;`, downloaded as `stock-report.csv`, then revoked.
+5. An endpoint or malformed-response failure shows an inline export error and does not download a file.
 
 CSV columns, in order:
 
@@ -262,14 +283,20 @@ CSV columns, in order:
 - `Model`
 - `Variant`
 - `Year`
+- `Month`
 - `Colour`
 - `Fuel`
 - `KM`
+- `No. of Owners`
+- `Tax`
+- `Insurance Type`
 - `Price`
 - `Status`
+- `Remarks`
+- `Internal Comments`
 - `Owner`
 
-Export values are taken from the current client rows. Make, model, and variant use the same `clean()` helper as the display. Numeric KM and price values are exported as their string values, not the formatted display strings with Indian grouping or the rupee symbol. There is no server-side export endpoint, permission check at export time, export error state, total row, or export of photo metadata/customer fields.
+Export values are returned by a fresh server query for the applied filter URL. Make, model, and variant use the same `clean()` helper as the display. Numeric KM and price values are exported as their string values, not the formatted display strings with Indian grouping or the rupee symbol. There is no total row or export of photo metadata/customer fields.
 
 Exporting zero filtered rows produces a CSV containing the header row only.
 
@@ -305,26 +332,27 @@ The request is lazy and is made only after clicking a non-zero photo count. Ther
 - calls `getPhotos(inventoryId)` otherwise.
 - returns the Prisma photo rows as JSON.
 
-`getPhotos` calls `prisma.inventoryPhotos.findMany({ where: { fkInventoryId: inventoryId } })`. No explicit order is requested. The returned model fields include `documentId`, `inventoryNumberLegacy`, `path`, and `fkInventoryId`; the client uses `documentId` and `path`.
+`getPhotos` calls `prisma.inventoryPhotos.findMany({ where: { fkInventoryId: inventoryId } })`. No explicit order is requested. The API maps each database photo to `documentId`, a filename, and a preview URL. The preview URL supports current `/uploads/` paths, Firebase storage paths, and legacy `Fileupload/Inventory_Car_Photo` paths through the existing legacy-photo route.
 
 ### 9.4 Modal behavior
 
 The shared `Modal` is titled `Photos — {registrationNo}` and opens while `photoRow` is non-null. It can close through the close button, outside click, or `Escape`. Closing clears `photoRow`; it does not clear the current photo array or reset `photosLoading` directly.
 
-The modal always displays this note:
+The modal displays this note:
 
-`Image files from the legacy system were not migrated to this app's storage — filenames are shown for reference.`
+`Previews are shown when the stored image is accessible. Files unavailable in the current environment remain listed for reference.`
 
 Body states:
 
 - loading: `Loading...`
 - loaded empty: `No photos on file.`
-- loaded with rows: a list of filenames
+- loaded with rows: a two-column grid with an image preview and filename for each photo
 
-For each photo, the client displays the final slash-delimited path segment using `p.path?.split('/').pop()`, falling back to the full path when no final segment is available. It does not create an `<img>` element or use the public legacy-photo route. There is no inline error message when the fetch fails.
+For each photo, the client renders its preview URL in an image element. If the URL is absent or fails to load, that tile changes to `Preview unavailable` while retaining its filename. There is no inline error message when the photo-list fetch itself fails.
 
 ## 10. Business logic and calculations
 
+- A summary strip reflects the current server-filtered result set: matching vehicle count, total price across matching rows, and count by inventory status. Price aggregation is calculated in the database; blank prices do not contribute to the total.
 - Result ordering is descending `inventoryId` from the initial Prisma query.
 - The report performs no totals, aggregates, balance calculations, derived status calculations, or row grouping.
 - The header count is the count of rows remaining after client search and status filtering.
@@ -347,7 +375,7 @@ Visible controls:
 - Photo count button: opens the photo modal and loads photo metadata.
 - Modal close button: closes the photo modal.
 
-There are no reset, save, create, edit, delete, sort, pagination, row-selection, or inventory-detail buttons. There are no links in report table cells or modal content.
+There are no reset, save, create, edit, delete, row-selection, or inventory-detail buttons. The page has rows-per-page selection, server-backed sorting, and Previous/Next pagination controls; there are no links in report table cells or modal content.
 
 ## 12. Validation and error handling
 
@@ -389,17 +417,14 @@ Stock Report reads from `inventory_management`, vehicle-master relations, and `i
 
 ## 14. Current constraints and known gaps
 
-- The full inventory result set is loaded server-side before browser filtering; there is no pagination or result limit.
-- Search/status changes do not re-query the database and are not represented in the URL.
-- The client search is narrower than the server query helper: it omits colour, fuel type, mobile, and several fields supported by `listStock`.
-- The client search does not include variant or colour even though both are displayed.
+- A Sort by control is URL-backed and applied in the server query. It supports newest inventory first (default), registration A–Z, newest year first, KM high-to-low, and price high-to-low or low-to-high.
+- Export intentionally loads all matching rows and should be monitored if report sizes become exceptionally large.
 - There is no sorting control; rows remain in descending inventory ID order.
 - The report has no server-side export and export always uses the current browser-filtered data.
 - The export button is available for an empty result and creates a header-only CSV.
-- Photo records are shown as filenames only because legacy image files were not migrated into this app's storage.
+- A preview is unavailable when a photo has no supported storage path or its legacy/current storage file cannot be reached from the app environment; its filename remains visible.
 - Photo lookup has no explicit ordering.
-- Photo API route authorization is session-only, not function-permission-aware.
-- Photo loading has no error UI and can leave a stale loading state after a failure.
+- Photo-list failures show an inline error and always clear the loading state.
 - The UI’s truthiness checks display zero KM/price as `—`.
 - `mobileNoOwnedBy` and `customerName` are present in the client row type but unused in the report UI.
 - Prisma returns more inventory scalar data than the report renders, but there is no explicit `select` projection in the query.
@@ -417,9 +442,9 @@ The implementation was reviewed a second time after the initial source trace by 
 - the `InventoryManagement` and `InventoryPhotos` Prisma model fields;
 - the dashboard middleware/layout interaction.
 
-The second pass confirmed that Stock Report is distinct from Stock Tracking, that all visible actions are covered above, and that no additional Stock Report page, API, form, sort, pagination, or mutation path is present in the current Next.js codebase.
+The second pass confirmed that Stock Report is distinct from Stock Tracking and that all visible actions are covered above. Pagination, URL-backed filters, and server sorting are implemented; no additional Stock Report page or mutation path is present.
 
 ## 16. SSOT rule
 
-The current Next.js Stock Report contract is an authenticated and permission-gated, read-only inventory listing that loads data once on the server, filters it in the browser by free text and status, exports the filtered rows locally as CSV, and retrieves photo metadata on demand. Any change to the page route, access function, inventory query, displayed fields, client filter predicates, CSV columns, photo API contract, or modal behavior should update this document and its corresponding tests.
+The current Next.js Stock Report contract is an authenticated and permission-gated, read-only inventory listing that applies URL-backed filters in the server query, exports a fresh authorized server result as CSV, and retrieves photo metadata on demand. Any change to the page route, access function, inventory query, displayed fields, filter predicates, CSV columns, export or photo API contract, or modal behavior should update this document and its corresponding tests.
 

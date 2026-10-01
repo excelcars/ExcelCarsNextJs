@@ -7,19 +7,25 @@ import { ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Table, PageHeader } from '@/components/ui'
 import {
   OUTSTANDING_PAGE_SIZES,
+  OUTSTANDING_PAYMENT_STATUSES,
   OUTSTANDING_TYPES,
   type OutstandingRow,
-} from './queries'
+  getOutstandingDrillThroughHref,
+} from './rules'
+import { buildOutstandingCsv } from './csv'
 
 const fmtMoney = (n: number | null | undefined) => `₹${Number(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+
+function fmtDate(value: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+}
 
 function fmtPercent(value: number | null) {
   if (value === null || value === undefined) return '—'
   return `${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}%`
-}
-
-function csvValue(value: string | number | null | undefined) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
 
 function buildExportParams(filters: {
@@ -27,6 +33,7 @@ function buildExportParams(filters: {
   customerMobile: string
   registrationNo: string
   type: string
+  paymentStatus: string
 }) {
   const params = new URLSearchParams()
 
@@ -34,65 +41,13 @@ function buildExportParams(filters: {
   if (filters.customerMobile) params.set('customerMobile', filters.customerMobile)
   if (filters.registrationNo) params.set('registrationNo', filters.registrationNo)
   if (filters.type && filters.type !== 'All') params.set('type', filters.type)
+  if (filters.paymentStatus && filters.paymentStatus !== 'All') params.set('paymentStatus', filters.paymentStatus)
 
   return params
 }
 
-function toCsv(rows: OutstandingRow[]): string {
-  const headers = [
-    'Sr. No.',
-    'Type',
-    'Customer Name',
-    'Customer Mobile',
-    'Customer Email',
-    'Car Registration No',
-    'Payment Status',
-    'Total Amount',
-    '% of Payout',
-    'Payout Amount',
-    'Amount Paid',
-    'Bal Amt',
-  ]
-  const lines = [headers.map(csvValue).join(',')]
-  const grandTotal = rows.reduce((sum, row) => sum + Number(row.balance ?? 0), 0)
-
-  rows.forEach((row, index) => {
-    lines.push([
-      index + 1,
-      row.type,
-      row.customerName,
-      row.customerMobile,
-      row.customerEmail,
-      row.registrationNo,
-      row.paymentStatus,
-      row.totalAmount,
-      row.percentageOfPayout,
-      row.payoutAmount,
-      row.amountPaid,
-      row.balance,
-    ].map(csvValue).join(','))
-  })
-
-  lines.push([
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    'Grand Total',
-    grandTotal,
-  ].map(csvValue).join(','))
-
-  return lines.join('\n')
-}
-
 function downloadCsv(rows: OutstandingRow[]) {
-  const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8;' })
+  const blob = new Blob([buildOutstandingCsv(rows)], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -194,6 +149,7 @@ interface OutstandingClientProps {
   initialCustomerMobile: string
   initialRegistrationNo: string
   initialType: string
+  initialPaymentStatus: string
   total: number
   totalBalance: number
   page: number
@@ -207,6 +163,7 @@ export function OutstandingClient({
   initialCustomerMobile,
   initialRegistrationNo,
   initialType,
+  initialPaymentStatus,
   total,
   totalBalance,
   page,
@@ -222,6 +179,7 @@ export function OutstandingClient({
   const [customerMobile, setCustomerMobile] = useState(initialCustomerMobile)
   const [registrationNo, setRegistrationNo] = useState(initialRegistrationNo)
   const [filterType, setFilterType] = useState(initialType)
+  const [paymentStatus, setPaymentStatus] = useState(initialPaymentStatus)
   const [customerSuggestions, setCustomerSuggestions] = useState<CustomerSuggestion[]>([])
   const [customerOpen, setCustomerOpen] = useState(false)
   const [customerLoading, setCustomerLoading] = useState(false)
@@ -244,7 +202,8 @@ export function OutstandingClient({
     setCustomerMobile(initialCustomerMobile)
     setRegistrationNo(initialRegistrationNo)
     setFilterType(initialType)
-  }, [initialCustomerMobile, initialCustomerName, initialRegistrationNo, initialType])
+    setPaymentStatus(initialPaymentStatus)
+  }, [initialCustomerMobile, initialCustomerName, initialPaymentStatus, initialRegistrationNo, initialType])
 
   useEffect(() => {
     if (customerDebounceRef.current) clearTimeout(customerDebounceRef.current)
@@ -325,6 +284,7 @@ export function OutstandingClient({
     customerMobile: string
     registrationNo: string
     type: string
+    paymentStatus: string
     page: number
     pageSize: number
   }) => {
@@ -334,6 +294,7 @@ export function OutstandingClient({
     if (next.customerMobile) params.set('customerMobile', next.customerMobile)
     if (next.registrationNo) params.set('registrationNo', next.registrationNo)
     if (next.type !== 'All') params.set('type', next.type)
+    if (next.paymentStatus !== 'All') params.set('paymentStatus', next.paymentStatus)
     if (next.page > 1) params.set('page', String(next.page))
     if (next.pageSize !== 25) params.set('pageSize', String(next.pageSize))
 
@@ -348,6 +309,7 @@ export function OutstandingClient({
       customerMobile: customerMobile.trim(),
       registrationNo: registrationNo.trim(),
       type: filterType,
+      paymentStatus,
       page: 1,
       pageSize,
     })
@@ -358,6 +320,7 @@ export function OutstandingClient({
     setCustomerMobile('')
     setRegistrationNo('')
     setFilterType('All')
+    setPaymentStatus('All')
     setCustomerOpen(false)
     setRegistrationOpen(false)
     pushQuery({
@@ -365,6 +328,7 @@ export function OutstandingClient({
       customerMobile: '',
       registrationNo: '',
       type: 'All',
+      paymentStatus: 'All',
       page: 1,
       pageSize,
     })
@@ -378,6 +342,7 @@ export function OutstandingClient({
         customerMobile: initialCustomerMobile,
         registrationNo: initialRegistrationNo,
         type: initialType,
+        paymentStatus: initialPaymentStatus,
       })
 
       try {
@@ -402,8 +367,8 @@ export function OutstandingClient({
   const pageEnd = total === 0 ? 0 : pageStart + rows.length - 1
 
   const hasActiveFilters = useMemo(() => {
-    return Boolean(initialCustomerName || initialCustomerMobile || initialRegistrationNo || initialType !== 'All')
-  }, [initialCustomerMobile, initialCustomerName, initialRegistrationNo, initialType])
+    return Boolean(initialCustomerName || initialCustomerMobile || initialRegistrationNo || initialType !== 'All' || initialPaymentStatus !== 'All')
+  }, [initialCustomerMobile, initialCustomerName, initialPaymentStatus, initialRegistrationNo, initialType])
 
   return (
     <div>
@@ -418,7 +383,7 @@ export function OutstandingClient({
         }
       />
 
-      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <AutocompleteInput
           label="Customer Name"
           value={customerName}
@@ -493,6 +458,16 @@ export function OutstandingClient({
           ))}
         </Select>
         <Select
+          label="Payment Status"
+          value={paymentStatus}
+          onChange={event => setPaymentStatus(event.target.value)}
+          disabled={isPending}
+        >
+          {OUTSTANDING_PAYMENT_STATUSES.map(status => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </Select>
+        <Select
           label="Rows Per Page"
           value={String(pageSize)}
           onChange={event => pushQuery({
@@ -500,6 +475,7 @@ export function OutstandingClient({
             customerMobile: initialCustomerMobile,
             registrationNo: initialRegistrationNo,
             type: initialType,
+            paymentStatus: initialPaymentStatus,
             page: 1,
             pageSize: Number(event.target.value),
           })}
@@ -540,6 +516,8 @@ export function OutstandingClient({
             'Customer Email',
             'Car Registration No',
             'Payment Status',
+            'Next Follow-up',
+            'Remark',
             'Total Amount',
             '% of Payout',
             'Payout Amount',
@@ -561,13 +539,7 @@ export function OutstandingClient({
                 <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">
                   {row.registrationNo ? (
                     <Link
-                      href={
-                        row.type === 'RTO'
-                          ? `/rto?registrationNo=${encodeURIComponent(row.registrationNo)}`
-                          : row.type === 'Insurance'
-                          ? `/insurance?search=${encodeURIComponent(row.registrationNo)}`
-                          : `/loan?search=${encodeURIComponent(row.registrationNo)}`
-                      }
+                      href={getOutstandingDrillThroughHref(row.type, row.registrationNo)}
                       className="hover:underline text-blue-800"
                     >
                       {row.registrationNo}
@@ -579,6 +551,8 @@ export function OutstandingClient({
                 <td className="px-4 py-3 text-sm text-gray-700">
                   {row.paymentStatus ? <Badge label={row.paymentStatus} /> : '—'}
                 </td>
+                <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(row.followupDate)}</td>
+                <td className="px-4 py-3 text-sm text-gray-600 max-w-56"><span className="block truncate" title={row.remark ?? undefined}>{row.remark ?? '—'}</span></td>
                 <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(row.totalAmount)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{fmtPercent(row.percentageOfPayout)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">
@@ -596,7 +570,7 @@ export function OutstandingClient({
           })}
           {rows.length > 0 && (
             <tr className="bg-gray-50 font-semibold">
-              <td className="px-4 py-3" colSpan={11}>Total Balance (all filtered rows)</td>
+              <td className="px-4 py-3" colSpan={13}>Total Balance (all filtered rows)</td>
               <td className={`px-4 py-3 ${totalBalance > 0 ? 'text-red-600' : totalBalance < 0 ? 'text-green-600' : 'text-gray-700'}`}>
                 {fmtMoney(totalBalance)}
               </td>
@@ -616,7 +590,8 @@ export function OutstandingClient({
               customerName: initialCustomerName,
               customerMobile: initialCustomerMobile,
               registrationNo: initialRegistrationNo,
-              type: initialType,
+            type: initialType,
+            paymentStatus: initialPaymentStatus,
               page: page - 1,
               pageSize,
             })}
@@ -633,6 +608,7 @@ export function OutstandingClient({
               customerMobile: initialCustomerMobile,
               registrationNo: initialRegistrationNo,
               type: initialType,
+              paymentStatus: initialPaymentStatus,
               page: page + 1,
               pageSize,
             })}

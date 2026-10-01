@@ -1,34 +1,9 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import { calculateOutstandingBalance, normalizeOutstandingFilters, type OutstandingFilters, type OutstandingRow, type OutstandingType } from './rules'
 
-export const OUTSTANDING_TYPES = ['All', 'RTO', 'Insurance', 'Loan'] as const
-export const OUTSTANDING_PAGE_SIZES = [25, 50, 100] as const
-
-export type OutstandingType = Exclude<(typeof OUTSTANDING_TYPES)[number], 'All'>
-
-export interface OutstandingFilters {
-  customerName: string
-  customerMobile: string
-  registrationNo: string
-  type: (typeof OUTSTANDING_TYPES)[number]
-  page: number
-  pageSize: number
-}
-
-export interface OutstandingRow {
-  key: string
-  type: OutstandingType
-  registrationNo: string | null
-  customerName: string | null
-  customerMobile: string | null
-  customerEmail: string | null
-  paymentStatus: string | null
-  totalAmount: number
-  percentageOfPayout: number | null
-  payoutAmount: number
-  amountPaid: number
-  balance: number
-}
+export { OUTSTANDING_PAGE_SIZES, OUTSTANDING_PAYMENT_STATUSES, OUTSTANDING_TYPES, normalizeOutstandingFilters } from './rules'
+export type { OutstandingFilters, OutstandingRow, OutstandingType } from './rules'
 
 export interface OutstandingListResult {
   rows: OutstandingRow[]
@@ -44,28 +19,6 @@ function normalizeText(value: string | null | undefined) {
   return trimmed ? trimmed : null
 }
 
-function sanitizePage(page: number) {
-  return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1
-}
-
-function sanitizePageSize(pageSize: number) {
-  if (!Number.isFinite(pageSize) || pageSize <= 0) return 25
-  return OUTSTANDING_PAGE_SIZES.includes(pageSize as (typeof OUTSTANDING_PAGE_SIZES)[number]) ? pageSize : 25
-}
-
-export function normalizeOutstandingFilters(input: Partial<OutstandingFilters>): OutstandingFilters {
-  return {
-    customerName: input.customerName?.trim() ?? '',
-    customerMobile: input.customerMobile?.trim() ?? '',
-    registrationNo: input.registrationNo?.trim() ?? '',
-    type: OUTSTANDING_TYPES.includes((input.type ?? 'All') as (typeof OUTSTANDING_TYPES)[number])
-      ? (input.type ?? 'All') as (typeof OUTSTANDING_TYPES)[number]
-      : 'All',
-    page: sanitizePage(input.page ?? 1),
-    pageSize: sanitizePageSize(input.pageSize ?? 25),
-  }
-}
-
 interface OutstandingRowRaw {
   key: string
   type: OutstandingType
@@ -74,6 +27,8 @@ interface OutstandingRowRaw {
   customerMobile: string | null
   customerEmail: string | null
   paymentStatus: string | null
+  followupDate: Date | string | null
+  remark: string | null
   totalAmount: Prisma.Decimal | number | null
   percentageOfPayout: Prisma.Decimal | number | null
   payoutAmount: Prisma.Decimal | number | null
@@ -102,6 +57,7 @@ function buildRtoSelect(filters: OutstandingFilters) {
   if (filters.customerName) conditions.push(Prisma.sql`${customerNameSql} ILIKE ${containsSql(filters.customerName)}`)
   if (filters.customerMobile) conditions.push(Prisma.sql`${customerMobileSql} ILIKE ${containsSql(filters.customerMobile)}`)
   if (filters.registrationNo) conditions.push(Prisma.sql`${registrationSql} ILIKE ${containsSql(filters.registrationNo)}`)
+  if (filters.paymentStatus !== 'All') conditions.push(Prisma.sql`${rawSql(`NULLIF(BTRIM(r.payment_status), '')`)} = ${filters.paymentStatus}`)
 
   return Prisma.sql`
     SELECT
@@ -112,6 +68,8 @@ function buildRtoSelect(filters: OutstandingFilters) {
       ${customerMobileSql} AS "customerMobile",
       ${customerEmailSql} AS "customerEmail",
       ${rawSql(`NULLIF(BTRIM(r.payment_status), '')`)} AS "paymentStatus",
+      r.followup_date AS "followupDate",
+      ${rawSql(`NULLIF(BTRIM(r.remark), '')`)} AS "remark",
       COALESCE(r.transfer_charges, 0) AS "totalAmount",
       NULL::numeric AS "percentageOfPayout",
       COALESCE(r.transfer_charges, 0) AS "payoutAmount",
@@ -136,6 +94,7 @@ function buildInsuranceSelect(filters: OutstandingFilters) {
   if (filters.customerName) conditions.push(Prisma.sql`${customerNameSql} ILIKE ${containsSql(filters.customerName)}`)
   if (filters.customerMobile) conditions.push(Prisma.sql`${customerMobileSql} ILIKE ${containsSql(filters.customerMobile)}`)
   if (filters.registrationNo) conditions.push(Prisma.sql`${registrationSql} ILIKE ${containsSql(filters.registrationNo)}`)
+  if (filters.paymentStatus !== 'All') conditions.push(Prisma.sql`${rawSql(`NULLIF(BTRIM(i.payout_payment_status), '')`)} = ${filters.paymentStatus}`)
 
   return Prisma.sql`
     SELECT
@@ -146,6 +105,8 @@ function buildInsuranceSelect(filters: OutstandingFilters) {
       ${customerMobileSql} AS "customerMobile",
       ${customerEmailSql} AS "customerEmail",
       ${rawSql(`NULLIF(BTRIM(i.payout_payment_status), '')`)} AS "paymentStatus",
+      i.followup_date AS "followupDate",
+      ${rawSql(`NULLIF(BTRIM(i.remark), '')`)} AS "remark",
       COALESCE(i.o_d_premium, 0) AS "totalAmount",
       i.payout_percentage_od_premium AS "percentageOfPayout",
       COALESCE(i.payout_amount, 0) AS "payoutAmount",
@@ -170,6 +131,7 @@ function buildLoanSelect(filters: OutstandingFilters) {
   if (filters.customerName) conditions.push(Prisma.sql`${customerNameSql} ILIKE ${containsSql(filters.customerName)}`)
   if (filters.customerMobile) conditions.push(Prisma.sql`${customerMobileSql} ILIKE ${containsSql(filters.customerMobile)}`)
   if (filters.registrationNo) conditions.push(Prisma.sql`${registrationSql} ILIKE ${containsSql(filters.registrationNo)}`)
+  if (filters.paymentStatus !== 'All') conditions.push(Prisma.sql`${rawSql(`NULLIF(BTRIM(l.payment_status), '')`)} = ${filters.paymentStatus}`)
 
   return Prisma.sql`
     SELECT
@@ -180,6 +142,8 @@ function buildLoanSelect(filters: OutstandingFilters) {
       ${customerMobileSql} AS "customerMobile",
       ${customerEmailSql} AS "customerEmail",
       ${rawSql(`NULLIF(BTRIM(l.payment_status), '')`)} AS "paymentStatus",
+      l.followup_date AS "followupDate",
+      ${rawSql(`NULLIF(BTRIM(l.remarks), '')`)} AS "remark",
       COALESCE(l.loan_amount, 0) AS "totalAmount",
       l.percentage_payout_amount AS "percentageOfPayout",
       COALESCE(l.payout_amount, 0) AS "payoutAmount",
@@ -214,11 +178,13 @@ function mapOutstandingRows(rows: OutstandingRowRaw[]): OutstandingRow[] {
     customerMobile: normalizeText(row.customerMobile),
     customerEmail: normalizeText(row.customerEmail),
     paymentStatus: normalizeText(row.paymentStatus),
+    followupDate: row.followupDate instanceof Date ? row.followupDate.toISOString() : row.followupDate,
+    remark: normalizeText(row.remark),
     totalAmount: Number(row.totalAmount ?? 0),
     percentageOfPayout: row.percentageOfPayout === null ? null : Number(row.percentageOfPayout),
     payoutAmount: Number(row.payoutAmount ?? 0),
     amountPaid: Number(row.amountPaid ?? 0),
-    balance: Number(row.balance ?? 0),
+    balance: calculateOutstandingBalance(row.payoutAmount, row.amountPaid),
   }))
 }
 
@@ -238,6 +204,8 @@ async function listOutstandingRows(filters: OutstandingFilters, page?: number, p
       "customerMobile",
       "customerEmail",
       "paymentStatus",
+      "followupDate",
+      "remark",
       "totalAmount",
       "percentageOfPayout",
       "payoutAmount",
@@ -279,4 +247,38 @@ export async function listOutstanding(input: Partial<OutstandingFilters> = {}): 
 export async function listOutstandingForExport(input: Partial<OutstandingFilters> = {}) {
   const filters = normalizeOutstandingFilters(input)
   return listOutstandingRows(filters)
+}
+
+export async function listOutstandingRegistrationSuggestions(input: string, limit = 15) {
+  const query = input.trim()
+  if (query.length < 2) return []
+
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 50)
+  const rows = await prisma.$queryRaw<Array<{ registrationNo: string }>>(Prisma.sql`
+    WITH registrations AS (
+      SELECT NULLIF(BTRIM(r.car_registration_no), '') AS "registrationNo"
+      FROM rto_agent r
+      WHERE r.transfer_charges IS NOT NULL OR r.amt_paid IS NOT NULL
+
+      UNION
+
+      SELECT NULLIF(BTRIM(i.car_registration_no), '') AS "registrationNo"
+      FROM insurance_main i
+      WHERE i.payout_amount IS NOT NULL OR i.total_amount_received IS NOT NULL
+
+      UNION
+
+      SELECT NULLIF(BTRIM(l.registration_no), '') AS "registrationNo"
+      FROM loan_management l
+      WHERE l.payout_amount IS NOT NULL OR l.total_amount_received IS NOT NULL
+    )
+    SELECT DISTINCT "registrationNo"
+    FROM registrations
+    WHERE "registrationNo" IS NOT NULL
+      AND "registrationNo" ILIKE ${containsSql(query)}
+    ORDER BY "registrationNo" ASC
+    LIMIT ${safeLimit}
+  `)
+
+  return rows.map(row => row.registrationNo)
 }
