@@ -620,7 +620,7 @@ export function DsaClient({ initialData, vehicles }: { initialData: DsaRow[]; ve
             </div>
 
             {/* Audit Log Details */}
-            <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
+            <div className="border-t border-gray-100 pt-4 text-[12px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
               <div>
                 Created By: <span className="font-medium text-gray-500">{viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? 'System'}</span>
                 {viewRow.createdDate && <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.createdDate)}</span></>}

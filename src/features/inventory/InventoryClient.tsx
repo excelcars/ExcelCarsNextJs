@@ -1365,7 +1365,7 @@ export function InventoryClient({
                       )}
                       <div className="space-y-2 p-3">
                         <div className="truncate text-xs font-medium text-gray-700">{photo.fileName}</div>
-                        {!photo.isUploadedHere ? <div className="text-[11px] text-amber-700">File unavailable in current app storage</div> : null}
+                        {!photo.isUploadedHere ? <div className="text-[12px] text-amber-700">File unavailable in current app storage</div> : null}
                         <button
                           type="button"
                           onClick={() => deletePhoto(photo)}
@@ -1398,12 +1398,12 @@ export function InventoryClient({
                       <img src={item.previewUrl} alt={item.file.name} className="h-32 w-full bg-gray-100 object-cover" />
                       <div className="space-y-1 p-3">
                         <div className="truncate text-xs font-medium text-gray-700">{item.file.name}</div>
-                        <div className="text-[11px] text-gray-400">{(item.file.size / (1024 * 1024)).toFixed(2)} MB</div>
-                        <div className={`text-[11px] font-medium ${item.status === 'failed' ? 'text-red-600' : item.status === 'uploaded' ? 'text-green-600' : item.status === 'uploading' ? 'text-blue-600' : 'text-gray-500'}`}>
+                        <div className="text-[12px] text-gray-400">{(item.file.size / (1024 * 1024)).toFixed(2)} MB</div>
+                        <div className={`text-[12px] font-medium ${item.status === 'failed' ? 'text-red-600' : item.status === 'uploaded' ? 'text-green-600' : item.status === 'uploading' ? 'text-blue-600' : 'text-gray-500'}`}>
                           {item.status === 'queued' ? 'Queued' : item.status === 'uploading' ? 'Uploading...' : item.status === 'uploaded' ? 'Uploaded' : item.error ?? 'Failed'}
                         </div>
                         {item.status === 'queued' || item.status === 'failed' ? (
-                          <button type="button" onClick={() => removeQueuedFile(item.id)} className="text-[11px] font-medium text-gray-500 hover:text-red-600">
+                          <button type="button" onClick={() => removeQueuedFile(item.id)} className="text-[12px] font-medium text-gray-500 hover:text-red-600">
                             Remove
                           </button>
                         ) : null}

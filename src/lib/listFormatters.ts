@@ -6,6 +6,15 @@ export function formatListMoney(value: string | number | null | undefined) {
   return value ? `₹${Number(value).toLocaleString('en-IN')}` : '—'
 }
 
+export function normalizeIntegerInput(value: string) {
+  return value.replace(/\D/g, '')
+}
+
+export function formatIndianNumberInput(value: string) {
+  const digits = normalizeIntegerInput(value)
+  return digits ? Number(digits).toLocaleString('en-IN') : ''
+}
+
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 
 export function cleanListValue(value: string | null | undefined) {

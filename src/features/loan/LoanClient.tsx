@@ -130,8 +130,8 @@ function emptyForm(): LoanFormInput {
     partnerId: null, bankName: '', bankPersonName: '', bankPersonMobileNo: '', bankPersonEmailId: '', customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
     inventoryId: null, fkVariantId: null, registrationNo: '', carType: 'PreOwned', carMake: '', carModel: '', carVariant: '', carYear: null,
     entryDate: today,
-    loanAmount: null, percentagePayoutAmount: null, payoutAmount: null, initialAmountReceived: null,
-    paymentStatus: 'Partial', paymentDate: today, followupDate: today, remarks: '',
+    loanAmount: null, percentagePayoutAmount: null, payoutAmount: null, initialAmountReceived: 0,
+    paymentStatus: 'Pending', paymentDate: today, followupDate: today, remarks: '',
   }
 }
 
@@ -470,10 +470,10 @@ export function LoanClient({
       const payout = form.loanAmount !== null && form.percentagePayoutAmount !== null
         ? Math.round((form.loanAmount * form.percentagePayoutAmount) / 100 * 100) / 100
         : null
-      if (form.initialAmountReceived === null || form.initialAmountReceived <= 0 || (payout !== null && form.initialAmountReceived > payout)) {
+      if (form.initialAmountReceived === null || form.initialAmountReceived < 0 || (payout !== null && form.initialAmountReceived > payout)) {
         newErrors.initialAmountReceived = payout !== null && form.initialAmountReceived !== null && form.initialAmountReceived > payout
           ? 'Initial received amount cannot exceed payout.'
-          : 'Initial received amount is required.'
+          : 'Enter zero or a positive initial received amount.'
       }
     }
     if (form.carYear !== null && !isValidYear(form.carYear)) {
@@ -785,7 +785,14 @@ export function LoanClient({
             <Input label="Loan Amount (₹) *" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} error={!!errors.loanAmount} errorMessage={errors.loanAmount} />
             <Input label="Payout % of Loan *" type="number" value={form.percentagePayoutAmount ?? ''} onChange={e => f('percentagePayoutAmount', e.target.value ? +e.target.value : null)} error={!!errors.percentagePayoutAmount} errorMessage={errors.percentagePayoutAmount} />
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
-            {!editId && <Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={!!errors.initialAmountReceived} errorMessage={errors.initialAmountReceived} />}
+            {!editId && <Input label="Initial Amount Received (₹)" type="number" min="0" value={form.initialAmountReceived ?? ''} onChange={e => {
+              const initialAmountReceived = e.target.value === '' ? null : +e.target.value
+              setForm(current => ({
+                ...current,
+                initialAmountReceived,
+                paymentStatus: initialAmountReceived === 0 ? 'Pending' : current.payoutAmount !== null && initialAmountReceived === current.payoutAmount ? 'Paid' : 'Partial',
+              }))
+            }} error={!!errors.initialAmountReceived} errorMessage={errors.initialAmountReceived} />}
             <Select label="Payment Status *" value={form.paymentStatus} onChange={e => f('paymentStatus', e.target.value)}>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
@@ -841,15 +848,15 @@ export function LoanClient({
               const progress = payout > 0 ? Math.min((received / payout) * 100, 100) : 0
               return <>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-green-700">Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-orange-700">Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-gray-800">Payment workflow</div>{viewRow.paymentStatus !== 'Received' && <span className="text-xs font-medium text-amber-700">Action needed</span>}</div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[11px] uppercase tracking-wide text-gray-500">Payment status</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.paymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
-                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[11px] uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
+                    <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[12px] uppercase tracking-wide text-gray-500">Payment status</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.paymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[12px] uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
                   </div>
                 </div>
               </>
@@ -989,9 +996,9 @@ export function LoanClient({
               const displayStatus = settled ? 'Paid' : received > 0 ? 'Partial' : 'Pending'
               return <>
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Payout Amount</div><div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payout)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount Paid</div><div className="mt-1 flex items-center gap-2 text-sm font-bold text-green-800">{fmtMoney(received)}<Badge label={displayStatus} /></div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending Balance</div><div className="mt-1 text-sm font-bold text-orange-800">{fmtMoney(pending)}</div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Payout Amount</div><div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payout)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2"><div className="text-[12px] font-semibold uppercase tracking-wide text-green-700">Amount Paid</div><div className="mt-1 flex items-center gap-2 text-sm font-bold text-green-800">{fmtMoney(received)}<Badge label={displayStatus} /></div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2"><div className="text-[12px] font-semibold uppercase tracking-wide text-orange-700">Pending Balance</div><div className="mt-1 text-sm font-bold text-orange-800">{fmtMoney(pending)}</div></div>
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Payment Workflow</div><div className={`text-xs font-medium ${settled ? 'text-green-700' : 'text-orange-700'}`}>{settled ? 'Completed' : 'Action needed'}</div></div>

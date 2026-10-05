@@ -53,7 +53,7 @@ const GENDER_OPTIONS = GENDERS.map(value => ({ value, label: value }))
 const STATUS_OPTIONS = STATUSES.map(value => ({ value, label: value }))
 
 function CharacterCount({ value, maxLength }: { value: string; maxLength: number }) {
-  return <div className="mt-1 text-right text-[11px] text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
+  return <div className="mt-1 text-right text-[12px] text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
 }
 
 function CountedInput({ value = '', maxLength, ...props }: Omit<ComponentProps<typeof Input>, 'value' | 'maxLength'> & { value?: string; maxLength: number }) {

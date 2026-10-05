@@ -28,8 +28,8 @@ type FollowupTableProps<T extends FollowupTableRow> = { rows: T[]; page: number;
 
 export function FollowupTable<T extends FollowupTableRow>({ rows, page, pageSize, onLogFollowup, renderInlineCells, onViewFollowup, onEditInquiry }: FollowupTableProps<T>) {
   return (
-    <div className="[&_th]:px-2 [&_td]:px-2 [&_th]:text-[11px] [&_td]:text-xs [&_input]:h-9 [&_input]:px-2 [&_label]:text-[11px] [&_label]:font-semibold [&_label]:uppercase [&_label]:tracking-wide [&_textarea]:px-2 [&_th:first-child]:w-12 [&_th:first-child]:min-w-12 [&_th:first-child]:max-w-12 [&_td:first-child]:w-12 [&_td:first-child]:min-w-12 [&_td:first-child]:max-w-12">
-      <Table headers={['Sr. No.', 'Inquiry', 'Customer Details', 'Vehicle', 'Budget / Visited Date', 'Follow-up Status', 'Classification / Outcome', 'Remark', 'Actions']} empty={rows.length === 0} minWidthClass="min-w-[1450px]">
+    <div className="[&_th]:px-2 [&_td]:px-2 [&_input]:h-9 [&_input]:px-2 [&_label]:font-semibold [&_textarea]:px-2 [&_th:first-child]:w-12 [&_th:first-child]:min-w-12 [&_th:first-child]:max-w-12 [&_td:first-child]:w-12 [&_td:first-child]:min-w-12 [&_td:first-child]:max-w-12">
+      <Table headers={['Sr. No.', 'Inquiry', 'Customer Details', 'Vehicle', 'Budget / Visited Date', 'Follow-up Status', 'Classification / Outcome', 'Remark', 'Actions']} empty={rows.length === 0} minWidthClass="min-w-[1100px]" stickyLastColumn>
         {rows.map((row, index) => {
           const name = row.customer?.custName ?? row.customerNameLegacy ?? ''
           const mobile = row.customer?.custMobile ?? row.mobileno

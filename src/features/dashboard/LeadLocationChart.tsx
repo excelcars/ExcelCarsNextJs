@@ -31,8 +31,8 @@ export function LeadLocationChart({ breakdowns, selectedSourceName, selectedSour
   return (
     <div className="h-full">
       <div className="mb-2 flex flex-wrap items-center gap-1" aria-label="Location report period">
-        {PERIODS.map(item => <button key={item.key} type="button" onClick={() => setPeriod(item.key)} aria-pressed={period === item.key} className={`rounded px-2 py-1 text-[11px] font-semibold transition ${period === item.key ? 'bg-[#1B2A6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>{item.label}</button>)}
-        {selectedSourceName ? <button type="button" onClick={onClearSource} className="ml-1 rounded px-2 py-1 text-[11px] font-semibold text-[#1B2A6B] hover:bg-blue-50" title="Show every lead source">{selectedSourceName} ×</button> : null}
+        {PERIODS.map(item => <button key={item.key} type="button" onClick={() => setPeriod(item.key)} aria-pressed={period === item.key} className={`rounded px-2 py-1 text-[12px] font-semibold transition ${period === item.key ? 'bg-[#1B2A6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>{item.label}</button>)}
+        {selectedSourceName ? <button type="button" onClick={onClearSource} className="ml-1 rounded px-2 py-1 text-[12px] font-semibold text-[#1B2A6B] hover:bg-blue-50" title="Show every lead source">{selectedSourceName} ×</button> : null}
       </div>
       {data.length === 0 ? <p className="py-8 text-center text-sm text-gray-400">{emptyMessage}</p> : <div className="h-[calc(100%-32px)]">
         <div className="flex items-center justify-between gap-3 px-1 text-xs">

@@ -954,7 +954,7 @@ export function RtoClient({
               </td>
               <td className="px-3 py-3">
                 <div className="mb-1"><Badge label={payment.status} /></div>
-                <div className="grid grid-cols-3 gap-2 text-[11px] leading-4">
+                <div className="grid grid-cols-3 gap-2 text-[12px] leading-4">
                   <div><span className="block text-gray-400">Charges</span><span className="font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</span></div>
                   <div><span className="block text-gray-400">Paid</span><span className="font-semibold text-green-700">{fmtMoney(r.amtPaid)}</span></div>
                   <div><span className="block text-gray-400">Balance</span><span className="font-semibold text-amber-700">{payment.charges ? fmtMoney(payment.balance) : '—'}</span></div>
@@ -1005,10 +1005,10 @@ export function RtoClient({
               const payment = paymentSummary(viewRow)
               return (
                 <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-green-700">Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-orange-700">Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div></div>
                 </div>
               )
             })()}
@@ -1151,7 +1151,7 @@ export function RtoClient({
             </div>}
 
             {/* Audit Log Details */}
-            {viewTab === 'record' && <div className="border-t border-gray-100 pt-4 text-[11px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
+            {viewTab === 'record' && <div className="border-t border-gray-100 pt-4 text-[12px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
               <div>
                 Created By: <span className="font-medium text-gray-500">{viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? 'System'}</span>
                 {viewRow.createdDt && <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.createdDt)}</span></>}
@@ -1341,15 +1341,15 @@ export function RtoClient({
               return (
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <div className="text-[11px] font-semibold uppercase text-gray-500">Transfer charges</div>
+                    <div className="text-[12px] font-semibold uppercase text-gray-500">Transfer charges</div>
                     <div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payRow.transferCharges)}</div>
                   </div>
                   <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
-                    <div className="text-[11px] font-semibold uppercase text-green-700">Amount paid</div>
+                    <div className="text-[12px] font-semibold uppercase text-green-700">Amount paid</div>
                     <div className="mt-1 flex items-center gap-2"><span className="text-sm font-bold text-green-800">{fmtMoney(paid)}</span><Badge label={summary.status} /></div>
                   </div>
                   <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2">
-                    <div className="text-[11px] font-semibold uppercase text-orange-700">Pending balance</div>
+                    <div className="text-[12px] font-semibold uppercase text-orange-700">Pending balance</div>
                     <div className="mt-1 text-sm font-bold text-orange-800">{summary.charges ? fmtMoney(summary.balance) : '—'}</div>
                   </div>
                 </div>
