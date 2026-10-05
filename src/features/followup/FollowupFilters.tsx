@@ -5,6 +5,7 @@ import { FormDropdown } from '@/components/FormDropdown'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import { DateFilterInput } from '@/components/DateFilterInput'
 import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
+import { formatIndianNumberInput, normalizeIntegerInput } from '@/lib/listFormatters'
 
 type UserOption = {
   userId: number
@@ -161,8 +162,8 @@ export function FollowupFilters({
         <DateFilterInput label="Follow-up Date To" value={followUpDateTo} onChange={onFollowUpDateToChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date From" value={visitedDateFrom} onChange={onVisitedDateFromChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date To" value={visitedDateTo} onChange={onVisitedDateToChange} disabled={isRoutePending} />
-        <Input type="number" min="0" label="Budget From" value={budgetFrom} onChange={event => onBudgetFromChange(event.target.value)} disabled={isRoutePending} />
-        <Input type="number" min="0" label="Budget To" value={budgetTo} onChange={event => onBudgetToChange(event.target.value)} disabled={isRoutePending} />
+        <Input inputMode="numeric" label="Budget From" value={formatIndianNumberInput(budgetFrom)} onChange={event => onBudgetFromChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
+        <Input inputMode="numeric" label="Budget To" value={formatIndianNumberInput(budgetTo)} onChange={event => onBudgetToChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
       </div>
     </>
   )

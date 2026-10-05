@@ -109,7 +109,7 @@ const INSURANCE_VALIDATION_MESSAGES: Record<string, string> = {
   insurancePremium: 'Insurance premium must be greater than zero.',
   oDPremium: 'OD premium must be greater than zero and cannot exceed the insurance premium.',
   payoutPercentageOdPremium: 'Payout percentage must be between 0 and 100.',
-  initialAmountReceived: 'Initial amount must be greater than zero and cannot exceed the payout amount.',
+  initialAmountReceived: 'Initial amount can be zero but cannot be negative or exceed the payout amount.',
   agentMobileNoLegacy: 'Agent mobile must contain 10 digits.',
   agentEmailIdLegacy: 'Enter a valid agent email address.',
   customerMobileLegacy: 'Customer mobile must contain 10 digits.',
@@ -227,7 +227,7 @@ function emptyForm(): InsuranceFormInput {
     customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '',
     inventoryId: null, fkVariantId: null, carType: 'PreOwned', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '',
     entryDate: new Date().toISOString().slice(0, 10),
-    insurancePremium: null, oDPremium: null, payoutPercentageOdPremium: null, payoutAmount: null, initialAmountReceived: null,
+    insurancePremium: null, oDPremium: null, payoutPercentageOdPremium: null, payoutAmount: null, initialAmountReceived: 0,
     payoutPaymentStatus: 'Pending', policyStatus: 'Pending',
     renewalDate: '', expiryDate: '', followupDate: '', remark: '',
   }
@@ -561,7 +561,7 @@ export function InsuranceClient({
     if (form.customerEmailLegacy && !isValidEmail(form.customerEmailLegacy)) {
       newErrors.customerEmailLegacy = true
     }
-    if (!editId && (form.initialAmountReceived === null || form.initialAmountReceived <= 0 || (form.payoutAmount !== null && form.initialAmountReceived > form.payoutAmount))) {
+    if (!editId && (form.initialAmountReceived === null || form.initialAmountReceived < 0 || (form.payoutAmount !== null && form.initialAmountReceived > form.payoutAmount))) {
       newErrors.initialAmountReceived = true
     }
 
@@ -857,7 +857,14 @@ export function InsuranceClient({
             <div><Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} error={errors.oDPremium} />{fieldError('oDPremium')}</div>
             <div><Input label="Payout % of OD Premium" type="number" value={form.payoutPercentageOdPremium ?? ''} onChange={e => f('payoutPercentageOdPremium', e.target.value ? +e.target.value : null)} error={errors.payoutPercentageOdPremium} />{fieldError('payoutPercentageOdPremium')}</div>
             <Input label="Payout Amount (auto)" value={form.payoutAmount != null ? `₹${form.payoutAmount.toLocaleString('en-IN')}` : ''} readOnly className="bg-gray-50" />
-            {!editId && <div><Input label="Initial Amount Received (₹) *" type="number" value={form.initialAmountReceived ?? ''} onChange={e => f('initialAmountReceived', e.target.value ? +e.target.value : null)} error={errors.initialAmountReceived} />{fieldError('initialAmountReceived')}</div>}
+            {!editId && <div><Input label="Initial Amount Received (₹)" type="number" min="0" value={form.initialAmountReceived ?? ''} onChange={e => {
+              const initialAmountReceived = e.target.value === '' ? null : +e.target.value
+              setForm(current => ({
+                ...current,
+                initialAmountReceived,
+                payoutPaymentStatus: initialAmountReceived !== null && current.payoutAmount !== null && initialAmountReceived === current.payoutAmount ? 'Paid' : 'Pending',
+              }))
+            }} error={errors.initialAmountReceived} />{fieldError('initialAmountReceived')}</div>}
             <Input label="Total Amount Received" value={formTotalAmountReceived != null ? `₹${Number(formTotalAmountReceived).toLocaleString('en-IN')}` : '₹0'} readOnly className="bg-gray-50" />
             <Select label="Payout Status" value={form.payoutPaymentStatus} onChange={e => f('payoutPaymentStatus', e.target.value)}>
               {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -906,16 +913,16 @@ export function InsuranceClient({
               const progress = payout > 0 ? Math.min((received / payout) * 100, 100) : 0
               return <>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-green-700">Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-green-700">Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-orange-700">Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-gray-800">Policy workflow</div>{(viewRow.payoutPaymentStatus === 'Pending' || viewRow.policyStatus === 'Pending') && <span className="text-xs font-medium text-amber-700">Action needed</span>}</div>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[11px] uppercase tracking-wide text-gray-500">Payout</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.payoutPaymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
-                    <div className={`rounded-lg px-3 py-2 ${viewRow.policyStatus === 'Pending' ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[11px] uppercase tracking-wide text-gray-500">Policy</div><div className="mt-1"><Badge label={viewRow.policyStatus ?? 'Pending'} /></div></div>
-                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[11px] uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
+                    <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[12px] uppercase tracking-wide text-gray-500">Payout</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.payoutPaymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
+                    <div className={`rounded-lg px-3 py-2 ${viewRow.policyStatus === 'Pending' ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-[12px] uppercase tracking-wide text-gray-500">Policy</div><div className="mt-1"><Badge label={viewRow.policyStatus ?? 'Pending'} /></div></div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-[12px] uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
                   </div>
                 </div>
               </>

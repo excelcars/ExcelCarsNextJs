@@ -7,6 +7,7 @@ import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import type { InquirySourceOption } from './sourceMaster'
 import type { InquiryLocationOption } from './locationMaster'
+import { formatIndianNumberInput, normalizeIntegerInput } from '@/lib/listFormatters'
 
 type QuickFilter = 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
 
@@ -137,8 +138,8 @@ export function InquiryFilters({
         <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} labeled onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         <DateFilterInput label="Follow-up Date" value={followUpDate} onChange={onFollowUpDateChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date" value={visitedDate} onChange={onVisitedDateChange} disabled={isRoutePending} />
-        <Input label="Budget From" type="number" min="0" inputMode="numeric" value={draftBudgetMin} onChange={event => setDraftBudgetMin(event.target.value)} placeholder="Minimum budget" disabled={isRoutePending} />
-        <div className="flex items-end gap-2"><Input label="Budget To" type="number" min="0" inputMode="numeric" value={draftBudgetMax} onChange={event => setDraftBudgetMax(event.target.value)} placeholder="Maximum budget" disabled={isRoutePending} /><Btn variant="outline" size="sm" onClick={() => onBudgetApply(draftBudgetMin, draftBudgetMax)} disabled={isRoutePending || (draftBudgetMin === budgetMin && draftBudgetMax === budgetMax)}>Apply Budget</Btn></div>
+        <Input label="Budget From" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMin)} onChange={event => setDraftBudgetMin(normalizeIntegerInput(event.target.value))} placeholder="Minimum budget" disabled={isRoutePending} />
+        <div className="flex items-end gap-2"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMax)} onChange={event => setDraftBudgetMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum budget" disabled={isRoutePending} /><Btn variant="outline" size="sm" onClick={() => onBudgetApply(draftBudgetMin, draftBudgetMax)} disabled={isRoutePending || (draftBudgetMin === budgetMin && draftBudgetMax === budgetMax)}>Apply Budget</Btn></div>
         <div className="flex flex-col gap-1 md:col-span-2">
           <label className="text-xs font-medium text-gray-600">Classification</label>
           <div className="flex flex-wrap gap-1.5">

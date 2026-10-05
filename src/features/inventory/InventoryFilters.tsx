@@ -4,6 +4,7 @@ import { Btn, Input, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { INVENTORY_STATUSES } from './queries'
 import type { InventoryFilters as InventoryFilterValues } from './inventoryTypes'
+import { formatIndianNumberInput, normalizeIntegerInput } from '@/lib/listFormatters'
 
 export interface InventoryFilterChip {
   key: keyof InventoryFilterValues
@@ -72,8 +73,8 @@ export function InventoryFilters({
         <FormDropdown disabled={isLoading} value={filters.status === 'All' ? '' : filters.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="All Statuses" allowClear onChange={value => onFilterChange('status', value || 'All')} />
         <FormDropdown disabled={isLoading} value={filters.fuelType} options={fuelTypes.map(value => ({ value, label: value }))} placeholder="All Fuels" allowClear onChange={value => onFilterChange('fuelType', value)} />
         <FormDropdown disabled={isLoading} value={filters.ownedType} options={['Excel Cars', 'Dealer', 'Individual'].map(value => ({ value, label: value }))} placeholder="All Owner Types" allowClear onChange={value => onFilterChange('ownedType', value)} />
-        <Input label="Budget From" type="number" min="0" inputMode="numeric" value={draftPriceMin} onChange={event => setDraftPriceMin(event.target.value)} placeholder="Minimum price" disabled={isLoading} />
-        <div className="flex items-end gap-2"><Input label="Budget To" type="number" min="0" inputMode="numeric" value={draftPriceMax} onChange={event => setDraftPriceMax(event.target.value)} placeholder="Maximum price" disabled={isLoading} /><Btn variant="outline" size="sm" onClick={() => onBudgetApply(draftPriceMin, draftPriceMax)} disabled={isLoading || (draftPriceMin === filters.priceMin && draftPriceMax === filters.priceMax)}>Apply Budget</Btn></div>
+        <Input label="Budget From" inputMode="numeric" value={formatIndianNumberInput(draftPriceMin)} onChange={event => setDraftPriceMin(normalizeIntegerInput(event.target.value))} placeholder="Minimum price" disabled={isLoading} />
+        <div className="flex items-end gap-2"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftPriceMax)} onChange={event => setDraftPriceMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum price" disabled={isLoading} /><Btn variant="outline" size="sm" onClick={() => onBudgetApply(draftPriceMin, draftPriceMax)} disabled={isLoading || (draftPriceMin === filters.priceMin && draftPriceMax === filters.priceMax)}>Apply Budget</Btn></div>
       </div>
       <div className="mt-3 text-sm text-gray-500">
         Searchable fields: Registration No, Make, Model, Variant, Colour, Owner Name, and Owner Mobile.

@@ -167,13 +167,14 @@ function validateLoanInput(input: LoanFormInput, { requireCustomerLink = false }
 function validateInitialPayment(input: LoanFormInput): string | null {
   const payoutAmount = calculatePayoutAmount(input)
   if (!payoutAmount || payoutAmount.lte(0)) return 'Loan amount and payout percentage must produce a positive payout amount.'
-  if (typeof input.initialAmountReceived !== 'number' || !Number.isFinite(input.initialAmountReceived) || input.initialAmountReceived <= 0) {
-    return 'Initial amount received must be greater than zero.'
+  if (typeof input.initialAmountReceived !== 'number' || !Number.isFinite(input.initialAmountReceived) || input.initialAmountReceived < 0) {
+    return 'Initial amount received cannot be negative.'
   }
   if (new Prisma.Decimal(input.initialAmountReceived).gt(payoutAmount)) {
     return 'Initial amount received cannot exceed the payout amount.'
   }
-  const expectedStatus = new Prisma.Decimal(input.initialAmountReceived).equals(payoutAmount) ? 'Paid' : 'Partial'
+  const initialAmount = new Prisma.Decimal(input.initialAmountReceived)
+  const expectedStatus = initialAmount.equals(0) ? 'Pending' : initialAmount.equals(payoutAmount) ? 'Paid' : 'Partial'
   if (input.paymentStatus !== expectedStatus) return `Select ${expectedStatus} for the initial received amount.`
   return null
 }

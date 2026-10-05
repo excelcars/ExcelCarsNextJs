@@ -113,7 +113,7 @@ function validateInsuranceInput(input: InsuranceFormInput): string | null {
 function validateInitialPayment(input: InsuranceFormInput): string | null {
   const payoutAmount = calculatePayoutAmount(input)
   if (!payoutAmount || payoutAmount.lte(0)) return 'OD premium and payout percentage must produce a positive payout amount.'
-  if (typeof input.initialAmountReceived !== 'number' || !Number.isFinite(input.initialAmountReceived) || input.initialAmountReceived <= 0) return 'Initial amount received must be greater than zero.'
+  if (typeof input.initialAmountReceived !== 'number' || !Number.isFinite(input.initialAmountReceived) || input.initialAmountReceived < 0) return 'Initial amount received cannot be negative.'
   if (new Prisma.Decimal(input.initialAmountReceived).gt(payoutAmount)) return 'Initial amount received cannot exceed the payout amount.'
   return null
 }

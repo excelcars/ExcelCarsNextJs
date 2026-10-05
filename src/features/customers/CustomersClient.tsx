@@ -113,7 +113,7 @@ function CustomerDateInput({
             <div className="text-sm font-semibold text-gray-800">{month.toLocaleString('en-GB', { month: 'long', year: 'numeric' })}</div>
             <button type="button" aria-label="Next month" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))} className="rounded p-1 text-gray-500 hover:bg-gray-100"><ChevronRight className="h-4 w-4" /></button>
           </div>
-          <div className="grid grid-cols-7 text-center text-[11px] font-medium text-gray-400">
+          <div className="grid grid-cols-7 text-center text-[12px] font-medium text-gray-400">
             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => <div key={day} className="py-1">{day}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-y-1 text-center">
