@@ -16,8 +16,6 @@ export interface StockFilters {
 }
 
 export const STOCK_REPORT_PAGE_SIZES = [25, 50, 100] as const
-export const STOCK_REPORT_SORTS = ['inventoryId_desc', 'registrationNo_asc', 'year_desc', 'kmsDriven_desc', 'price_desc', 'price_asc'] as const
-export type StockReportSort = (typeof STOCK_REPORT_SORTS)[number]
 
 export function normalizeStockFilters(input: Partial<StockFilters>): StockFilters {
   return {
@@ -41,10 +39,6 @@ export function normalizeStockPage(value: number | undefined) {
 
 export function normalizeStockPageSize(value: number | undefined) {
   return value !== undefined && STOCK_REPORT_PAGE_SIZES.includes(value as (typeof STOCK_REPORT_PAGE_SIZES)[number]) ? value : 25
-}
-
-export function normalizeStockSort(value: string | undefined): StockReportSort {
-  return STOCK_REPORT_SORTS.includes(value as StockReportSort) ? value as StockReportSort : 'inventoryId_desc'
 }
 
 function contains(value: string): Prisma.StringNullableFilter | undefined {
@@ -115,15 +109,6 @@ const stockInclude = {
   _count: { select: { inventoryPhotos: true } },
 } satisfies Prisma.InventoryManagementInclude
 
-const STOCK_ORDER_BY: Record<StockReportSort, Prisma.InventoryManagementOrderByWithRelationInput> = {
-  inventoryId_desc: { inventoryId: 'desc' },
-  registrationNo_asc: { registrationNo: 'asc' },
-  year_desc: { year: 'desc' },
-  kmsDriven_desc: { kmsDriven: 'desc' },
-  price_desc: { price: 'desc' },
-  price_asc: { price: 'asc' },
-}
-
 export async function listStock(filters: StockFilters) {
   return prisma.inventoryManagement.findMany({
     where: buildStockWhere(filters),
@@ -135,10 +120,9 @@ export async function listStock(filters: StockFilters) {
   })
 }
 
-export async function listStockPage(filters: StockFilters, pageInput: number, pageSizeInput: number, sortInput: string | undefined) {
+export async function listStockPage(filters: StockFilters, pageInput: number, pageSizeInput: number) {
   const requestedPage = normalizeStockPage(pageInput)
   const pageSize = normalizeStockPageSize(pageSizeInput)
-  const sort = normalizeStockSort(sortInput)
   const where = buildStockWhere(filters)
   const [total, valueAggregate, statusGroups] = await Promise.all([
     prisma.inventoryManagement.count({ where }),
@@ -150,7 +134,7 @@ export async function listStockPage(filters: StockFilters, pageInput: number, pa
   const rows = await prisma.inventoryManagement.findMany({
     where,
     include: stockInclude,
-    orderBy: STOCK_ORDER_BY[sort],
+    orderBy: { inventoryId: 'desc' },
     skip: (page - 1) * pageSize,
     take: pageSize,
   })
@@ -160,7 +144,6 @@ export async function listStockPage(filters: StockFilters, pageInput: number, pa
     page,
     pageSize,
     pageCount,
-    sort,
     totalValue: valueAggregate._sum.price?.toString() ?? null,
     statusCounts: statusGroups.map(group => ({ status: group.status ?? 'Unspecified', count: group._count._all })),
   }

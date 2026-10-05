@@ -1,6 +1,8 @@
 # SSOT - Stock Tracking Module
 ## Status: Next.js implemented; current-state behavior documented
 
+> Update 2026-10-01: `/reports/tracking` now uses URL-backed, server-side filters and pagination; supports authorized XLSX summary and vehicle-detail exports; and exposes the canonical vehicle detail route `/reports/tracking/[inventoryId]`. The API enforces `Stock_Tracking_Report` access and preserves multiple downstream records per vehicle.
+
 **Module:** `reports/tracking`  
 **Project:** `ExcelCarsNextJs`  
 **Depends On:** authenticated dashboard session, shared dashboard navigation/layout, Prisma read access to inventory/checklist/insurance/RTO/loan tables, downstream `rto` / `insurance` / `loan` modules for drill-through links  
