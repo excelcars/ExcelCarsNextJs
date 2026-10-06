@@ -21,7 +21,6 @@ const QUICK_PARTNER_ALLOWED_ROUTES = [
   '/loan',
   '/insurance',
   '/rto',
-  '/dsa',
 ] as const
 
 export async function quickCreatePartner(input: QuickPartnerInput): Promise<QuickPartnerResult> {

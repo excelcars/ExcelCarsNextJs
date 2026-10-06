@@ -512,21 +512,27 @@ export function UserAccessClient({
 
       <div className="relative">
         <LoadingOverlay show={isRoutePending} label="Loading users..." />
-        <Table headers={['User ID', 'Employee ID', 'Name', 'Username', 'Contact', 'Address', 'Role', 'Status', 'Actions']} empty={data.length === 0}>
+        <Table
+          headers={['User ID', 'Employee ID', 'Name', 'Username', 'Contact', 'Address', 'Role', 'Status', 'Actions']}
+          empty={data.length === 0}
+          compact
+          minWidthClass="min-w-full"
+          columnWidths={['5%', '7%', '13%', '10%', '15%', '16%', '12%', '9%', '13%']}
+        >
           {data.map(r => (
             <tr key={r.userId} className="hover:bg-gray-50 transition">
-              <td className="px-4 py-3 text-sm text-gray-600 font-mono">{r.userId}</td>
-              <td className="px-4 py-3 text-sm text-gray-600 font-mono">{r.employee?.empId ?? '—'}</td>
-              <td className="px-4 py-3 font-medium text-gray-900">{userDisplayName(r)}</td>
-              <td className="px-4 py-3 text-sm text-gray-700 font-mono">{r.userName ?? '—'}</td>
-              <td className="px-4 py-3">
-                <div className="text-sm text-gray-700">{contactMobile(r)}</div>
+              <td className="text-gray-600 font-mono">{r.userId}</td>
+              <td className="text-gray-600 font-mono">{r.employee?.empId ?? '—'}</td>
+              <td className="font-medium text-gray-900">{userDisplayName(r)}</td>
+              <td className="text-gray-700 font-mono">{r.userName ?? '—'}</td>
+              <td>
+                <div className="text-gray-700">{contactMobile(r)}</div>
                 <div className="text-xs text-gray-500">{contactEmail(r)}</div>
               </td>
-              <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">{formatAddress(r.employee)}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{r.roleName ?? '—'}</td>
-              <td className="px-4 py-3">{r.status ? <Badge label={r.status} /> : '—'}</td>
-              <td className="px-4 py-3">
+              <td className="text-gray-600">{formatAddress(r.employee)}</td>
+              <td className="text-gray-600">{r.roleName ?? '—'}</td>
+              <td>{r.status ? <Badge label={r.status} /> : '—'}</td>
+              <td>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View">
                     <Eye className="w-3.5 h-3.5" />

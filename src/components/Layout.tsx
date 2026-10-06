@@ -172,7 +172,6 @@ const navItems: NavItem[] = [
       { label: 'Insurance', href: '/insurance' },
       { label: 'RTO Management', href: '/rto' },
       { label: 'Follow-up', href: '/followup' },
-      { label: 'DSA Management', href: '/dsa' },
     ],
   },
   {
@@ -196,7 +195,6 @@ const navItems: NavItem[] = [
       { label: 'Outstanding Payments', href: '/reports/outstanding' },
       { label: 'Stock Tracking', href: '/reports/tracking' },
       { label: "Today's Activity", href: '/reports/today' },
-      { label: 'Exception Log', href: '/reports/exception' },
     ],
   },
 ]
