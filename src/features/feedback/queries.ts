@@ -9,7 +9,7 @@ export const QUESTIONS = [
   { key: 'answer_5', text: 'Thinking of similar products/services offered by other companies, how would you compare the product/service offered by our company?', options: ['Much Better', 'Somewhat Better', 'About the Same'] },
 ] as const
 
-export const FEEDBACK_PAGE_SIZES = [25, 50, 100] as const
+export const FEEDBACK_PAGE_SIZES = [10, 25, 50, 100] as const
 export const FEEDBACK_SORT_FIELDS = ['feedbackId', 'customerName', 'carRegistrationNo'] as const
 
 export interface FeedbackListParams {
@@ -39,9 +39,9 @@ function listOrder(sort = '', dir = ''): Prisma.CustomerFeedbackOrderByWithRelat
   return { [field]: direction }
 }
 
-export async function listFeedback({ search = '', page = 1, pageSize = 25, sort = '', dir = '' }: FeedbackListParams = {}) {
+export async function listFeedback({ search = '', page = 1, pageSize = 10, sort = '', dir = '' }: FeedbackListParams = {}) {
   const where = feedbackWhere(search)
-  const safePageSize = FEEDBACK_PAGE_SIZES.includes(pageSize as (typeof FEEDBACK_PAGE_SIZES)[number]) ? pageSize : 25
+  const safePageSize = FEEDBACK_PAGE_SIZES.includes(pageSize as (typeof FEEDBACK_PAGE_SIZES)[number]) ? pageSize : 10
   const total = await prisma.customerFeedback.count({ where })
   const pageCount = Math.max(1, Math.ceil(total / safePageSize))
   const currentPage = Math.min(Math.max(1, page), pageCount)

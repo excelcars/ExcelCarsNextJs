@@ -5,11 +5,16 @@ import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { sendEmail } from '@/lib/email/sendMail'
 import { isValidEmail } from '@/lib/validation'
-import { RECIPIENT_GROUPS, resolveMessageRecipients, searchMessageRecipients, type RecipientGroup, type RecipientSelection } from './recipients'
+import { RECIPIENT_GROUPS, resolveMessageRecipients, searchMessageRecipients, type RecipientGroup, type RecipientOption, type RecipientSelection } from './recipients'
 import { isSafeStoredAttachmentPath } from './attachments'
 import { access } from 'fs/promises'
 import { sanitizeEmailHtml } from '@/lib/email/sanitizeHtml'
 import { downloadFromFirebaseStorage, isFirebaseStoragePath } from '@/lib/firebase/storage'
+
+const TEMPLATE_VARIABLE_PATTERN = /{{(customerName|registrationNo|expiryDate|agentName|agentMobile|excelCarsName|excelCarsPhone|excelCarsEmail)}}/g
+const EXCEL_CARS_NAME = 'Excel Cars'
+const EXCEL_CARS_PHONE = process.env.PUBLIC_EXCEL_CARS_CONTACT_PHONE?.trim() || '9820344002 / 9820344332'
+const EXCEL_CARS_EMAIL = process.env.PUBLIC_EXCEL_CARS_EMAIL?.trim() || 'naziya@excelcarsmumbai.com'
 
 export interface TemplateFormInput {
   messageType: string
@@ -22,6 +27,49 @@ export interface ActionResult {
   error?: string
   sentCount?: number
   failedRecipients?: string[]
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
+}
+
+function formatIndiaDate(value: Date | null) {
+  return value ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).format(value) : '—'
+}
+
+async function templateVariablesForRecipient(recipient: RecipientOption) {
+  let registrationNo = '—'
+  let expiryDate = '—'
+
+  // A customer can have an insurance policy linked to their record. Use the
+  // newest one when this email is sent manually from the template screen.
+  if (recipient.group === 'Customers') {
+    const insurance = await prisma.insuranceMain.findFirst({
+      where: { customerId: recipient.id },
+      select: { carRegistrationNo: true, expiryDate: true },
+      orderBy: { expiryDate: 'desc' },
+    })
+    registrationNo = insurance?.carRegistrationNo?.trim() || registrationNo
+    expiryDate = formatIndiaDate(insurance?.expiryDate ?? null)
+  }
+
+  return {
+    customerName: recipient.name || 'Customer',
+    registrationNo,
+    expiryDate,
+    agentName: EXCEL_CARS_NAME,
+    agentMobile: EXCEL_CARS_PHONE,
+    excelCarsName: EXCEL_CARS_NAME,
+    excelCarsPhone: EXCEL_CARS_PHONE,
+    excelCarsEmail: EXCEL_CARS_EMAIL,
+  }
+}
+
+function renderEmailTemplate(template: string, variables: Awaited<ReturnType<typeof templateVariablesForRecipient>>, html = false) {
+  return template.replace(TEMPLATE_VARIABLE_PATTERN, (_, key: keyof typeof variables) => {
+    const value = variables[key] || '—'
+    return html ? escapeHtml(value) : value
+  })
 }
 
 async function currentUserId(): Promise<number | null> {
@@ -127,12 +175,12 @@ export async function sendTemplateEmail(templateId: number, toEmail: string, sel
   if (!Array.isArray(selections) || selections.length > 50) return { success: false, error: 'Select up to 50 recipients at a time.' }
   if (!Array.isArray(sendAttachmentIds) || sendAttachmentIds.length > 10) return { success: false, error: 'Attach up to 10 extra files at a time.' }
   const resolved = await resolveMessageRecipients(selections)
-  const recipients = new Map<string, string>()
-  for (const recipient of resolved) recipients.set(recipient.email!.toLowerCase(), recipient.email!)
+  const recipients = new Map<string, RecipientOption>()
+  for (const recipient of resolved) recipients.set(recipient.email!.toLowerCase(), recipient)
   const manualEmail = toEmail.trim()
   if (manualEmail) {
     if (!isValidEmail(manualEmail)) return { success: false, error: 'Enter a valid recipient email address.' }
-    recipients.set(manualEmail.toLowerCase(), manualEmail)
+    recipients.set(manualEmail.toLowerCase(), { group: 'Contacts', id: 0, name: 'Customer', email: manualEmail, mobile: null })
   }
   if (recipients.size === 0) return { success: false, error: 'Select at least one recipient or enter an email address.' }
   const uploads = await prisma.messageAttachmentUpload.findMany({
@@ -153,10 +201,13 @@ export async function sendTemplateEmail(templateId: number, toEmail: string, sel
 
   let sentCount = 0
   const failedRecipients: string[] = []
-  for (const email of recipients.values()) {
-    const emailHtml = sanitizeEmailHtml(template.messageBody)
-    const result = await sendEmail({ to: email, subject: template.messageSubject || '(no subject)', html: emailHtml, attachments })
-    await prisma.emailDeliveryLog.create({ data: { templateId, recipientEmail: email, status: result.success ? 'Sent' : 'Retrying', errorMessage: result.success ? null : (result.error ?? 'Failed to send email.').slice(0, 1000), attachmentCount: attachments.length, attemptedBy: userId, nextRetryAt: result.success ? null : new Date(Date.now() + 5 * 60 * 1000), emailSubject: template.messageSubject || '(no subject)', emailHtml, attachmentJson: attachments.length ? JSON.stringify(attachments) : null } })
+  for (const recipient of recipients.values()) {
+    const email = recipient.email!
+    const variables = await templateVariablesForRecipient(recipient)
+    const emailHtml = sanitizeEmailHtml(renderEmailTemplate(template.messageBody, variables, true))
+    const subject = renderEmailTemplate(template.messageSubject || '(no subject)', variables)
+    const result = await sendEmail({ to: email, subject, html: emailHtml, attachments })
+    await prisma.emailDeliveryLog.create({ data: { templateId, recipientEmail: email, status: result.success ? 'Sent' : 'Retrying', errorMessage: result.success ? null : (result.error ?? 'Failed to send email.').slice(0, 1000), attachmentCount: attachments.length, attemptedBy: userId, nextRetryAt: result.success ? null : new Date(Date.now() + 5 * 60 * 1000), emailSubject: subject, emailHtml, attachmentJson: attachments.length ? JSON.stringify(attachments) : null } })
     if (result.success) sentCount += 1
     else failedRecipients.push(email)
   }
