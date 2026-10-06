@@ -884,11 +884,11 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </div>
         </div>
 
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-hidden">
         {workspace === 'leads' ? (
-          <div className="grid min-h-0 gap-3">
-            <div className="grid min-h-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-            <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]" tableClass="w-auto min-w-[700px]">
+          <div className="grid h-full min-h-0 gap-3">
+            <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+            <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]" tableClass="w-auto min-w-[700px] [&_th]:py-1 [&_td]:py-1">
               {filteredLeadDetails.map(row => (
                 <tr key={row.label} className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-900">{row.label}</td>

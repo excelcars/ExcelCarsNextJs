@@ -118,7 +118,7 @@ export function TodayClient({
       {searchError && <p className="mb-4 text-sm text-red-600" role="alert">{searchError}</p>}
       {queryError && <p className="mb-4 text-sm text-red-600" role="alert">{queryError}</p>}
 
-      {searched && !searchError && !queryError && <Table headers={['#', 'Inquiry', 'Customer Details', 'Car Details', 'Budget', 'Follow-up State', 'Follow-up Detail', 'Created Audit', 'Updated Audit']} empty={initialData.length === 0} emptyMessage="No matching follow-up activities found." minWidthClass="min-w-[1800px]">
+      {searched && !searchError && !queryError && <Table headers={['#', 'Inquiry', 'Customer Details', 'Car Details', 'Budget', 'Follow-up State', 'Follow-up Detail', 'Created Audit', 'Updated Audit']} empty={initialData.length === 0} emptyMessage="No matching follow-up activities found." minWidthClass="min-w-[1280px]" compact columnWidths={['4%', '11%', '17%', '13%', '10%', '15%', '15%', '8%', '7%']}>
         {initialData.map((r, index) => (
           <tr key={r.pkFollowupId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3 text-sm text-gray-600 tabular-nums">{index + 1}</td>

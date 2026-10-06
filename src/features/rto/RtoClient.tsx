@@ -292,13 +292,15 @@ export function RtoClient({
     search: initialSearch,
     registrationNo: initialRegistrationNo,
   }))
+  const [draftFilters, setDraftFilters] = useState<RtoFilters>(() => ({
+    ...emptyFilters(),
+    search: initialSearch,
+    registrationNo: initialRegistrationNo,
+  }))
 
   useEffect(() => {
-    setFilters(prev => ({
-      ...prev,
-      search: initialSearch,
-      registrationNo: initialRegistrationNo,
-    }))
+    setFilters(previous => ({ ...previous, search: initialSearch, registrationNo: initialRegistrationNo }))
+    setDraftFilters(previous => ({ ...previous, search: initialSearch, registrationNo: initialRegistrationNo }))
   }, [initialSearch, initialRegistrationNo])
 
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
@@ -665,9 +667,13 @@ export function RtoClient({
   }
 
   const f = <K extends keyof RtoFormInput>(k: K, v: RtoFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
-  const setFilter = <K extends keyof RtoFilters>(k: K, v: RtoFilters[K]) => setFilters(prev => ({ ...prev, [k]: v }))
-  const resetFilters = () => setFilters(emptyFilters())
-
+  const setFilter = <K extends keyof RtoFilters>(k: K, v: RtoFilters[K]) => setDraftFilters(prev => ({ ...prev, [k]: v }))
+  const applyFilters = () => setFilters(draftFilters)
+  const resetFilters = () => {
+    const nextFilters = emptyFilters()
+    setFilters(nextFilters)
+    setDraftFilters(nextFilters)
+  }
   const save = () => {
     setError('')
     const newErrors: Record<string, boolean> = {}
@@ -874,67 +880,64 @@ export function RtoClient({
         }
       />
 
-      <div className="mb-4 space-y-4">
-        <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-gray-700">Search RTO Records</label>
-          <SearchBar
-            value={filters.search}
-            onChange={value => setFilter('search', value)}
-            placeholder="Search by Registration No, Customer Name, Agent Name, Make, Model or Variant"
-          />
-          <p className="text-xs text-gray-500">
-            Searchable fields: Registration No, Customer Name, Agent Name, Make, Model and Variant.
-          </p>
+      <form onSubmit={event => { event.preventDefault(); applyFilters() }} className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
+        <div className="mb-3">
+          <div className="text-sm font-semibold text-gray-900">Filters</div>
+          <div className="text-xs text-gray-500">Use any combination below. Export follows the same filters.</div>
         </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <Select label="RC Status" value={filters.rcStatus} onChange={e => setFilter('rcStatus', e.target.value)}>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-600">Quick search</label>
+            <SearchBar
+              value={draftFilters.search}
+              onChange={value => setFilter('search', value)}
+              placeholder="Reg no, customer, agent..."
+            />
+          </div>
+            <Select label="RC Status" value={draftFilters.rcStatus} onChange={e => setFilter('rcStatus', e.target.value)}>
               <option>All</option>
               {RC_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Select label="Transfer Status" value={filters.transferStatus} onChange={e => setFilter('transferStatus', e.target.value)}>
+            <Select label="Transfer Status" value={draftFilters.transferStatus} onChange={e => setFilter('transferStatus', e.target.value)}>
               <option>All</option>
               {TRANSFER_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Select label="Payment Status" value={filters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
+            <Select label="Payment Status" value={draftFilters.paymentStatus} onChange={e => setFilter('paymentStatus', e.target.value)}>
               <option>All</option>
               {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <Input label="From Entry Date" type="date" value={filters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
-            <Input label="To Entry Date" type="date" value={filters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
-            <div className="flex items-end gap-2">
-              <Btn variant="outline" onClick={resetFilters}>Reset Filters</Btn>
-              <Btn variant="outline" onClick={() => setShowMoreFilters(value => !value)}>
-                {showMoreFilters ? 'Hide Filters' : 'Load More Filter'}
-              </Btn>
-            </div>
-          </div>
+            <Input label="From Entry Date" type="date" value={draftFilters.fromDate} onChange={e => setFilter('fromDate', e.target.value)} />
+            <Input label="To Entry Date" type="date" value={draftFilters.toDate} onChange={e => setFilter('toDate', e.target.value)} />
 
           {showMoreFilters && (
-            <div className="mt-4 border-t border-gray-100 pt-4">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Input label="Registration No" value={filters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
-                <Input label="Customer Name" value={filters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
-                <Input label="Customer Mobile" value={filters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
-                <Input label="Customer Email" value={filters.customerEmail} onChange={e => setFilter('customerEmail', e.target.value)} />
-                <Input label="Agent Name" value={filters.agentName} onChange={e => setFilter('agentName', e.target.value)} />
-                <Input label="Agent Mobile" value={filters.agentMobile} onChange={e => setFilter('agentMobile', e.target.value)} />
-                <Input label="Agent Email" value={filters.agentEmail} onChange={e => setFilter('agentEmail', e.target.value)} />
-                <Select label="Car Type" value={filters.carType} onChange={e => setFilter('carType', e.target.value)}>
+            <div className="col-span-full grid gap-3 border-t border-gray-200 pt-3 md:grid-cols-2 xl:grid-cols-6">
+                <Input label="Registration No" value={draftFilters.registrationNo} onChange={e => setFilter('registrationNo', e.target.value)} />
+                <Input label="Customer Name" value={draftFilters.customerName} onChange={e => setFilter('customerName', e.target.value)} />
+                <Input label="Customer Mobile" value={draftFilters.customerMobile} onChange={e => setFilter('customerMobile', e.target.value)} />
+                <Input label="Customer Email" value={draftFilters.customerEmail} onChange={e => setFilter('customerEmail', e.target.value)} />
+                <Input label="Agent Name" value={draftFilters.agentName} onChange={e => setFilter('agentName', e.target.value)} />
+                <Input label="Agent Mobile" value={draftFilters.agentMobile} onChange={e => setFilter('agentMobile', e.target.value)} />
+                <Input label="Agent Email" value={draftFilters.agentEmail} onChange={e => setFilter('agentEmail', e.target.value)} />
+                <Select label="Car Type" value={draftFilters.carType} onChange={e => setFilter('carType', e.target.value)}>
                   <option>All</option>
                   {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
                 </Select>
-                <Input label="Year" value={filters.carYear} onChange={e => setFilter('carYear', e.target.value)} />
-                <Input label="Make" value={filters.make} onChange={e => setFilter('make', e.target.value)} />
-                <Input label="Model" value={filters.model} onChange={e => setFilter('model', e.target.value)} />
-                <Input label="Variant" value={filters.variant} onChange={e => setFilter('variant', e.target.value)} />
-              </div>
+                <Input label="Year" value={draftFilters.carYear} onChange={e => setFilter('carYear', e.target.value)} />
+                <Input label="Make" value={draftFilters.make} onChange={e => setFilter('make', e.target.value)} />
+                <Input label="Model" value={draftFilters.model} onChange={e => setFilter('model', e.target.value)} />
+                <Input label="Variant" value={draftFilters.variant} onChange={e => setFilter('variant', e.target.value)} />
             </div>
           )}
-
+          <div className="flex items-end gap-2">
+            <Btn type="submit" className="justify-center">Apply filters</Btn>
+            <Btn type="button" variant="outline" onClick={resetFilters}>Reset</Btn>
+            <Btn type="button" variant="outline" onClick={() => setShowMoreFilters(value => !value)}>
+              {showMoreFilters ? 'Hide more' : 'More filters'}
+            </Btn>
+          </div>
         </div>
-      </div>
+      </form>
+      <div className="mb-4 text-sm text-gray-500">Showing {filtered.length} of {data.length} transfer jobs</div>
 
       {exportError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
