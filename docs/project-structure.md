@@ -14,7 +14,6 @@ ExcelCarsNextJs/
 |  |  |- loan/
 |  |  |- insurance/
 |  |  |- rto/
-|  |  |- dsa/
 |  |  |- configuration/
 |  |  |- reports/
 |  |- api/
@@ -39,7 +38,6 @@ ExcelCarsNextJs/
 |  |  |- loan/
 |  |  |- insurance/
 |  |  |- rto/
-|  |  |- dsa/
 |  |  |- configuration/
 |  |  |- reports/
 |  |- lib/
@@ -72,9 +70,9 @@ ExcelCarsNextJs/
 - `inventory`: stock, photos, dealer/customer sharing
 - `inquiry`: inquiry entry, matching inventory, prior inquiry checks
 - `follow-up`: dashboard drill-through and follow-up tracking
-- `loan`, `insurance`, `rto`, `dsa`: operational financial-adjacent modules
+- `loan`, `insurance`, `rto`: operational financial-adjacent modules
 - `configuration`: users, dealer/customer masters, templates, notifications
-- `reports`: stock, outstanding payment, tracking, exception logging, exports
+- `reports`: stock, outstanding payment, tracking, and exports
 
 ## Docker usage
 

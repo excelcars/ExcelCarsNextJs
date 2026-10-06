@@ -14,8 +14,6 @@ export const FEEDBACK_FUNCTION = 'Customer_Feedback_Management'
 export const LEGACY_FEEDBACK_FUNCTION = 'Feedback_Management'
 export const TODAY_ACTIVITY_FUNCTION = 'Today_Activity_Report'
 export const LEGACY_TODAY_INQUIRY_FOLLOWUP_FUNCTION = 'Todays_Inquiry_Followup_Report'
-export const EXCEPTION_LOG_FUNCTION = 'Exception_Log_Report'
-export const LEGACY_SYSTEM_EXCEPTION_REPORT_FUNCTION = 'System_Exception_Report'
 export const INQUIRY_SOURCE_MASTER_FUNCTION = 'Inquiry_Source_Master_Management'
 export const INVENTORY_FUNCTION = 'Inventory_Management'
 
@@ -38,13 +36,11 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Operations', label: 'Insurance', functionName: 'Insurance_Management', route: '/insurance', description: 'Manage insurance referrals and payouts.' },
   { group: 'Operations', label: 'RTO Management', functionName: 'RTO_Management', route: '/rto', description: 'Manage RTO transfer and payment records.' },
   { group: 'Operations', label: 'Follow-up', functionName: 'Followup_Management', route: '/followup', description: 'Manage follow-up queue activity.' },
-  { group: 'Operations', label: 'DSA Management', functionName: 'DSA_Management', route: '/dsa', description: 'Manage DSA payout records.' },
 
   { group: 'Reports', label: 'Stock Report', functionName: 'Stock_Report', route: '/reports/stock', description: 'View stock report.' },
   { group: 'Reports', label: 'Outstanding Payments', functionName: 'Outstanding_Payments_Report', route: '/reports/outstanding', description: 'View outstanding payments report.' },
   { group: 'Reports', label: 'Stock Tracking', functionName: 'Stock_Tracking_Report', route: '/reports/tracking', description: 'View stock tracking report.' },
   { group: 'Reports', label: "Today's Activity", functionName: TODAY_ACTIVITY_FUNCTION, route: '/reports/today', description: 'View today activity report.' },
-  { group: 'Reports', label: 'Exception Log', functionName: EXCEPTION_LOG_FUNCTION, route: '/reports/exception', description: 'View all persisted exception-report details.' },
 ]
 
 export const APP_ACCESS_FUNCTION_NAMES = new Set(APP_ACCESS_CATALOG.map(item => item.functionName))
@@ -60,7 +56,6 @@ export function getAccessDefinitionByRoute(route: string) {
 export function getAllowedFunctionNamesForRoute(route: string) {
   if (route === '/config/feedback') return [FEEDBACK_FUNCTION, LEGACY_FEEDBACK_FUNCTION]
   if (route === '/reports/today') return [TODAY_ACTIVITY_FUNCTION, LEGACY_TODAY_INQUIRY_FOLLOWUP_FUNCTION]
-  if (route === '/reports/exception') return [EXCEPTION_LOG_FUNCTION, LEGACY_SYSTEM_EXCEPTION_REPORT_FUNCTION]
   if (route === '/config/role-access') return [ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION]
   if (route === '/config/role-access/history') return [ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION]
   const match = getAccessDefinitionByRoute(route)
