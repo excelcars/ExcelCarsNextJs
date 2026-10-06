@@ -525,6 +525,9 @@ export function OutstandingClient({
             'Bal Amt',
           ]}
           empty={rows.length === 0}
+          minWidthClass="min-w-[1280px]"
+          compact
+          columnWidths={['4%', '5%', '8%', '8%', '9%', '7%', '10%', '7%', '12%', '7%', '4%', '7%', '7%', '5%']}
         >
           {rows.map((row, index) => {
             const serialNo = (page - 1) * pageSize + index + 1
@@ -552,7 +555,7 @@ export function OutstandingClient({
                   {row.paymentStatus ? <Badge label={row.paymentStatus} /> : '—'}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(row.followupDate)}</td>
-                <td className="px-4 py-3 text-sm text-gray-600 max-w-56"><span className="block truncate" title={row.remark ?? undefined}>{row.remark ?? '—'}</span></td>
+                <td className="px-4 py-3 text-sm text-gray-600"><span className="block break-words">{row.remark ?? '—'}</span></td>
                 <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(row.totalAmount)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{fmtPercent(row.percentageOfPayout)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">

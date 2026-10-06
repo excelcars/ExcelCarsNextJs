@@ -40,7 +40,7 @@ export function Badge({ label }: { label: string }) {
   }
   const status = label.replace(/^(Payment|RC|Transfer):\s*/, '')
   const cls = map[status] || 'bg-gray-100 text-gray-600'
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[12px] font-medium ${cls}`}>{label}</span>
+  return <span className={`inline-flex whitespace-nowrap items-center px-2 py-0.5 rounded text-[12px] font-medium ${cls}`}>{label}</span>
 }
 
 export function Btn({ children, onClick, variant = 'primary', size = 'md', type = 'button', disabled = false, className = '' }: {
@@ -144,10 +144,11 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
   )
 }
 
-export function Table({ headers, children, empty = false, emptyMessage = 'No records found', stickyLastColumn = false, minWidthClass = 'min-w-[1860px]' }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string; stickyLastColumn?: boolean; minWidthClass?: string }) {
+export function Table({ headers, children, empty = false, emptyMessage = 'No records found', stickyLastColumn = false, minWidthClass = 'min-w-[1860px]', compact = false, columnWidths }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string; stickyLastColumn?: boolean; minWidthClass?: string; compact?: boolean; columnWidths?: string[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className={`w-full ${minWidthClass} table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal ${stickyLastColumn ? '[&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:z-10 [&_td:last-child]:bg-white [&_td:last-child]:shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>
+      <table className={`w-full ${minWidthClass} table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal ${compact ? '[&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-2 [&_td]:text-xs' : ''} ${stickyLastColumn ? '[&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:z-10 [&_td:last-child]:bg-white [&_td:last-child]:shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>
+        {columnWidths ? <colgroup>{headers.map((header, index) => <col key={header} style={{ width: columnWidths[index] }} />)}</colgroup> : null}
         <thead>
           <tr className="bg-white-50 border-b border-gray-200">
             {headers.map((h, index) => (
