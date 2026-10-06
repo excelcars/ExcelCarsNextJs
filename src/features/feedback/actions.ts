@@ -6,6 +6,7 @@ import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { getFeedbackDetail as queryFeedbackDetail, getVehicles as queryVehicles } from './queries'
 import { createHash, randomBytes } from 'crypto'
 import { sendEmail } from '@/lib/email/sendMail'
+import { normalizeWhatsAppRecipient, sendGlobalTemplate } from '@/lib/whatsapp/meta'
 
 export interface FeedbackFormInput {
   customerId: number | null
@@ -31,6 +32,7 @@ export interface FeedbackFormInput {
 export interface ActionResult {
   success: boolean
   error?: string
+  message?: string
 }
 
 async function currentUserId(): Promise<number | null> {
@@ -42,6 +44,8 @@ export async function sendFeedbackInvitation(customerId: number, inventoryId: nu
   if (!userId) return { success: false, error: 'Not authorized.' }
   const purchase = await prisma.inventoryManagement.findFirst({ where: { inventoryId, customerId }, include: { customer: true, carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } } })
   if (!purchase?.customer?.custEmail) return { success: false, error: 'Select a customer purchase with an email address.' }
+  const whatsappRecipient = normalizeWhatsAppRecipient(purchase.customer.custMobile)
+  if (!whatsappRecipient) return { success: false, error: 'The selected customer needs a valid 10-digit mobile number for WhatsApp.' }
   const customer = purchase.customer
   const token = randomBytes(32).toString('hex'); const tokenHash = createHash('sha256').update(token).digest('hex'); const expiresAt = new Date(Date.now() + 7 * 86400000)
   const invitation = await prisma.$transaction(async tx => {
@@ -49,10 +53,25 @@ export async function sendFeedbackInvitation(customerId: number, inventoryId: nu
     return tx.feedbackInvitation.create({ data: { customerId, inventoryId, recipientEmail: customer.custEmail!.trim(), tokenHash, expiresAt, createdBy: userId } })
   })
   const base = (process.env.PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
+  if (!base) {
+    await prisma.feedbackInvitation.update({ where: { feedbackInvitationId: invitation.feedbackInvitationId }, data: { invalidatedAt: new Date() } })
+    return { success: false, error: 'Feedback links are not configured. Set PUBLIC_APP_URL before sending invitations.' }
+  }
   const vehicle = [purchase.carVariantMaster?.carMakeMaster?.make, purchase.carVariantMaster?.carModelMaster?.model, purchase.carVariantMaster?.variant, purchase.registrationNo].filter(Boolean).join(' · ')
-  const result = await sendEmail({ to: invitation.recipientEmail, subject: 'Tell us about your Excel Cars purchase', html: `<p>Dear ${customer.custName},</p><p>Thank you for choosing Excel Cars.</p><p><b>Purchase summary:</b> ${vehicle}</p><p><a href="${base}/feedback/${token}">Give Feedback</a></p><p>This one-time link expires in 7 days.</p>` })
-  if (!result.success) await prisma.feedbackInvitation.update({ where: { feedbackInvitationId: invitation.feedbackInvitationId }, data: { invalidatedAt: new Date() } })
-  return result
+  const feedbackUrl = `${base}/feedback/${token}`
+  const [emailResult, whatsAppResult] = await Promise.all([
+    sendEmail({ to: invitation.recipientEmail, subject: 'Tell us about your Excel Cars purchase', html: `<p>Dear ${customer.custName},</p><p>Thank you for choosing Excel Cars.</p><p><b>Purchase summary:</b> ${vehicle}</p><p><a href="${feedbackUrl}">Give Feedback</a></p><p>This one-time link expires in 7 days.</p>` }),
+    sendGlobalTemplate({ to: whatsappRecipient, customerName: customer.custName?.trim() || 'Customer', message: `Thank you for choosing Excel Cars. Please share your feedback within 7 days: ${feedbackUrl}` }),
+  ])
+
+  if (!emailResult.success && !whatsAppResult.success) {
+    await prisma.feedbackInvitation.update({ where: { feedbackInvitationId: invitation.feedbackInvitationId }, data: { invalidatedAt: new Date() } })
+    return { success: false, error: `Email and WhatsApp could not be sent. Email: ${emailResult.error || 'failed'} WhatsApp: ${whatsAppResult.error || 'failed'}` }
+  }
+
+  const delivered = [emailResult.success && 'email', whatsAppResult.success && 'WhatsApp'].filter(Boolean).join(' and ')
+  const failed = [!emailResult.success && `Email failed: ${emailResult.error || 'unknown error'}`, !whatsAppResult.success && `WhatsApp failed: ${whatsAppResult.error || 'unknown error'}`].filter(Boolean).join(' ')
+  return { success: true, message: `Feedback invitation sent by ${delivered}.${failed ? ` ${failed}` : ''}` }
 }
 
 

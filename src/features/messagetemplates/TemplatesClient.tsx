@@ -17,6 +17,26 @@ interface TemplateRow {
 interface AttachmentRow { uploadId: string; originalName: string; byteSize: number; scope: string }
 interface DeliveryRow { deliveryLogId: number; recipientEmail: string; status: string; errorMessage: string | null; attachmentCount: number; attemptedAt: Date | string }
 
+// Templates are stored as HTML so they can be sent and previewed as formatted emails.
+// The list should be a compact, readable summary rather than exposing that markup.
+function emailBodyToText(html: string | null) {
+  if (!html) return '—'
+
+  return html
+    .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '• ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/\s*\n\s*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim() || '—'
+}
+
 function emptyForm(): TemplateFormInput {
   return { messageType: 'Email', messageSubject: '', messageBody: '' }
 }
@@ -201,12 +221,17 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
         <SearchBar value={search} onChange={setSearch} placeholder="Subject, body..." />
       </div>
 
-      <Table headers={['Type', 'Subject', 'Body', 'Actions']} empty={filtered.length === 0}>
+      <Table
+        headers={['Type', 'Subject', 'Body', 'Actions']}
+        empty={filtered.length === 0}
+        minWidthClass="min-w-0"
+        columnWidths={['11%', '29%', '48%', '12%']}
+      >
         {filtered.map(r => (
           <tr key={r.typeId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3">{r.messageType ? <Badge label={r.messageType} /> : '—'}</td>
-            <td className="px-4 py-3 font-medium text-gray-900">{r.messageSubject ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 max-w-md truncate">{r.messageBody ?? '—'}</td>
+            <td className="px-4 py-3 font-medium text-gray-900 break-words">{r.messageSubject ?? '—'}</td>
+            <td className="px-4 py-3 text-sm text-gray-600"><p className="max-h-12 overflow-hidden leading-5" title={emailBodyToText(r.messageBody)}>{emailBodyToText(r.messageBody)}</p></td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
                 {r.messageType === 'Email' && (
