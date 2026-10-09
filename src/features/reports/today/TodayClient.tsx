@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download } from 'lucide-react'
-import { Badge, Btn, Input, Select, Table, PageHeader } from '@/components/ui'
+import { Badge, Btn, Input, LoadingOverlay, Select, Table, PageHeader } from '@/components/ui'
 import { formatIndiaDate, indiaDateKey } from './date'
 
 interface FollowupRow {
@@ -46,6 +46,7 @@ export function TodayClient({
   queryError: string | null
 }) {
   const router = useRouter()
+  const [isNavigating, startNavigationTransition] = useTransition()
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [filters, setFilters] = useState({ fromDate, toDate, userId: userId ? String(userId) : '' })
@@ -63,11 +64,17 @@ export function TodayClient({
     return `/reports/today${q.toString() ? `?${q.toString()}` : ''}`
   }
 
-  const search = () => router.push(reportUrl(filters, true))
-  const reset = () => router.push('/reports/today')
+  const navigateToReport = (url: string) => {
+    startNavigationTransition(() => {
+      router.push(url)
+    })
+  }
+
+  const search = () => navigateToReport(reportUrl(filters, true))
+  const reset = () => navigateToReport('/reports/today')
   const setToday = () => {
     const date = indiaDateKey()
-    router.push(reportUrl({ fromDate: date, toDate: date, userId: '' }, false))
+    navigateToReport(reportUrl({ fromDate: date, toDate: date, userId: '' }, false))
   }
 
   const exportRows = async () => {
@@ -102,22 +109,24 @@ export function TodayClient({
       {exportError && <p className="mb-4 text-sm text-red-600" role="alert">{exportError}</p>}
 
       <div className="flex flex-wrap items-end gap-3 mb-4">
-        <Input label="From" type="date" value={filters.fromDate} error={Boolean(searchError)} onChange={e => setFilters(current => ({ ...current, fromDate: e.target.value }))} />
-        <Input label="To" type="date" value={filters.toDate} error={Boolean(searchError)} onChange={e => setFilters(current => ({ ...current, toDate: e.target.value }))} />
+        <Input label="From" type="date" value={filters.fromDate} disabled={isNavigating} error={Boolean(searchError)} onChange={e => setFilters(current => ({ ...current, fromDate: e.target.value }))} />
+        <Input label="To" type="date" value={filters.toDate} disabled={isNavigating} error={Boolean(searchError)} onChange={e => setFilters(current => ({ ...current, toDate: e.target.value }))} />
         {!restricted && (
-          <Select label="Updated By" value={filters.userId} onChange={e => setFilters(current => ({ ...current, userId: e.target.value }))}>
+          <Select label="Updated By" value={filters.userId} disabled={isNavigating} onChange={e => setFilters(current => ({ ...current, userId: e.target.value }))}>
             <option value="">All Users</option>
             {users.map(u => <option key={u.userId} value={u.userId}>{u.displayName ?? u.userName}</option>)}
           </Select>
         )}
-        <Btn size="sm" onClick={search}>Search</Btn>
-        <Btn variant="outline" size="sm" onClick={reset}>Reset</Btn>
-        <Btn variant="outline" size="sm" onClick={setToday}>Today</Btn>
+        <Btn size="sm" onClick={search} disabled={isNavigating}>{isNavigating ? 'Loading...' : 'Search'}</Btn>
+        <Btn variant="outline" size="sm" onClick={reset} disabled={isNavigating}>Reset</Btn>
+        <Btn variant="outline" size="sm" onClick={setToday} disabled={isNavigating}>Today</Btn>
       </div>
 
       {searchError && <p className="mb-4 text-sm text-red-600" role="alert">{searchError}</p>}
       {queryError && <p className="mb-4 text-sm text-red-600" role="alert">{queryError}</p>}
 
+      <div className="relative min-h-24" aria-busy={isNavigating}>
+        <LoadingOverlay show={isNavigating} label="Loading today activity report..." />
       {searched && !searchError && !queryError && <Table headers={['#', 'Inquiry', 'Customer Details', 'Car Details', 'Budget', 'Follow-up State', 'Follow-up Detail', 'Created Audit', 'Updated Audit']} empty={initialData.length === 0} emptyMessage="No matching follow-up activities found." minWidthClass="min-w-[1280px]" compact columnWidths={['4%', '11%', '17%', '13%', '10%', '15%', '15%', '8%', '7%']}>
         {initialData.map((r, index) => (
           <tr key={r.pkFollowupId} className="hover:bg-gray-50 transition">
@@ -157,6 +166,7 @@ export function TodayClient({
           </tr>
         ))}
       </Table>}
+      </div>
     </div>
   )
 }

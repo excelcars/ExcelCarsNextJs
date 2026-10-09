@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
-import { isFollowupStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { sendEmail } from '@/lib/email/sendMail'
 import { noInventoryEnquiryEmail, vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
@@ -366,7 +366,7 @@ function buildInquiryData(
     classification: input.classification || null,
     status: normalizedStatus,
     subStatus: input.subStatus || null,
-    followUpDate: isFollowupStatus(normalizedStatus) ? toDate(input.followUpDate) : null,
+    followUpDate: requiresInquiryFollowupDate(normalizedStatus) ? toDate(input.followUpDate) : null,
     remark: input.remark || null,
   }
 }
@@ -470,7 +470,7 @@ async function appendInquiryFollowupHistory({
   const followup = await prisma.followupInquiry.create({
     data: {
       fkInquiryId: inquiryId,
-      followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
+      followupDate: requiresInquiryFollowupDate(input.status) ? selectedFollowupDate : null,
       followupStatus: normalizeOptionalText(input.status),
       followupSubStatus: normalizeOptionalText(input.subStatus),
       followupClassification: normalizeOptionalText(input.classification),
@@ -1500,8 +1500,8 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
     return { success: false, error: resolvedSource.error ?? 'Select a valid source before saving the inquiry.' }
   }
   const resolvedLocation = await resolveInquiryLocation(input)
-  if (resolvedLocation.error || !resolvedLocation.location) {
-    return { success: false, error: resolvedLocation.error ?? 'Select a valid reporting location before saving the inquiry.' }
+  if (resolvedLocation.error) {
+    return { success: false, error: resolvedLocation.error }
   }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
@@ -1664,8 +1664,8 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
     return { success: false, error: resolvedSource.error ?? 'Select a valid source before saving the inquiry.' }
   }
   const resolvedLocation = await resolveInquiryLocation(input)
-  if (resolvedLocation.error || (route === '/inquiry' && !resolvedLocation.location)) {
-    return { success: false, error: resolvedLocation.error ?? 'Select a valid reporting location before saving the inquiry.' }
+  if (resolvedLocation.error) {
+    return { success: false, error: resolvedLocation.error }
   }
   const resolvedContact = await resolveInquiryContact(input)
   if (resolvedContact.error) {
@@ -1774,7 +1774,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
         const followup = await tx.followupInquiry.create({
           data: {
             fkInquiryId: id,
-            followupDate: isFollowupStatus(input.status) ? selectedFollowupDate : null,
+            followupDate: requiresInquiryFollowupDate(input.status) ? selectedFollowupDate : null,
             followupStatus: normalizeOptionalText(input.status),
             followupSubStatus: normalizeOptionalText(input.subStatus),
             followupClassification: normalizeOptionalText(input.classification),

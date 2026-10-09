@@ -21,7 +21,7 @@ const validInquiry = {
   classification: 'Warm',
   status: 'Open',
   subStatus: '',
-  followUpDate: '',
+  followUpDate: '2026-09-02',
   remark: '',
   inquiryCars: [{ carYear: 2020 }],
 }
@@ -33,8 +33,14 @@ test('inquiry validation requires a car, source, and a valid mobile number', () 
 })
 
 test('inquiry validation requires a scheduled date for follow-up and visited date for Visited', () => {
-  const followUp = validateInquiryFormInput({ ...validInquiry, status: 'FollowUp' })
-  assert.equal(followUp.error, 'Follow-up date is required when Follow is selected.')
+  const open = validateInquiryFormInput({ ...validInquiry, followUpDate: '' })
+  assert.equal(open.error, 'Follow-up date is required when status is Open or Follow Up.')
+
+  const followUp = validateInquiryFormInput({ ...validInquiry, status: 'FollowUp', followUpDate: '' })
+  assert.equal(followUp.error, 'Follow-up date is required when status is Open or Follow Up.')
+
+  const closed = validateInquiryFormInput({ ...validInquiry, status: 'Closed', followUpDate: '' })
+  assert.equal(closed.error, null)
 
   const visited = validateInquiryFormInput({ ...validInquiry, subStatus: 'Visited' })
   assert.equal(visited.error, 'Visited date is required when sub-status is Visited.')

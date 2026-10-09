@@ -25,7 +25,7 @@ import { InventoryVideosModal } from './InventoryVideosModal'
 import { InventoryDocumentsModal } from './InventoryDocumentsModal'
 import { buildDirtySnapshot, clean, emptyFilters, emptyForm, formatPriceInput } from './inventoryUtils'
 
-const INVENTORY_FUEL_TYPES = ['Petrol', 'Diesel', 'CNG']
+const INVENTORY_FUEL_TYPES = ['Petrol', 'Diesel', 'CNG', 'Hybrid', 'Electric']
 
 function csvValue(value: string | number | boolean | null | undefined) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
@@ -1226,7 +1226,7 @@ export function InventoryClient({
     pendingRefresh: pendingInventoryRefresh, vehicleLabel,
     onClose: () => { setInquiryRow(null); setSelectedInquiry(null); setInquiryMatches([]); setInquiryQuery(''); setInquiryError(''); if (pendingInventoryRefresh) window.location.reload() },
     onQueryChange: setInquiryQuery, onSelect: setSelectedInquiry,
-    onOpenInquiry: (id: number) => router.push(`/inquiry?edit=${id}`), onUpdate: updateInquiryDetails, onSync: syncInquiry,
+    onOpenInquiry: (id: number) => window.open(`/followup?inquiryId=${id}&status=All`, '_blank'), onUpdate: updateInquiryDetails, onSync: syncInquiry,
   }
 
   return (

@@ -15,6 +15,7 @@ export const LEGACY_FEEDBACK_FUNCTION = 'Feedback_Management'
 export const TODAY_ACTIVITY_FUNCTION = 'Today_Activity_Report'
 export const LEGACY_TODAY_INQUIRY_FOLLOWUP_FUNCTION = 'Todays_Inquiry_Followup_Report'
 export const INQUIRY_SOURCE_MASTER_FUNCTION = 'Inquiry_Source_Master_Management'
+export const PORTAL_ASSIGNMENT_MANAGEMENT_FUNCTION = 'Portal_Assignment_Management'
 export const INVENTORY_FUNCTION = 'Inventory_Management'
 
 export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
@@ -26,6 +27,7 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Agents', functionName: 'Agent_Management', route: '/config/agents', description: 'Manage reusable Insurance and RTO agent master records.' },
   { group: 'Configuration', label: 'Vehicle Masters', functionName: 'Vehicle_Master_Management', route: '/config/catalog', description: 'Manage Make, Model, and Variant master records.' },
   { group: 'Configuration', label: 'Inquiry Source Master', functionName: INQUIRY_SOURCE_MASTER_FUNCTION, route: '/config/inquiry-sources', description: 'View the controlled Reference Website / Source master used by inquiries.' },
+  { group: 'Configuration', label: 'Portal Assignments', functionName: PORTAL_ASSIGNMENT_MANAGEMENT_FUNCTION, route: '/config/portal-assignments', description: 'Map inquiry portal sources to the employee who owns incoming enquiries.' },
   { group: 'Configuration', label: 'Feedback', functionName: FEEDBACK_FUNCTION, route: '/config/feedback', description: 'Manage customer feedback responses.' },
   { group: 'Configuration', label: 'Email Templates', functionName: 'Message_Template_Management', route: '/config/sms-email', description: 'Manage email templates.' },
 

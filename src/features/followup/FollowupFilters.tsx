@@ -132,18 +132,19 @@ export function FollowupFilters({
   onBudgetFromChange,
   onBudgetToChange,
 }: FollowupFiltersProps) {
+  const hasAdvancedFilters = Boolean(
+    contactOutcome || customerName || subStatus || website || customerMobile || makeId || modelId || variantId ||
+    inquiryDateFrom || inquiryDateTo || followUpDateFrom || followUpDateTo || visitedDateFrom || visitedDateTo || budgetFrom || budgetTo,
+  )
+
   return (
     <>
-      <div className="mb-4 flex flex-wrap gap-3">
-        <SearchBar value={search} onChange={onSearchChange} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="min-w-[260px] flex-1">
+          <SearchBar value={search} onChange={onSearchChange} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
+        </div>
         <FormDropdown value={status === 'All' ? '' : status} options={statuses.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up Only' : value }))} placeholder="All Status" allowClear disabled={isRoutePending} className="min-w-[160px]" onChange={value => onStatusChange(value || 'All')} />
-        <FormDropdown value={contactOutcome} options={contactOutcomes.map(option => ({ value: option.value, label: option.title }))} placeholder="All reached outcomes" allowClear disabled={isRoutePending} className="min-w-[210px]" onChange={onContactOutcomeChange} />
-        <Input value={customerName} onChange={e => onCustomerNameChange(e.target.value)} placeholder="Customer name..." disabled={isRoutePending} className="min-w-[220px]" />
-        <Input value={subStatus} onChange={e => onSubStatusChange(e.target.value)} placeholder="Filter sub-status..." disabled={isRoutePending} className="min-w-[220px]" />
-        <FormDropdown value={website} options={sourceOptions.map(item => ({ value: item.code, label: item.displayName }))} placeholder="All Sources" allowClear disabled={isRoutePending} className="min-w-[220px]" onChange={onWebsiteChange} />
-        <Input value={customerMobile} onChange={e => onCustomerMobileChange(e.target.value)} placeholder="Customer mobile..." disabled={isRoutePending} className="min-w-[200px]" />
         <FormDropdown value={restricted ? currentUserId : userId} options={users.map(item => ({ value: String(item.userId), label: userLabel(item) }))} placeholder={restricted ? 'My Inquiries Only' : 'All Users'} allowClear disabled={isRoutePending || restricted} className="min-w-[200px]" onChange={onUserIdChange} />
-        <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} className="min-w-[180px]" onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         <div className="flex flex-wrap gap-1.5">
           {['All', ...classifications].map(value => (
             <button key={value} onClick={() => onClassificationChange(value)} disabled={isRoutePending}
@@ -155,16 +156,29 @@ export function FollowupFilters({
         </div>
       </div>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-2">
-        <DateFilterInput label="Inquiry Date From" value={inquiryDateFrom} onChange={onInquiryDateFromChange} disabled={isRoutePending} />
-        <DateFilterInput label="Inquiry Date To" value={inquiryDateTo} onChange={onInquiryDateToChange} disabled={isRoutePending} />
-        <DateFilterInput label="Follow-up Date From" value={followUpDateFrom} onChange={onFollowUpDateFromChange} disabled={isRoutePending} />
-        <DateFilterInput label="Follow-up Date To" value={followUpDateTo} onChange={onFollowUpDateToChange} disabled={isRoutePending} />
-        <DateFilterInput label="Visited Date From" value={visitedDateFrom} onChange={onVisitedDateFromChange} disabled={isRoutePending} />
-        <DateFilterInput label="Visited Date To" value={visitedDateTo} onChange={onVisitedDateToChange} disabled={isRoutePending} />
-        <Input inputMode="numeric" label="Budget From" value={formatIndianNumberInput(budgetFrom)} onChange={event => onBudgetFromChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
-        <Input inputMode="numeric" label="Budget To" value={formatIndianNumberInput(budgetTo)} onChange={event => onBudgetToChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
-      </div>
+      <details className="mb-4" open={hasAdvancedFilters}>
+        <summary className="inline-flex cursor-pointer select-none rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Advanced filters
+        </summary>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <FormDropdown value={contactOutcome} options={contactOutcomes.map(option => ({ value: option.value, label: option.title }))} placeholder="All reached outcomes" allowClear disabled={isRoutePending} onChange={onContactOutcomeChange} />
+          <Input value={customerName} onChange={e => onCustomerNameChange(e.target.value)} placeholder="Customer name..." disabled={isRoutePending} />
+          <Input value={subStatus} onChange={e => onSubStatusChange(e.target.value)} placeholder="Filter sub-status..." disabled={isRoutePending} />
+          <FormDropdown value={website} options={sourceOptions.map(item => ({ value: item.code, label: item.displayName }))} placeholder="All Sources" allowClear disabled={isRoutePending} onChange={onWebsiteChange} />
+          <Input value={customerMobile} onChange={e => onCustomerMobileChange(e.target.value)} placeholder="Customer mobile..." disabled={isRoutePending} />
+          <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <DateFilterInput label="Inquiry Date From" value={inquiryDateFrom} onChange={onInquiryDateFromChange} disabled={isRoutePending} />
+          <DateFilterInput label="Inquiry Date To" value={inquiryDateTo} onChange={onInquiryDateToChange} disabled={isRoutePending} />
+          <DateFilterInput label="Follow-up Date From" value={followUpDateFrom} onChange={onFollowUpDateFromChange} disabled={isRoutePending} />
+          <DateFilterInput label="Follow-up Date To" value={followUpDateTo} onChange={onFollowUpDateToChange} disabled={isRoutePending} />
+          <DateFilterInput label="Visited Date From" value={visitedDateFrom} onChange={onVisitedDateFromChange} disabled={isRoutePending} />
+          <DateFilterInput label="Visited Date To" value={visitedDateTo} onChange={onVisitedDateToChange} disabled={isRoutePending} />
+          <Input inputMode="numeric" label="Budget From" value={formatIndianNumberInput(budgetFrom)} onChange={event => onBudgetFromChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
+          <Input inputMode="numeric" label="Budget To" value={formatIndianNumberInput(budgetTo)} onChange={event => onBudgetToChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
+        </div>
+      </details>
     </>
   )
 }

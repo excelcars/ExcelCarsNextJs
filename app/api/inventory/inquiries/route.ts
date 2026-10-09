@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
   const inquiryCarWhere = vehicleConditions.length > 0 ? { AND: vehicleConditions } : undefined
 
   const where = {
+    // Inventory can only be linked to an active enquiry. This includes Open
+    // and FollowUp leads, but never a Closed lead.
+    status: { not: 'Closed' },
     ...(ownershipScope.restrictToUserId
       ? { AND: [buildInquiryOwnershipWhere(ownershipScope.restrictToUserId, ownershipScope.ownershipMode)] }
       : {}),

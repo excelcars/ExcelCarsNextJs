@@ -8,7 +8,7 @@ import { FormDropdown } from '@/components/FormDropdown'
 import { logFollowup, type LogFollowupInput } from './actions'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
-import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES } from '@/features/inquiry/queries'
+import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES, inquiryStatusLabel } from '@/features/inquiry/queries'
 import { getInquiryDetail, updateInquiry, type InquiryCarInput, type InquiryFormInput } from '@/features/inquiry/actions'
 import { isValidYear } from '@/lib/validation'
 import { FOLLOWUP_CONTACT_OUTCOMES, FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
@@ -630,29 +630,6 @@ export function FollowupClient({
   const viewInquiryRequestRef = useRef(0)
   const editInquiryRequestRef = useRef(0)
   const overdueCount = useMemo(() => initialData.filter(r => isOverdue(r.followUpDate)).length, [initialData])
-  const activeFilterCount = [
-    search.trim() ? 1 : 0,
-    status !== 'FollowUp' ? 1 : 0,
-    sort !== 'due' ? 1 : 0,
-    contactOutcome ? 1 : 0,
-    customerName.trim() ? 1 : 0,
-    subStatus.trim() ? 1 : 0,
-    website.trim() ? 1 : 0,
-    customerMobile.trim() ? 1 : 0,
-    userId ? 1 : 0,
-    makeId ? 1 : 0,
-    modelId ? 1 : 0,
-    variantId ? 1 : 0,
-    classification !== 'All' ? 1 : 0,
-    inquiryDateFrom ? 1 : 0,
-    inquiryDateTo ? 1 : 0,
-    followUpDateFrom ? 1 : 0,
-    followUpDateTo ? 1 : 0,
-    visitedDateFrom ? 1 : 0,
-    visitedDateTo ? 1 : 0,
-    budgetFrom ? 1 : 0,
-    budgetTo ? 1 : 0,
-  ].reduce((sum, value) => sum + value, 0)
   const hasActiveFilters = Boolean(
     search.trim() ||
     status !== 'FollowUp' ||
@@ -1436,22 +1413,6 @@ export function FollowupClient({
         onBudgetToChange={setBudgetTo}
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-        <div>
-          <div className="text-sm font-medium text-gray-900">
-            Showing {total.toLocaleString('en-IN')} matching {total === 1 ? 'inquiry' : 'inquiries'}
-          </div>
-          <div className="text-xs text-gray-500">
-            {hasActiveFilters
-              ? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'} applied${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}`
-              : `Default follow-up queue${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}`}
-          </div>
-        </div>
-        <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm">
-          {restricted ? 'My inquiries only' : hasActiveFilters ? 'Filtered view' : 'Default view'}
-        </div>
-      </div>
-
       <div className="mb-4 flex justify-end">
         <Btn variant="outline" size="sm" onClick={() => { setSuccessMessage(''); resetFilters() }} disabled={isRoutePending || !hasActiveFilters}>
           Reset Filters
@@ -2031,7 +1992,7 @@ export function FollowupClient({
               <Input label="Budget of customer" type="number" value={editInquiryForm.budgetOfCustomer ?? ''} onChange={e => updateInquiryField('budgetOfCustomer', e.target.value ? Number(e.target.value) : null)} error={editInquiryErrors.budgetOfCustomer} />
               <FormDropdown label="Classification *" value={editInquiryForm.classification} options={INQUIRY_CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => updateInquiryField('classification', value)} />
               <Input label="Visited Date of customer" type="date" value={editInquiryForm.visitedDateOfCustomer} onChange={e => updateInquiryField('visitedDateOfCustomer', e.target.value)} error={editInquiryErrors.visitedDateOfCustomer} />
-              <FormDropdown label="Status *" value={editInquiryForm.status} options={INQUIRY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" onChange={value => updateInquiryField('status', value)} />
+              <FormDropdown label="Status *" value={editInquiryForm.status} options={INQUIRY_STATUSES.map(value => ({ value, label: inquiryStatusLabel(value) }))} placeholder="Select status" onChange={value => updateInquiryField('status', value)} />
               <FormDropdown label="Sub Status" value={editInquiryForm.subStatus} options={SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear onChange={value => updateInquiryField('subStatus', value)} />
               <Input
                 label={isFollowupStatus(editInquiryForm.status) ? 'FollowUp Date*' : 'FollowUp Date'}

@@ -184,6 +184,7 @@ const navItems: NavItem[] = [
       { label: 'Agents', href: '/config/agents' },
       { label: 'Vehicle Masters', href: '/config/catalog' },
       { label: 'Inquiry Source Master', href: '/config/inquiry-sources' },
+      { label: 'Portal Assignments', href: '/config/portal-assignments' },
       { label: 'Feedback', href: '/config/feedback' },
       { label: 'Email Templates', href: '/config/sms-email' },
     ],

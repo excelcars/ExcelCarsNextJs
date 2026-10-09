@@ -47,7 +47,7 @@ export const FOLLOWUP_CONTACT_OUTCOMES = [
   'number_not_working',
 ] as const
 
-export const FOLLOWUP_ALLOWED_STATUSES = ['Open', 'FollowUp', 'Closed'] as const
+export const FOLLOWUP_ALLOWED_STATUSES = ['Open', 'FollowUp', 'Booked', 'Closed', 'Converted'] as const
 
 export const FOLLOWUP_ALLOWED_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 
@@ -76,6 +76,11 @@ function buildValidationResult(fieldErrors: Record<string, boolean>, error: stri
 export function isFollowupStatus(value: string | null | undefined) {
   const normalized = (value ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '')
   return normalized === 'followup' || normalized === 'follow'
+}
+
+export function requiresInquiryFollowupDate(value: string | null | undefined) {
+  const normalized = (value ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '')
+  return normalized === 'open' || normalized === 'followup' || normalized === 'follow'
 }
 
 export function isVisitedSubStatus(value: string | null | undefined) {
@@ -123,7 +128,7 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
   const followUpDate = input.followUpDate.trim()
   const visitedDate = input.visitedDateOfCustomer.trim()
 
-  if (isFollowupStatus(status) && !followUpDate) {
+  if (requiresInquiryFollowupDate(status) && !followUpDate) {
     fieldErrors.followUpDate = true
   }
   if (isVisitedSubStatus(subStatus) && !visitedDate) {
@@ -145,8 +150,8 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
   if (fieldErrors.inquiryCars) {
     return buildValidationResult(fieldErrors, 'Add at least one car of interest before saving the inquiry.')
   }
-  if (fieldErrors.followUpDate && isFollowupStatus(status) && !followUpDate) {
-    return buildValidationResult(fieldErrors, 'Follow-up date is required when Follow is selected.')
+  if (fieldErrors.followUpDate && requiresInquiryFollowupDate(status) && !followUpDate) {
+    return buildValidationResult(fieldErrors, 'Follow-up date is required when status is Open or Follow Up.')
   }
   if (fieldErrors.visitedDateOfCustomer && isVisitedSubStatus(subStatus) && !visitedDate) {
     return buildValidationResult(fieldErrors, 'Visited date is required when sub-status is Visited.')
