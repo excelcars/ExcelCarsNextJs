@@ -6,10 +6,10 @@ import { Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
 import { Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
-import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS } from './queries'
+import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS, inquiryStatusLabel } from './queries'
 import { assignInquiry, createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
 import { isValidYear } from '@/lib/validation'
-import { isFollowupStatus, isVisitedSubStatus, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { isVisitedSubStatus, requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { formatInquiryInventoryWorkflowLabel } from './workflow'
@@ -989,10 +989,10 @@ export function InquiryClient({
   const [inventoryMatchError, setInventoryMatchError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
-  const followUpSelected = isFollowupStatus(form.status)
+  const followUpDateRequired = requiresInquiryFollowupDate(form.status)
   const visitedSelected = isVisitedSubStatus(form.subStatus)
   const customerDetailsLocked = Boolean(selectedCustomer || form.customerId)
-  const isMissingFollowUpDate = followUpSelected && !form.followUpDate.trim()
+  const isMissingFollowUpDate = followUpDateRequired && !form.followUpDate.trim()
   const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
   const hasInventoryRequirements = Boolean(
     carEditor.selectedMakeId || carEditor.selectedModelId || carEditor.fkVariantId ||
@@ -1873,7 +1873,7 @@ export function InquiryClient({
           </div>
           {previousInquiryAlert}
           <div className="grid grid-cols-2 gap-4">
-            <FormDropdown label={fieldLabel('City / Reporting Location', true)} value={String(form.locationId ?? '')} options={locationOptions.map(item => ({ value: String(item.locationId), label: `${item.displayName} · ${item.region}` }))} placeholder="Select reporting location" allowClear error={errors.locationId} onChange={value => f('locationId', Number(value) || null)} />
+            <FormDropdown label="City / Reporting Location (Optional)" value={String(form.locationId ?? '')} options={locationOptions.map(item => ({ value: String(item.locationId), label: `${item.displayName} · ${item.region}` }))} placeholder="Select reporting location" allowClear error={errors.locationId} onChange={value => f('locationId', Number(value) || null)} />
             <Input label="Area / Locality" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Kothrud, JLT" />
           </div>
 
@@ -1953,27 +1953,28 @@ export function InquiryClient({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INQUIRY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" onChange={nextStatus => {
+            <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INQUIRY_STATUSES.map(value => ({ value, label: inquiryStatusLabel(value) }))} placeholder="Select status" onChange={nextStatus => {
               f('status', nextStatus)
-              if (!isFollowupStatus(nextStatus)) {
+              if (!requiresInquiryFollowupDate(nextStatus)) {
                 f('followUpDate', '')
+                f('subStatus', '')
               }
             }} />
-            <FormDropdown label="Sub Status" value={form.subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear allowCustom onChange={value => f('subStatus', value)} />
+            <FormDropdown label="Sub Status" value={form.subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear disabled={!requiresInquiryFollowupDate(form.status)} onChange={value => f('subStatus', value)} />
             <Input
-              label={fieldLabel('FollowUp Date', followUpSelected)}
+              label={fieldLabel('FollowUp Date', followUpDateRequired)}
               type="date"
               value={form.followUpDate}
               onChange={e => f('followUpDate', e.target.value)}
               error={errors.followUpDate}
-              disabled={!followUpSelected}
+              disabled={!followUpDateRequired}
             />
             <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} placeholder="Notes about this inquiry..." />
           </div>
 
           {(isMissingFollowUpDate || isMissingVisitedDate) ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {isMissingFollowUpDate ? <div>Follow status needs a follow-up date.</div> : null}
+              {isMissingFollowUpDate ? <div>Open and Followup statuses need a follow-up date.</div> : null}
               {isMissingVisitedDate ? <div>Visited sub-status needs a visited date.</div> : null}
             </div>
           ) : null}

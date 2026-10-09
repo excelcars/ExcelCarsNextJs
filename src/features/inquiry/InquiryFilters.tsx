@@ -8,6 +8,7 @@ import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import type { InquirySourceOption } from './sourceMaster'
 import type { InquiryLocationOption } from './locationMaster'
 import { formatIndianNumberInput, normalizeIntegerInput } from '@/lib/listFormatters'
+import { inquiryStatusLabel } from './queries'
 
 type QuickFilter = 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
 
@@ -159,7 +160,7 @@ export function InquiryFilters({
               <button key={value} onClick={() => onStatusChange(value)} disabled={isRoutePending}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${status === value ? 'text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
                 style={status === value ? { backgroundColor: '#1B2A6B' } : {}}>
-                {value}
+                {inquiryStatusLabel(value)}
               </button>
             ))}
           </div>

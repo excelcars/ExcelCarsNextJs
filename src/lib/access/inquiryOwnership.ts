@@ -25,8 +25,9 @@ export function buildInquiryOwnershipWhere(userId: number, ownershipMode: Inquir
 }
 
 function resolveOwnershipMode(route: string, restricted: boolean): InquiryOwnershipMode {
-  if (!restricted) return 'created-or-assigned'
-  return route === '/followup' ? 'created-only' : 'created-or-assigned'
+  void route
+  void restricted
+  return 'created-or-assigned'
 }
 
 export async function getInquiryOwnershipScopeForRoute(route: string): Promise<InquiryOwnershipScope> {

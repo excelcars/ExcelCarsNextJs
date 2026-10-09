@@ -4,7 +4,26 @@ import { buildInquiryOwnershipWhere } from '@/lib/access/inquiryOwnership'
 import { getActiveInquirySources } from './sourceMaster.server'
 import { getActiveInquiryLocations } from './locationMaster.server'
 
-export const INQUIRY_STATUSES = ['Open', 'FollowUp', 'Closed'] as const
+// Keep `FollowUp` as the saved value so existing follow-up queues and reports
+// continue to work, while presenting the friendlier "Followup" label in the UI.
+export const INQUIRY_STATUSES = ['Open', 'FollowUp', 'Booked', 'Closed', 'Converted'] as const
+export const INQUIRY_LEAD_SUB_STATUS_OPTIONS = [
+  'Appointment Fixed',
+  'Busy',
+  'Call Later',
+  'Customer Has Called',
+  'Desired Car Not In Stock',
+  'Expecting Lesser Price',
+  'Number Not Available',
+  'Ringing',
+  'Showroom Visit',
+  'Other',
+  'Outstanding Lead',
+] as const
+
+export function inquiryStatusLabel(status: string) {
+  return status === 'FollowUp' ? 'Followup' : status
+}
 export const INQUIRY_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 export const PAGE_SIZE = 25
 export const INQUIRY_QUICK_FILTERS = ['active', 'overdue', 'today', 'upcoming', 'activity', 'all'] as const
@@ -338,6 +357,11 @@ export async function getInquirySubStatusSuggestions() {
 
   const seen = new Set<string>()
   const suggestions: string[] = []
+
+  for (const value of INQUIRY_LEAD_SUB_STATUS_OPTIONS) {
+    seen.add(value.toLowerCase())
+    suggestions.push(value)
+  }
 
   for (const row of rows) {
     const value = row.subStatus?.trim()

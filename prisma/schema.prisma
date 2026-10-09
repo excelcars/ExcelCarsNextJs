@@ -456,10 +456,43 @@ model InquirySourceMaster {
   updatedAt      DateTime                     @default(now()) @map("updated_at") @db.Timestamptz(6)
   inquiries      Inquiry[]
   legacyMappings LegacyInquirySourceMapping[]
+  portalAssignment InquiryPortalAssignment?
 
   @@unique([displayName], map: "uq_inquiry_source_master_display_name")
   @@index([isActive, reportingSort], map: "idx_inquiry_source_master_active_sort")
   @@map("inquiry_source_master")
+}
+
+model InquiryPortalAssignment {
+  inquiryPortalAssignmentId Int                 @id @default(autoincrement()) @map("inquiry_portal_assignment_id")
+  sourceId                  Int                 @unique(map: "uq_inquiry_portal_assignment_source") @map("source_id")
+  assignedToUserId          Int                 @map("assigned_to_user_id")
+  isActive                  Boolean             @default(true) @map("is_active")
+  createdAt                 DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy                 Int?                @map("created_by")
+  updatedAt                 DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy                 Int?                @map("updated_by")
+  source                    InquirySourceMaster @relation(fields: [sourceId], references: [sourceId], onDelete: Cascade, onUpdate: NoAction, map: "fk_inquiry_portal_assignment_source")
+  assignedToUser            UserTable           @relation("inquiry_portal_assignment_assignee", fields: [assignedToUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_portal_assignment_assignee")
+  createdByUser             UserTable?          @relation("inquiry_portal_assignment_created_by", fields: [createdBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_portal_assignment_created_by")
+  updatedByUser             UserTable?          @relation("inquiry_portal_assignment_updated_by", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_inquiry_portal_assignment_updated_by")
+
+  @@index([assignedToUserId], map: "idx_inquiry_portal_assignment_assignee")
+  @@index([isActive], map: "idx_inquiry_portal_assignment_active")
+  @@map("inquiry_portal_assignments")
+}
+
+model PartnerWebhookLead {
+  partnerWebhookLeadId Int      @id @default(autoincrement()) @map("partner_webhook_lead_id")
+  partner              String
+  externalLeadId       String   @map("external_lead_id")
+  sourceId             Int      @map("source_id")
+  inquiryId            Int?     @unique(map: "uq_partner_webhook_lead_inquiry") @map("inquiry_id")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([partner, externalLeadId], map: "uq_partner_webhook_lead_partner_external")
+  @@index([sourceId], map: "idx_partner_webhook_lead_source")
+  @@map("partner_webhook_leads")
 }
 
 model LegacyInquirySourceMapping {
@@ -1271,6 +1304,9 @@ model UserTable {
   updatedInventoryManagements       InventoryManagement[]      @relation("inventory_management_updated_byTouser_table")
   createdMessageTemplates           MessageTemplate[]          @relation("message_template_created_byTouser_table")
   updatedMessageTemplates           MessageTemplate[]          @relation("message_template_updated_byTouser_table")
+  assignedInquiryPortalAssignments  InquiryPortalAssignment[]   @relation("inquiry_portal_assignment_assignee")
+  createdInquiryPortalAssignments   InquiryPortalAssignment[]   @relation("inquiry_portal_assignment_created_by")
+  updatedInquiryPortalAssignments   InquiryPortalAssignment[]   @relation("inquiry_portal_assignment_updated_by")
   messageAttachmentUploads          MessageAttachmentUpload[]
   emailDeliveryLogs                 EmailDeliveryLog[]
   createdRoleMasters                RoleMaster[]               @relation("role_master_created_byTouser_table")
