@@ -2,6 +2,7 @@ import { listInventory, getMakes, getDealers, getInventoryColours } from '@/feat
 import { InventoryClient } from '@/features/inventory/InventoryClient'
 import { isEmailConfigured } from '@/lib/email/sendMail'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { buildInquiryOwnershipWhere, getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 import { redirect } from 'next/navigation'
 
 export default async function InventoryPage({
@@ -72,6 +73,13 @@ export default async function InventoryPage({
   const otherRemarks = sp.otherRemarks ?? ''
   const page = Number(sp.page) || 1
   const pageSize = Number(sp.pageSize) || 25
+  const inquiryOwnershipScope = await getInquiryOwnershipScopeForRoute('/inventory')
+  const interestedInquiryWhere = {
+    status: { not: 'Closed' },
+    ...(inquiryOwnershipScope.restrictToUserId
+      ? { AND: [buildInquiryOwnershipWhere(inquiryOwnershipScope.restrictToUserId, inquiryOwnershipScope.ownershipMode)] }
+      : {}),
+  }
 
   const [{ rows, total, pageCount, page: safePage, pageSize: safePageSize }, makes, dealers, inventoryColours] = await Promise.all([
     listInventory({
@@ -103,6 +111,7 @@ export default async function InventoryPage({
       linkedCustomer,
       internalComments,
       otherRemarks,
+      interestedInquiryWhere,
       page,
       pageSize,
     }),

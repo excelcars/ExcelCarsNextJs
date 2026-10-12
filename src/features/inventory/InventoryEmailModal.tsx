@@ -2,7 +2,7 @@ import { Mail, MessageCircle, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Btn, Input, Modal } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
-import { sendInventoryWhatsApp } from './actions'
+import { sendInventoryEmail, sendInventoryWhatsApp } from './actions'
 import type { CustomerOption, Dealer, EmailProgressItem, EmailRecipient, InventoryRow } from './inventoryTypes'
 
 interface InventoryEmailModalProps {
@@ -52,6 +52,7 @@ function emailSubject(row: InventoryRow) {
 }
 
 type WhatsAppRecipient = { key: string; name: string; mobile: string; source: 'Customer' | 'Dealer' }
+type InterestedInquiry = { inquiryId: number; inquiryNo: string | null; name: string; mobile: string | null; email: string | null; status: string | null }
 
 export function InventoryEmailModal({
   row, rows, recipientType, dealerQuery, dealerOpen, selectedDealer, selectedCustomer,
@@ -69,8 +70,16 @@ export function InventoryEmailModal({
   const [whatsAppSending, setWhatsAppSending] = useState(false)
   const [whatsAppRecipients, setWhatsAppRecipients] = useState<WhatsAppRecipient[]>([])
   const [whatsAppContactType, setWhatsAppContactType] = useState<'customer' | 'dealer'>('customer')
-  const [activeChannel, setActiveChannel] = useState<'email' | 'whatsapp'>('email')
-  useEffect(() => { setActiveChannel('email') }, [row?.inventoryId])
+  const [activeChannel, setActiveChannel] = useState<'email' | 'whatsapp' | 'direct' | 'multiple' | 'interested'>('email')
+  const [selectedInterestedIds, setSelectedInterestedIds] = useState<number[]>([])
+  const [interestedSending, setInterestedSending] = useState<'email' | 'whatsapp' | null>(null)
+  const [interestedMessage, setInterestedMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  useEffect(() => {
+    setActiveChannel('email')
+    setSelectedInterestedIds([])
+    setInterestedMessage(null)
+  }, [row?.inventoryId])
   const addCustomer = (customer: CustomerOption) => {
     onAddRecipient({ key: `customer-${customer.custId}`, recipientType: 'customer', recipientId: customer.custId, name: customer.custName, email: customer.custEmail, meta: customer.custMobile ?? 'Customer' })
     onSelectedCustomerChange(null)
@@ -145,6 +154,55 @@ export function InventoryEmailModal({
   }
 
   const linkedCustomer = row?.customer
+  const directPanel = <div className="space-y-5"><div><div className="text-lg font-semibold text-gray-900">Direct email</div><p className="mt-1 text-sm text-gray-600">Add one or more email addresses manually, then review them before sending.</p></div><div className="rounded-xl border border-gray-200 bg-gray-50 p-4"><label className="text-xs font-semibold uppercase tracking-wide text-gray-600">Email address</label><div className="mt-2 flex flex-col gap-2 sm:flex-row"><Input value={directEmail} onChange={event => { setDirectEmail(event.target.value); setDirectEmailError('') }} placeholder="name@example.com" disabled={isSending} /><Btn onClick={addDirectEmail} disabled={isSending || !directEmail.trim()}>Add recipient</Btn></div>{directEmailError ? <div className="mt-2 text-xs text-red-600">{directEmailError}</div> : <div className="mt-2 text-xs text-gray-500">You can add addresses one at a time.</div>}</div><div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3"><span className="text-sm text-gray-700">{recipients.filter(item => item.recipientType === 'direct').length} direct recipient{recipients.filter(item => item.recipientType === 'direct').length === 1 ? '' : 's'} added</span><Btn size="sm" variant="outline" onClick={() => setActiveChannel('email')} disabled={recipients.length === 0}>Review email</Btn></div></div>
+  const multiplePanel = <div className="space-y-5"><div><div className="text-lg font-semibold text-gray-900">Multiple recipients</div><p className="mt-1 text-sm text-gray-600">Build an email list from saved customers and dealers. Each selection is added to your draft.</p></div><div className="flex gap-2 rounded-lg bg-gray-100 p-1">{(['customer', 'dealer'] as const).map(type => <button key={type} type="button" onClick={() => onRecipientTypeChange(type)} className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold capitalize transition ${recipientType === type ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>{type}</button>)}</div>{recipientType === 'customer' ? <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/40 p-4">{row?.customer ? <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2.5"><div className="min-w-0"><div className="truncate text-sm font-medium text-gray-800">{row.customer.custName}</div><div className="truncate text-xs text-gray-500">{row.customer.custMobile ?? '—'}{row.customer.custEmail ? ` · ${row.customer.custEmail}` : ''}</div></div><Btn size="sm" onClick={() => addCustomer({ custId: row.customer!.custId, custName: row.customer!.custName, custMobile: row.customer!.custMobile, custEmail: row.customer!.custEmail })} disabled={recipients.some(item => item.key === `customer-${row.customer!.custId}`)}>{recipients.some(item => item.key === `customer-${row.customer!.custId}`) ? 'Added' : 'Add'}</Btn></div> : null}<CustomerPicker value={selectedCustomer} onChange={customer => { if (customer) addCustomer(customer); else onSelectedCustomerChange(null) }} /><div className="text-xs text-gray-500">Search and select another customer to add them.</div></div> : <div className="relative rounded-xl border border-blue-100 bg-blue-50/40 p-4">{selectedDealer ? <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-white px-3 py-2.5"><div className="min-w-0"><div className="truncate text-sm font-medium text-gray-800">{selectedDealer.dealerName}</div><div className="truncate text-xs text-gray-500">{selectedDealer.dealerEmail ?? 'No email address'}</div></div><div className="flex items-center gap-2"><Btn size="sm" onClick={addDealer}>Add</Btn><button type="button" onClick={onSelectedDealerClear} className="text-gray-400 hover:text-red-600"><X className="h-4 w-4" /></button></div></div> : <><Input placeholder="Search dealer by name..." value={dealerQuery} onChange={event => onDealerQueryChange(event.target.value)} onFocus={onDealerFocus} />{dealerOpen ? <div className="absolute z-10 mt-1 max-h-56 w-[calc(100%-2rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">{dealerMatches.length === 0 ? <div className="px-3 py-2 text-sm text-gray-400">No matches</div> : dealerMatches.map(dealer => <button key={dealer.dealerId} type="button" onClick={() => addPickedEmailDealer(dealer)} className="w-full border-b border-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-50 last:border-0"><div className="font-medium text-gray-800">{dealer.dealerName}</div><div className="text-xs text-gray-500">{dealer.dealerEmail ?? 'No email address'}</div></button>)}</div> : null}</>}</div>}<div className="flex items-center justify-between rounded-lg border border-blue-100 bg-white px-4 py-3"><span className="text-sm text-gray-700">{recipients.length} recipient{recipients.length === 1 ? '' : 's'} in your draft</span><Btn size="sm" variant="outline" onClick={() => setActiveChannel('email')} disabled={recipients.length === 0}>Review email</Btn></div></div>
+  void directPanel
+  void multiplePanel
+  const interestedInquiries: InterestedInquiry[] = (row?.inquiryInventoryLinks ?? []).map(link => ({
+    inquiryId: link.inquiryId,
+    inquiryNo: link.inquiry.inquiryNo,
+    name: link.inquiry.customer?.custName ?? link.inquiry.customerNameLegacy ?? 'Unnamed enquiry',
+    mobile: link.inquiry.customer?.custMobile ?? link.inquiry.mobileno,
+    email: link.inquiry.customer?.custEmail ?? link.inquiry.email,
+    status: link.inquiry.status,
+  }))
+  const selectedInterested = interestedInquiries.filter(item => selectedInterestedIds.includes(item.inquiryId))
+  const sendInterestedEmail = async () => {
+    if (!row) return
+    const emailRecipients = selectedInterested.filter(item => item.email?.trim()).map(item => ({
+      key: `inquiry-${item.inquiryId}-${item.email!.trim().toLowerCase()}`,
+      recipientType: 'direct', recipientId: 0, name: item.name, email: item.email, meta: item.inquiryNo ?? 'Interested enquiry',
+    } as EmailRecipient))
+    if (emailRecipients.length === 0) return
+    setInterestedSending('email')
+    setInterestedMessage(null)
+    try {
+      const result = await sendInventoryEmail(row.inventoryId, { recipients: emailRecipients })
+      setInterestedMessage({ ok: result.success, text: result.message ?? result.error ?? 'Could not send email.' })
+    } finally {
+      setInterestedSending(null)
+    }
+  }
+  const sendInterestedWhatsApp = async () => {
+    if (!row) return
+    const mobiles = selectedInterested.map(item => item.mobile?.trim()).filter((mobile): mobile is string => Boolean(mobile))
+    if (mobiles.length === 0) return
+    setInterestedSending('whatsapp')
+    setInterestedMessage(null)
+    try {
+      const result = await sendInventoryWhatsApp(row.inventoryId, { mobiles })
+      setInterestedMessage({ ok: result.success, text: result.message ?? result.error ?? 'Could not send WhatsApp.' })
+    } finally {
+      setInterestedSending(null)
+    }
+  }
+  const interestedPanel = <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-5">
+    <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-gray-900">Interested enquiries</div><p className="mt-1 text-sm text-gray-600">Select one or more people who enquired about this vehicle, then add them to Email or WhatsApp recipients.</p></div>{interestedInquiries.length > 0 ? <button type="button" onClick={() => setSelectedInterestedIds(selectedInterestedIds.length === interestedInquiries.length ? [] : interestedInquiries.map(item => item.inquiryId))} className="shrink-0 text-xs font-semibold text-violet-700 hover:underline">{selectedInterestedIds.length === interestedInquiries.length ? 'Clear all' : 'Select all'}</button> : null}</div>
+    <div className="mt-4 overflow-hidden rounded-lg border border-violet-100 bg-white">
+      {interestedInquiries.length === 0 ? <div className="px-4 py-8 text-center text-sm text-gray-500">No interested enquiries have been received for this vehicle yet.</div> : <div className="divide-y divide-violet-50">{interestedInquiries.map(item => <label key={item.inquiryId} className="flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-violet-50/60"><input type="checkbox" checked={selectedInterestedIds.includes(item.inquiryId)} onChange={() => setSelectedInterestedIds(current => current.includes(item.inquiryId) ? current.filter(id => id !== item.inquiryId) : [...current, item.inquiryId])} className="mt-1 h-4 w-4 rounded border-gray-300 text-violet-700 focus:ring-violet-600" /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-x-2"><span className="font-medium text-gray-900">{item.name}</span>{item.inquiryNo ? <span className="font-mono text-xs text-gray-500">{item.inquiryNo}</span> : null}{item.status ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">{item.status}</span> : null}</span><span className="mt-1 block text-xs text-gray-500">{item.mobile ?? 'No mobile'}{item.email ? ` · ${item.email}` : ' · No email'}</span></span></label>)}</div>}
+    </div>
+    {selectedInterested.length > 0 ? <div className="mt-4 space-y-3 rounded-lg border border-violet-200 bg-white/80 px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm font-medium text-violet-950">{selectedInterested.length} selected</span><div className="flex flex-wrap gap-2"><Btn size="sm" variant="outline" onClick={() => void sendInterestedEmail()} disabled={!emailConfigured || interestedSending !== null || !selectedInterested.some(item => item.email?.trim())}>{interestedSending === 'email' ? 'Sending email…' : `Send Email (${selectedInterested.filter(item => item.email?.trim()).length})`}</Btn><Btn size="sm" onClick={() => void sendInterestedWhatsApp()} disabled={interestedSending !== null || !selectedInterested.some(item => item.mobile?.trim())}>{interestedSending === 'whatsapp' ? 'Sending WhatsApp…' : `Send WhatsApp (${selectedInterested.filter(item => item.mobile?.trim()).length})`}</Btn></div></div>{interestedMessage ? <div className={`rounded-md px-3 py-2 text-sm ${interestedMessage.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>{interestedMessage.text}</div> : null}</div> : null}
+  </div>
   const whatsAppPanel = <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5">
     <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700"><MessageCircle className="h-5 w-5" /></span><div><div className="text-sm font-semibold text-gray-900">Share via WhatsApp</div><p className="mt-1 text-sm text-gray-600">Send a secure vehicle-details link, including photos, to saved contacts or manual numbers.</p></div></div>
     <div className="mt-5 rounded-lg border border-emerald-100 bg-white/80 p-3">
@@ -168,9 +226,10 @@ export function InventoryEmailModal({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 rounded-xl border border-gray-200 bg-gray-50 p-1" role="tablist" aria-label="Delivery channel">
+          <div className="grid grid-cols-3 rounded-xl border border-gray-200 bg-gray-50 p-1" role="tablist" aria-label="Delivery channel">
             <button type="button" role="tab" aria-selected={activeChannel === 'email'} onClick={() => setActiveChannel('email')} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${activeChannel === 'email' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}><Mail className="h-4 w-4" />Email</button>
             <button type="button" role="tab" aria-selected={activeChannel === 'whatsapp'} onClick={() => setActiveChannel('whatsapp')} disabled={rows.length !== 1} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${activeChannel === 'whatsapp' ? 'bg-[#e8f7f0] text-emerald-800 shadow-sm' : 'text-gray-500 hover:text-gray-800'} disabled:cursor-not-allowed disabled:opacity-45`}><MessageCircle className="h-4 w-4" />WhatsApp</button>
+            <button type="button" role="tab" aria-selected={activeChannel === 'interested'} onClick={() => setActiveChannel('interested')} disabled={rows.length !== 1} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${activeChannel === 'interested' ? 'bg-violet-100 text-violet-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'} disabled:cursor-not-allowed disabled:opacity-45`}>Interested</button>
           </div>
           {activeChannel === 'email' ? <>
           {rows.length === 1 ? <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5"><div className="text-xs font-medium uppercase tracking-wide text-[#1B2A6B]">Email subject</div><div className="mt-1 text-sm font-medium text-gray-800">{emailSubject(row)}</div><div className="mt-1 text-xs text-gray-500">Generated from the vehicle make, model, variant, and colour.</div></div> : <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-xs text-gray-600">A separate dynamic subject will be generated for each selected vehicle.</div>}
@@ -181,7 +240,7 @@ export function InventoryEmailModal({
           {emailError ? <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{emailError}</div> : null}
           {!emailConfigured && !emailError ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Email is not configured yet. Add <span className="font-mono">SMTP_HOST</span>, <span className="font-mono">SMTP_USER</span>, <span className="font-mono">SMTP_PASSWORD</span> and <span className="font-mono">EMAIL_FROM_ADDRESS</span> to the environment before sending.</div> : null}
           <div className="flex justify-end gap-3 pt-2"><Btn variant="outline" onClick={onClose}>Cancel</Btn><Btn onClick={onSend} disabled={isPending || isSending || !emailConfigured || recipients.length === 0}>{isSending ? 'Sending...' : `Send Email${recipients.length > 0 ? ` (${recipients.length})` : ''}`}</Btn></div>
-          </> : whatsAppPanel}
+          </> : activeChannel === 'whatsapp' ? whatsAppPanel : interestedPanel}
         </div>
       ) : null}
     </Modal>

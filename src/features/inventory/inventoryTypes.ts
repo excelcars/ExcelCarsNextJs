@@ -35,6 +35,18 @@ export interface InventoryRow {
   fkVariantId: number | null
   customer: CustomerOption | null
   _count: { inventoryPhotos: number; inventoryVideos: number; inventoryDocuments: number }
+  inquiryInventoryLinks?: Array<{
+    inquiryId: number
+    createdAt: string | Date
+    inquiry: {
+      inquiryNo: string | null
+      customerNameLegacy: string | null
+      mobileno: string | null
+      email: string | null
+      status: string | null
+      customer: CustomerOption | null
+    }
+  }>
   vehicleEmailLinks?: Array<{
     vehicleEmailLinkId: number
     recipientEmail: string
