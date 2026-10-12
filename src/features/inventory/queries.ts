@@ -33,6 +33,7 @@ export interface InventoryListParams {
   linkedCustomer?: string
   internalComments?: string
   otherRemarks?: string
+  interestedInquiryWhere?: Prisma.InquiryWhereInput
   page?: number
   pageSize?: number
 }
@@ -240,6 +241,7 @@ function inventoryListInclude() {
 export async function listInventory({
   page = 1,
   pageSize = 25,
+  interestedInquiryWhere,
   ...filters
 }: InventoryListParams) {
   const where = buildInventoryWhere(filters)
@@ -249,7 +251,28 @@ export async function listInventory({
   const [rows, total] = await Promise.all([
     prisma.inventoryManagement.findMany({
       where,
-      include: inventoryListInclude(),
+      include: {
+        ...inventoryListInclude(),
+        inquiryInventoryLinks: {
+          where: { isActive: true, inquiry: interestedInquiryWhere ?? {} },
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          select: {
+            inquiryId: true,
+            createdAt: true,
+            inquiry: {
+              select: {
+                inquiryNo: true,
+                customerNameLegacy: true,
+                mobileno: true,
+                email: true,
+                status: true,
+                customer: { select: { custId: true, custName: true, custMobile: true, custEmail: true } },
+              },
+            },
+          },
+        },
+      },
       orderBy: { inventoryId: 'desc' },
       skip: (safePage - 1) * safePageSize,
       take: safePageSize,
