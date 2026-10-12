@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Download, Loader2 } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import { Badge, Btn, Input, Select, Textarea, PageHeader } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { logFollowup, type LogFollowupInput } from './actions'
@@ -26,7 +26,6 @@ import { FollowupInquiryViewModal } from './FollowupInquiryViewModal'
 import { FollowupInquiryEditModal } from './FollowupInquiryEditModal'
 import { InquiryCarTable } from '@/features/inquiry/InquiryCarTable'
 import { LogFollowupRecentActivity } from './LogFollowupRecentActivity'
-import { FollowupHistoryTimeline } from './FollowupHistoryTimeline'
 import { LogFollowupContactOutcome } from './LogFollowupContactOutcome'
 import { LogFollowupRemark } from './LogFollowupRemark'
 import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime } from '@/lib/listFormatters'
@@ -246,29 +245,12 @@ function daysFromToday(d: Date | string | null | undefined) {
   return Math.floor(diff / (1000 * 60 * 60 * 24))
 }
 
-function daysBetween(from: Date | string | null | undefined, to: Date | string | null | undefined) {
-  const fromValue = toDateValue(from)
-  const toValue = toDateValue(to)
-  if (!fromValue || !toValue) return null
-  const diff = startOfDay(toValue).getTime() - startOfDay(fromValue).getTime()
-  return Math.floor(diff / (1000 * 60 * 60 * 24))
-}
-
 function fmtLongDate(d: Date | string | null | undefined) {
   const value = toDateValue(d)
   if (!value) return '—'
   return value.toLocaleDateString('en-IN', {
     weekday: 'short',
     day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-function fmtMonthYear(d: Date | string | null | undefined) {
-  const value = toDateValue(d)
-  if (!value) return '—'
-  return value.toLocaleDateString('en-IN', {
     month: 'short',
     year: 'numeric',
   })
@@ -1721,134 +1703,53 @@ export function FollowupClient({
                 const bTime = toDateValue(b.createdDt ?? b.followupDate)?.getTime() ?? 0
                 return bTime - aTime
               })
-              const leadVehicle = getInquiryCarSummary(viewHistoryRow.inquiryCarDetails[0])
-              const vehicleSummary = getInquiryCarsSummary(viewHistoryRow.inquiryCarDetails)
-              const followupCount = sortedHistory.length
-              const dueDays = daysFromToday(viewHistoryRow.followUpDate)
-              const inquiryAge = daysFromToday(viewHistoryRow.dateOfInquiry)
-              const lastContact = sortedHistory[0]?.createdDt ?? sortedHistory[0]?.followupDate ?? null
-              const quietDays = lastContact ? daysFromToday(lastContact) : inquiryAge
-              const latestLoggedBeforeDue = lastContact && viewHistoryRow.followUpDate
-                ? (toDateValue(lastContact)?.getTime() ?? 0) < (toDateValue(viewHistoryRow.followUpDate)?.getTime() ?? 0)
-                : false
-              const showOverdue = viewHistoryRow.status === 'FollowUp' && dueDays !== null && dueDays > 0
-              const mobileNumber = viewHistoryRow.customer?.custMobile ?? viewHistoryRow.mobileno ?? ''
 
               return (
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                  <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{viewHistoryRow.inquiryNo ?? `Inquiry/${viewHistoryRow.inquiryId}`}</span>
-                        {viewHistoryRow.website ? <span className="rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-[#1B2A6B]">{viewHistoryRow.website}</span> : null}
-                      </div>
-                      <h2 className="mt-3 text-3xl font-bold text-gray-900">{viewHistoryRow.customer?.custName ?? viewHistoryRow.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-                        <span>Customer #{viewHistoryRow.customer?.custId ?? viewHistoryRow.customerId ?? '—'}</span>
-                        <span>·</span>
-                        <span>Raised {fmtLongDate(viewHistoryRow.dateOfInquiry)}</span>
-                        <span>·</span>
-                        <span>{vehicleSummary}</span>
-                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{viewHistoryRow.customer?.custName ?? viewHistoryRow.customerNameLegacy ?? 'Unnamed inquiry'}</div>
+                      <div className="mt-1 text-xs text-gray-500">{viewHistoryRow.inquiryNo ?? `Inquiry/${viewHistoryRow.inquiryId}`} · Raised {fmtDate(viewHistoryRow.dateOfInquiry) || '—'}</div>
                     </div>
-
-                    <div className="flex flex-col items-start gap-3 lg:items-end">
+                    <div className="flex flex-wrap items-center gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         {viewHistoryRow.classification ? <Badge label={viewHistoryRow.classification} /> : null}
                         {viewHistoryRow.status ? <Badge label={viewHistoryRow.status} /> : null}
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {mobileNumber ? (
-                          <Btn variant="outline" onClick={() => { window.location.href = `tel:${mobileNumber}` }}>
-                            Call {mobileNumber}
-                          </Btn>
-                        ) : null}
-                        <Btn onClick={() => {
-                          closeFollowupView()
-                          openLog(viewHistoryRow)
-                        }}
-                        >
-                          Log follow-up
-                        </Btn>
-                      </div>
+                      <Btn size="sm" onClick={() => {
+                        closeFollowupView()
+                        openLog(viewHistoryRow)
+                      }}>
+                        Add follow-up
+                      </Btn>
                     </div>
                   </div>
-
-                  {showOverdue ? (
-                    <div className="flex flex-col gap-3 border-t border-red-100 bg-red-50 px-6 py-4 text-sm text-red-700 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                        <div>
-                          <div className="font-semibold">{dueDays} day{dueDays === 1 ? '' : 's'} past the last scheduled follow-up</div>
-                          <div className="mt-1">
-                            Due {fmtLongDate(viewHistoryRow.followUpDate)}
-                            {latestLoggedBeforeDue && lastContact ? ` · nothing logged since ${fmtLongDate(lastContact)}` : ''}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Btn variant="outline" onClick={() => {
-                          closeFollowupView()
-                          openInquiryEdit(viewHistoryRow.inquiryId)
-                        }}
-                        >
-                          Edit inquiry
-                        </Btn>
-                        <Btn onClick={() => {
-                          closeFollowupView()
-                          openLog(viewHistoryRow)
-                        }}
-                        >
-                          Reschedule
-                        </Btn>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="grid gap-0 border-t border-gray-100 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="border-r border-gray-100 px-6 py-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Car Of Interest</div>
-                      <div className="mt-2 text-2xl font-semibold text-gray-900">{leadVehicle}</div>
-                      <div className="mt-1 text-sm text-gray-500">{viewHistoryRow.subStatus ?? viewHistoryRow.remark ?? 'Requirement recorded on inquiry'}</div>
-                    </div>
-                    <div className="border-r border-gray-100 px-6 py-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Follow-ups Logged</div>
-                      <div className="mt-2 text-2xl font-semibold text-gray-900">{followupCount}</div>
-                      <div className="mt-1 text-sm text-gray-500">{followupCount > 0 && lastContact ? `Last entry ${fmtMonthYear(lastContact)}` : 'No entries yet'}</div>
-                    </div>
-                    <div className="border-r border-gray-100 px-6 py-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Last Contact</div>
-                      <div className="mt-2 text-2xl font-semibold text-gray-900">{lastContact ? fmtLongDate(lastContact) : 'Not logged'}</div>
-                      <div className="mt-1 text-sm text-gray-500">{quietDays !== null ? `${quietDays} day${quietDays === 1 ? '' : 's'} ago` : 'No activity yet'}</div>
-                    </div>
-                    <div className="px-6 py-5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Inquiry Age</div>
-                      <div className="mt-2 text-2xl font-semibold text-gray-900">{inquiryAge !== null ? `${inquiryAge} days` : '—'}</div>
-                      <div className="mt-1 text-sm text-gray-500">{viewHistoryRow.dateOfInquiry ? `since ${fmtLongDate(viewHistoryRow.dateOfInquiry)}` : 'Inquiry date not set'}</div>
-                    </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="bg-[#1B2A6B] text-left text-xs font-semibold uppercase tracking-wide text-white">
+                        <tr>
+                          <th className="w-16 px-5 py-3">Sr. No.</th>
+                          <th className="px-5 py-3">Entry Date</th>
+                          <th className="px-5 py-3">Follow-up Date</th>
+                          <th className="px-5 py-3">Status</th>
+                          <th className="px-5 py-3">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sortedHistory.length === 0 ? (
+                          <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">No follow-up history recorded yet.</td></tr>
+                        ) : sortedHistory.map((entry, index) => (
+                          <tr key={entry.pkFollowupId} className="bg-white hover:bg-gray-50">
+                            <td className="px-5 py-3 text-gray-500">{index + 1}</td>
+                            <td className="whitespace-nowrap px-5 py-3 text-gray-700">{fmtDate(entry.createdDt ?? entry.followupDate) || '—'}</td>
+                            <td className="whitespace-nowrap px-5 py-3 text-gray-700">{fmtDate(entry.followupDate) || '—'}</td>
+                            <td className="px-5 py-3 text-gray-700">{formatFriendlyStatus(entry.followupStatus ?? '', entry.followupSubStatus ?? '')}</td>
+                            <td className="max-w-xl px-5 py-3 text-gray-700">{clean(entry.comments) || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-
-                  <FollowupHistoryTimeline
-                    inquiryDate={viewHistoryRow.dateOfInquiry}
-                    scheduledFollowupDate={viewHistoryRow.followUpDate}
-                    history={sortedHistory}
-                    overdue={showOverdue}
-                    overdueDays={dueDays}
-                    lastContact={lastContact}
-                    latestLoggedBeforeDue={latestLoggedBeforeDue}
-                    mobileNumber={mobileNumber}
-                    onCall={() => { window.location.href = `tel:${mobileNumber}` }}
-                    onLogFollowup={() => {
-                      closeFollowupView()
-                      openLog(viewHistoryRow)
-                    }}
-                    onClose={closeFollowupView}
-                    formatLongDate={fmtLongDate}
-                    formatMonthYear={fmtMonthYear}
-                    formatDateTime={fmtDateTime}
-                    daysBetween={daysBetween}
-                    cleanRemark={clean}
-                  />
                 </div>
               )
             })()
