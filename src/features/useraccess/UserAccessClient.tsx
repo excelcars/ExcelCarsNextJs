@@ -53,7 +53,7 @@ const GENDER_OPTIONS = GENDERS.map(value => ({ value, label: value }))
 const STATUS_OPTIONS = STATUSES.map(value => ({ value, label: value }))
 
 function CharacterCount({ value, maxLength }: { value: string; maxLength: number }) {
-  return <div className="mt-1 text-right text-[12px] text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
+  return <div className="mt-1 text-right text-xs text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
 }
 
 function CountedInput({ value = '', maxLength, ...props }: Omit<ComponentProps<typeof Input>, 'value' | 'maxLength'> & { value?: string; maxLength: number }) {
@@ -534,8 +534,8 @@ export function UserAccessClient({
               <td>{r.status ? <Badge label={r.status} /> : '—'}</td>
               <td>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View">
-                    <Eye className="w-3.5 h-3.5" />
+                  <button onClick={() => setViewRow(r)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View">
+                    <Eye className="h-4 w-4" />
                   </button>
                   {canManageRow(r) && (
                     <>

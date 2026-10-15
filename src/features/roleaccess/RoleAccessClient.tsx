@@ -318,7 +318,7 @@ export function RoleAccessClient({
                       <div className="text-sm font-medium text-gray-900">{role.roleName ?? `Role #${role.roleId}`}</div>
                       <div className="mt-0.5 text-xs text-gray-500">Role ID: {role.roleId}</div>
                     </div>
-                    <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[12px] font-medium text-gray-600">
+                    <div className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                       {rolePermissionCount}
                     </div>
                   </div>
@@ -415,10 +415,10 @@ export function RoleAccessClient({
                               <div className="flex flex-wrap items-center gap-2">
                                 <div className="text-sm font-medium text-gray-900">{item.label}</div>
                                 {isCritical && currentRoleHasCriticalAccess(item.functionName) && (
-                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[12px] font-medium text-amber-800">Critical</span>
+                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Critical</span>
                                 )}
                                 {!item.existsInDb && (
-                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[12px] font-medium text-blue-700">Will be created on save</span>
+                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Will be created on save</span>
                                 )}
                               </div>
                               <div className="mt-1 text-xs text-gray-500">{item.functionName}</div>

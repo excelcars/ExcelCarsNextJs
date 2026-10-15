@@ -219,13 +219,38 @@ export function Layout({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ Operations: true, Configuration: true, Reports: true })
   const [isNavigationPending, startNavigationTransition] = useTransition()
   const [pendingNavigation, setPendingNavigation] = useState<{ fromPathname: string; label: string } | null>(null)
+  const desktopNavRef = useRef<HTMLElement>(null)
+  const mobileNavRef = useRef<HTMLElement>(null)
+  const sidebarScrollPositionRef = useRef(0)
   const accessibleRouteSet = new Set(accessibleRoutes)
+
+  const rememberSidebarScroll = (scrollTop: number) => {
+    sidebarScrollPositionRef.current = scrollTop
+    window.sessionStorage.setItem('excel-cars-sidebar-scroll-top', String(scrollTop))
+  }
+
+  const restoreSidebarScroll = () => {
+    const storedPosition = window.sessionStorage.getItem('excel-cars-sidebar-scroll-top')
+    const scrollTop = storedPosition === null ? sidebarScrollPositionRef.current : Number(storedPosition)
+    const safeScrollTop = Number.isFinite(scrollTop) ? scrollTop : 0
+
+    sidebarScrollPositionRef.current = safeScrollTop
+    desktopNavRef.current?.scrollTo({ top: safeScrollTop })
+    mobileNavRef.current?.scrollTo({ top: safeScrollTop })
+  }
 
   useEffect(() => {
     if (pendingNavigation && pathname !== pendingNavigation.fromPathname && !isNavigationPending) {
       setPendingNavigation(null)
     }
   }, [isNavigationPending, pathname, pendingNavigation])
+
+  // Next.js may recreate this scroll container during navigation. Restore the
+  // sidebar independently so the selected item stays where the user left it.
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(restoreSidebarScroll)
+    return () => window.cancelAnimationFrame(frame)
+  }, [pathname, mobileSidebarOpen, sidebarOpen])
 
   const visibleNavItems = navItems
     .map(item => {
@@ -266,7 +291,7 @@ export function Layout({
   const displayName = initialDisplayName || session?.user?.name || session?.user?.username || 'User'
   const roleName = initialRoleName || session?.user?.roleName || ''
 
-  const SidebarContent = () => (
+  const renderSidebarContent = (navRef: React.RefObject<HTMLElement | null>) => (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="h-16 flex items-center px-5 border-b border-white/10 flex-shrink-0">
@@ -276,7 +301,11 @@ export function Layout({
       </div>
 
       {/* Nav */}
-      <nav className="sidebar-scrollbar flex-1 overflow-y-auto py-4 px-2">
+      <nav
+        ref={navRef}
+        onScroll={event => rememberSidebarScroll(event.currentTarget.scrollTop)}
+        className="sidebar-scrollbar flex-1 overflow-y-auto py-4 px-2"
+      >
         {visibleNavItems.map(item => (
           <div key={item.label} className="mb-0.5">
             {item.href ? (
@@ -363,7 +392,7 @@ export function Layout({
         className="hidden md:flex flex-col flex-shrink-0 transition-all duration-200"
         style={{ width: sidebarOpen ? 240 : 64, background: 'linear-gradient(180deg, #1B2A6B 0%, #12204F 100%)' }}
       >
-        <SidebarContent />
+        {renderSidebarContent(desktopNavRef)}
       </aside>
 
       {/* Mobile Sidebar */}
@@ -371,7 +400,7 @@ export function Layout({
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col" style={{ background: 'linear-gradient(180deg, #1B2A6B 0%, #12204F 100%)' }}>
-            <SidebarContent />
+            {renderSidebarContent(mobileNavRef)}
           </aside>
         </div>
       )}

@@ -113,7 +113,7 @@ function CustomerDateInput({
             <div className="text-sm font-semibold text-gray-800">{month.toLocaleString('en-GB', { month: 'long', year: 'numeric' })}</div>
             <button type="button" aria-label="Next month" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))} className="rounded p-1 text-gray-500 hover:bg-gray-100"><ChevronRight className="h-4 w-4" /></button>
           </div>
-          <div className="grid grid-cols-7 text-center text-[12px] font-medium text-gray-400">
+          <div className="grid grid-cols-7 text-center text-xs font-medium text-gray-400">
             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => <div key={day} className="py-1">{day}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-y-1 text-center">
@@ -329,7 +329,7 @@ export function CustomersClient({
             </td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
-                <button onClick={() => setViewRow(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setViewRow(r)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View"><Eye className="h-4 w-4" /></button>
                 {canWrite && <>
                   <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                   <button onClick={() => { setDeleteError(''); setDeleteId(r.custId) }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>

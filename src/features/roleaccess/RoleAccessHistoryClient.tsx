@@ -162,8 +162,8 @@ export function RoleAccessHistoryClient({
                 </div>
               </td>
               <td className="px-4 py-3">
-                <button onClick={() => setViewRow(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="View details">
-                  <Eye className="w-3.5 h-3.5" />
+                <button onClick={() => setViewRow(row)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View details">
+                  <Eye className="h-4 w-4" />
                 </button>
               </td>
             </tr>

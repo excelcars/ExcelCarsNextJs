@@ -73,3 +73,15 @@ test('follow-up validation permits a closed inquiry without another follow-up da
   }, '2026-09-01')
   assert.equal(result.error, null)
 })
+
+test('follow-up validation permits an omitted contact outcome', () => {
+  const result = validateFollowupLogInput({
+    contactOutcome: '',
+    status: 'Closed',
+    subStatus: 'Lost',
+    classification: 'Cold',
+    comments: 'Customer selected another vehicle.',
+    nextFollowUpDate: '',
+  }, '2026-09-01')
+  assert.equal(result.error, null)
+})

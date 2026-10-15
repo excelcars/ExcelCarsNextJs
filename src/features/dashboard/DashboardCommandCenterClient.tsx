@@ -260,7 +260,7 @@ function CompactKpi({
   const content = (
     <div className="grid h-full grid-rows-[18px_1fr]">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[12px] font-semibold uppercase tracking-wide text-white/85">{label}</span>
+        <span className="truncate text-xs font-semibold uppercase tracking-wide text-white/85">{label}</span>
         <span className="shrink-0 text-white/60">{icon}</span>
       </div>
       <div className="flex min-h-0 items-end justify-between gap-3">
@@ -304,7 +304,7 @@ function WorkTable({
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-100 bg-gray-50">
               {headers.map(header => (
-                <th key={header} className="whitespace-nowrap px-3 py-2 text-left text-[12px] font-bold uppercase text-gray-500">
+                <th key={header} className="whitespace-nowrap px-3 py-2 text-left text-xs font-bold uppercase text-gray-500">
                   {header}
                 </th>
               ))}
@@ -373,10 +373,10 @@ function PendingFilesVisual({
             event.stopPropagation()
             onOpen(item.workspace)
           }}
-          className="grid h-10 w-11 cursor-pointer grid-rows-[16px_10px_10px] place-items-center rounded-md px-0.5 text-center text-[9px] leading-none text-white/80 transition hover:bg-white/15 focus:outline-none focus:ring-1 focus:ring-white/60"
+          className="grid h-10 w-11 cursor-pointer grid-rows-[16px_11px_11px] place-items-center rounded-md px-0.5 text-center text-[11px] leading-none text-white/80 transition hover:bg-white/15 focus:outline-none focus:ring-1 focus:ring-white/60"
         >
           <div className="scale-75">{item.icon}</div>
-          <strong className="text-[12px] leading-none text-white">{item.value}</strong>
+          <strong className="text-xs leading-none text-white">{item.value}</strong>
           <span className="max-w-full truncate">{item.label}</span>
         </button>
       ))}
@@ -404,7 +404,7 @@ function PendingFilesKpi({
   return (
     <div className="grid h-[72px] min-w-0 grid-rows-[18px_1fr] overflow-hidden rounded-lg border border-amber-200/25 bg-amber-100/15 px-3 py-2 text-left text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[12px] font-semibold uppercase tracking-wide text-white/85">Pending Files</span>
+        <span className="truncate text-xs font-semibold uppercase tracking-wide text-white/85">Pending Files</span>
         <FileText className="h-4 w-4 shrink-0 text-white/60" />
       </div>
       <div className="flex min-h-0 items-end justify-between gap-2">
@@ -434,13 +434,13 @@ function DailyTotals({ stats, todayStats, permissions }: Pick<DashboardCommandCe
           <a key={row.label} href={row.href} className="grid grid-cols-[38px_24px_minmax(0,1fr)] items-center gap-2 rounded-lg transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/30">
             <div className="text-right">
               <div className="text-sm font-bold leading-none text-gray-900">{row.value}</div>
-              <div className="mt-0.5 text-[12px] leading-tight text-gray-500">{row.unit}</div>
+              <div className="mt-0.5 text-xs leading-tight text-gray-500">{row.unit}</div>
             </div>
             <div className={`grid h-6 w-6 place-items-center rounded-full text-white ${row.tone}`}>{row.icon}</div>
             <div className="flex h-10 min-w-0 items-center justify-between gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 shadow-sm">
               <div className="min-w-0">
-                <div className="whitespace-nowrap text-[9px] font-bold uppercase leading-tight text-gray-900">{row.label}: {row.value}</div>
-                <div className="whitespace-nowrap text-[9px] uppercase leading-tight text-gray-600">{row.sub}</div>
+                <div className="whitespace-nowrap text-[11px] font-bold uppercase leading-tight text-gray-900">{row.label}: {row.value}</div>
+                <div className="whitespace-nowrap text-[11px] uppercase leading-tight text-gray-600">{row.sub}</div>
               </div>
               <div className="grid h-7 w-11 shrink-0 place-items-center overflow-hidden opacity-80">
                 <div className="scale-[0.46]">{row.visual}</div>
@@ -493,7 +493,7 @@ function ActionLoad({
           <div className="grid h-[74px] w-[74px] place-items-center rounded-full bg-white text-center">
             <div>
               <div className="text-2xl font-bold leading-none text-gray-900">{total}</div>
-              <div className="mt-1 text-[12px] leading-tight text-gray-500">total open<br />attention</div>
+              <div className="mt-1 text-xs leading-tight text-gray-500">total open<br />attention</div>
             </div>
           </div>
         </div>
@@ -506,7 +506,7 @@ function ActionLoad({
                 <div className={`grid ${sizes[index]} place-items-center rounded-full shadow-md`} style={{ background: `conic-gradient(${row.color} ${Math.max(8, Math.round((row.value / max) * 100))}%, #e5e7eb 0)` }}>
                   <div className="h-2/3 w-2/3 rounded-full bg-white" />
                 </div>
-                <div className="min-w-0 text-[12px] leading-tight text-gray-700">
+                <div className="min-w-0 text-xs leading-tight text-gray-700">
                   <div>{row.label}</div>
                 </div>
                 <strong className="shrink-0 text-right text-sm leading-none text-gray-900">{row.value}</strong>

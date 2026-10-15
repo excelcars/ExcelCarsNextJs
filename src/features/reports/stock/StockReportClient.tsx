@@ -281,8 +281,8 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
         ...(visibleColumns.has('fuelType') ? ['Fuel'] : []), 'KM Driven',
         ...(visibleColumns.has('ownerCount') ? ['Owner Count'] : []), ...(visibleColumns.has('owner') ? ['Owner Name'] : []), ...(visibleColumns.has('tax') ? ['Tax'] : []), ...(visibleColumns.has('insurance') ? ['Insurance'] : []),
         'Price', 'Status', ...(visibleColumns.has('remarks') ? ['Remarks'] : []), ...(visibleColumns.has('comments') ? ['Internal Comments'] : []),
-        ...(visibleColumns.has('owner') ? ['Owner'] : []), ...(visibleColumns.has('photos') ? ['Photos'] : []), ...(canAccessInventory ? ['Actions'] : []),
-      ]} empty={initialData.length === 0}>
+        ...(visibleColumns.has('photos') ? ['Photos'] : []), ...(canAccessInventory ? ['Actions'] : []),
+      ]} empty={initialData.length === 0} stickyLastColumn={canAccessInventory}>
         {initialData.map(r => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
             {visibleColumns.has('sku') ? <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.sku ?? '—'}</td> : null}
