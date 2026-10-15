@@ -312,7 +312,7 @@ export function Layout({
               <Link
                 href={item.href}
                 onClick={event => {
-                  setSidebarOpen(true)
+                  setSidebarOpen(false)
                   handleNavigationClick(event, item.label)
                   setMobileSidebarOpen(false)
                 }}
@@ -354,6 +354,7 @@ export function Layout({
                         key={child.href}
                         href={child.href}
                         onClick={event => {
+                          setSidebarOpen(false)
                           handleNavigationClick(event, child.label)
                           setMobileSidebarOpen(false)
                         }}

@@ -960,10 +960,10 @@ export function RtoClient({
               </td>
               <td className="px-3 py-3">
                 <div className="mb-1"><Badge label={payment.status} /></div>
-                <div className="grid grid-cols-3 gap-2 text-xs leading-4">
-                  <div><span className="block text-gray-400">Charges</span><span className="font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</span></div>
-                  <div><span className="block text-gray-400">Paid</span><span className="font-semibold text-green-700">{fmtMoney(r.amtPaid)}</span></div>
-                  <div><span className="block text-gray-400">Balance</span><span className="font-semibold text-amber-700">{payment.charges ? fmtMoney(payment.balance) : '—'}</span></div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs leading-4">
+                  <div><span className="block whitespace-nowrap text-gray-400">Charges</span><span className="whitespace-nowrap font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</span></div>
+                  <div><span className="block whitespace-nowrap text-gray-400">Paid</span><span className="whitespace-nowrap font-semibold text-green-700">{fmtMoney(r.amtPaid)}</span></div>
+                  <div className="col-span-2"><span className="block whitespace-nowrap text-gray-400">Balance</span><span className="whitespace-nowrap font-semibold text-amber-700">{payment.charges ? fmtMoney(payment.balance) : '—'}</span></div>
                 </div>
                 <div className="mt-2 h-1 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div>
               </td>
