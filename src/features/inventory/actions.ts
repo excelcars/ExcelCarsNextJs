@@ -10,7 +10,7 @@ import { buildInquiryOwnershipWhere, getInquiryOwnershipScopeForRoute } from '@/
 import { sendEmail } from '@/lib/email/sendMail'
 import { vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
-import { normalizeRegistrationNo, validateInventoryInput } from '@/lib/validation'
+import { isCompleteVehicleRegistrationNo, normalizeRegistrationNo, validateInventoryInput } from '@/lib/validation'
 import { getInventoryBulkEmailLimits } from './emailLimits'
 import { deleteFromFirebaseStorage, isFirebaseStoragePath } from '@/lib/firebase/storage'
 import { normalizeWhatsAppRecipient, sendEnquiryTemplate } from '@/lib/whatsapp/meta'
@@ -260,7 +260,7 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
     }
     const outcome = await prisma.$transaction(async tx => {
       const normalizedRegistrationNo = normalizeRegistrationNo(input.registrationNo)
-      if (normalizedRegistrationNo.length > 5) {
+      if (isCompleteVehicleRegistrationNo(normalizedRegistrationNo)) {
         const duplicate = await tx.inventoryManagement.findFirst({
           where: { registrationNo: normalizedRegistrationNo },
           select: { inventoryId: true },
@@ -313,7 +313,7 @@ export async function updateInventory(id: number, input: InventoryFormInput): Pr
     if (relationshipError) return { success: false, error: relationshipError }
 
     const normalizedRegistrationNo = normalizeRegistrationNo(input.registrationNo)
-    if (normalizedRegistrationNo.length > 5) {
+    if (isCompleteVehicleRegistrationNo(normalizedRegistrationNo)) {
       const duplicate = await prisma.inventoryManagement.findFirst({
         where: { registrationNo: normalizedRegistrationNo, NOT: { inventoryId: id } },
         select: { inventoryId: true },

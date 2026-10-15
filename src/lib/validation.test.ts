@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-const { validateInventoryInput } = await import(new URL('./validation.ts', import.meta.url).href)
+const { isCompleteVehicleRegistrationNo, validateInventoryInput } = await import(new URL('./validation.ts', import.meta.url).href)
 
 const validInventory = {
   fkVariantId: 1,
@@ -54,4 +54,12 @@ test('sold inventory requires a linked customer instead of a compatibility name'
     'Select a customer for Sold inventory.',
   )
   assert.equal(validateInventoryInput({ ...validInventory, status: 'Sold', customerId: 42, customerName: '' }), null)
+})
+
+test('only complete registration numbers are subject to duplicate protection', () => {
+  assert.equal(isCompleteVehicleRegistrationNo('MH'), false)
+  assert.equal(isCompleteVehicleRegistrationNo('MH02'), false)
+  assert.equal(isCompleteVehicleRegistrationNo('MH02AB'), false)
+  assert.equal(isCompleteVehicleRegistrationNo('MH 02 AB 1234'), true)
+  assert.equal(isCompleteVehicleRegistrationNo('22 BH 1234 AA'), true)
 })

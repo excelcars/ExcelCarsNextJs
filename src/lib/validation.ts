@@ -32,6 +32,16 @@ export function normalizeRegistrationNo(value: string | null | undefined): strin
   return (value ?? '').replace(/\s+/g, '').toUpperCase()
 }
 
+/**
+ * Identifies a complete Indian vehicle registration number after spaces have
+ * been removed. Stock labels such as `MH` and `MH02` deliberately do not
+ * match, so they can be reused across vehicles.
+ */
+export function isCompleteVehicleRegistrationNo(value: string | null | undefined): boolean {
+  const registrationNo = normalizeRegistrationNo(value)
+  return /^(?:[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{1,4}|\d{2}BH\d{4}[A-Z]{1,2})$/.test(registrationNo)
+}
+
 export interface InventoryValidationInput {
   fkVariantId: number | null
   registrationNo: string
