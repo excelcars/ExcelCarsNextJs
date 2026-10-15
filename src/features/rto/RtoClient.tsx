@@ -808,7 +808,10 @@ export function RtoClient({
     setError('')
     const newErrors: Record<string, boolean> = {}
 
-    const totalPaidAlready = Number(payRow.amtPaid ?? 0)
+    // Prefer the loaded payment ledger over the cached total on the RTO job.
+    const totalPaidAlready = payments.length > 0
+      ? payments.reduce((sum, payment) => sum + Number(payment.amountPaid ?? 0), 0)
+      : Number(payRow.amtPaid ?? 0)
     const charges = Number(payRow.transferCharges ?? 0)
     const statusOnlyUpdate = payForm.amountPaid === null && charges > 0 && totalPaidAlready >= charges
     if (!statusOnlyUpdate) {
@@ -928,10 +931,10 @@ export function RtoClient({
                 <Input label="Variant" value={draftFilters.variant} onChange={e => setFilter('variant', e.target.value)} />
             </div>
           )}
-          <div className="flex items-end gap-2">
-            <Btn type="submit" className="justify-center">Apply filters</Btn>
-            <Btn type="button" variant="outline" onClick={resetFilters}>Reset</Btn>
-            <Btn type="button" variant="outline" onClick={() => setShowMoreFilters(value => !value)}>
+          <div className="col-span-full flex flex-wrap items-center gap-2 pt-1">
+            <Btn type="submit" className="justify-center whitespace-nowrap">Apply filters</Btn>
+            <Btn type="button" variant="outline" className="whitespace-nowrap" onClick={resetFilters}>Reset</Btn>
+            <Btn type="button" variant="outline" className="whitespace-nowrap" onClick={() => setShowMoreFilters(value => !value)}>
               {showMoreFilters ? 'Hide more' : 'More filters'}
             </Btn>
           </div>
@@ -957,7 +960,7 @@ export function RtoClient({
               </td>
               <td className="px-3 py-3">
                 <div className="mb-1"><Badge label={payment.status} /></div>
-                <div className="grid grid-cols-3 gap-2 text-[12px] leading-4">
+                <div className="grid grid-cols-3 gap-2 text-xs leading-4">
                   <div><span className="block text-gray-400">Charges</span><span className="font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</span></div>
                   <div><span className="block text-gray-400">Paid</span><span className="font-semibold text-green-700">{fmtMoney(r.amtPaid)}</span></div>
                   <div><span className="block text-gray-400">Balance</span><span className="font-semibold text-amber-700">{payment.charges ? fmtMoney(payment.balance) : '—'}</span></div>
@@ -969,7 +972,7 @@ export function RtoClient({
               <td className="px-3 py-3 text-xs font-medium text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || 'Not scheduled'}</td>
               <td className="px-3 py-3">
                 <div className="flex items-center gap-0.5">
-                  <button onClick={() => void openView(r)} className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-900 rounded transition" title="View details"><Eye className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => void openView(r)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View details"><Eye className="h-4 w-4" /></button>
                   <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 rounded transition" title="Log payment"><IndianRupee className="w-3.5 h-3.5" /></button>
                   <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                   <button onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -1008,10 +1011,10 @@ export function RtoClient({
               const payment = paymentSummary(viewRow)
               return (
                 <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-green-700">Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-orange-700">Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div></div>
                 </div>
               )
             })()}
@@ -1154,7 +1157,7 @@ export function RtoClient({
             </div>}
 
             {/* Audit Log Details */}
-            {viewTab === 'record' && <div className="border-t border-gray-100 pt-4 text-[12px] text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
+            {viewTab === 'record' && <div className="border-t border-gray-100 pt-4 text-xs text-gray-400 flex flex-wrap gap-x-6 gap-y-1">
               <div>
                 Created By: <span className="font-medium text-gray-500">{viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? 'System'}</span>
                 {viewRow.createdDt && <> on <span className="font-medium text-gray-500">{fmtDateTime(viewRow.createdDt)}</span></>}
@@ -1344,15 +1347,15 @@ export function RtoClient({
               return (
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <div className="text-[12px] font-semibold uppercase text-gray-500">Transfer charges</div>
+                    <div className="text-xs font-semibold uppercase text-gray-500">Transfer charges</div>
                     <div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payRow.transferCharges)}</div>
                   </div>
                   <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
-                    <div className="text-[12px] font-semibold uppercase text-green-700">Amount paid</div>
+                    <div className="text-xs font-semibold uppercase text-green-700">Amount paid</div>
                     <div className="mt-1 flex items-center gap-2"><span className="text-sm font-bold text-green-800">{fmtMoney(paid)}</span><Badge label={summary.status} /></div>
                   </div>
                   <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2">
-                    <div className="text-[12px] font-semibold uppercase text-orange-700">Pending balance</div>
+                    <div className="text-xs font-semibold uppercase text-orange-700">Pending balance</div>
                     <div className="mt-1 text-sm font-bold text-orange-800">{summary.charges ? fmtMoney(summary.balance) : '—'}</div>
                   </div>
                 </div>

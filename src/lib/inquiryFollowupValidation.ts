@@ -168,15 +168,11 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
 
 export function validateFollowupLogInput(input: FollowupLogLike, today = new Date().toISOString().slice(0, 10)): ValidationResult {
   const fieldErrors: Record<string, boolean> = {}
-  const contactOutcome = input.contactOutcome.trim()
   const status = input.status.trim()
   const classification = input.classification.trim()
   const subStatus = resolveFollowupSubStatusInput(input)
   const nextFollowUpDate = input.nextFollowUpDate.trim()
 
-  if (!contactOutcome || !FOLLOWUP_CONTACT_OUTCOMES.includes(contactOutcome as (typeof FOLLOWUP_CONTACT_OUTCOMES)[number])) {
-    fieldErrors.contactOutcome = true
-  }
   if (!status || !FOLLOWUP_ALLOWED_STATUSES.includes(status as (typeof FOLLOWUP_ALLOWED_STATUSES)[number])) {
     fieldErrors.status = true
   }
@@ -205,9 +201,6 @@ export function validateFollowupLogInput(input: FollowupLogLike, today = new Dat
   }
   if (fieldErrors.classification) {
     return buildValidationResult(fieldErrors, 'Classification is required.')
-  }
-  if (fieldErrors.contactOutcome) {
-    return buildValidationResult(fieldErrors, 'Select whether the customer was reached before saving follow-up.')
   }
   if (fieldErrors.otherSubStatus) {
     return buildValidationResult(fieldErrors, 'Enter the custom sub-status when OTHER is selected.')

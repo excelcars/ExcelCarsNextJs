@@ -144,7 +144,9 @@ interface InventoryMatch {
   kmsDriven: string | null
   price: string | null
   status: string | null
+  insuranceType: string | null
   otherRemarks: string | null
+  internalComments: string | null
   matchReasons?: string[]
   currentState?: string | null
   currentStateAt?: string | null
@@ -200,9 +202,11 @@ function InventoryMatchPanel({
                   <div><span className="font-medium text-gray-900">Colour / Fuel:</span> {[match.colour, match.fuelType].filter(Boolean).join(' / ') || '—'}</div>
                   <div><span className="font-medium text-gray-900">KM / Owners:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match.noOfOwners ?? '—'}</div>
                   <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
+                  <div><span className="font-medium text-gray-900">Insurance:</span> {match.insuranceType?.trim() || '—'}</div>
                   <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched because:</span> {match.matchReasons?.join(' · ') || 'In-stock match'}</div>
                   <div><span className="font-medium text-gray-900">State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
                   <div className="md:col-span-3 whitespace-pre-wrap"><span className="font-medium text-gray-900">Remarks:</span> {match.otherRemarks?.trim() || '—'}</div>
+                  <div className="md:col-span-3 whitespace-pre-wrap"><span className="font-medium text-gray-900">Internal remarks:</span> {match.internalComments?.trim() || '—'}</div>
                 </div>
               </div>
             )
@@ -1938,7 +1942,7 @@ export function InquiryClient({
 
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Budget of customer"
+              label="Budget of customer (optional)"
               inputMode="numeric"
               placeholder="e.g. 12,00,000"
               value={form.budgetOfCustomer === null ? '' : form.budgetOfCustomer.toLocaleString('en-IN')}
@@ -1957,10 +1961,9 @@ export function InquiryClient({
               f('status', nextStatus)
               if (!requiresInquiryFollowupDate(nextStatus)) {
                 f('followUpDate', '')
-                f('subStatus', '')
               }
             }} />
-            <FormDropdown label="Sub Status" value={form.subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear disabled={!requiresInquiryFollowupDate(form.status)} onChange={value => f('subStatus', value)} />
+            <FormDropdown label="Sub Status" value={form.subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear onChange={value => f('subStatus', value)} />
             <Input
               label={fieldLabel('FollowUp Date', followUpDateRequired)}
               type="date"

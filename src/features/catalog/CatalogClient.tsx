@@ -599,7 +599,7 @@ export function CatalogClient({
                             const model = item as ModelOption;
                             openVariants(manager.makeId, { ...model, _count: { carVariantMaster: 0 }, carVariantMaster: [] });
                           }}
-                          className="rounded border border-gray-200 p-1.5 text-gray-500 hover:bg-blue-50 hover:text-[#1B2A6B]"
+                          className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-[#1B2A6B]"
                           title="View or manage variants"
                         >
                           <Eye className="h-3.5 w-3.5" />

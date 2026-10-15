@@ -42,7 +42,7 @@ export function InsurancePaymentWorkflow({ payoutPaymentStatus, policyStatus }: 
 }
 
 function SummaryCard({ label, value, className, badge }: { label: string; value: string; className: string; badge?: string }) {
-  return <div className={`rounded-lg border px-3 py-2.5 ${className}`}><div className="text-[12px] font-semibold uppercase tracking-wide opacity-75">{label}</div><div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-bold"><span>{value}</span>{badge && <Badge label={badge} />}</div></div>
+  return <div className={`rounded-lg border px-3 py-2.5 ${className}`}><div className="text-xs font-semibold uppercase tracking-wide opacity-75">{label}</div><div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-bold"><span>{value}</span>{badge && <Badge label={badge} />}</div></div>
 }
 
 function WorkflowItem({ label, status, action }: { label: string; status: string; action: string }) {

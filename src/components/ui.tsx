@@ -40,7 +40,7 @@ export function Badge({ label }: { label: string }) {
   }
   const status = label.replace(/^(Payment|RC|Transfer):\s*/, '')
   const cls = map[status] || 'bg-gray-100 text-gray-600'
-  return <span className={`inline-flex whitespace-nowrap items-center px-2 py-0.5 rounded text-[12px] font-medium ${cls}`}>{label}</span>
+  return <span className={`inline-flex whitespace-nowrap items-center px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{label}</span>
 }
 
 export function Btn({ children, onClick, variant = 'primary', size = 'md', type = 'button', disabled = false, className = '' }: {

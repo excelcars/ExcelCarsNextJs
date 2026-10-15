@@ -47,7 +47,7 @@ function personalFormFromProfile(profile: ProfileData): UpdateMyProfileInput {
 }
 
 function CharacterCount({ value, maxLength }: { value: string; maxLength: number }) {
-  return <div className="mt-1 text-right text-[12px] text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
+  return <div className="mt-1 text-right text-xs text-gray-400" aria-live="polite">{value.length}/{maxLength}</div>
 }
 
 function CountedInput({ value = '', maxLength, ...props }: Omit<ComponentProps<typeof Input>, 'value' | 'maxLength'> & { value?: string; maxLength: number }) {

@@ -13,10 +13,13 @@ export const INQUIRY_LEAD_SUB_STATUS_OPTIONS = [
   'Call Later',
   'Customer Has Called',
   'Desired Car Not In Stock',
+  'Deal Done',
   'Expecting Lesser Price',
+  'Lost',
   'Number Not Available',
   'Ringing',
   'Showroom Visit',
+  'Unreachable',
   'Other',
   'Outstanding Lead',
 ] as const

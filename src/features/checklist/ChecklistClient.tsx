@@ -833,9 +833,9 @@ export function ChecklistClient({
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Documents</div><div className="mt-1 text-xl font-bold text-gray-900">{documents.length}</div></div>
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-blue-700">Applicable</div><div className="mt-1 text-xl font-bold text-blue-800">{applicable}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-[12px] font-semibold uppercase tracking-wide text-green-700">Received</div><div className="mt-1 text-xl font-bold text-green-800">{received}<span className="ml-1 text-sm font-medium">/ {applicable}</span></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Documents</div><div className="mt-1 text-xl font-bold text-gray-900">{documents.length}</div></div>
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Applicable</div><div className="mt-1 text-xl font-bold text-blue-800">{applicable}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Received</div><div className="mt-1 text-xl font-bold text-green-800">{received}<span className="ml-1 text-sm font-medium">/ {applicable}</span></div></div>
                 </div>
               </>
             })()}

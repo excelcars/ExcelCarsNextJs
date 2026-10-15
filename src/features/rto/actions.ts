@@ -333,17 +333,26 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
   const now = new Date()
 
   try {
-    const main = await prisma.rtoAgent.findUnique({ where: { rtoAgentMainId } })
+    const [main, paymentTotal] = await Promise.all([
+      prisma.rtoAgent.findUnique({ where: { rtoAgentMainId } }),
+      prisma.rtoPaymentDetails.aggregate({
+        where: { fkRtoAgentMainId: rtoAgentMainId },
+        _sum: { amountPaid: true },
+      }),
+    ])
     if (!main) return { success: false, error: 'RTO record not found.' }
     const charges = Number(main.transferCharges ?? 0)
-    const paidBefore = Number(main.amtPaid ?? 0)
+    // The main record is a cached summary. Use the payment ledger as the
+    // source of truth so legacy/stale summaries cannot reject a valid part payment.
+    const paidBefore = Number(paymentTotal._sum.amountPaid ?? 0)
     if (charges <= 0) return { success: false, error: 'Set transfer charges before logging a payment.' }
     if (input.amountPaid === null) {
       if (paidBefore < charges) return { success: false, error: 'Enter a payment amount greater than zero.' }
       await prisma.rtoAgent.update({
         where: { rtoAgentMainId },
         data: {
-          paymentStatus: paymentStatusFor(main.transferCharges, main.amtPaid),
+          amtPaid: paymentTotal._sum.amountPaid ?? 0,
+          paymentStatus: paymentStatusFor(main.transferCharges, paymentTotal._sum.amountPaid),
           rcStatus: input.rcStatus,
           transferStatus: input.transferStatus,
           remark: input.remark.trim(),

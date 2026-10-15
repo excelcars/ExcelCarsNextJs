@@ -69,7 +69,7 @@ export function InsuranceViewDetails({ row, onEdit, onLogPayment }: { row: Insur
 }
 
 function Metric({ label, value, detail, emphasis = false }: { label: string; value: string; detail: string; emphasis?: boolean }) {
-  return <div className="min-h-28 px-6 py-5"><div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</div><div className={`mt-2 text-xl font-bold ${emphasis ? 'text-orange-700' : 'text-gray-900'}`}>{value}</div>{detail && <div className="mt-1 text-xs text-gray-500">{detail}</div>}</div>
+  return <div className="min-h-28 px-6 py-5"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</div><div className={`mt-2 text-xl font-bold ${emphasis ? 'text-orange-700' : 'text-gray-900'}`}>{value}</div>{detail && <div className="mt-1 text-xs text-gray-500">{detail}</div>}</div>
 }
 
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {

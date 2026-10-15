@@ -138,7 +138,7 @@ export function LoanCustomerLookup({
         <div className="overflow-hidden rounded-lg border border-gray-200">
           {matches.length === 0 ? <div className="px-3 py-3 text-sm text-gray-500">No matching customer or inquiry. Use Create Customer to add the person deliberately.</div> : matches.map(match => (
             <button key={match.id} type="button" onClick={() => chooseMatch(match)} className="block w-full border-b border-gray-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-blue-50">
-              <div className="flex items-center justify-between gap-2"><span className="font-medium text-gray-800">{match.name}</span><span className="rounded bg-gray-100 px-1.5 py-0.5 text-[12px] text-gray-600">{match.source === 'customer' ? 'Customer Master' : `Inquiry ${match.inquiryNo ?? `#${match.inquiryId}`}`}</span></div>
+              <div className="flex items-center justify-between gap-2"><span className="font-medium text-gray-800">{match.name}</span><span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{match.source === 'customer' ? 'Customer Master' : `Inquiry ${match.inquiryNo ?? `#${match.inquiryId}`}`}</span></div>
               <div className="mt-0.5 text-xs text-gray-500">{match.mobile ?? 'No mobile'}{match.email ? ` · ${match.email}` : ''}</div>
               {vehicleLabel(match.vehicle) && <div className="mt-1 text-xs text-[#1B2A6B]">Car: {vehicleLabel(match.vehicle)}</div>}
               {match.source === 'inquiry' && !match.customerId && <div className="mt-1 text-xs font-medium text-[#1B2A6B]">Select to explicitly create this inquiry person as a customer.</div>}
