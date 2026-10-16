@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Badge, Btn, Input, Select, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
+import { Btn, Input, Select, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
 import { INVENTORY_STATUSES } from '@/features/inventory/queries'
 
 interface StockRow {
@@ -50,6 +50,21 @@ const OPTIONAL_COLUMNS = [
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number][0]
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+
+function StockStatusBadge({ label }: { label: string }) {
+  const status = label.trim().toLowerCase()
+  const tone = status === 'loan process'
+    ? 'border-violet-100 bg-violet-50 text-violet-700 before:bg-violet-500'
+    : status === 'not available'
+      ? 'border-slate-200 bg-slate-100 text-slate-600 before:bg-slate-400'
+      : status === 'available' || status === 'in stock'
+        ? 'border-emerald-100 bg-emerald-50 text-emerald-700 before:bg-emerald-500'
+        : status === 'sold'
+          ? 'border-red-100 bg-red-50 text-red-700 before:bg-red-500'
+          : 'border-blue-100 bg-blue-50 text-blue-700 before:bg-blue-500'
+
+  return <span title={label} className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold leading-none ${tone} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}>{label}</span>
+}
 const stockColourSwatches: Array<[string, string]> = [['a.royale', '#102f77'], ['royale', '#102f77'], ['blue', '#2563eb'], ['white', '#e5e7eb'], ['black', '#111827'], ['silver', '#cbd5e1'], ['grey', '#94a3b8'], ['gray', '#94a3b8'], ['red', '#dc2626'], ['pink', '#ec4899'], ['green', '#16a34a'], ['brown', '#92400e'], ['gold', '#ca8a04'], ['orange', '#ea580c']]
 const stockColourSwatch = (colour: string | null) => stockColourSwatches.find(([name]) => clean(colour).toLowerCase().includes(name))?.[1] ?? '#94a3b8'
 
@@ -302,7 +317,7 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
             {visibleColumns.has('tax') ? <td className="px-4 py-3 text-gray-700">{r.tax ?? '—'}</td> : null}
             {visibleColumns.has('insurance') ? <td className="px-4 py-3 text-gray-700">{r.insuranceType ?? '—'}</td> : null}
             <td className="px-4 py-3 font-semibold text-gray-900">{fmtMoney(r.price)}</td>
-            <td className="px-4 py-3">{r.status ? <Badge label={r.status} /> : '—'}</td>
+            <td className="px-4 py-3">{r.status ? <StockStatusBadge label={r.status} /> : '—'}</td>
             {visibleColumns.has('remarks') ? <td className="px-4 py-3 text-sm text-gray-600">{r.otherRemarks ?? '—'}</td> : null}
             {visibleColumns.has('comments') ? <td className="px-4 py-3 text-sm text-gray-600">{r.internalComments ?? '—'}</td> : null}
             {visibleColumns.has('photos') ? <td className="px-2 py-3">
