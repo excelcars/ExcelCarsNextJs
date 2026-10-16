@@ -495,6 +495,20 @@ model PartnerWebhookLead {
   @@map("partner_webhook_leads")
 }
 
+model PartnerWebhookPayload {
+  partnerWebhookPayloadId Int      @id @default(autoincrement()) @map("partner_webhook_payload_id")
+  partner                 String
+  externalLeadId          String?  @map("external_lead_id")
+  rawPayload              Json     @map("raw_payload")
+  receivedAt              DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  inquiryId               Int?     @map("inquiry_id")
+
+  @@index([partner, externalLeadId], map: "idx_partner_webhook_payload_partner_external")
+  @@index([inquiryId], map: "idx_partner_webhook_payload_inquiry")
+  @@index([receivedAt], map: "idx_partner_webhook_payload_received_at")
+  @@map("partner_webhook_payloads")
+}
+
 model LegacyInquirySourceMapping {
   legacyInquirySourceMappingId Int                 @id(map: "pk_legacy_inquiry_source_mapping") @default(autoincrement()) @map("legacy_inquiry_source_mapping_id")
   legacySource                 String              @map("legacy_source")
@@ -1325,8 +1339,30 @@ model UserTable {
   role                              RoleMaster?                @relation("user_table_role_idTorole_master", fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_table_role_id")
   updatedByUser                     UserTable?                 @relation("user_table_updated_byTouser_table", fields: [updatedBy], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_user_table_updated_by_user")
   updatedUsers                      UserTable[]                @relation("user_table_updated_byTouser_table")
+  notifications                     UserNotification[]         @relation("user_notifications_recipient")
 
   @@index([empId], map: "idx_16623_ix_user_table_emp_id")
   @@index([roleId], map: "idx_16623_ix_user_table_role_id")
   @@map("user_table")
+}
+
+model UserNotification {
+  notificationId  Int        @id @default(autoincrement()) @map("notification_id")
+  recipientUserId Int        @map("recipient_user_id")
+  type            String
+  title           String
+  body            String?
+  href            String?
+  entityType      String?    @map("entity_type")
+  entityId        Int?       @map("entity_id")
+  dedupeKey       String     @unique(map: "uq_user_notifications_dedupe_key") @map("dedupe_key")
+  readAt          DateTime?  @map("read_at") @db.Timestamptz(6)
+  archivedAt      DateTime?  @map("archived_at") @db.Timestamptz(6)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  recipient       UserTable  @relation("user_notifications_recipient", fields: [recipientUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([recipientUserId, archivedAt, createdAt], map: "ix_user_notifications_recipient_active")
+  @@index([recipientUserId, readAt], map: "ix_user_notifications_recipient_read")
+  @@map("user_notifications")
 }

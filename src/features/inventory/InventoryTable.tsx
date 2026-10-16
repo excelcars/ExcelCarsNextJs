@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Building2, Eye, FileText, Images, Link2, Mail, Pencil, Phone, Trash2, UserRound, Video } from 'lucide-react'
 import { IconButton, Modal, Table } from '@/components/ui'
 import { InventoryDetailCell } from './InventoryDetailCell'
@@ -48,12 +48,27 @@ function vehicleColourSwatch(colour: string | null | undefined) {
 
 function RemarkPreview({ value, title, onView }: { value: string | null | undefined; title: string; onView: (value: string, title: string) => void }) {
   const remark = clean(value)
+  const textRef = useRef<HTMLParagraphElement>(null)
+  const [isTruncated, setIsTruncated] = useState(false)
+
+  useEffect(() => {
+    const element = textRef.current
+    if (!element) return
+
+    const updateTruncation = () => setIsTruncated(element.scrollHeight > element.clientHeight + 1)
+    updateTruncation()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateTruncation)
+    observer?.observe(element)
+    return () => observer?.disconnect()
+  }, [remark])
+
   if (!remark) return <span className="text-gray-400">—</span>
-  return <div className="w-[140px] max-w-full"><p className="line-clamp-4 break-normal text-sm leading-5 text-gray-700">{remark}</p><button type="button" onClick={() => onView(remark, title)} className="mt-1 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">View more</button></div>
+  return <div className="w-full"><p ref={textRef} className="line-clamp-4 break-words [overflow-wrap:anywhere] text-sm leading-5 text-gray-700">{remark}</p>{isTruncated ? <button type="button" onClick={() => onView(remark, title)} className="mt-1 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">View more</button> : null}</div>
 }
 
 interface InventoryTableProps {
   rows: InventoryRow[]
+  selectionMode: boolean
   selectedInventoryIds: number[]
   page: number
   pageSize: number
@@ -70,6 +85,7 @@ interface InventoryTableProps {
 
 export function InventoryTable({
   rows,
+  selectionMode,
   selectedInventoryIds,
   page,
   pageSize,
@@ -84,18 +100,24 @@ export function InventoryTable({
   onDelete,
 }: InventoryTableProps) {
   const [remarkModal, setRemarkModal] = useState<{ title: string; value: string } | null>(null)
+  const headers = selectionMode
+    ? ['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Remarks', 'Internal Remarks', 'Actions']
+    : ['Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Remarks', 'Internal Remarks', 'Actions']
+  const columnWidths = selectionMode
+    ? ['5%', '4%', '10%', '8%', '10%', '10%', '10%', '10%', '10%', '6%', '7%', '10%']
+    : ['4%', '10%', '8%', '10%', '10%', '10%', '10%', '10%', '8.5%', '9.5%', '10%']
   return (
     <>
-    <div className="[&_th]:px-2 [&_td]:px-2 [&_td]:[overflow-wrap:normal] [&_th:last-child]:whitespace-nowrap [&_th:last-child]:[overflow-wrap:normal]">
+    <div className="[&_th]:px-2 [&_td]:px-2 [&_th:last-child]:whitespace-nowrap [&_th:last-child]:[overflow-wrap:normal]">
       <Table
-        headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Remarks', 'Internal Remarks', 'Actions']}
+        headers={headers}
         empty={rows.length === 0}
         minWidthClass="min-w-full"
-        columnWidths={['5%', '4%', '10%', '8%', '10%', '10%', '10%', '10%', '10%', '6%', '7%', '10%']}
+        columnWidths={columnWidths}
       >
         {rows.map((r, index) => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
-            <td className="px-2 py-3 text-center"><input type="checkbox" checked={selectedInventoryIds.includes(r.inventoryId)} onChange={event => onSelectionChange(r.inventoryId, event.target.checked)} aria-label={`Select ${r.registrationNo ?? r.inventoryNumber ?? 'vehicle'}`} /></td>
+            {selectionMode ? <td className="px-2 py-3 text-center"><input type="checkbox" checked={selectedInventoryIds.includes(r.inventoryId)} onChange={event => onSelectionChange(r.inventoryId, event.target.checked)} aria-label={`Select ${r.registrationNo ?? r.inventoryNumber ?? 'vehicle'}`} /></td> : null}
             <td className="px-4 py-3 text-center font-semibold text-gray-700">{((page - 1) * pageSize) + index + 1}</td>
             <td className="px-4 py-3"><InventoryDetailCell items={[['Make', clean(r.carVariantMaster?.carMakeMaster?.make ?? r.makeLegacy)], ['Model', clean(r.carVariantMaster?.carModelMaster?.model ?? r.modelLegacy)], ['Variant', clean(r.carVariantMaster?.variant ?? r.variantLegacy)]]} /></td>
             <td className="px-4 py-3">

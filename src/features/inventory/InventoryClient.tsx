@@ -320,6 +320,7 @@ export function InventoryClient({
 
   const { emailRow, setEmailRow, emailRows, setEmailRows, recipientType, setRecipientType, dealerQuery, setDealerQuery, dealerOpen, setDealerOpen, emailSelectedDealer, setEmailSelectedDealer, emailSelectedCustomer, setEmailSelectedCustomer, emailRecipients, setEmailRecipients, editingRecipientEmailKey, setEditingRecipientEmailKey, recipientEmailDraft, setRecipientEmailDraft, recipientEmailError, setRecipientEmailError, emailError, setEmailError, emailSentMessage, setEmailSentMessage, emailProgress, setEmailProgress, isEmailSending, setIsEmailSending } = inventory.email
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<number[]>([])
+  const [selectionMode, setSelectionMode] = useState(false)
   const [photoRow, setPhotoRow] = useState<InventoryRow | null>(null)
   const [videoRow, setVideoRow] = useState<InventoryRow | null>(null)
   const [documentRow, setDocumentRow] = useState<InventoryRow | null>(null)
@@ -1231,7 +1232,7 @@ export function InventoryClient({
 
   return (
     <div>
-      <InventoryHeader total={total} status={filters.status} selectedCount={selectedInventoryIds.length} hasActiveFilters={hasActiveFilters} isExporting={isExporting} onBulkEmail={openBulkEmail} onExport={exportAllMatchingRows} onAdd={openAdd} />
+      <InventoryHeader total={total} status={filters.status} selectedCount={selectedInventoryIds.length} selectionMode={selectionMode} hasActiveFilters={hasActiveFilters} isExporting={isExporting} onBulkEmail={openBulkEmail} onToggleSelectionMode={() => { if (selectionMode) setSelectedInventoryIds([]); setSelectionMode(current => !current) }} onExport={exportAllMatchingRows} onAdd={openAdd} />
 
       {exportError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
@@ -1246,9 +1247,10 @@ export function InventoryClient({
             <span>Loading inventory results...</span>
           </div>
         ) : null}
-        <InventorySelectionBar selectedCount={selectedInventoryIds.length} visibleCount={data.length} onSelectVisible={() => setSelectedInventoryIds(data.map(row => row.inventoryId))} onClear={() => setSelectedInventoryIds([])} />
+        {selectionMode ? <InventorySelectionBar selectedCount={selectedInventoryIds.length} visibleCount={data.length} onSelectVisible={() => setSelectedInventoryIds(data.map(row => row.inventoryId))} onClear={() => setSelectedInventoryIds([])} /> : null}
       <InventoryTable
           rows={data}
+          selectionMode={selectionMode}
           selectedInventoryIds={selectedInventoryIds}
           page={page}
           pageSize={pageSize}

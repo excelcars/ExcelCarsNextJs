@@ -1,22 +1,26 @@
-import { Download, Mail, Plus } from 'lucide-react'
+import { CheckSquare, Download, Mail, Plus } from 'lucide-react'
 import { Btn, PageHeader } from '@/components/ui'
 
 export function InventoryHeader({
   total,
   status,
   selectedCount,
+  selectionMode,
   hasActiveFilters,
   isExporting,
   onBulkEmail,
+  onToggleSelectionMode,
   onExport,
   onAdd,
 }: {
   total: number
   status: string
   selectedCount: number
+  selectionMode: boolean
   hasActiveFilters: boolean
   isExporting: boolean
   onBulkEmail: () => void
+  onToggleSelectionMode: () => void
   onExport: () => void
   onAdd: () => void
 }) {
@@ -26,7 +30,9 @@ export function InventoryHeader({
       subtitle={`${total.toLocaleString('en-IN')} vehicles${status !== 'All' ? ` · ${status}` : ''}`}
       action={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {selectedCount === 0 && <span className="text-xs text-amber-700">Select at least one inventory vehicle to send an email.</span>}
+          <Btn variant={selectionMode ? 'primary' : 'outline'} size="sm" onClick={onToggleSelectionMode} aria-pressed={selectionMode}>
+            <CheckSquare className="w-3.5 h-3.5" />{selectionMode ? 'Done Selecting' : 'Select Vehicles'}
+          </Btn>
           <Btn variant="outline" size="sm" onClick={onBulkEmail} disabled={selectedCount === 0}>
             <Mail className="w-3.5 h-3.5" />Send Email{selectedCount > 0 ? ` (${selectedCount})` : ''}
           </Btn>
