@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { ensureInquiryActivityLogTable, logInquiryEvent } from './eventLog'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
+import { createUserNotification } from '@/features/notifications/service'
 
 type Partner = 'CARDEKHO' | 'JUSTDIAL'
 type Payload = Record<string, unknown>
@@ -106,7 +107,17 @@ async function nextInquiryNumber(client: Prisma.TransactionClient) {
 }
 
 export async function receivePartnerInquiry(partner: Partner, payload: Payload) {
+  const receivedAt = new Date()
   const parsed = partner === 'CARDEKHO' ? parseCardekho(payload) : parseJustdial(payload)
+  const rawPayload = await prisma.partnerWebhookPayload.create({
+    data: {
+      partner,
+      externalLeadId: parsed.lead?.leadId ?? null,
+      rawPayload: payload as Prisma.InputJsonValue,
+      receivedAt,
+    },
+    select: { partnerWebhookPayloadId: true },
+  })
   if (!parsed.lead) return { success: false as const, status: 422, error: parsed.error ?? 'Invalid payload.' }
   const lead = parsed.lead
   await ensureInquirySourceMasterSeed()
@@ -122,7 +133,7 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
   try {
     await ensureInquiryActivityLogTable()
     return await prisma.$transaction(async tx => {
-      const now = new Date()
+      const now = receivedAt
       const claim = await tx.partnerWebhookLead.create({
         data: { partner, externalLeadId: lead.leadId, sourceId: source.sourceId, createdAt: now },
         select: { partnerWebhookLeadId: true },
@@ -138,7 +149,11 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
         select: { inquiryId: true },
       })
       await tx.partnerWebhookLead.update({ where: { partnerWebhookLeadId: claim.partnerWebhookLeadId }, data: { inquiryId: inquiry.inquiryId } })
+      await tx.partnerWebhookPayload.update({ where: { partnerWebhookPayloadId: rawPayload.partnerWebhookPayloadId }, data: { inquiryId: inquiry.inquiryId } })
       await logInquiryEvent(tx, { inquiryId: inquiry.inquiryId, eventType: 'partner_inquiry_received', eventLabel: `${source.displayName} enquiry received`, eventDetail: `${sourceDetail}${assignment ? `; assigned to user #${assignment.assignedToUserId}` : '; unassigned'}`, createdAt: now })
+      if (assignment?.assignedToUserId) {
+        await createUserNotification(tx, { recipientUserId: assignment.assignedToUserId, type: 'portal_lead', title: `New ${source.displayName} lead`, body: `${lead.customerName || 'A new customer'} has been assigned to you.`, href: `/inquiry?search=${encodeURIComponent(lead.leadId)}`, entityType: 'inquiry', entityId: inquiry.inquiryId, dedupeKey: `portal_lead:${partner}:${lead.leadId}:${assignment.assignedToUserId}` })
+      }
       return { success: true as const, duplicate: false, inquiryId: inquiry.inquiryId }
     }, { maxWait: 10_000, timeout: 30_000 })
   } catch (error) {
@@ -147,7 +162,10 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
         where: { partner_externalLeadId: { partner, externalLeadId: lead.leadId } },
         select: { inquiryId: true },
       })
-      if (existing?.inquiryId) return { success: true as const, duplicate: true, inquiryId: existing.inquiryId }
+      if (existing?.inquiryId) {
+        await prisma.partnerWebhookPayload.update({ where: { partnerWebhookPayloadId: rawPayload.partnerWebhookPayloadId }, data: { inquiryId: existing.inquiryId } })
+        return { success: true as const, duplicate: true, inquiryId: existing.inquiryId }
+      }
     }
     throw error
   }

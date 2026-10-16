@@ -6,6 +6,7 @@ import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
 import { isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput } from '@/lib/inquiryFollowupValidation'
 import { logInquiryEvent } from '@/features/inquiry/eventLog'
+import { archiveFollowupNotifications } from '@/features/notifications/service'
 
 export interface LogFollowupInput {
   contactOutcome: string
@@ -77,6 +78,7 @@ export async function logFollowup(inquiryId: number, input: LogFollowupInput): P
           ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
         },
       })
+      await archiveFollowupNotifications(tx, inquiryId)
 
       await logInquiryEvent(tx, {
         inquiryId,

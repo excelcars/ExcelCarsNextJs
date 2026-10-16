@@ -12,6 +12,7 @@ import { noInventoryEnquiryEmail, vehicleDetailsEmail } from '@/lib/email/templa
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
 import { normalizeWhatsAppRecipient, sendEnquiryTemplate, sendNoInventoryEnquiryTemplate } from '@/lib/whatsapp/meta'
 import { getInquiryActivityEvents, logInquiryEvent } from './eventLog'
+import { archiveFollowupNotifications, createUserNotification } from '@/features/notifications/service'
 import { INQUIRY_INVENTORY_WORKFLOW_OPTIONS, type InquiryInventoryWorkflowType } from './workflow'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
 import { ensureInquiryLocationMasterSeed } from './locationMaster.server'
@@ -1726,6 +1727,7 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
           ...(userId ? { updatedByUser: { connect: { userId } } } : {}),
         },
       })
+      if (shouldAppendFollowup) await archiveFollowupNotifications(tx, id)
 
       await tx.inquiryCarDetails.deleteMany({ where: { fkInquiryId: id } })
 
@@ -1851,7 +1853,7 @@ export async function assignInquiry(input: AssignInquiryInput): Promise<ActionRe
     await prisma.$transaction(async (tx) => {
       const current = await tx.inquiry.findUnique({
         where: { inquiryId: input.inquiryId },
-        select: { assignedTo: true },
+        select: { assignedTo: true, inquiryNo: true, customerNameLegacy: true, customer: { select: { custName: true } } },
       })
 
       const now = new Date()
@@ -1874,6 +1876,17 @@ export async function assignInquiry(input: AssignInquiryInput): Promise<ActionRe
         actorUserId: userId,
         createdAt: now,
       })
+
+      if (current?.assignedTo !== assignedToUserId) {
+        const customerName = current?.customer?.custName || current?.customerNameLegacy || `Inquiry #${input.inquiryId}`
+        const href = `/inquiry?search=${encodeURIComponent(current?.inquiryNo ?? String(input.inquiryId))}`
+        if (assignedToUserId && assignedToUserId !== userId) {
+          await createUserNotification(tx, { recipientUserId: assignedToUserId, type: 'inquiry_assigned', title: 'Inquiry assigned to you', body: `${customerName} has been assigned to you.`, href, entityType: 'inquiry', entityId: input.inquiryId, dedupeKey: `inquiry_assigned:${assignedToUserId}:${input.inquiryId}` })
+        }
+        if (current?.assignedTo && current.assignedTo !== userId) {
+          await createUserNotification(tx, { recipientUserId: current.assignedTo, type: 'inquiry_reassigned', title: 'Inquiry reassigned', body: `${customerName} is no longer assigned to you.`, href, entityType: 'inquiry', entityId: input.inquiryId, dedupeKey: `inquiry_reassigned:${current.assignedTo}:${input.inquiryId}:${assignedToUserId ?? 'none'}` })
+        }
+      }
     })
   } catch (err) {
     return { success: false, error: describeError(err) }
