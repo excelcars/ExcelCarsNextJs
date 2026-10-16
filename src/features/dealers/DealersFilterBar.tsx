@@ -1,4 +1,4 @@
-import { Btn, SearchBar } from '@/components/ui'
+import { Btn, FilterPanel, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 
 const searchFieldLabels: Record<string, string> = {
@@ -15,7 +15,7 @@ export function DealersFilterBar({ search, searchInput, field, sort, onSearchCha
 }) {
   const searchFieldLabel = searchFieldLabels[field] ?? searchFieldLabels.all
   const hasFilters = Boolean(search || searchInput || field !== 'all' || sort !== 'nameAsc')
-  return <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
+  return <FilterPanel className="p-3">
     <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_11rem_11rem_auto]">
       <div className="flex flex-col gap-1 sm:col-span-2 xl:col-span-1">
         <label className="text-xs font-medium text-gray-600">Search value</label>
@@ -26,5 +26,5 @@ export function DealersFilterBar({ search, searchInput, field, sort, onSearchCha
       {hasFilters && <Btn variant="outline" size="sm" onClick={onReset}>Reset Filters</Btn>}
       <p className="text-xs text-gray-500 sm:col-span-2 xl:col-span-4">Choose where to search, then type the value above. Sorting applies immediately; filtering starts after you type.</p>
     </div>
-  </div>
+  </FilterPanel>
 }

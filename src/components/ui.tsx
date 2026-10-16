@@ -1,46 +1,46 @@
 'use client'
 
 import { useEffect, type ReactNode, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { X, ChevronDown, Loader2 } from 'lucide-react'
+import { X, ChevronDown, Loader2, Search } from 'lucide-react'
 
 export const R = '#C8102E'
 export const N = '#1B2A6B'
 
 export function Badge({ label }: { label: string }) {
   const map: Record<string, string> = {
-    Active: 'bg-green-100 text-green-700',
-    Available: 'bg-green-100 text-green-700',
-    'In Stock': 'bg-green-100 text-green-700',
-    Sold: 'bg-blue-100 text-blue-700',
-    Booked: 'bg-yellow-100 text-yellow-700',
-    Reserved: 'bg-yellow-100 text-yellow-700',
-    'In Service': 'bg-orange-100 text-orange-700',
-    'Not Available': 'bg-gray-100 text-gray-500',
-    'Loan Process': 'bg-purple-100 text-purple-700',
-    Inactive: 'bg-gray-100 text-gray-500',
-    Hot: 'bg-red-100 text-red-700',
-    Warm: 'bg-orange-100 text-orange-700',
-    Cold: 'bg-blue-100 text-blue-700',
-    Converted: 'bg-green-100 text-green-700',
-    Pending: 'bg-yellow-100 text-yellow-700',
-    Partial: 'bg-orange-100 text-orange-700',
-    Done: 'bg-green-100 text-green-700',
-    Closed: 'bg-gray-100 text-gray-600',
-    FollowUp: 'bg-yellow-100 text-yellow-700',
-    Overdue: 'bg-red-100 text-red-700',
-    'In Progress': 'bg-blue-100 text-blue-700',
-    Completed: 'bg-green-100 text-green-700',
-    'Fully Paid': 'bg-green-100 text-green-700',
-    'Partially Paid': 'bg-blue-100 text-blue-700',
-    Paid: 'bg-green-100 text-green-700',
-    Received: 'bg-green-100 text-green-700',
-    Renewed: 'bg-green-100 text-green-700',
-    'Expiring Soon': 'bg-orange-100 text-orange-700',
-    Draft: 'bg-gray-100 text-gray-500',
+    Active: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    Available: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    'In Stock': 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    Sold: 'bg-red-50 text-red-700 ring-red-100 before:bg-red-500',
+    Booked: 'bg-blue-50 text-blue-700 ring-blue-100 before:bg-blue-500',
+    Reserved: 'bg-blue-50 text-blue-700 ring-blue-100 before:bg-blue-500',
+    'In Service': 'bg-amber-50 text-amber-700 ring-amber-100 before:bg-amber-500',
+    'Not Available': 'bg-gray-100 text-gray-500 ring-gray-200 before:bg-gray-400',
+    'Loan Process': 'bg-purple-50 text-purple-700 ring-purple-100 before:bg-purple-500',
+    Inactive: 'bg-gray-100 text-gray-500 ring-gray-200 before:bg-gray-400',
+    Hot: 'bg-red-50 text-red-700 ring-red-100 before:bg-red-500',
+    Warm: 'bg-orange-50 text-orange-700 ring-orange-100 before:bg-orange-500',
+    Cold: 'bg-blue-50 text-blue-700 ring-blue-100 before:bg-blue-500',
+    Converted: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    Pending: 'bg-amber-50 text-amber-700 ring-amber-100 before:bg-amber-500',
+    Partial: 'bg-orange-50 text-orange-700 ring-orange-100 before:bg-orange-500',
+    Done: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    Closed: 'bg-gray-100 text-gray-600 ring-gray-200 before:bg-gray-400',
+    FollowUp: 'bg-amber-50 text-amber-700 ring-amber-100 before:bg-amber-500',
+    Overdue: 'bg-red-50 text-red-700 ring-red-100 before:bg-red-500',
+    'In Progress': 'bg-blue-50 text-blue-700 ring-blue-100 before:bg-blue-500',
+    Completed: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    'Fully Paid': 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    'Partially Paid': 'bg-blue-50 text-blue-700 ring-blue-100 before:bg-blue-500',
+    Paid: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    Received: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    Renewed: 'bg-emerald-50 text-emerald-700 ring-emerald-100 before:bg-emerald-500',
+    'Expiring Soon': 'bg-orange-50 text-orange-700 ring-orange-100 before:bg-orange-500',
+    Draft: 'bg-gray-100 text-gray-500 ring-gray-200 before:bg-gray-400',
   }
   const status = label.replace(/^(Payment|RC|Transfer):\s*/, '')
-  const cls = map[status] || 'bg-gray-100 text-gray-600'
-  return <span className={`inline-flex whitespace-nowrap items-center px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{label}</span>
+  const cls = map[status] || 'bg-gray-100 text-gray-600 ring-gray-200 before:bg-gray-400'
+  return <span className={`inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-sm font-semibold leading-none ring-1 ring-inset ${cls} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}><span>{label}</span></span>
 }
 
 export function Btn({ children, onClick, variant = 'primary', size = 'md', type = 'button', disabled = false, className = '' }: {
@@ -72,7 +72,7 @@ export function Input({ label, error, errorMessage, autoComplete, ...props }: In
       <input
         {...props}
         autoComplete={autoComplete ?? (isLookup ? 'new-password' : undefined)}
-        className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
+        className={`min-h-10 border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
         style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
       />
       {error && errorMessage && <span className="text-xs text-red-600">{errorMessage}</span>}
@@ -87,7 +87,7 @@ export function Select({ label, children, error, errorMessage, ...props }: Selec
       <div className="relative">
         <select
           {...props}
-          className={`w-full border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none pr-8 ${props.className || ''}`}
+          className={`min-h-10 w-full border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white appearance-none focus:outline-none pr-8 ${props.className || ''}`}
         >
           {children}
         </select>
@@ -144,19 +144,19 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
   )
 }
 
-export function Table({ headers, children, empty = false, emptyMessage = 'No records found', stickyLastColumn = false, minWidthClass = 'min-w-[1860px]', compact = false, columnWidths }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string; stickyLastColumn?: boolean; minWidthClass?: string; compact?: boolean; columnWidths?: string[] }) {
+export function Table({ headers, children, empty = false, emptyMessage = 'No records found', stickyLastColumn = false, minWidthClass = 'min-w-full', compact = false, columnWidths }: { headers: string[]; children: ReactNode; empty?: boolean; emptyMessage?: string; stickyLastColumn?: boolean; minWidthClass?: string; compact?: boolean; columnWidths?: string[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className={`w-full ${minWidthClass} table-fixed text-sm [&_td]:align-top [&_td]:break-words [&_td]:whitespace-normal [&_th]:align-top [&_th]:break-words [&_th]:whitespace-normal ${compact ? '[&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-2 [&_td]:text-xs' : ''} ${stickyLastColumn ? '[&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:z-10 [&_td:last-child]:bg-white [&_td:last-child]:shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+      <table className={`w-full ${minWidthClass} table-fixed border-separate border-spacing-0 text-sm [&_td]:align-top [&_td]:border-b [&_td]:border-r [&_td]:border-gray-100 [&_td]:[overflow-wrap:anywhere] [&_td]:whitespace-normal [&_th]:align-top [&_th]:border-b [&_th]:border-r [&_th]:border-gray-200 [&_th]:[overflow-wrap:anywhere] [&_th]:whitespace-normal ${compact ? '[&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-2' : ''} ${stickyLastColumn ? '[&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:z-10 [&_td:last-child]:bg-white [&_td:last-child]:shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>
         {columnWidths ? <colgroup>{headers.map((header, index) => <col key={header} style={{ width: columnWidths[index] }} />)}</colgroup> : null}
         <thead>
-          <tr className="bg-white-50 border-b border-gray-200">
+          <tr className="bg-slate-50">
             {headers.map((h, index) => (
-              <th key={h} className={`text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider ${stickyLastColumn && index === headers.length - 1 ? 'sticky right-0 z-20 bg-white shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>{h}</th>
+              <th key={h} className={`text-left px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide ${stickyLastColumn && index === headers.length - 1 ? 'sticky right-0 z-20 bg-slate-50 shadow-[-4px_0_8px_-6px_rgba(0,0,0,0.3)]' : ''}`}>{h}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody>
           {empty
             ? <tr><td colSpan={headers.length} className="text-center py-12 text-gray-400 text-sm">{emptyMessage}</td></tr>
             : children}
@@ -183,18 +183,28 @@ export function SearchBar({ value, onChange, placeholder = 'Search...', disabled
 }) {
   return (
     <div className="relative">
-      <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" strokeWidth={2} />
       <input
         ref={inputRef} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="new-password"
-        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 w-full max-w-full disabled:opacity-60 disabled:cursor-not-allowed"
+        className="min-h-10 w-full max-w-full rounded-md border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-800 outline-none focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B] disabled:cursor-not-allowed disabled:opacity-60"
       />
     </div>
   )
+}
+
+export function FilterPanel({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <section className={`mb-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm ${className}`}>{children}</section>
+}
+
+export function FilterChip({ active, children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return <button type="button" {...props} aria-pressed={active} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 disabled:cursor-not-allowed disabled:opacity-60 ${active ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'} ${props.className ?? ''}`}>{children}</button>
+}
+
+export function IconButton({ label, children, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+  return <button type="button" aria-label={label} title={label} {...props} className={`inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 transition hover:bg-blue-50 hover:text-[#1B2A6B] focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${className}`}>{children}</button>
 }
 
 export function StatCard({ label, value, sub, color = N, icon }: { label: string; value: string | number; sub?: string; color?: string; icon?: ReactNode }) {

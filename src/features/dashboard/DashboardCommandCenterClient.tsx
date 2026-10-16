@@ -192,7 +192,7 @@ const todayStart = () => {
 
 function formatDate(value: DateValue) {
   if (!value) return '-'
-  return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
 function formatMoney(value: number) {

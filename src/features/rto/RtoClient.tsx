@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { CalendarDays, Mail, Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2, Phone, UserRound, Building2, CircleDollarSign, FileText, WalletCards } from 'lucide-react'
+import { Badge, Btn, FilterPanel, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
@@ -105,6 +105,7 @@ interface RtoFilters {
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
+const displayDate = (d: Date | string | null) => d ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(d)) : '—'
 const fmtDateTime = (d: Date | string | null) => d ? new Date(d).toLocaleString('en-IN') : ''
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
 const todayForInput = () => {
@@ -721,10 +722,13 @@ export function RtoClient({
     if (form.carYear !== null && !isValidYear(form.carYear)) {
       newErrors.carYear = true
     }
-    if (form.agentMobileNoLegacy && !isValidPhone(form.agentMobileNoLegacy)) {
+    // Agent contact details are owned by Agent Master.  Older master records may
+    // contain a legacy mobile value, which must not prevent an RTO job from being
+    // linked to that existing agent.
+    if (!form.partnerId && form.agentMobileNoLegacy && !isValidPhone(form.agentMobileNoLegacy)) {
       newErrors.agentMobileNoLegacy = true
     }
-    if (form.agentEmailIdLegacy && !isValidEmail(form.agentEmailIdLegacy)) {
+    if (!form.partnerId && form.agentEmailIdLegacy && !isValidEmail(form.agentEmailIdLegacy)) {
       newErrors.agentEmailIdLegacy = true
     }
     if (customerEntryMode === 'manual' && form.customerMobLegacy && !isValidPhone(form.customerMobLegacy)) {
@@ -736,6 +740,7 @@ export function RtoClient({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      setError('Please correct the highlighted fields before saving.')
       return
     }
     setErrors({})
@@ -883,7 +888,8 @@ export function RtoClient({
         }
       />
 
-      <form onSubmit={event => { event.preventDefault(); applyFilters() }} className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
+      <FilterPanel>
+      <form onSubmit={event => { event.preventDefault(); applyFilters() }}>
         <div className="mb-3">
           <div className="text-sm font-semibold text-gray-900">Filters</div>
           <div className="text-xs text-gray-500">Use any combination below. Export follows the same filters.</div>
@@ -940,42 +946,46 @@ export function RtoClient({
           </div>
         </div>
       </form>
+      </FilterPanel>
       <div className="mb-4 text-sm text-gray-500">Showing {filtered.length} of {data.length} transfer jobs</div>
 
       {exportError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <Table headers={['Registration & Vehicle', 'Customer / Agent', 'Payment', 'RC', 'Transfer', 'Follow-up', 'Actions']} empty={filtered.length === 0} minWidthClass="min-w-full">
+      <Table headers={['Registration & Vehicle', 'Customer / Agent', 'Payment', 'RC', 'Transfer', 'Follow-up', 'Actions']} empty={filtered.length === 0} minWidthClass="min-w-full" columnWidths={['18%', '16%', '20%', '10%', '10%', '14%', '12%']}>
         {filtered.map(r => {
           const payment = paymentSummary(r)
           return (
             <tr key={r.rtoAgentMainId} className="transition hover:bg-gray-50">
               <td className="px-3 py-3">
-                <div className="font-mono text-sm font-semibold text-gray-900">{r.carRegistrationNo ?? '—'}</div>
-                <div className="mt-0.5 text-xs text-gray-500">{[r.carMakeLegacy, r.carModelLegacy, r.carVariantLegacy, r.carYear].filter(Boolean).join(' · ') || '—'}</div>
+                <div className="font-mono text-sm font-semibold text-[#1B2A6B]">{r.carRegistrationNo ?? '—'}</div>
+                <div className="mt-1 font-semibold text-gray-900">{[r.carMakeLegacy, r.carModelLegacy].filter(Boolean).join(' ') || '—'}</div>
+                <div className="text-sm text-gray-500">{r.carVariantLegacy ?? '—'}</div>
+                <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{r.carYear ?? '—'}</span><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{r.carType ?? '—'}</span></div>
               </td>
-              <td className="px-3 py-3 text-xs">
-                <div className="font-medium text-gray-800">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
-                <div className="mt-0.5 text-gray-500">{r.customer?.custMobile ?? r.customerMobLegacy ?? '—'}</div>
-                <div className="mt-1 font-medium text-gray-700">{r.partnerMaster?.name ?? r.agentNameLegacy ?? '—'}</div>
+              <td className="px-3 py-3 text-sm">
+                <div className="font-semibold text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-gray-500"><Phone aria-hidden="true" className="h-4 w-4 shrink-0" /><span>{r.customer?.custMobile ?? r.customerMobLegacy ?? '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2 text-gray-500"><Mail aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="break-all">{r.customer?.custEmail ?? r.customerEmailLegacy ?? '—'}</span></div>
+                <div className="mt-2 flex min-w-0 items-center gap-2 border-t border-gray-100 pt-2 text-gray-600"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span>{r.partnerMaster?.name ?? r.agentNameLegacy ?? '—'}</span></div>
               </td>
               <td className="px-3 py-3">
                 <div className="mb-1"><Badge label={payment.status} /></div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs leading-4">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm leading-5">
                   <div><span className="block whitespace-nowrap text-gray-400">Charges</span><span className="whitespace-nowrap font-semibold text-gray-800">{fmtMoney(r.transferCharges)}</span></div>
                   <div><span className="block whitespace-nowrap text-gray-400">Paid</span><span className="whitespace-nowrap font-semibold text-green-700">{fmtMoney(r.amtPaid)}</span></div>
                   <div className="col-span-2"><span className="block whitespace-nowrap text-gray-400">Balance</span><span className="whitespace-nowrap font-semibold text-amber-700">{payment.charges ? fmtMoney(payment.balance) : '—'}</span></div>
                 </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full ${payment.status === 'Fully Paid' ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${payment.progress}%` }} /></div>
               </td>
               <td className="px-3 py-3">{r.rcStatus ? <Badge label={r.rcStatus} /> : '—'}</td>
               <td className="px-3 py-3">{r.transferStatus ? <Badge label={r.transferStatus} /> : '—'}</td>
-              <td className="px-3 py-3 text-xs font-medium text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || 'Not scheduled'}</td>
-              <td className="px-3 py-3">
-                <div className="flex items-center gap-0.5">
-                  <button onClick={() => void openView(r)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View details"><Eye className="h-4 w-4" /></button>
-                  <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:bg-green-50 hover:text-green-600 rounded transition" title="Log payment"><IndianRupee className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:bg-blue-50 hover:text-[#1B2A6B] rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+              <td className="px-3 py-3 text-sm font-medium text-gray-600"><div className="flex items-center gap-2"><CalendarDays aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span>{r.followupDate ? displayDate(r.followupDate) : 'Not scheduled'}</span></div>{r.remark ? <div className="mt-2 break-words text-gray-500">{r.remark}</div> : null}</td>
+              <td className="px-2 py-3">
+                <div className="flex items-center gap-1 whitespace-nowrap">
+                  <IconButton label="View RTO job" onClick={() => void openView(r)} className="p-1.5 hover:bg-slate-100 hover:text-slate-700"><Eye className="h-4 w-4" strokeWidth={1.8} /></IconButton>
+                  <IconButton label="Log payment" onClick={() => openPay(r)} className="p-1.5 hover:bg-slate-100 hover:text-slate-700"><IndianRupee className="h-4 w-4" strokeWidth={1.8} /></IconButton>
+                  <IconButton label="Edit RTO job" onClick={() => openEdit(r)} className="p-1.5 hover:bg-slate-100 hover:text-slate-700"><Pencil className="h-4 w-4" strokeWidth={1.8} /></IconButton>
+                  <IconButton label="Delete RTO job" onClick={() => setDeleteId(r.rtoAgentMainId)} className="p-1.5 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" strokeWidth={1.8} /></IconButton>
                 </div>
               </td>
             </tr>
@@ -987,12 +997,15 @@ export function RtoClient({
       <Modal title={`View RTO Job — ${viewRow?.carRegistrationNo ?? ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
         {viewRow && (
           <div className="space-y-5">
-            <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
+            <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-[#1B2A6B] shadow-sm"><Car aria-hidden="true" className="h-5 w-5" /></span>
+                  <div>
                   <div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-[#1B2A6B] shadow-sm">{viewRow.carRegistrationNo ?? 'RTO job'}</span><span className="rounded-md bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">{viewRow.carType ?? 'Vehicle'}</span></div>
-                  <div className="mt-3 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
+                  <div className="mt-2 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
                   <div className="mt-1 text-sm text-gray-600">{[clean(viewRow.carMakeLegacy), clean(viewRow.carModelLegacy), clean(viewRow.carVariantLegacy), viewRow.carYear].filter(Boolean).join(' · ') || 'Vehicle details unavailable'} <span className="mx-1 text-gray-300">•</span> RTO job #{viewRow.rtoAgentMainId}</div>
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <div className="flex flex-wrap justify-end gap-1"><Badge label={paymentSummary(viewRow).status} /><Badge label={`RC: ${viewRow.rcStatus ?? 'Pending'}`} /><Badge label={`Transfer: ${viewRow.transferStatus ?? 'Pending'}`} /></div>
@@ -1004,17 +1017,17 @@ export function RtoClient({
             {(() => {
               const payment = paymentSummary(viewRow)
               const pendingSteps = [payment.balance > 0 ? 'payment balance' : '', viewRow.rcStatus === 'Pending' ? 'RC receipt' : '', viewRow.transferStatus === 'Pending' ? 'transfer completion' : ''].filter(Boolean)
-              return pendingSteps.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3 border-y border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"><span><span className="font-semibold">Action needed:</span> Pending {pendingSteps.join(', ')}.</span><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); void openPay(viewRow) }}>Update status</Btn></div> : null
+              return pendingSteps.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3 border-y border-red-100 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3 text-sm text-red-700"><span className="flex items-center gap-2"><CalendarDays aria-hidden="true" className="h-4 w-4" /><span><span className="font-semibold">Action needed:</span> Pending {pendingSteps.join(', ')}.</span></span><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); void openPay(viewRow) }}>Update status</Btn></div> : null
             })()}
 
             {(() => {
               const payment = paymentSummary(viewRow)
               return (
                 <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500"><CircleDollarSign className="h-4 w-4 text-[#1B2A6B]" />Transfer charges</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.transferCharges)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-green-700"><WalletCards className="h-4 w-4" />Amount paid</div><div className="mt-1 flex flex-wrap items-center gap-2 text-lg font-bold text-green-800">{fmtMoney(viewRow.amtPaid)}<Badge label={payment.status} /></div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-orange-700"><IndianRupee className="h-4 w-4" />Pending balance</div><div className="mt-1 text-lg font-bold text-orange-800">{payment.charges ? fmtMoney(payment.balance) : '—'}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${payment.progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-violet-100 bg-violet-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-violet-700"><CalendarDays className="h-4 w-4" />Next follow-up</div><div className="mt-1 text-lg font-bold text-gray-900">{displayDate(viewRow.followupDate)}</div></div>
                 </div>
               )
             })()}
@@ -1024,7 +1037,7 @@ export function RtoClient({
             </div>
 
             {viewTab === 'overview' && <>
-            <div className="text-sm font-semibold text-gray-800">Vehicle details</div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50"><Car aria-hidden="true" className="h-4 w-4" /></span>Vehicle details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
@@ -1044,7 +1057,7 @@ export function RtoClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Customer details</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-violet-50"><UserRound aria-hidden="true" className="h-4 w-4" /></span>Customer details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Customer</div>
@@ -1060,7 +1073,7 @@ export function RtoClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">RTO agent</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-amber-50"><Building2 aria-hidden="true" className="h-4 w-4" /></span>RTO agent</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">RTO Agent</div>
@@ -1076,11 +1089,11 @@ export function RtoClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Job dates and notes</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-50"><FileText aria-hidden="true" className="h-4 w-4" /></span>Job dates and payment</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.dateOfEntry) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.dateOfEntry)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Transfer Charges</div>
@@ -1104,7 +1117,7 @@ export function RtoClient({
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Follow-up Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.followupDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Remark</div>

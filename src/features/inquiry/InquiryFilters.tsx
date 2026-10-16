@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Btn, Input, SearchBar } from '@/components/ui'
+import { Btn, FilterChip, FilterPanel, Input, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { DateFilterInput } from '@/components/DateFilterInput'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
@@ -108,7 +108,7 @@ export function InquiryFilters({
   useEffect(() => { setDraftBudgetMax(budgetMax) }, [budgetMax])
 
   return (
-    <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
+    <FilterPanel>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-gray-900">Filters</div>
@@ -120,10 +120,9 @@ export function InquiryFilters({
         {([
           ['active', 'Active'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
         ] as const).map(([value, label]) => (
-          <button key={value} type="button" onClick={() => onQuickFilterChange(value)} disabled={isRoutePending} aria-pressed={quickFilter === value}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${quickFilter === value ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>
+          <FilterChip key={value} onClick={() => onQuickFilterChange(value)} disabled={isRoutePending} active={quickFilter === value}>
             {label}
-          </button>
+          </FilterChip>
         ))}
       </div>
 
@@ -172,6 +171,6 @@ export function InquiryFilters({
           Reset Filters
         </Btn>
       </div>
-    </div>
+    </FilterPanel>
   )
 }

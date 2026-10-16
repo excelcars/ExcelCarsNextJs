@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { Mail, Pencil, Phone, Trash2 } from 'lucide-react'
 import { LoadingOverlay, Table } from '@/components/ui'
 import type { DealerRow } from './types'
 
@@ -12,12 +12,12 @@ export function DealersTable({ rows, loading, onEdit, onDelete }: {
         <td className="px-4 py-3">
           <div className="font-medium text-gray-900">{row.dealerName ?? '—'}</div>
           {row.dealerCompanyName && <div className="mt-1 text-sm text-gray-600">{row.dealerCompanyName}</div>}
-          {row.dealerWebsite && <div className="mt-0.5 max-w-56 truncate text-xs text-gray-500" title={row.dealerWebsite}>{row.dealerWebsite}</div>}
+          {row.dealerWebsite && <div className="mt-0.5 max-w-56 truncate text-sm text-gray-500" title={row.dealerWebsite}>{row.dealerWebsite}</div>}
         </td>
         <td className="px-4 py-3">
-          <div className="font-mono text-sm text-gray-700">{row.dealerMobileNo ?? '—'}</div>
-          {row.dealerMobileNo_2 && <div className="mt-0.5 font-mono text-xs text-gray-500">{row.dealerMobileNo_2}</div>}
-          {row.dealerEmail && <div className="mt-0.5 max-w-56 truncate text-xs text-gray-500" title={row.dealerEmail}>{row.dealerEmail}</div>}
+          <div className="flex items-center gap-2 font-mono text-sm text-gray-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />{row.dealerMobileNo ?? '—'}</div>
+          {row.dealerMobileNo_2 && <div className="mt-0.5 flex items-center gap-2 font-mono text-sm text-gray-500"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />{row.dealerMobileNo_2}</div>}
+          {row.dealerEmail && <div className="mt-0.5 flex min-w-0 items-center gap-2 text-sm text-gray-500" title={row.dealerEmail}><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{row.dealerEmail}</span></div>}
         </td>
         <td className="max-w-64 px-4 py-3 text-sm text-gray-600"><div className="truncate" title={row.dealerAddress ?? undefined}>{row.dealerAddress ?? '—'}</div></td>
         <td className="px-4 py-3"><div className="flex items-center gap-1">

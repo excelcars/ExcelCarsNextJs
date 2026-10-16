@@ -294,9 +294,9 @@ export function Layout({
   const renderSidebarContent = (navRef: React.RefObject<HTMLElement | null>) => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center px-5 border-b border-white/10 flex-shrink-0">
+      <div className={`h-16 flex items-center border-b border-white/10 flex-shrink-0 ${sidebarOpen ? 'px-5' : 'justify-center px-1'}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-excel-car.png" alt="Excel Cars" className="h-8 object-contain bg-white rounded px-2 py-0.5" />
+        <img src="/logo-excel-car.png" alt="Excel Cars" className={sidebarOpen ? 'h-10 w-32 rounded-lg bg-white px-2 py-1 object-contain object-left shadow-sm' : 'h-10 w-11 rounded-lg bg-white px-1 py-1 object-contain shadow-sm'} />
         {sidebarOpen && <span className="ml-3 text-white/60 text-xs font-mono uppercase tracking-widest">CRM</span>}
       </div>
 

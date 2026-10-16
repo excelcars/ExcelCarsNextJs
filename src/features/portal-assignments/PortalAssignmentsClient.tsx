@@ -43,7 +43,7 @@ export function PortalAssignmentsClient({ initialSources, users }: { initialSour
         {initialSources.map(source => {
           const isSaving = isPending && pendingSourceId === source.sourceId
           return <tr key={source.sourceId} className="hover:bg-gray-50">
-            <td className="px-4 py-3"><div className="font-medium text-gray-900">{source.displayName}</div><div className="mt-1 font-mono text-xs text-gray-500">{source.code}</div></td>
+            <td className="px-4 py-3"><div className="font-medium text-gray-900">{source.displayName}</div><div className="mt-1 font-mono text-sm text-gray-500">{source.code}</div></td>
             <td className="px-4 py-3 text-sm text-gray-700">{source.category}</td>
             <td className="px-4 py-3"><Select aria-label={`Assign ${source.displayName}`} value={values[source.sourceId] ?? ''} onChange={event => setValues(current => ({ ...current, [source.sourceId]: event.target.value }))} disabled={isSaving}><option value="">Unassigned</option>{users.map(user => <option key={user.userId} value={user.userId}>{userLabel(user)}</option>)}</Select></td>
             <td className="px-4 py-3"><Btn size="sm" onClick={() => save(source.sourceId)} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save'}</Btn></td>

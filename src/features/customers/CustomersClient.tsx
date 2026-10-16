@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CalendarDays, Eye } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CalendarDays, Eye, Mail, Phone } from 'lucide-react'
 import { Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createCustomer, updateCustomer, deleteCustomer, type CustomerFormInput } from './adminActions'
 import { CUSTOMER_TYPES } from './adminQueries'
@@ -313,17 +313,17 @@ export function CustomersClient({
           <tr key={r.custId} className="hover:bg-gray-50 transition">
             <td className="px-4 py-3">
               <div className="font-medium text-gray-900">{r.custName}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500">
                 {r.type && <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-[#1B2A6B]">{r.type}</span>}
                 {r.companyName && <span>{r.companyName}</span>}
               </div>
             </td>
             <td className="px-4 py-3">
-              <div className="text-sm text-gray-700 font-mono">{r.custMobile ?? '—'}</div>
-              {r.mobile_2 && <div className="text-xs text-gray-500 font-mono">{r.mobile_2}</div>}
-              <div className="text-xs text-gray-500">{r.custEmail ?? ''}</div>
+              <div className="flex items-center gap-2 text-sm text-gray-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="font-mono">{r.custMobile ?? '—'}</span></div>
+              {r.mobile_2 && <div className="flex items-center gap-2 text-sm text-gray-500"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="font-mono">{r.mobile_2}</span></div>}
+              <div className="flex min-w-0 items-center gap-2 text-sm text-gray-500"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{r.custEmail ?? '—'}</span></div>
             </td>
-            <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
               <div><span className="text-gray-400">DOB:</span> {fmtDate(r.custDob) || '—'}</div>
               <div className="mt-1"><span className="text-gray-400">Anniversary:</span> {fmtDate(r.custAnniversaryDt) || '—'}</div>
             </td>

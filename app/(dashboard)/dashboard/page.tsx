@@ -93,12 +93,7 @@ export default async function DashboardPage({
     getPendingPayments({ includeRto: permissions.canRto, includeLoan: permissions.canLoan, includeInsurance: permissions.canInsurance }),
   ])
 
-  const todayLabel = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
+  const todayLabel = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).format(new Date())
   const firstName = (profile?.displayName || profile?.userName || session?.user?.name || 'there').split(' ')[0]
 
   return (

@@ -84,6 +84,7 @@ interface FollowupHistoryEntry {
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
+const displayDate = (d: Date | string | null) => d ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(d)) : '—'
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
 const normalizeRegistrationNo = (value: string | null | undefined) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
 const todayLocalDate = () => {
@@ -922,7 +923,7 @@ export function InsuranceClient({
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-xs uppercase tracking-wide text-gray-500">Payout</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.payoutPaymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
                     <div className={`rounded-lg px-3 py-2 ${viewRow.policyStatus === 'Pending' ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-xs uppercase tracking-wide text-gray-500">Policy</div><div className="mt-1"><Badge label={viewRow.policyStatus ?? 'Pending'} /></div></div>
-                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-xs uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-xs uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{viewRow.followupDate ? displayDate(viewRow.followupDate) : 'Not scheduled'}</div></div>
                   </div>
                 </div>
               </>
@@ -979,15 +980,15 @@ export function InsuranceClient({
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.entryDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.entryDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Renewal Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.renewalDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.renewalDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Expiry Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.expiryDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.expiryDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Insurance Premium</div>
@@ -1011,7 +1012,7 @@ export function InsuranceClient({
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Follow-up Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.followupDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payout Status</div>

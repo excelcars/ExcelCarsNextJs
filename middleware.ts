@@ -28,5 +28,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api|vehicle/|feedback/|_next/static|_next/image|favicon.ico|logo-excel-car.png).*)"],
+  matcher: ["/((?!api|vehicle/|feedback/|_next/static|_next/image|favicon.ico|logo-excel-car.png|login-hero-car.png|login-hero-drift.mp4).*)"],
 };
