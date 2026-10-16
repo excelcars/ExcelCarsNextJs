@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Download, Loader2, Mail, Phone } from 'lucide-react'
-import { Badge, Btn, Input, Select, Table, PageHeader } from '@/components/ui'
+import { Btn, Input, Select, Table, PageHeader } from '@/components/ui'
 import {
   OUTSTANDING_PAGE_SIZES,
   OUTSTANDING_PAYMENT_STATUSES,
@@ -26,6 +26,25 @@ function fmtDate(value: string | null) {
 function fmtPercent(value: number | null) {
   if (value === null || value === undefined) return '—'
   return `${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}%`
+}
+
+function OutstandingBadge({ label, kind }: { label: string; kind: 'type' | 'status' }) {
+  const normalized = label.trim().toLowerCase()
+  const tone = kind === 'type'
+    ? normalized === 'loan'
+      ? 'border-violet-100 bg-violet-50 text-violet-700 before:bg-violet-500'
+      : normalized === 'rto'
+        ? 'border-sky-100 bg-sky-50 text-sky-700 before:bg-sky-500'
+        : 'border-indigo-100 bg-indigo-50 text-indigo-700 before:bg-indigo-500'
+    : normalized === 'pending'
+      ? 'border-amber-100 bg-amber-50 text-amber-700 before:bg-amber-500'
+      : normalized === 'partial' || normalized === 'partially paid'
+        ? 'border-blue-100 bg-blue-50 text-blue-700 before:bg-blue-500'
+        : normalized === 'paid' || normalized === 'fully paid'
+          ? 'border-emerald-100 bg-emerald-50 text-emerald-700 before:bg-emerald-500'
+          : 'border-slate-200 bg-slate-50 text-slate-600 before:bg-slate-400'
+
+  return <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold leading-none ${tone} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}><span>{label}</span></span>
 }
 
 function buildExportParams(filters: {
@@ -527,7 +546,7 @@ export function OutstandingClient({
           empty={rows.length === 0}
           minWidthClass="min-w-[1280px]"
           compact
-          columnWidths={['4%', '5%', '8%', '8%', '9%', '7%', '10%', '7%', '12%', '7%', '4%', '7%', '7%', '5%']}
+          columnWidths={['4%', '8%', '8%', '8%', '8%', '7%', '10%', '7%', '10%', '7%', '4%', '7%', '7%', '5%']}
         >
           {rows.map((row, index) => {
             const serialNo = (page - 1) * pageSize + index + 1
@@ -535,7 +554,7 @@ export function OutstandingClient({
             return (
               <tr key={row.key} className="hover:bg-gray-50 transition">
                 <td className="px-4 py-3 text-sm text-gray-700">{serialNo}</td>
-                <td className="px-4 py-3"><Badge label={row.type} /></td>
+                <td className="px-4 py-3"><OutstandingBadge label={row.type} kind="type" /></td>
                 <td className="px-4 py-3 text-sm text-gray-700">{row.customerName ?? '—'}</td>
                 <td className="px-4 py-3"><div className="flex items-center gap-2 text-sm text-gray-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />{row.customerMobile ?? '—'}</div></td>
                 <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-2 text-sm text-gray-700"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{row.customerEmail ?? '—'}</span></div></td>
@@ -552,7 +571,7 @@ export function OutstandingClient({
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-700">
-                  {row.paymentStatus ? <Badge label={row.paymentStatus} /> : '—'}
+                  {row.paymentStatus ? <OutstandingBadge label={row.paymentStatus} kind="status" /> : '—'}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(row.followupDate)}</td>
                 <td className="px-4 py-3 text-sm text-gray-600"><span className="block break-words">{row.remark ?? '—'}</span></td>

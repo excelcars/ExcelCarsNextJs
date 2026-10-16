@@ -64,7 +64,9 @@ export function InventoryViewModal({ open, loading, error, row, onClose }: Inven
 
     let active = true
     setPreviewPhoto(null)
-    fetch(`/api/inventory/photos?inventoryId=${row.inventoryId}`)
+    const photoParams = new URLSearchParams({ inventoryId: String(row.inventoryId) })
+    if (row.inventoryNumber) photoParams.set('inventoryNumber', row.inventoryNumber)
+    fetch(`/api/inventory/photos?${photoParams.toString()}`)
       .then(response => response.ok ? response.json() : [])
       .then((photos: InventoryPreviewPhoto[]) => {
         if (active) setPreviewPhoto(photos.find(photo => Boolean(photo.path)) ?? null)
@@ -74,7 +76,7 @@ export function InventoryViewModal({ open, loading, error, row, onClose }: Inven
       })
 
     return () => { active = false }
-  }, [open, row?.inventoryId])
+  }, [open, row?.inventoryId, row?.inventoryNumber])
 
   return (
     <Modal title={row ? `View Inventory — ${row.inventoryNumber ?? `#${row.inventoryId}`}` : 'View Inventory'} open={open} onClose={onClose} width="max-w-6xl">
@@ -96,7 +98,7 @@ export function InventoryViewModal({ open, loading, error, row, onClose }: Inven
                 <span>{clean(row.carVariantMaster?.variant ?? row.variantLegacy) || 'Variant not set'}</span><span>·</span><span>{row.year ?? 'Year not set'}</span><span>·</span><span>{row.fuelType ?? 'Fuel not set'}</span>
               </div>
             </div>
-            <div className="flex flex-col items-start gap-3 lg:items-end">{row.status ? <Badge label={row.status} /> : null}<div className="hidden h-32 w-56 overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 text-[#1B2A6B] lg:grid">{previewPhoto?.path ? <img src={previewPhoto.path} alt={previewPhoto.fileName || `Photo of ${row.registrationNo ?? 'vehicle'}`} className="h-full w-full object-cover" onError={() => setPreviewPhoto(null)} /> : <><CarFront aria-hidden="true" className="h-20 w-20" strokeWidth={1.25} /><span className="mt-1 text-xs font-medium text-slate-500">Vehicle preview</span></>}</div></div>
+            <div className="flex flex-col items-start gap-3 lg:items-end">{row.status ? <Badge label={row.status} /> : null}<div className="hidden h-32 w-56 overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 via-blue-50 to-slate-200 text-[#1B2A6B] lg:grid lg:place-items-center">{previewPhoto?.path ? <img src={previewPhoto.path} alt={previewPhoto.fileName || `Photo of ${row.registrationNo ?? 'vehicle'}`} className="h-full w-full object-cover" onError={() => setPreviewPhoto(null)} /> : <div className="flex h-full w-full flex-col items-center justify-center"><CarFront aria-hidden="true" className="h-14 w-14" strokeWidth={1.35} /><span className="mt-2 text-xs font-medium text-slate-500">No vehicle photo</span></div>}</div></div>
           </div>
 
           <div className="grid gap-3 border-t border-gray-100 bg-slate-50/70 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
