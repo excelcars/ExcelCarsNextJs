@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
-import { Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
+import { CarFront, Database, Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
+import { Badge, Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS, inquiryStatusLabel } from './queries'
@@ -173,9 +173,9 @@ function InventoryMatchPanel({
   if (!hasRequirements && !error) return null
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
+    <div className="rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 px-4 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-sm font-semibold text-blue-900">Matching Inventory</div>
+        <div className="flex items-center gap-3 text-sm font-semibold text-blue-900"><Database className="h-5 w-5 text-blue-600" />Matching Inventory</div>
         {!loading && !error ? <div className="text-xs font-medium text-blue-800">{matches.length} {matches.length === 1 ? 'vehicle' : 'vehicles'} found</div> : null}
       </div>
       <div className="mt-1 text-xs text-blue-800">Live matches update as you select the customer’s vehicle and budget requirements.</div>
@@ -194,19 +194,12 @@ function InventoryMatchPanel({
               clean(match.carVariantMaster?.variant),
             ].filter(Boolean).join(' ') || '—'
             return (
-              <div key={match.inventoryId} className="rounded-md border border-blue-100 bg-white px-3 py-3 text-xs text-gray-700">
-                <div className="grid gap-2 md:grid-cols-3">
-                  <div><span className="font-medium text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div>
-                  <div><span className="font-medium text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}${match.month ? ` ${match.month}` : ''}` : ''}</div>
-                  <div><span className="font-medium text-gray-900">Colour / Fuel:</span> {[match.colour, match.fuelType].filter(Boolean).join(' / ') || '—'}</div>
-                  <div><span className="font-medium text-gray-900">KM / Owners:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match.noOfOwners ?? '—'}</div>
-                  <div><span className="font-medium text-gray-900">Price:</span> {fmtMoney(match.price)}</div>
-                  <div><span className="font-medium text-gray-900">Insurance:</span> {match.insuranceType?.trim() || '—'}</div>
-                  <div className="md:col-span-2"><span className="font-medium text-gray-900">Matched because:</span> {match.matchReasons?.join(' · ') || 'In-stock match'}</div>
-                  <div><span className="font-medium text-gray-900">State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div>
-                  <div className="md:col-span-3 whitespace-pre-wrap"><span className="font-medium text-gray-900">Remarks:</span> {match.otherRemarks?.trim() || '—'}</div>
-                  <div className="md:col-span-3 whitespace-pre-wrap"><span className="font-medium text-gray-900">Internal remarks:</span> {match.internalComments?.trim() || '—'}</div>
+              <div key={match.inventoryId} className="rounded-lg border border-blue-100 bg-white px-3 py-3 text-xs text-gray-700 shadow-sm">
+                <div className="grid gap-3 md:grid-cols-[9rem_1fr_1fr_1fr]">
+                  <div className="flex min-h-28 items-center justify-center rounded-md bg-slate-50 text-[#1B2A6B]"><CarFront className="h-12 w-12" strokeWidth={1.25} /></div>
+                  <div className="space-y-1 border-l-0 border-blue-100 md:border-l md:pl-3"><div><span className="font-semibold text-gray-900">Inventory:</span> {match.inventoryNumber ?? `#${match.inventoryId}`}</div><div className="flex items-center gap-1.5"><span className="font-semibold text-gray-900">Colour / Fuel:</span><span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: inventoryColourSwatch(match.colour) }} /><span>{[match.colour, match.fuelType].filter(Boolean).join(' / ') || '—'}</span></div><div><span className="font-semibold text-gray-900">Insurance:</span> {match.insuranceType?.trim() || '—'}</div><div><span className="font-semibold text-gray-900">State:</span> {match.currentState ? formatInquiryInventoryWorkflowLabel(match.currentState) : 'Not marked'}</div></div>
+                  <div className="space-y-1 border-l-0 border-blue-100 md:border-l md:pl-3"><div><span className="font-semibold text-gray-900">Registration:</span> {match.registrationNo ?? '—'}</div><div><span className="font-semibold text-gray-900">KM / Owners:</span> {match.kmsDriven ? Number(match.kmsDriven).toLocaleString('en-IN') : '—'} / {match.noOfOwners ?? '—'}</div><div><span className="font-semibold text-gray-900">Matched because:</span> {match.matchReasons?.join(' · ') || 'In-stock match'}</div></div>
+                  <div className="space-y-1 border-l-0 border-blue-100 md:border-l md:pl-3"><div><span className="font-semibold text-gray-900">Vehicle:</span> {vehicle}{match.year ? ` · ${match.year}${match.month ? ` ${match.month}` : ''}` : ''}</div><div><span className="font-semibold text-gray-900">Price:</span> {fmtMoney(match.price)}</div>{match.status ? <Badge label={match.status} /> : null}<div className="whitespace-pre-wrap"><span className="font-semibold text-gray-900">Remarks:</span> {match.otherRemarks?.trim() || '—'}</div></div>
                 </div>
               </div>
             )
@@ -215,6 +208,15 @@ function InventoryMatchPanel({
       )}
     </div>
   )
+}
+
+const inventoryColourSwatches: Array<[string, string]> = [
+  ['a.royale', '#102f77'], ['royale', '#102f77'], ['midnight blue', '#172554'], ['navy blue', '#1e3a8a'], ['sky blue', '#38bdf8'], ['blue', '#2563eb'], ['pearl white', '#f8fafc'], ['white', '#e5e7eb'], ['black', '#111827'], ['silver', '#cbd5e1'], ['grey', '#94a3b8'], ['gray', '#94a3b8'], ['burgundy', '#800020'], ['maroon', '#7f1d1d'], ['red', '#dc2626'], ['pink', '#ec4899'], ['purple', '#7e22ce'], ['champagne', '#d6b98c'], ['beige', '#d6c29a'], ['gold', '#ca8a04'], ['brown', '#92400e'], ['yellow', '#eab308'], ['orange', '#ea580c'], ['green', '#16a34a'],
+]
+
+function inventoryColourSwatch(colour: string | null) {
+  const normalized = clean(colour).toLowerCase()
+  return inventoryColourSwatches.find(([name]) => normalized.includes(name))?.[1] ?? '#94a3b8'
 }
 
 function buildInventoryWorkflowStateMap(
@@ -1881,7 +1883,7 @@ export function InquiryClient({
             <Input label="Area / Locality" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Kothrud, JLT" />
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-gray-900">Car Details</div>
@@ -1892,7 +1894,7 @@ export function InquiryClient({
               ) : null}
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,.8fr)_minmax(0,1.1fr)_auto]">
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,1fr)_auto] [&_label]:whitespace-nowrap">
               <FormDropdown label={fieldLabel('Make', true)} value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
               <FormDropdown label={fieldLabel('Model', true)} value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
               <FormDropdown label={fieldLabel('Variant', true)} value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
@@ -1913,7 +1915,7 @@ export function InquiryClient({
               }} placeholder="Optional" />
               <div className="flex items-end">
                 <Btn onClick={saveInquiryCarRow} className="w-full">
-                  {editingCarIndex !== null ? 'Update' : 'Add'}
+                  {editingCarIndex !== null ? 'Update' : <><Plus className="h-4 w-4" />Add</>}
                 </Btn>
               </div>
             </div>

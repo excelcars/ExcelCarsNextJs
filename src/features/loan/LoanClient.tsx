@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, Table, PageHeader, ConfirmDialog } from '@/components/ui'
+import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2, Mail, Phone, Banknote, Building2, CalendarClock, CircleDollarSign, Landmark, ReceiptText, UserRound, WalletCards } from 'lucide-react'
+import { Badge, Btn, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, ConfirmDialog } from '@/components/ui'
 import { LoanFiltersPanel } from './LoanFiltersPanel'
 import { LoanPagination } from './LoanPagination'
 import { LoanCustomerLookup, type LoanCustomerOption } from './LoanCustomerLookup'
@@ -100,6 +100,8 @@ const todayDateValue = () => {
   return local.toISOString().slice(0, 10)
 }
 const fmtDate = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : ''
+const fmtShortDate = (d: Date | string | null) => d ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(d)) : '—'
+const displayDate = fmtShortDate
 const fmtDateTime = (value: Date | string | null | undefined) => {
   if (!value) return '—'
   const d = new Date(value)
@@ -664,29 +666,29 @@ export function LoanClient({
       }} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <Table minWidthClass="min-w-full" headers={['Reg No', 'Customer', 'Bank', 'Loan Amount', 'Payout', 'Received', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
+      <Table minWidthClass="min-w-full" columnWidths={['8%', '18%', '13%', '13%', '14%', '10%', '11%', '13%']} headers={['Registration / Entry', 'Customer', 'Bank / Partner', 'Loan / Payout', 'Received / Pending', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
         {filtered.map(r => (
           <tr key={r.loanManagementId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800 whitespace-nowrap">{r.registrationNo ?? '—'}</td>
-            <td className="px-4 py-3">
-              <div className="font-medium text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
-              <div className="text-xs text-gray-500 font-mono">{r.customerMobileLegacy ?? ''}</div>
+            <td className="px-2 py-3"><div className="font-mono text-sm font-semibold text-[#1B2A6B]">{r.registrationNo ?? '—'}</div><div className="mt-1 text-sm text-gray-500">{fmtShortDate(r.entryDate)}</div></td>
+            <td className="px-3 py-3">
+              <div className="font-semibold text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</div>
+              <div className="mt-1 flex min-w-0 items-center gap-2 text-sm text-gray-500"><Phone aria-hidden="true" className="h-4 w-4 shrink-0" /><span>{r.customer?.custMobile ?? r.customerMobileLegacy ?? '—'}</span></div>
+              <div className="flex min-w-0 items-center gap-2 text-sm text-gray-500"><Mail aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="break-all">{r.customer?.custEmail ?? r.customerEmailLegacy ?? '—'}</span></div>
             </td>
-            <td className="px-4 py-3">
-              <div className="text-sm text-gray-700">{r.bankName ?? '—'}</div>
-              <div className="text-xs text-gray-500">{r.partnerMaster?.name ?? ''}</div>
+            <td className="px-3 py-3">
+              <div className="font-medium text-gray-800">{r.bankName ?? '—'}</div>
+              {r.partnerMaster?.name ? <div className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-600">{r.partnerMaster.name}</div> : null}
             </td>
-            <td className="px-4 py-3 text-sm text-gray-600">{fmtMoney(r.loanAmount)}</td>
-            <td className="px-4 py-3 text-sm font-semibold text-gray-800">{fmtMoney(r.payoutAmount)}</td>
-            <td className="px-4 py-3 text-sm text-gray-600"><div>{fmtMoney(r.totalAmountReceived)}</div><div className="mt-1 text-xs font-medium text-orange-700">{fmtMoney(Math.max(0, Number(r.payoutAmount ?? 0) - Number(r.totalAmountReceived ?? 0)))} pending</div></td>
-            <td className="px-4 py-3">{r.paymentStatus ? <Badge label={r.paymentStatus} /> : '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{fmtDate(r.followupDate) || '—'}</td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
-                <button onClick={() => openView(r)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View"><Eye className="h-4 w-4" /></button>
-                <button onClick={() => openPay(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Log Payment"><IndianRupee className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteId(r.loanManagementId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+            <td className="px-3 py-3"><div className="font-semibold text-gray-800">{fmtMoney(r.loanAmount)}</div><div className="mt-1 text-sm text-gray-500">Payout: <span className="font-semibold text-gray-700">{fmtMoney(r.payoutAmount)}</span></div></td>
+            <td className="px-3 py-3"><div className="font-semibold text-gray-800">{fmtMoney(r.totalAmountReceived)}</div><div className="mt-1 text-sm font-medium text-orange-700">{fmtMoney(Math.max(0, Number(r.payoutAmount ?? 0) - Number(r.totalAmountReceived ?? 0)))} pending</div></td>
+            <td className="px-3 py-3">{r.paymentStatus ? <Badge label={r.paymentStatus} /> : '—'}</td>
+            <td className="px-3 py-3 text-sm font-medium text-gray-700">{fmtShortDate(r.followupDate)}</td>
+            <td className="px-2 py-3">
+              <div className="flex items-center gap-1 whitespace-nowrap">
+                <IconButton label="View loan" onClick={() => openView(r)} className="p-1.5 hover:bg-slate-100 hover:text-slate-700"><Eye className="h-4 w-4" strokeWidth={1.8} /></IconButton>
+                <IconButton label="Log payment" onClick={() => openPay(r)} className="p-1.5 hover:bg-slate-100 hover:text-slate-700"><IndianRupee className="h-4 w-4" strokeWidth={1.8} /></IconButton>
+                <IconButton label="Edit loan" onClick={() => openEdit(r)} className="p-1.5 hover:bg-slate-100 hover:text-slate-700"><Pencil className="h-4 w-4" strokeWidth={1.8} /></IconButton>
+                <IconButton label="Delete loan" onClick={() => setDeleteId(r.loanManagementId)} className="p-1.5 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" strokeWidth={1.8} /></IconButton>
               </div>
             </td>
           </tr>
@@ -813,12 +815,15 @@ export function LoanClient({
       <Modal title={`View Loan${viewRow ? ` — ${viewRow.registrationNo ?? ''}` : ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
         {viewRow && (
           <div className="space-y-5">
-            <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-50 text-[#1B2A6B]"><Banknote aria-hidden="true" className="h-5 w-5" /></span>
+                  <div>
                   <div className="flex flex-wrap gap-2"><span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Loan #{viewRow.loanManagementId}</span><span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-[#1B2A6B]">{viewRow.customerId ? 'Customer Master' : 'Manual customer'}</span></div>
-                  <div className="mt-3 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
-                  <div className="mt-1 text-sm text-gray-600">Registration {viewRow.registrationNo ?? 'not added'} · Raised {fmtDate(viewRow.entryDate) || '—'} · { [clean(viewRow.carMake), clean(viewRow.carModel), clean(viewRow.carVariant)].filter(Boolean).join(' ') || 'Vehicle not added' }</div>
+                  <div className="mt-2 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
+                  <div className="mt-1 text-sm text-gray-600">Registration {viewRow.registrationNo ?? 'not added'} · Raised {displayDate(viewRow.entryDate)} · { [clean(viewRow.carMake), clean(viewRow.carModel), clean(viewRow.carVariant)].filter(Boolean).join(' ') || 'Vehicle not added' }</div>
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-3">
                   <Badge label={viewRow.paymentStatus ?? 'Pending'} />
@@ -837,8 +842,8 @@ export function LoanClient({
               const today = new Date(); today.setHours(0, 0, 0, 0)
               const followUpDay = new Date(followUp); followUpDay.setHours(0, 0, 0, 0)
               const overdueDays = Math.floor((today.getTime() - followUpDay.getTime()) / 86_400_000)
-              const message = overdueDays > 0 ? `Follow-up was due on ${fmtDate(followUp)} and is overdue by ${overdueDays} day${overdueDays === 1 ? '' : 's'}.` : `Next follow-up is scheduled for ${fmtDate(followUp)}.`
-              return <div className={`${overdueDays > 0 ? 'border-red-100 bg-red-50 text-red-700' : 'border-amber-100 bg-amber-50 text-amber-800'} flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm`}><span>{message}</span><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); void openPay(viewRow) }}>{overdueDays > 0 ? 'Log payment' : 'Update follow-up'}</Btn></div>
+              const message = overdueDays > 0 ? `Follow-up was due on ${displayDate(followUp)} and is overdue by ${overdueDays} day${overdueDays === 1 ? '' : 's'}.` : `Next follow-up is scheduled for ${displayDate(followUp)}.`
+              return <div className={`${overdueDays > 0 ? 'border-red-100 bg-red-50 text-red-700' : 'border-amber-100 bg-amber-50 text-amber-800'} flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm`}><span className="flex items-center gap-2 font-medium"><CalendarClock aria-hidden="true" className="h-4 w-4" />{message}</span><Btn size="sm" variant="outline" onClick={() => { setViewRow(null); void openPay(viewRow) }}>{overdueDays > 0 ? 'Log payment' : 'Update follow-up'}</Btn></div>
             })()}
 
             {(() => {
@@ -848,21 +853,21 @@ export function LoanClient({
               const progress = payout > 0 ? Math.min((received / payout) * 100, 100) : 0
               return <>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
-                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500"><CircleDollarSign className="h-4 w-4 text-[#1B2A6B]" />Payout amount</div><div className="mt-1 text-lg font-bold text-gray-900">{fmtMoney(viewRow.payoutAmount)}</div></div>
+                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-green-700"><WalletCards className="h-4 w-4" />Amount received</div><div className="mt-1 text-lg font-bold text-green-800">{fmtMoney(viewRow.totalAmountReceived)}</div></div>
+                  <div className="rounded-lg border border-orange-100 bg-orange-50 px-4 py-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-orange-700"><ReceiptText className="h-4 w-4" />Pending payout</div><div className="mt-1 text-lg font-bold text-orange-800">{fmtMoney(balance)}</div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div></div>
                 </div>
                 <div className="rounded-xl border border-gray-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-gray-800">Payment workflow</div>{viewRow.paymentStatus !== 'Received' && <span className="text-xs font-medium text-amber-700">Action needed</span>}</div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className={`rounded-lg px-3 py-2 ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}><div className="text-xs uppercase tracking-wide text-gray-500">Payment status</div><div className="mt-1 flex items-center gap-2"><Badge label={viewRow.paymentStatus ?? 'Pending'} />{balance > 0 && <span className="text-xs text-amber-700">{fmtMoney(balance)} due</span>}</div></div>
-                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-xs uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{fmtDate(viewRow.followupDate) || 'Not scheduled'}</div></div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2"><div className="text-xs uppercase tracking-wide text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-semibold text-gray-800">{viewRow.followupDate ? displayDate(viewRow.followupDate) : 'Not scheduled'}</div></div>
                   </div>
                 </div>
               </>
             })()}
 
-            <div className="text-sm font-semibold text-gray-800">Customer details</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50"><UserRound aria-hidden="true" className="h-4 w-4" /></span>Customer details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
@@ -882,7 +887,7 @@ export function LoanClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Bank contact</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-violet-50"><Landmark aria-hidden="true" className="h-4 w-4" /></span>Bank contact</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Bank Name</div>
@@ -902,7 +907,7 @@ export function LoanClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Vehicle details</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-amber-50"><Car aria-hidden="true" className="h-4 w-4" /></span>Vehicle details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Car Type</div>
@@ -918,11 +923,11 @@ export function LoanClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Loan details</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-50"><Building2 aria-hidden="true" className="h-4 w-4" /></span>Loan details</div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Entry Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.entryDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.entryDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Loan Amount</div>
@@ -946,11 +951,11 @@ export function LoanClient({
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Payment Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.paymentDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.paymentDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Follow-up Date</div>
-                <div className="mt-1 text-sm font-medium text-gray-900">{fmtDate(viewRow.followupDate) || '—'}</div>
+                <div className="mt-1 text-sm font-medium text-gray-900">{displayDate(viewRow.followupDate)}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 md:col-span-2 xl:col-span-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Remarks</div>
@@ -958,7 +963,7 @@ export function LoanClient({
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Record activity</div>
+            <div className="flex items-center gap-2 border-t border-gray-100 pt-5 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100"><CalendarClock aria-hidden="true" className="h-4 w-4" /></span>Record activity</div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Created</div>

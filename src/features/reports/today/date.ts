@@ -21,8 +21,7 @@ export function indiaDateKey(value: Date | string = new Date()) {
 
 export function formatIndiaDate(value: Date | string | null) {
   if (!value) return ''
-  const [year, month, day] = indiaDateKey(value).split('-')
-  return `${day}/${month}/${year}`
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: INDIA_TIME_ZONE }).format(new Date(value))
 }
 
 export function indiaDateRange(fromDate: string, toDate: string) {

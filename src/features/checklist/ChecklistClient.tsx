@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, X, Car, Download, Loader2, Pencil } from 'lucide-react'
+import { CheckCircle2, ClipboardList, FileText, History, Plus, Trash2, X, Car, Download, Loader2, Pencil } from 'lucide-react'
 import { Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { ListPagination } from '@/components/ListPagination'
 import { ChecklistTable } from './ChecklistTable'
@@ -824,24 +824,24 @@ export function ChecklistClient({
               return <>
                 <div className="rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wider text-[#1B2A6B]">Vehicle checklist</div>
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-11 w-11 place-items-center rounded-full bg-blue-100 text-blue-700"><Car className="h-5 w-5" /></span><div><div className="text-xs font-semibold uppercase tracking-wider text-[#1B2A6B]">Vehicle checklist</div>
                       <div className="mt-1 font-mono text-xl font-bold text-gray-900">{viewRow.registrationNo ?? 'Registration not added'}</div>
                       <div className="mt-1 text-sm text-gray-600">{[clean(viewRow.make), clean(viewRow.model), clean(viewRow.variant), viewRow.year].filter(Boolean).join(' · ') || 'Vehicle details unavailable'}</div>
-                    </div>
+                    </div></div>
                     <Btn size="sm" variant="outline" onClick={() => { setViewOpen(false); openEdit(viewRow) }}><Pencil className="h-3.5 w-3.5" />Edit Checklist</Btn>
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Documents</div><div className="mt-1 text-xl font-bold text-gray-900">{documents.length}</div></div>
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Applicable</div><div className="mt-1 text-xl font-bold text-blue-800">{applicable}</div></div>
-                  <div className="rounded-lg border border-green-100 bg-green-50 px-4 py-3"><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Received</div><div className="mt-1 text-xl font-bold text-green-800">{received}<span className="ml-1 text-sm font-medium">/ {applicable}</span></div></div>
+                  <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white px-4 py-3"><span className="grid h-9 w-9 place-items-center rounded-full bg-blue-100 text-blue-700"><ClipboardList className="h-4 w-4" /></span><div><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Documents</div><div className="mt-1 text-xl font-bold text-gray-900">{documents.length}</div></div></div>
+                  <div className="flex items-center gap-3 rounded-xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white px-4 py-3"><span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-violet-700"><FileText className="h-4 w-4" /></span><div><div className="text-xs font-semibold uppercase tracking-wide text-violet-700">Applicable</div><div className="mt-1 text-xl font-bold text-violet-800">{applicable}</div></div></div>
+                  <div className="flex items-center gap-3 rounded-xl border border-green-100 bg-gradient-to-br from-green-50 to-white px-4 py-3"><span className="grid h-9 w-9 place-items-center rounded-full bg-green-100 text-green-700"><CheckCircle2 className="h-4 w-4" /></span><div><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Received</div><div className="mt-1 text-xl font-bold text-green-800">{received}<span className="ml-1 text-sm font-medium">/ {applicable}</span></div></div></div>
                 </div>
               </>
             })()}
 
-            <div className="text-sm font-semibold text-gray-800">Vehicle and customer</div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"><div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100"><Car className="h-4 w-4" /></span>Vehicle and customer details</div><Btn size="sm" variant="outline" onClick={() => { setViewOpen(false); openEdit(viewRow) }}><Pencil className="h-3.5 w-3.5" />Edit</Btn></div>
+            <div className="grid gap-0 overflow-hidden rounded-lg border border-gray-100 md:grid-cols-2 xl:grid-cols-3 [&>div]:rounded-none [&>div]:border-0 [&>div]:border-b [&>div]:border-gray-100 [&>div]:bg-white [&>div]:px-4 [&>div]:py-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Registration No</div>
                 <div className="mt-1 font-mono text-sm font-semibold text-gray-900">{viewRow.registrationNo ?? '—'}</div>
@@ -871,17 +871,18 @@ export function ChecklistClient({
                 <div className="mt-1 text-sm font-medium text-gray-900 break-all">{viewRow.customer?.custEmail ?? viewRow.customerEmailLegacy ?? '—'}</div>
               </div>
             </div>
+            </section>
 
-            <div className="border-t border-gray-100 pt-5 text-sm font-semibold text-gray-800">Record activity</div>
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"><div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-violet-100"><History className="h-4 w-4" /></span>Record activity</div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="rounded-lg border border-green-100 bg-gradient-to-br from-green-50 to-white px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Created</div>
                 <div className="mt-1 text-sm font-medium text-gray-900">{fmtDateTime(viewRow.createdDate)}</div>
                 <div className="mt-1 text-xs text-gray-500">
                   By {viewRow.createdByUser?.displayName ?? viewRow.createdByUser?.userName ?? (viewRow.createdBy ? `User #${viewRow.createdBy}` : '—')}
                 </div>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-50 to-white px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Last Updated</div>
                 <div className="mt-1 text-sm font-medium text-gray-900">{fmtDateTime(viewRow.updatedDate)}</div>
                 <div className="mt-1 text-xs text-gray-500">
@@ -889,9 +890,10 @@ export function ChecklistClient({
                 </div>
               </div>
             </div>
+            </section>
 
-            <div>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-semibold text-gray-900">Document Checklist</div><div className="text-xs font-medium text-gray-500">Received documents are marked in green.</div></div>
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100"><ClipboardList className="h-4 w-4" /></span>Document Checklist</div><div className="text-xs font-medium text-gray-500">Received documents are marked in green.</div></div>
               <div className="overflow-x-auto rounded-xl border border-gray-200">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -920,7 +922,7 @@ export function ChecklistClient({
                   </tbody>
                 </table>
               </div>
-            </div>
+            </section>
 
             <div className="flex flex-wrap justify-end gap-2">
               <Btn variant="outline" onClick={() => { setViewOpen(false); openEdit(viewRow) }}><Pencil className="h-4 w-4" />Edit Checklist</Btn>

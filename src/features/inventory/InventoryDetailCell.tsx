@@ -4,7 +4,7 @@ export function InventoryDetailCell({
   items: Array<[string, string | number | boolean | null | undefined]>
 }) {
   return (
-    <div className="space-y-0.5 text-xs leading-5 text-gray-600">
+    <div className="space-y-0.5 text-sm leading-6 text-gray-600">
       {items.map(([label, value]) => {
         const displayValue = value === null || value === undefined || value === ''
           ? '—'

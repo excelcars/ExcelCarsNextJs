@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, Loader2, Mail, Phone } from 'lucide-react'
 import { Badge, Btn, Input, Select, Table, PageHeader } from '@/components/ui'
 import {
   OUTSTANDING_PAGE_SIZES,
@@ -537,8 +537,8 @@ export function OutstandingClient({
                 <td className="px-4 py-3 text-sm text-gray-700">{serialNo}</td>
                 <td className="px-4 py-3"><Badge label={row.type} /></td>
                 <td className="px-4 py-3 text-sm text-gray-700">{row.customerName ?? '—'}</td>
-                <td className="px-4 py-3 text-sm text-gray-700">{row.customerMobile ?? '—'}</td>
-                <td className="px-4 py-3 text-sm text-gray-700">{row.customerEmail ?? '—'}</td>
+                <td className="px-4 py-3"><div className="flex items-center gap-2 text-sm text-gray-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />{row.customerMobile ?? '—'}</div></td>
+                <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-2 text-sm text-gray-700"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{row.customerEmail ?? '—'}</span></div></td>
                 <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">
                   {row.registrationNo ? (
                     <Link

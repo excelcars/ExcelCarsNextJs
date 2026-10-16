@@ -73,8 +73,8 @@ export function FormDropdown({
 
   return <div ref={rootRef} className={`relative flex flex-col gap-1 ${className}`}>
     {label ? <label className="text-xs font-medium text-gray-600">{label}</label> : null}
-    <button type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} onClick={() => { if (!disabled) { setOpen(current => !current); setQuery('') } }} className={`flex w-full items-center justify-between rounded-md border bg-white px-3 py-2 text-left text-sm text-gray-800 outline-none focus:ring-1 focus:ring-[#1B2A6B] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${error ? 'border-red-500' : 'border-gray-200'}`}>
-      <span className={value ? '' : 'text-gray-400'}>{selected || placeholder}</span><ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+    <button type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} onClick={() => { if (!disabled) { setOpen(current => !current); setQuery('') } }} className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-md border bg-white px-3 py-2 text-left text-sm text-gray-800 outline-none focus:ring-1 focus:ring-[#1B2A6B] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${error ? 'border-red-500' : 'border-gray-200'}`}>
+      <span className={`min-w-0 break-words ${value ? '' : 'text-gray-400'}`}>{selected || placeholder}</span><ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
     </button>
     {open && menuStyle && typeof document !== 'undefined' ? createPortal(
       <div ref={menuRef} className="z-[100] flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" style={menuStyle}>

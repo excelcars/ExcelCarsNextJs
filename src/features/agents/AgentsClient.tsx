@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Phone } from 'lucide-react'
 import { Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { isValidEmail, isValidPhone } from '@/lib/validation'
@@ -109,8 +109,8 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
       {initialData.map(row => <tr key={row.partnerId} className="hover:bg-gray-50 transition">
         <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
         <td className="px-4 py-3 text-sm text-gray-700">{row.partnerType}</td>
-        <td className="px-4 py-3 font-mono text-sm text-gray-700">{row.mobile ?? '—'}</td>
-        <td className="px-4 py-3 text-sm text-gray-600">{row.email ?? '—'}</td>
+        <td className="px-4 py-3"><div className="flex items-center gap-2 font-mono text-sm text-gray-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />{row.mobile ?? '—'}</div></td>
+        <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-2 text-sm text-gray-600"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{row.email ?? '—'}</span></div></td>
         <td className="px-4 py-3"><div className="flex items-center gap-1">
           <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
           <button onClick={() => setDeleteId(row.partnerId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>

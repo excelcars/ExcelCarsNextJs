@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { CalendarClock, CarFront, CircleDollarSign, ClipboardList, Edit3, Mail, MessageCircle, Phone, UserRound, type LucideIcon } from 'lucide-react'
 import { Badge, Btn } from '@/components/ui'
 import { getInquiryDetail, setInquiryInventoryWorkflowState } from './actions'
 import { formatInquiryInventoryWorkflowLabel, INQUIRY_INVENTORY_WORKFLOW_OPTIONS } from './workflow'
@@ -219,6 +220,11 @@ function fmtMoney(n: string | number | null | undefined) {
 
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'IN'
+
+function InquirySummaryCard({ label, value, detail, Icon, tone }: { label: string; value: string; detail: string; Icon: LucideIcon; tone: string }) {
+  return <div className={`rounded-xl border border-white/70 bg-gradient-to-br px-4 py-3 ${tone}`}><div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/75 shadow-sm"><Icon aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0"><div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</div><div className="mt-1 text-lg font-bold text-slate-900">{value}</div><div className="mt-0.5 break-words text-xs text-slate-500">{detail}</div></div></div></div>
+}
 
 function userOptionLabel(user?: InquiryDetailData['assignedToUser'] | InquiryDetailData['createdByUser'] | InquiryDetailInventoryLink['createdByUser'] | null) {
   if (!user) return '-'
@@ -569,19 +575,22 @@ export function InquiryDetailView({
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{currentInquiry.inquiryNo ?? `Inquiry/${currentInquiry.inquiryId}`}</span>
-            {currentInquiry.website ? <span className="rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-[#1B2A6B]">{currentInquiry.website}{currentInquiry.sourceDetail ? ` · ${currentInquiry.sourceDetail}` : ''}</span> : null}
-          </div>
-          <h2 className="mt-3 text-3xl font-bold text-gray-900">{currentInquiry.customer?.custName ?? currentInquiry.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500">
-            <span>Customer #{currentInquiry.customer?.custId ?? currentInquiry.customerId ?? '-'}</span>
-            <span>·</span>
-            <span>Raised {fmtDate(currentInquiry.dateOfInquiry) || '-'}</span>
-            {currentInquiry.location ? <><span>·</span><span>{currentInquiry.location}</span></> : null}
-            <span>·</span>
-            <span>Inquiry #{currentInquiry.inquiryId}</span>
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-50 text-base font-bold text-blue-700">{initials(currentInquiry.customer?.custName ?? currentInquiry.customerNameLegacy ?? 'Inquiry')}</span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{currentInquiry.inquiryNo ?? `Inquiry/${currentInquiry.inquiryId}`}</span>
+              {currentInquiry.website ? <span className="rounded-md bg-blue-50 px-3 py-1 text-sm font-medium text-[#1B2A6B]">{currentInquiry.website}{currentInquiry.sourceDetail ? ` · ${currentInquiry.sourceDetail}` : ''}</span> : null}
+            </div>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">{currentInquiry.customer?.custName ?? currentInquiry.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+              <span>Customer #{currentInquiry.customer?.custId ?? currentInquiry.customerId ?? '-'}</span>
+              <span>·</span>
+              <span>Raised on {fmtDate(currentInquiry.dateOfInquiry) || '-'}</span>
+              {currentInquiry.location ? <><span>·</span><span>{currentInquiry.location}</span></> : null}
+              <span>·</span>
+              <span>Inquiry #{currentInquiry.inquiryId}</span>
+            </div>
           </div>
         </div>
 
@@ -591,15 +600,15 @@ export function InquiryDetailView({
             {currentInquiry.status ? <Badge label={currentInquiry.status} /> : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Btn variant="outline" onClick={onEdit}>Edit</Btn>
+            <Btn variant="outline" onClick={onEdit}><Edit3 aria-hidden="true" className="mr-1.5 h-4 w-4" />Edit</Btn>
             <Btn onClick={onLogFollowup}>Log follow-up</Btn>
           </div>
         </div>
       </div>
 
       {followupOverdue ? (
-        <div className="flex flex-col gap-3 border-t border-red-100 bg-red-50 px-6 py-4 text-sm text-red-700 md:flex-row md:items-center md:justify-between">
-          <div className="font-medium">Follow-up was due on {fmtDate(currentInquiry.followUpDate)} and is overdue by {overdueDays} day{overdueDays === 1 ? '' : 's'}.</div>
+        <div className="flex flex-col gap-3 border-t border-red-100 bg-gradient-to-r from-red-50 to-rose-50 px-6 py-4 text-sm text-red-700 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3 font-medium"><span className="grid h-9 w-9 place-items-center rounded-lg bg-red-100 text-red-600"><CalendarClock aria-hidden="true" className="h-4 w-4" /></span>Follow-up was due on {fmtDate(currentInquiry.followUpDate)} and is overdue by {overdueDays} day{overdueDays === 1 ? '' : 's'}.</div>
           <div className="flex gap-2">
             <Btn variant="outline" onClick={onEdit}>Reschedule</Btn>
             <Btn onClick={onLogFollowup}>Mark done</Btn>
@@ -607,24 +616,11 @@ export function InquiryDetailView({
         </div>
       ) : null}
 
-      <div className="grid gap-0 border-t border-gray-100 md:grid-cols-2 xl:grid-cols-4">
-        <div className="border-r border-gray-100 px-6 py-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Assigned To</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">{userOptionLabel(currentInquiry.assignedToUser)}</div>
-        </div>
-        <div className="border-r border-gray-100 px-6 py-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Budget</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">{fmtMoney(currentInquiry.budgetOfCustomer)}</div>
-        </div>
-        <div className="border-r border-gray-100 px-6 py-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Vehicles Wanted</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">{currentInquiry.inquiryCarDetails.length}</div>
-          <div className="mt-1 text-sm text-gray-500">{vehicleSummary}</div>
-        </div>
-        <div className="px-6 py-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Showroom Visit</div>
-          <div className="mt-2 text-2xl font-semibold text-gray-900">{fmtDate(currentInquiry.visitedDateOfCustomer) || 'Not visited'}</div>
-        </div>
+      <div className="grid gap-3 border-t border-gray-100 bg-slate-50/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
+        <InquirySummaryCard label="Assigned to" value={userOptionLabel(currentInquiry.assignedToUser)} detail="—" Icon={UserRound} tone="from-blue-50 to-white text-blue-600" />
+        <InquirySummaryCard label="Budget" value={fmtMoney(currentInquiry.budgetOfCustomer)} detail="—" Icon={CircleDollarSign} tone="from-emerald-50 to-white text-emerald-600" />
+        <InquirySummaryCard label="Vehicles wanted" value={String(currentInquiry.inquiryCarDetails.length)} detail={vehicleSummary} Icon={CarFront} tone="from-violet-50 to-white text-violet-600" />
+        <InquirySummaryCard label="Showroom visit" value={fmtDate(currentInquiry.visitedDateOfCustomer) || 'Not visited'} detail="—" Icon={ClipboardList} tone="from-orange-50 to-white text-orange-600" />
       </div>
 
       <div className="border-t border-gray-100 px-6">
@@ -651,42 +647,33 @@ export function InquiryDetailView({
         {tab === 'overview' ? (
           <div className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-2">
-              <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+              <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Contact</div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50"><UserRound aria-hidden="true" className="h-4 w-4" /></span>Contact</div>
                   {(currentInquiry.customer?.custId ?? currentInquiry.customerId) ? <div className="text-sm font-medium text-[#1B2A6B]">Customer #{currentInquiry.customer?.custId ?? currentInquiry.customerId}</div> : null}
                 </div>
-                <div className="mt-4 space-y-4 text-sm text-gray-700">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mobile</div>
-                    <div className="mt-1 text-xl font-semibold text-gray-900">{currentInquiry.customer?.custMobile ?? currentInquiry.mobileno ?? '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">WhatsApp</div>
-                    <div className="mt-1 text-base text-gray-900">{currentInquiry.customer?.custMobile ?? currentInquiry.mobileno ? 'Send listings' : '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Email</div>
-                    <div className="mt-1 text-base break-all text-gray-900">{currentInquiry.customer?.custEmail ?? currentInquiry.email ?? '-'}</div>
-                  </div>
+                <div className="mt-3 divide-y divide-gray-100 text-sm text-gray-700">
+                  <div className="flex items-center gap-3 py-3"><Phone aria-hidden="true" className="h-4 w-4 text-[#1B2A6B]" /><div><div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Mobile</div><div className="font-semibold text-gray-900">{currentInquiry.customer?.custMobile ?? currentInquiry.mobileno ?? '-'}</div></div></div>
+                  <div className="flex items-center gap-3 py-3"><MessageCircle aria-hidden="true" className="h-4 w-4 text-emerald-600" /><div><div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">WhatsApp</div><div className="font-medium text-gray-900">{currentInquiry.customer?.custMobile ?? currentInquiry.mobileno ? 'Send listings' : '-'}</div></div></div>
+                  <div className="flex items-start gap-3 py-3"><Mail aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" /><div className="min-w-0"><div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Email</div><div className="break-all font-medium text-gray-900">{currentInquiry.customer?.custEmail ?? currentInquiry.email ?? '-'}</div></div></div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+              <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Requirement</div>
-                  <button type="button" className="text-sm font-medium text-[#1B2A6B]" onClick={() => setTab('requirement')}>Open requirement</button>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-violet-50"><CarFront aria-hidden="true" className="h-4 w-4" /></span>Requirement</div>
+                  <button type="button" className="text-sm font-medium text-[#1B2A6B]" onClick={() => setTab('requirement')}>Open requirement →</button>
                 </div>
                 {currentInquiry.inquiryCarDetails.length === 0 ? (
                   <div className="mt-4 text-sm text-gray-500">No vehicle requirement captured.</div>
                 ) : (
                   <div className="mt-4 space-y-3">
                     {currentInquiry.inquiryCarDetails.map((car, index) => (
-                      <div key={car.inquiryCarDetailsId ?? `overview-car-${index}`} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4">
+                      <div key={car.inquiryCarDetailsId ?? `overview-car-${index}`} className="rounded-xl border border-gray-200 bg-gradient-to-br from-slate-50 to-blue-50/50 px-4 py-3">
                         <div className="flex items-start gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-sm font-medium text-[#1B2A6B]">{index + 1}</div>
                           <div>
-                            <div className="text-2xl font-semibold text-gray-900">{[
+                            <div className="text-lg font-semibold text-gray-900">{[
                               clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy),
                               clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy),
                             ].filter(Boolean).join(' ') || 'Vehicle not set'}</div>
@@ -707,12 +694,12 @@ export function InquiryDetailView({
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+            <div className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Remarks</div>
-                <button type="button" className="text-sm font-medium text-[#1B2A6B]" onClick={onEdit}>Add note</button>
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50"><ClipboardList aria-hidden="true" className="h-4 w-4" /></span>Remarks</div>
+                <button type="button" className="text-sm font-medium text-[#1B2A6B]" onClick={onEdit}>⊕ Add note</button>
               </div>
-              <div className="mt-4 whitespace-pre-wrap text-sm text-gray-700">{currentInquiry.remark?.trim() ? currentInquiry.remark : 'No remarks recorded yet.'}</div>
+              <div className="mt-3 rounded-lg bg-slate-50 px-4 py-3 whitespace-pre-wrap text-sm text-gray-700">{currentInquiry.remark?.trim() ? currentInquiry.remark : 'No remarks recorded yet.'}</div>
             </div>
           </div>
         ) : null}

@@ -1,5 +1,7 @@
 export function formatListDate(value: Date | string | null | undefined) {
-  return value ? new Date(value).toISOString().slice(0, 10) : ''
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date)
 }
 
 export function formatListMoney(value: string | number | null | undefined) {

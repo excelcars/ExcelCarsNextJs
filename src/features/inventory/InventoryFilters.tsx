@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { Btn, Input, SearchBar } from '@/components/ui'
+import { Btn, FilterChip, FilterPanel, Input, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { INVENTORY_STATUSES } from './queries'
 import type { InventoryFilters as InventoryFilterValues } from './inventoryTypes'
@@ -53,7 +53,7 @@ export function InventoryFilters({
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4">
+    <FilterPanel>
       <div className="mb-3">
         <div className="text-sm font-semibold text-gray-900">Filters</div>
         <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
@@ -62,10 +62,9 @@ export function InventoryFilters({
         {([
           ['All', 'All Vehicles'], ['In Stock', 'In Stock'], ['Booked', 'Booked'], ['Loan Process', 'Loan Process'], ['Sold', 'Sold'], ['Not Available', 'Not Available'],
         ] as const).map(([value, label]) => (
-          <button key={value} type="button" onClick={() => onFilterChange('status', value)} disabled={isLoading} aria-pressed={filters.status === value}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${filters.status === value ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>
+          <FilterChip key={value} onClick={() => onFilterChange('status', value)} disabled={isLoading} active={filters.status === value}>
             {label}
-          </button>
+          </FilterChip>
         ))}
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -85,6 +84,6 @@ export function InventoryFilters({
           <Btn variant="ghost" onClick={onClear} disabled={isLoading}>Clear All</Btn>
         </div>
       ) : null}
-    </div>
+    </FilterPanel>
   )
 }

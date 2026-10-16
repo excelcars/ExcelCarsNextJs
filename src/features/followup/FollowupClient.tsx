@@ -248,12 +248,7 @@ function daysFromToday(d: Date | string | null | undefined) {
 function fmtLongDate(d: Date | string | null | undefined) {
   const value = toDateValue(d)
   if (!value) return '—'
-  return value.toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+  return value.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 }
 
 export function buildVehicleHistoryRows(

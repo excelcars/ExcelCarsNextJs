@@ -15,8 +15,8 @@ type Vehicle = { inventoryId: number; customerId: number | null; registrationNo:
 
 const clean = (value: string | null | undefined) => !value || ['null', 'na', 'n/a'].includes(value.trim().toLowerCase()) ? '' : value
 const isoDate = (value: Date | string | null) => value ? new Date(value).toISOString().slice(0, 10) : ''
-const displayDate = (value: Date | string | null) => value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC' }).format(new Date(value)) : '—'
-const displayDateTime = (value: Date | string | null) => value ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
+const displayDate = (value: Date | string | null) => value ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(value)) : '—'
+const displayDateTime = (value: Date | string | null) => value ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
 const vehicleLabel = (vehicle: Vehicle) => `${vehicle.registrationNo ?? vehicle.sku ?? '—'} — ${[clean(vehicle.carVariantMaster?.carMakeMaster?.make), clean(vehicle.carVariantMaster?.carModelMaster?.model), clean(vehicle.carVariantMaster?.variant)].filter(Boolean).join(' ') || 'Vehicle details unavailable'}`
 const emptyForm = (): FeedbackFormInput => ({ customerId: null, customerName: '', customerMob: '', customerEmail: '', customerDob: '', customerAnniversaryDt: '', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '', fkVariantId: null, answer_1: 'Neutral', answer_2: 'Fair', answer_3: 'Neutral', answer_4: 'Not Sure', answer_5: 'About the Same', comments: '' })
 

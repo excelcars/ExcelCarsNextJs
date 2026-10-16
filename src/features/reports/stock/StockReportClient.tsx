@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CarFront, Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, Btn, Input, Select, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
 import { INVENTORY_STATUSES } from '@/features/inventory/queries'
 
@@ -50,6 +50,8 @@ const OPTIONAL_COLUMNS = [
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number][0]
 const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
 const fmtMoney = (n: string | number | null) => n ? `₹${Number(n).toLocaleString('en-IN')}` : '—'
+const stockColourSwatches: Array<[string, string]> = [['a.royale', '#102f77'], ['royale', '#102f77'], ['blue', '#2563eb'], ['white', '#e5e7eb'], ['black', '#111827'], ['silver', '#cbd5e1'], ['grey', '#94a3b8'], ['gray', '#94a3b8'], ['red', '#dc2626'], ['pink', '#ec4899'], ['green', '#16a34a'], ['brown', '#92400e'], ['gold', '#ca8a04'], ['orange', '#ea580c']]
+const stockColourSwatch = (colour: string | null) => stockColourSwatches.find(([name]) => clean(colour).toLowerCase().includes(name))?.[1] ?? '#94a3b8'
 
 interface StockReportClientProps {
   initialData: StockRow[]
@@ -189,6 +191,14 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
     }
   }
 
+  const tableHeaders = [
+    ...(visibleColumns.has('sku') ? ['SKU'] : []), ...(visibleColumns.has('registrationNo') ? ['Reg No'] : []), 'Vehicle', 'Year / Month',
+    ...(visibleColumns.has('fuelType') ? ['Fuel'] : []), 'KM Driven', ...(visibleColumns.has('ownerCount') ? ['Owner Count'] : []), ...(visibleColumns.has('owner') ? ['Owner Name'] : []), ...(visibleColumns.has('tax') ? ['Tax'] : []), ...(visibleColumns.has('insurance') ? ['Insurance'] : []), 'Price', 'Status', ...(visibleColumns.has('remarks') ? ['Remarks'] : []), ...(visibleColumns.has('comments') ? ['Internal Comments'] : []), ...(visibleColumns.has('photos') ? ['Photos'] : []), ...(canAccessInventory ? ['Actions'] : []),
+  ]
+  const tableWidths = [
+    ...(visibleColumns.has('sku') ? ['6%'] : []), ...(visibleColumns.has('registrationNo') ? ['6%'] : []), '9%', '5%', ...(visibleColumns.has('fuelType') ? ['5%'] : []), '5%', ...(visibleColumns.has('ownerCount') ? ['5%'] : []), ...(visibleColumns.has('owner') ? ['6%'] : []), ...(visibleColumns.has('tax') ? ['5%'] : []), ...(visibleColumns.has('insurance') ? ['6%'] : []), '8%', '7%', ...(visibleColumns.has('remarks') ? ['7%'] : []), ...(visibleColumns.has('comments') ? ['8%'] : []), ...(visibleColumns.has('photos') ? ['6%'] : []), ...(canAccessInventory ? ['7%'] : []),
+  ]
+
   return (
     <div>
       <PageHeader
@@ -276,22 +286,15 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
 
       {exportError ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div> : null}
 
-      <Table headers={[
-        ...(visibleColumns.has('sku') ? ['SKU'] : []), ...(visibleColumns.has('registrationNo') ? ['Reg No'] : []), 'Vehicle', 'Year / Month',
-        ...(visibleColumns.has('fuelType') ? ['Fuel'] : []), 'KM Driven',
-        ...(visibleColumns.has('ownerCount') ? ['Owner Count'] : []), ...(visibleColumns.has('owner') ? ['Owner Name'] : []), ...(visibleColumns.has('tax') ? ['Tax'] : []), ...(visibleColumns.has('insurance') ? ['Insurance'] : []),
-        'Price', 'Status', ...(visibleColumns.has('remarks') ? ['Remarks'] : []), ...(visibleColumns.has('comments') ? ['Internal Comments'] : []),
-        ...(visibleColumns.has('photos') ? ['Photos'] : []), ...(canAccessInventory ? ['Actions'] : []),
-      ]} empty={initialData.length === 0} stickyLastColumn={canAccessInventory}>
+      <Table headers={tableHeaders} columnWidths={tableWidths} empty={initialData.length === 0} stickyLastColumn={canAccessInventory} minWidthClass="min-w-[1680px]" compact>
         {initialData.map(r => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
-            {visibleColumns.has('sku') ? <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.sku ?? '—'}</td> : null}
+            {visibleColumns.has('sku') ? <td className="px-4 py-3 font-mono text-sm text-gray-500">{r.sku ?? '—'}</td> : null}
             {visibleColumns.has('registrationNo') ? <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">{r.registrationNo ?? '—'}</td> : null}
-            <td className="px-4 py-3">
-              <div className="font-medium text-gray-900">{clean(r.carVariantMaster?.carMakeMaster?.make)} {clean(r.carVariantMaster?.carModelMaster?.model)}</div>
-              <div className="text-xs text-gray-500">{clean(r.carVariantMaster?.variant)} {r.colour ? `· ${r.colour}` : ''}</div>
+            <td className="px-2 py-3">
+              <div className="flex items-start gap-2"><div className="grid h-10 w-12 shrink-0 place-items-center rounded-md bg-slate-100 text-[#1B2A6B]"><CarFront className="h-6 w-6" strokeWidth={1.4} /></div><div className="min-w-0"><div className="font-semibold text-gray-900">{clean(r.carVariantMaster?.carMakeMaster?.make)} {clean(r.carVariantMaster?.carModelMaster?.model)}</div><div className="text-sm text-gray-500">{clean(r.carVariantMaster?.variant)}</div><div className="mt-1 flex items-center gap-1 text-sm text-gray-500"><span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: stockColourSwatch(r.colour) }} />{r.colour ?? '—'}</div></div></div>
             </td>
-            <td className="px-4 py-3 text-gray-700">{[r.month, r.year].filter(Boolean).join(' ') || '—'}</td>
+            <td className="px-2 py-3 text-gray-700"><div className="font-semibold">{r.year ?? '—'}</div><div className="mt-1 text-sm text-gray-500">{r.month ?? '—'}</div></td>
             {visibleColumns.has('fuelType') ? <td className="px-4 py-3 text-gray-700">{r.fuelType ?? '—'}</td> : null}
             <td className="px-4 py-3 text-gray-700">{r.kmsDriven ? Number(r.kmsDriven).toLocaleString('en-IN') : '—'}</td>
             {visibleColumns.has('ownerCount') ? <td className="px-4 py-3 text-gray-700">{r.noOfOwners ?? '—'}</td> : null}
@@ -302,15 +305,15 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
             <td className="px-4 py-3">{r.status ? <Badge label={r.status} /> : '—'}</td>
             {visibleColumns.has('remarks') ? <td className="px-4 py-3 text-sm text-gray-600">{r.otherRemarks ?? '—'}</td> : null}
             {visibleColumns.has('comments') ? <td className="px-4 py-3 text-sm text-gray-600">{r.internalComments ?? '—'}</td> : null}
-            {visibleColumns.has('photos') ? <td className="px-4 py-3">
+            {visibleColumns.has('photos') ? <td className="px-2 py-3">
               {r._count.inventoryPhotos > 0 ? (
-                <button onClick={() => openPhotos(r)} className="flex items-center gap-1 text-xs text-[#1B2A6B] hover:underline">
+                <button onClick={() => openPhotos(r)} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-[#1B2A6B] hover:bg-blue-100">
                   <ImageIcon className="w-3.5 h-3.5" />{r._count.inventoryPhotos}
                 </button>
               ) : '—'}
             </td> : null}
-            {canAccessInventory ? <td className="px-4 py-3">
-              <Link href={`/inventory?registrationNo=${encodeURIComponent(r.registrationNo ?? '')}`} className="text-xs font-medium text-[#1B2A6B] hover:underline">Open inventory</Link>
+            {canAccessInventory ? <td className="px-2 py-3">
+              <Link href={`/inventory?registrationNo=${encodeURIComponent(r.registrationNo ?? '')}`} className="inline-flex items-center gap-1 rounded-md border border-[#1B2A6B]/60 px-2 py-1.5 text-xs font-semibold text-[#1B2A6B] transition hover:bg-blue-50"><Eye className="h-3.5 w-3.5" />Open Inventory</Link>
             </td> : null}
           </tr>
         ))}
