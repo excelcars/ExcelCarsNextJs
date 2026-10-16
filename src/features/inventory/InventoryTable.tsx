@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Building2, Eye, FileText, Images, Link2, Mail, Pencil, Phone, Trash2, UserRound, Video } from 'lucide-react'
-import { Badge, IconButton, Modal, Table } from '@/components/ui'
+import { IconButton, Modal, Table } from '@/components/ui'
 import { InventoryDetailCell } from './InventoryDetailCell'
 import type { InventoryRow } from './inventoryTypes'
 
@@ -15,6 +15,21 @@ const clean = (value: string | null | undefined) => {
 function formatVehiclePrice(value: number | null) {
   if (value === null || !Number.isFinite(Number(value))) return '—'
   return `₹ ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value))}`
+}
+
+function InventoryStatusBadge({ label }: { label: string }) {
+  const status = label.trim().toLowerCase()
+  const tone = status === 'loan process'
+    ? 'border-violet-100 bg-violet-50 text-violet-700 before:bg-violet-500'
+    : status === 'not available'
+      ? 'border-slate-200 bg-slate-100 text-slate-600 before:bg-slate-400'
+      : status === 'available' || status === 'in stock'
+        ? 'border-emerald-100 bg-emerald-50 text-emerald-700 before:bg-emerald-500'
+        : status === 'sold'
+          ? 'border-red-100 bg-red-50 text-red-700 before:bg-red-500'
+          : 'border-blue-100 bg-blue-50 text-blue-700 before:bg-blue-500'
+
+  return <span title={label} className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold leading-none ${tone} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}>{label}</span>
 }
 
 const vehicleColourSwatches: Array<[string, string]> = [
@@ -76,7 +91,7 @@ export function InventoryTable({
         headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Remarks', 'Internal Remarks', 'Actions']}
         empty={rows.length === 0}
         minWidthClass="min-w-full"
-        columnWidths={['5%', '4%', '10%', '8%', '10%', '10%', '9%', '10%', '10%', '7%', '7%', '10%']}
+        columnWidths={['5%', '4%', '10%', '8%', '10%', '10%', '10%', '10%', '10%', '6%', '7%', '10%']}
       >
         {rows.map((r, index) => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
@@ -95,7 +110,7 @@ export function InventoryTable({
             <td className="px-4 py-3">
               <div className="space-y-2">
                 <div className="truncate font-semibold tabular-nums text-gray-800">{formatVehiclePrice(r.price !== null ? Number(r.price) : null)}</div>
-                {r.status ? <Badge label={r.status} /> : <span className="text-xs text-gray-400">—</span>}
+                {r.status ? <InventoryStatusBadge label={r.status} /> : <span className="text-xs text-gray-400">—</span>}
               </div>
             </td>
             <td className="px-4 py-3">
