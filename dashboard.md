@@ -94,26 +94,15 @@ Clicking a KPI changes the same-screen workspace where relevant rather than navi
 
 ## 7. Command center overview
 
-The main overview uses two columns on desktop.
+`Needs Attention` is available as the first detail-workspace tab, while its summary prompt opens the action breakdown.
 
-Left side: `Needs Attention`
-
-- Shows one unified priority table across modules.
-- Initially shows the highest-priority items, not every module table.
-- Columns: Priority, Customer, Type, Due / Date, Status, Action.
-- Sources: overdue/today follow-ups, pending insurance policies, insurance renewal/expiry, pending payments, and RTO pending items.
-- Priority order: overdue follow-up first, insurance expiring soon and pending insurance policy second, payment pending third, RTO RC pending fourth, normal follow-up/RTO items after that.
-- `Details` keeps the user on the dashboard and switches workspace.
-- `Open` navigates to the relevant module with filters where available.
-
-Right side: `Action Load` and `Daily Totals`
-
-- Action Load Analyzer shows the total open attention count with a donut/ring visual and a compact category breakdown for overdue follow-ups, pending payments, insurance items, and RTO RC pending. Birthday/anniversary reminders remain available in the detail workspace but are not included in this analyzer chart.
-- Daily Totals shows four compact operation rows for available stock, today's leads, today's follow-ups, and payments received today. Each row shows the count/unit, a module icon, a label/status callout, and a compact visual cue.
+- Selecting the `Needs Attention` prompt opens Action Load Analyzer in a focused modal. It shows the total open attention count with a donut/ring visual and a compact category breakdown for overdue follow-ups, pending payments, insurance items, and RTO RC pending. Birthday/anniversary reminders remain available in the detail workspace but are not included in this analyzer chart.
 
 ## 9. Detail workspace
 
 The lower workspace is same-screen and tab-based. Tabs do not stack module tables vertically. KPI, `Details`, `View All`, back, and workspace tab clicks update client state without a full page reload. The browser URL is also updated with `/dashboard?workspace=<tab>` through history state so direct links and reloads preserve the selected tab.
+
+`To-do` is the first tab. It shows the unified priority table across modules (Priority, Customer, Type, Due / Date, Status, Action), ordered by urgency. `Details` switches to the relevant workspace and `Open` navigates to the related module.
 
 The dashboard no longer shows the old percentage-based task-completion ring because that derived percentage could be misleading when attention volume is high.
 

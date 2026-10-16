@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
-  LayoutDashboard, ChevronDown, ChevronRight, Menu, Bell, LogOut,
+  LayoutDashboard, ChevronDown, ChevronRight, Menu, Bell, LogOut, Search,
   Package, BarChart3, Wrench, UserRound, LockKeyhole, ChevronUp
 } from 'lucide-react'
 
@@ -80,7 +80,7 @@ function ProfileMenu({
         title={isSidebar && !showSidebarDetails ? displayName : undefined}
         className={isSidebar
           ? `w-full flex items-center gap-3 cursor-pointer ${showSidebarDetails ? 'px-2' : 'justify-center px-0'} py-2 rounded-lg text-left transition-all ${open ? 'bg-white/10' : 'hover:bg-white/10'}`
-          : 'flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 transition hover:bg-gray-100'
+          : 'flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 text-white transition hover:bg-white/10'
         }
       >
         <div className={`${isSidebar ? 'w-8 h-8 bg-[#C8102E] text-sm' : 'w-7 h-7 bg-[#1B2A6B] text-xs'} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}>
@@ -93,7 +93,7 @@ function ProfileMenu({
           </div>
         )}
         {!isSidebar && (
-          <span className="text-sm font-medium text-gray-700 hidden sm:block">{displayName}</span>
+          <span className="hidden text-sm font-medium text-white sm:block">{displayName}</span>
         )}
         {isSidebar && showSidebarDetails && (open ? <ChevronUp className="w-4 h-4 text-white/60" /> : <ChevronDown className="w-4 h-4 text-white/60" />)}
       </button>
@@ -391,7 +391,7 @@ export function Layout({
       {/* Desktop Sidebar */}
       <aside
         className="hidden md:flex flex-col flex-shrink-0 transition-all duration-200"
-        style={{ width: sidebarOpen ? 240 : 64, background: 'linear-gradient(180deg, #1B2A6B 0%, #12204F 100%)' }}
+        style={{ width: sidebarOpen ? 240 : 64, background: 'linear-gradient(165deg, #0d1f50 0%, #123b68 55%, #8c143d 100%)' }}
       >
         {renderSidebarContent(desktopNavRef)}
       </aside>
@@ -400,7 +400,7 @@ export function Layout({
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col" style={{ background: 'linear-gradient(180deg, #1B2A6B 0%, #12204F 100%)' }}>
+          <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col" style={{ background: 'linear-gradient(165deg, #0d1f50 0%, #123b68 55%, #8c143d 100%)' }}>
             {renderSidebarContent(mobileNavRef)}
           </aside>
         </div>
@@ -409,18 +409,25 @@ export function Layout({
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 flex-shrink-0 shadow-sm">
+        <header className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/10 bg-[linear-gradient(105deg,#0d1f50_0%,#123b68_52%,#8c143d_100%)] px-4 text-white shadow-sm">
           <button
             onClick={() => { setSidebarOpen(!sidebarOpen); setMobileSidebarOpen(!mobileSidebarOpen) }}
-            className="text-gray-500 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition"
+            className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex-1" />
-          <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition">
+          <div className="hidden min-w-0 flex-1 md:block">
+            <div className="relative max-w-xl">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+              <input aria-label="Global search" placeholder="Search leads, customers, files, RTO, payments..." className="h-8 w-full rounded-md border border-white/15 bg-white/10 pl-9 pr-14 text-xs text-white placeholder:text-white/55 outline-none transition focus:border-white/40 focus:bg-white/15 focus:ring-2 focus:ring-white/10" />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold text-white/70">Ctrl + K</span>
+            </div>
+          </div>
+          <button className="relative rounded-lg p-2 text-white/80 transition hover:bg-white/10 hover:text-white">
             <Bell className="w-4 h-4" />
+            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-white" />
           </button>
-          <div className="pl-2 border-l border-gray-200">
+          <div className="border-l border-white/15 pl-2">
             <ProfileMenu displayName={displayName} roleName={roleName} placement="header" />
           </div>
         </header>

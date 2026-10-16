@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CarFront, Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Badge, Btn, Input, Select, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
 import { INVENTORY_STATUSES } from '@/features/inventory/queries'
 
@@ -291,8 +291,8 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
             {visibleColumns.has('sku') ? <td className="px-4 py-3 font-mono text-sm text-gray-500">{r.sku ?? '—'}</td> : null}
             {visibleColumns.has('registrationNo') ? <td className="px-4 py-3 font-mono text-sm font-semibold text-gray-800">{r.registrationNo ?? '—'}</td> : null}
-            <td className="px-2 py-3">
-              <div className="flex items-start gap-2"><div className="grid h-10 w-12 shrink-0 place-items-center rounded-md bg-slate-100 text-[#1B2A6B]"><CarFront className="h-6 w-6" strokeWidth={1.4} /></div><div className="min-w-0"><div className="font-semibold text-gray-900">{clean(r.carVariantMaster?.carMakeMaster?.make)} {clean(r.carVariantMaster?.carModelMaster?.model)}</div><div className="text-sm text-gray-500">{clean(r.carVariantMaster?.variant)}</div><div className="mt-1 flex items-center gap-1 text-sm text-gray-500"><span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: stockColourSwatch(r.colour) }} />{r.colour ?? '—'}</div></div></div>
+            <td className="px-4 py-3">
+              <div className="min-w-0"><div className="font-semibold text-gray-900">{clean(r.carVariantMaster?.carMakeMaster?.make)} {clean(r.carVariantMaster?.carModelMaster?.model)}</div><div className="text-sm text-gray-500">{clean(r.carVariantMaster?.variant)}</div><div className="mt-1 flex items-center gap-1 text-sm text-gray-500"><span aria-hidden="true" className="h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: stockColourSwatch(r.colour) }} />{r.colour ?? '—'}</div></div>
             </td>
             <td className="px-2 py-3 text-gray-700"><div className="font-semibold">{r.year ?? '—'}</div><div className="mt-1 text-sm text-gray-500">{r.month ?? '—'}</div></td>
             {visibleColumns.has('fuelType') ? <td className="px-4 py-3 text-gray-700">{r.fuelType ?? '—'}</td> : null}
@@ -313,7 +313,7 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
               ) : '—'}
             </td> : null}
             {canAccessInventory ? <td className="px-2 py-3">
-              <Link href={`/inventory?registrationNo=${encodeURIComponent(r.registrationNo ?? '')}`} className="inline-flex items-center gap-1 rounded-md border border-[#1B2A6B]/60 px-2 py-1.5 text-xs font-semibold text-[#1B2A6B] transition hover:bg-blue-50"><Eye className="h-3.5 w-3.5" />Open Inventory</Link>
+              <Link href={`/inventory?registrationNo=${encodeURIComponent(r.registrationNo ?? '')}`} aria-label="Open Inventory" title="Open Inventory" className="group relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#1B2A6B]/60 text-[#1B2A6B] transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20"><Eye className="h-4 w-4" /><span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Open Inventory</span></Link>
             </td> : null}
           </tr>
         ))}

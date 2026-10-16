@@ -2,7 +2,9 @@
 
 import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
+  AlertTriangle,
   Car,
+  ChevronRight,
   Clock,
   ExternalLink,
   FileText,
@@ -15,10 +17,10 @@ import { Badge, Modal } from '@/components/ui'
 import { LeadSourceChart, type LeadSourceBreakdown } from './LeadSourceChart'
 import { LeadLocationChart, type LeadRegionBreakdowns } from './LeadLocationChart'
 
-type Workspace = 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'loans' | 'birthdays' | 'anniversaries'
+type Workspace = 'attention' | 'leads' | 'followups' | 'insurance' | 'rto' | 'payments' | 'loans' | 'birthdays' | 'anniversaries'
 type SortMode = 'priority' | 'dateAsc' | 'dateDesc'
 type DateValue = string | Date | null
-const DASHBOARD_WORKSPACES: Workspace[] = ['leads', 'followups', 'insurance', 'rto', 'payments', 'loans', 'birthdays', 'anniversaries']
+const DASHBOARD_WORKSPACES: Workspace[] = ['attention', 'leads', 'followups', 'insurance', 'rto', 'payments', 'loans', 'birthdays', 'anniversaries']
 
 function workspaceHref(workspace: Workspace) {
   return workspace === 'leads' ? '/dashboard' : `/dashboard?workspace=${workspace}`
@@ -247,34 +249,32 @@ function CompactKpi({
   value: number
   sub?: string
   icon: ReactNode
-  tone?: 'neutral' | 'warning' | 'danger'
+  tone?: 'neutral' | 'success' | 'warning' | 'danger'
   onClick?: () => void
   visual?: ReactNode
   href?: string
 }) {
   const colors = {
-    neutral: 'border-white/15 bg-white/14 text-white',
-    warning: 'border-amber-200/25 bg-amber-100/15 text-white',
-    danger: 'border-red-200/35 bg-red-100/15 text-white',
+    neutral: { icon: 'bg-blue-50 text-blue-600', visual: 'text-blue-400', ring: 'hover:border-blue-200' },
+    success: { icon: 'bg-emerald-50 text-emerald-600', visual: 'text-emerald-400', ring: 'hover:border-emerald-200' },
+    warning: { icon: 'bg-amber-50 text-amber-600', visual: 'text-amber-400', ring: 'hover:border-amber-200' },
+    danger: { icon: 'bg-red-50 text-red-600', visual: 'text-red-400', ring: 'hover:border-red-200' },
   }
   const content = (
-    <div className="grid h-full grid-rows-[18px_1fr]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs font-semibold uppercase tracking-wide text-white/85">{label}</span>
-        <span className="shrink-0 text-white/60">{icon}</span>
-      </div>
-      <div className="flex min-h-0 items-end justify-between gap-3">
-        <div className="min-w-0 pb-0.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xl font-bold leading-none">{value}</span>
-            {sub && <span className="truncate text-sm text-white/75">{sub}</span>}
-          </div>
+    <div className="flex h-full items-center gap-3">
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${colors[tone].icon}`}>{icon}</span>
+      <div className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-bold uppercase tracking-wide text-slate-500">{label}</span>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="text-xl font-bold leading-none text-[#11275B]">{value}</span>
+          {sub && <span className="truncate text-xs font-medium text-slate-500">{sub}</span>}
         </div>
-        {visual && <div className="flex h-10 shrink-0 items-end">{visual}</div>}
       </div>
+      {visual && <div className={`flex h-10 shrink-0 items-end ${colors[tone].visual}`}>{visual}</div>}
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
     </div>
   )
-  const className = `block h-[72px] min-w-0 cursor-pointer overflow-hidden rounded-lg border px-3 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60 ${colors[tone]}`
+  const className = `block h-[78px] min-w-0 cursor-pointer overflow-hidden rounded-xl border border-slate-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${colors[tone].ring}`
   if (href) {
     return <a href={href} onClick={onClick} className={className}>{content}</a>
   }
@@ -298,13 +298,13 @@ function WorkTable({
 }) {
   const hasRows = Children.count(children) > 0
   return (
-    <div className={`${maxHeight} overflow-auto rounded-lg border border-gray-200 bg-white [scrollbar-gutter:stable]`}>
+    <div className={`${maxHeight} overflow-auto rounded-lg border border-gray-200 bg-white`}>
       <div className={tableMinWidth}>
-        <table className={`${tableClass} text-xs`}>
+        <table className={`${tableClass} text-[13px]`}>
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-100 bg-gray-50">
               {headers.map(header => (
-                <th key={header} className="whitespace-nowrap px-3 py-2 text-left text-xs font-bold uppercase text-gray-500">
+                <th key={header} className="whitespace-nowrap px-3 py-2 text-left text-[13px] font-bold uppercase text-gray-500">
                   {header}
                 </th>
               ))}
@@ -323,9 +323,15 @@ function WorkTable({
   )
 }
 
+function OwnShareBar({ total, own }: { total: number; own: number }) {
+  const percentage = total > 0 ? Math.min(100, (own / total) * 100) : 0
+  const visiblePercentage = own > 0 ? Math.max(2, percentage) : 0
+  return <div className="min-w-[132px]"><div className="mb-1 flex items-center justify-between text-[13px] font-medium text-slate-500"><span>Own share</span><span>{percentage.toFixed(1)}%</span></div><div className="h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Own lead share" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percentage)}><div className="h-full rounded-full bg-blue-500" style={{ width: `${visiblePercentage}%` }} /></div></div>
+}
+
 function SparkLine() {
   return (
-    <svg width="96" height="34" viewBox="0 0 96 34" aria-hidden="true" className="text-emerald-200/80">
+    <svg width="82" height="34" viewBox="0 0 96 34" aria-hidden="true" className="text-current">
       <path d="M2 29H94" stroke="currentColor" strokeOpacity="0.2" />
       <path d="M4 27C14 27 14 14 24 16C33 18 32 28 42 24C50 20 51 8 60 11C68 14 66 26 76 25C85 24 84 14 92 18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
       <circle cx="60" cy="11" r="3" fill="white" />
@@ -336,9 +342,9 @@ function SparkLine() {
 function FunnelVisual() {
   return (
     <div aria-hidden="true" className="relative h-10 w-20">
-      <div className="mx-auto h-0 w-16 border-l-[12px] border-r-[12px] border-t-[18px] border-l-transparent border-r-transparent border-t-emerald-400/80" />
+      <div className="mx-auto h-0 w-16 border-l-[12px] border-r-[12px] border-t-[18px] border-l-transparent border-r-transparent border-t-blue-500/80" />
       <div className="mx-auto h-0 w-11 border-l-[10px] border-r-[10px] border-t-[16px] border-l-transparent border-r-transparent border-t-sky-300/80" />
-      <div className="mx-auto h-3 w-4 bg-white/70" />
+      <div className="mx-auto h-3 w-4 bg-blue-100" />
     </div>
   )
 }
@@ -359,98 +365,15 @@ function PendingFilesVisual({
   onOpen: (workspace: Workspace) => void
 }) {
   const items = [
-    { label: 'RTO', value: rto, workspace: 'rto' as const, show: canRto, icon: <Car className="h-5 w-5 text-red-200" /> },
-    { label: 'Payments', value: payments, workspace: 'payments' as const, show: canRto, icon: <FileText className="h-5 w-5 text-yellow-200" /> },
-    { label: 'Insurance', value: insurance, workspace: 'insurance' as const, show: canInsurance, icon: <Shield className="h-5 w-5 text-amber-200" /> },
+    { label: 'RTO', value: rto, workspace: 'rto' as const, show: canRto, icon: <Car className="h-4 w-4 text-red-500" /> },
+    { label: 'Payments', value: payments, workspace: 'payments' as const, show: canRto, icon: <FileText className="h-4 w-4 text-amber-500" /> },
+    { label: 'Insurance', value: insurance, workspace: 'insurance' as const, show: canInsurance, icon: <Shield className="h-4 w-4 text-yellow-600" /> },
   ].filter(item => item.show)
-  return (
-    <div className="grid shrink-0 grid-cols-3 gap-1.5">
-      {items.map(item => (
-        <button
-          key={item.label}
-          type="button"
-          onClick={event => {
-            event.stopPropagation()
-            onOpen(item.workspace)
-          }}
-          className="grid h-10 w-11 cursor-pointer grid-rows-[16px_11px_11px] place-items-center rounded-md px-0.5 text-center text-[11px] leading-none text-white/80 transition hover:bg-white/15 focus:outline-none focus:ring-1 focus:ring-white/60"
-        >
-          <div className="scale-75">{item.icon}</div>
-          <strong className="text-xs leading-none text-white">{item.value}</strong>
-          <span className="max-w-full truncate">{item.label}</span>
-        </button>
-      ))}
-    </div>
-  )
+  return <div className="grid shrink-0 grid-cols-3 gap-1">{items.map(item => <button key={item.label} type="button" title={item.label} onClick={event => { event.stopPropagation(); onOpen(item.workspace) }} className="grid h-12 w-14 cursor-pointer grid-rows-[17px_14px_12px] place-items-center rounded-lg px-0.5 text-center leading-none text-slate-600 transition hover:bg-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-300"><div>{item.icon}</div><strong className="text-base leading-none text-[#11275B]">{item.value}</strong><span className="max-w-full whitespace-nowrap text-[11px] font-medium">{item.label}</span></button>)}</div>
 }
 
-function PendingFilesKpi({
-  value,
-  rto,
-  payments,
-  insurance,
-  canRto,
-  canInsurance,
-  onOpen,
-}: {
-  value: number
-  rto: number
-  payments: number
-  insurance: number
-  canRto: boolean
-  canInsurance: boolean
-  onOpen: (workspace: Workspace) => void
-}) {
-  return (
-    <div className="grid h-[72px] min-w-0 grid-rows-[18px_1fr] overflow-hidden rounded-lg border border-amber-200/25 bg-amber-100/15 px-3 py-2 text-left text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs font-semibold uppercase tracking-wide text-white/85">Pending Files</span>
-        <FileText className="h-4 w-4 shrink-0 text-white/60" />
-      </div>
-      <div className="flex min-h-0 items-end justify-between gap-2">
-        <div className="flex min-w-0 shrink-0 items-baseline gap-2 pb-0.5">
-          <span className="text-xl font-bold leading-none">{value}</span>
-          <span className="text-sm text-white/75">pending</span>
-        </div>
-        <PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} />
-      </div>
-    </div>
-  )
-}
-
-function DailyTotals({ stats, todayStats, permissions }: Pick<DashboardCommandCenterProps, 'stats' | 'todayStats' | 'permissions'>) {
-  const today = localDateParam()
-  const rows = [
-    { show: permissions.canInventory, label: 'Available Stock', value: stats.availableStock, unit: stats.availableStock === 1 ? 'unit' : 'units', sub: 'available', href: '/inventory?status=In%20Stock', icon: <Car className="h-3.5 w-3.5" />, tone: 'bg-emerald-500', visual: <SparkLine /> },
-    { show: permissions.canInquiry, label: "Today's Leads", value: stats.todayInquiries, unit: stats.todayInquiries === 1 ? 'lead' : 'leads', sub: 'today', href: `/inquiry?quickFilter=all&inquiryDate=${today}`, icon: <Users className="h-3.5 w-3.5" />, tone: 'bg-slate-500', visual: <FunnelVisual /> },
-    { show: permissions.canFollowup, label: 'Follow-ups', value: todayStats.followupsToday, unit: todayStats.followupsToday === 1 ? 'task' : 'tasks', sub: 'due today', href: `/followup?status=FollowUp&followUpDateFrom=${today}&followUpDateTo=${today}`, icon: <Clock className="h-3.5 w-3.5" />, tone: 'bg-rose-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
-    { show: permissions.canRto, label: 'Payments', value: todayStats.paymentsReceivedToday, unit: todayStats.paymentsReceivedToday === 1 ? 'task' : 'tasks', sub: 'received today', href: '/dashboard?workspace=payments', icon: <FileText className="h-3.5 w-3.5" />, tone: 'bg-gray-500', visual: <FileText className="h-6 w-6 text-gray-500" /> },
-  ].filter(row => row.show)
-  return (
-    <div className="h-full overflow-hidden rounded-lg bg-white px-3 py-2.5">
-      <h3 className="text-base font-semibold text-gray-900">Daily Totals</h3>
-      <div className="mt-2 space-y-1">
-        {rows.map(row => (
-          <a key={row.label} href={row.href} className="grid grid-cols-[38px_24px_minmax(0,1fr)] items-center gap-2 rounded-lg transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/30">
-            <div className="text-right">
-              <div className="text-sm font-bold leading-none text-gray-900">{row.value}</div>
-              <div className="mt-0.5 text-xs leading-tight text-gray-500">{row.unit}</div>
-            </div>
-            <div className={`grid h-6 w-6 place-items-center rounded-full text-white ${row.tone}`}>{row.icon}</div>
-            <div className="flex h-10 min-w-0 items-center justify-between gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 shadow-sm">
-              <div className="min-w-0">
-                <div className="whitespace-nowrap text-[11px] font-bold uppercase leading-tight text-gray-900">{row.label}: {row.value}</div>
-                <div className="whitespace-nowrap text-[11px] uppercase leading-tight text-gray-600">{row.sub}</div>
-              </div>
-              <div className="grid h-7 w-11 shrink-0 place-items-center overflow-hidden opacity-80">
-                <div className="scale-[0.46]">{row.visual}</div>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-    </div>
-  )
+function PendingFilesKpi({ value, rto, payments, insurance, canRto, canInsurance, onOpen }: { value: number; rto: number; payments: number; insurance: number; canRto: boolean; canInsurance: boolean; onOpen: (workspace: Workspace) => void }) {
+  return <div className="grid h-[78px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)]"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><FileText className="h-4 w-4" /></span><div className="min-w-0"><span className="block truncate text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending Files</span><div className="mt-1 flex items-baseline gap-2"><span className="text-xl font-bold leading-none text-[#11275B]">{value}</span><span className="text-xs font-medium text-slate-500">pending</span></div></div></div><PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} /></div>
 }
 
 function ActionLoad({
@@ -519,6 +442,56 @@ function ActionLoad({
   )
 }
 
+function TodoWorkloadSnapshot({ items }: { items: AttentionItem[] }) {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const endOfToday = new Date(startOfToday)
+  endOfToday.setDate(endOfToday.getDate() + 1)
+  const inNextWeek = new Date(endOfToday)
+  inNextWeek.setDate(inNextWeek.getDate() + 7)
+  const dueDate = (item: AttentionItem) => item.date ? new Date(item.date) : null
+  const overdue = items.filter(item => item.priority === 'High').length
+  const dueToday = items.filter(item => {
+    const date = dueDate(item)
+    return item.priority !== 'High' && date !== null && date >= startOfToday && date < endOfToday
+  }).length
+  const upcoming = items.filter(item => {
+    const date = dueDate(item)
+    return item.priority !== 'High' && date !== null && date >= endOfToday && date < inNextWeek
+  }).length
+  const pending = Math.max(items.length - overdue - dueToday - upcoming, 0)
+  const total = items.length
+  const parts = [
+    { label: 'Overdue', value: overdue, color: '#ef4444', dot: 'bg-red-500' },
+    { label: 'Due today', value: dueToday, color: '#f59e0b', dot: 'bg-amber-500' },
+    { label: 'Upcoming', value: upcoming, color: '#3b82f6', dot: 'bg-blue-500' },
+    { label: 'Pending', value: pending, color: '#94a3b8', dot: 'bg-slate-400' },
+  ]
+  const gradient = total
+    ? `conic-gradient(${parts.reduce<{ value: string; offset: number }>((state, part) => {
+      const start = state.offset
+      const end = start + (part.value / total) * 360
+      return { value: `${state.value}${part.color} ${start}deg ${end}deg, `, offset: end }
+    }, { value: '', offset: 0 }).value.slice(0, -2)})`
+    : 'conic-gradient(#e2e8f0 0deg 360deg)'
+  return (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div><h2 className="text-sm font-bold text-[#172d62]">Workload Snapshot</h2><p className="mt-0.5 text-[11px] text-slate-500">Open work by urgency and module</p></div>
+        {overdue > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600"><AlertTriangle className="h-3 w-3" /> {overdue} overdue</span>}
+      </div>
+      <div className="grid min-h-0 flex-1 content-center">
+        <div className="flex items-center justify-center gap-4">
+          <div className="relative grid h-32 w-32 shrink-0 place-items-center rounded-full" style={{ background: gradient }} aria-label={`${total} open tasks`}>
+            <div className="grid h-[84px] w-[84px] place-items-center rounded-full bg-white text-center shadow-sm"><strong className="text-2xl leading-none text-[#172d62]">{total}</strong><span className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">open</span></div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-2.5">{parts.map(part => <div key={part.label} className="flex items-center gap-1.5 text-xs text-slate-600"><span className={`h-2.5 w-2.5 rounded-full ${part.dot}`} /><span>{part.label}</span><strong className="ml-auto text-slate-800">{part.value}</strong></div>)}</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function DashboardCommandCenterClient(props: DashboardCommandCenterProps) {
   const [workspace, setWorkspace] = useState<Workspace>(props.initialWorkspace ?? 'leads')
   const [query, setQuery] = useState('')
@@ -526,6 +499,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const [page, setPage] = useState(1)
   const [selectedLeadSource, setSelectedLeadSource] = useState<LeadSourceBreakdown | null>(null)
   const [salespersonRenewalAlertOpen, setSalespersonRenewalAlertOpen] = useState(props.assignedExpiryRenewalPolicies.length > 0)
+  const [attentionBreakdownOpen, setAttentionBreakdownOpen] = useState(false)
   const detailWorkspaceRef = useRef<HTMLElement>(null)
   const { permissions, stats } = props
 
@@ -616,6 +590,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     return rows.sort((a, b) => a.rank - b.rank)
   }, [attentionItems, query, sort])
 
+  const hasOverdueAttention = attentionItems.some(row => row.priority === 'High')
+
   const filteredLeadDetails = useMemo(() => {
     // This is the legacy operational sequence, not a ranked report. Preserve it
     // even when dashboard sorting is changed for the other workspaces.
@@ -691,15 +667,9 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const anniversaryCount = props.reminders.filter(row => row.type === 'Anniversary').length
   const loanCount = props.pendingPayments.filter(row => row.type === 'Loan').length
 
-  const totalAttention =
-    (permissions.canFollowup ? stats.overdueFollowups : 0) +
-    (permissions.canRto || permissions.canLoan ? props.pendingPayments.length : 0) +
-    (permissions.canInsurance ? props.expiryRenewalPolicies.length + props.pendingPolicies.length : 0) +
-    (permissions.canRto ? props.rtoPending.length : 0) +
-    props.reminders.length
-
   const tabs = [
     { key: 'leads' as const, label: 'Lead Details', count: props.leadDetails.find(row => row.label === 'All Leads')?.total ?? 0, show: permissions.canFollowup },
+    { key: 'attention' as const, label: 'To-do', count: currentRows.length, show: true, warning: hasOverdueAttention },
     { key: 'followups' as const, label: 'Follow-ups', count: stats.pendingFollowups, show: permissions.canFollowup },
     { key: 'insurance' as const, label: 'Insurance', count: props.pendingPolicies.length + props.expiryRenewalPolicies.length, show: permissions.canInsurance },
     { key: 'rto' as const, label: 'RTO', count: props.rtoPending.length, show: permissions.canRto },
@@ -749,18 +719,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       : kpiCount === 3
         ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
         : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
-  const showActionLoad = permissions.canFollowup || permissions.canRto || permissions.canInsurance
-  const showDailyTotals = permissions.canInventory || (permissions.canInquiry && permissions.canFollowup) || permissions.canFollowup || permissions.canRto
-  const attentionAreas = [
-    permissions.canFollowup ? 'follow-ups' : null,
-    permissions.canRto ? 'payments' : null,
-    permissions.canInsurance ? 'insurance' : null,
-    permissions.canRto ? 'RTO' : null,
-  ].filter(Boolean)
-  const attentionDescription = attentionAreas.length
-    ? `Highest priority work across ${attentionAreas.join(', ')}.`
-    : 'No operational modules are available for this account.'
-
   return (
     <div className="min-h-full 2xl:h-full 2xl:min-h-0 2xl:overflow-hidden">
       <Modal title="Insurance renewal alerts" open={salespersonRenewalAlertOpen} onClose={() => setSalespersonRenewalAlertOpen(false)} width="max-w-2xl">
@@ -774,109 +732,62 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </table>
         </div>
       </Modal>
-      <div className="min-h-full border border-black/20 bg-gradient-to-br from-[#10183d] via-[#123652] to-[#1f673d] p-3 shadow-2xl 2xl:h-full 2xl:overflow-hidden">
-        <div className="grid gap-2 2xl:h-full 2xl:grid-rows-[auto_72px_235px_minmax(250px,1fr)]">
-          <div className="flex flex-wrap items-start justify-between gap-3 px-1">
-            <div className="text-white">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-base font-semibold text-white shadow-sm ring-1 ring-white/10">
-                <Sun className="h-4 w-4 text-amber-200" />
-                <span>Good morning, {props.firstName}</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-xs text-white/65">{props.todayLabel}</span>
-              <div className="flex items-center gap-3 rounded-lg border border-red-100 bg-red-50 px-4 py-2 text-sm text-red-800 shadow-sm">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-orange-200 to-sky-500 text-white">
-                  <Users className="h-5 w-5" />
-                </span>
-                <div>
-                  <div className="font-bold">Action Required:</div>
-                  <div>{totalAttention} items need your attention.</div>
+      <Modal title="Needs attention" open={attentionBreakdownOpen} onClose={() => setAttentionBreakdownOpen(false)} width="max-w-2xl">
+        <p className="text-sm text-gray-600">Open work grouped by urgency and module. Select a category to continue in that workspace.</p>
+        <div className="mt-4 h-[240px]"><ActionLoad overdueFollowups={stats.overdueFollowups} pendingPayments={props.pendingPayments.length} insuranceItems={insuranceAttention} rtoRcPending={rtoRcPending} permissions={permissions} /></div>
+      </Modal>
+      <div className="min-h-full bg-[#f5f8fc] p-3 2xl:h-full 2xl:overflow-hidden">
+        <div className="grid gap-3 2xl:h-full 2xl:grid-rows-[94px_78px_minmax(250px,1fr)]">
+          <div className="relative min-h-[94px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-5 py-3 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
+            <div className="absolute inset-y-0 left-[27%] right-[24%] bg-[url('/login-hero-car.png')] bg-[length:500px_auto] bg-[position:72%_48%] bg-no-repeat opacity-70 mix-blend-screen" aria-hidden="true" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,24,66,0.25),transparent_48%,rgba(130,16,57,0.12))]" aria-hidden="true" />
+            <div className="dashboard-hero-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3" aria-hidden="true" />
+            <div className="relative flex h-full flex-wrap items-center justify-between gap-4">
+              <div className="text-white">
+                <div className="flex items-center gap-3">
+                  <span className="dashboard-greeting-sun grid h-10 w-10 place-items-center rounded-full bg-white/10 text-amber-300 ring-1 ring-white/10"><Sun className="h-5 w-5" /></span>
+                  <div><div className="text-base font-bold">Good morning, {props.firstName}</div><p className="mt-0.5 text-xs text-white/75">Here&apos;s what&apos;s happening with your dealership today.</p></div>
                 </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-medium text-white/80">{props.todayLabel}</span>
+                <button type="button" onClick={() => setAttentionBreakdownOpen(true)} className="flex items-center gap-2 rounded-lg border border-red-100/80 bg-white/95 px-3 py-2 text-left text-red-800 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-red-200">
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-red-500 text-white"><AlertTriangle className="h-3.5 w-3.5" /></span>
+                  <div><div className="text-xs font-bold">Action Required</div><div className="mt-0.5 text-[11px] text-red-700">{stats.overdueFollowups} items need your attention.</div></div><ChevronRight className="h-3.5 w-3.5 text-red-500" />
+                </button>
               </div>
             </div>
           </div>
 
-          <div className={`grid gap-3 ${kpiGridClass}`}>
+          <div className={`relative z-10 -mt-4 grid gap-3 ${kpiGridClass}`}>
             {permissions.canInventory && (
-              <CompactKpi label="Available Stock" value={stats.availableStock} sub="available" icon={<Car className="h-4 w-4" />} visual={<SparkLine />} href="/inventory?status=In%20Stock" />
+              <CompactKpi label="Available Stock" value={stats.availableStock} sub="available" tone="success" icon={<Car className="h-4 w-4" />} visual={<SparkLine />} href="/inventory?status=In%20Stock" />
             )}
             {permissions.canInquiry && (
               <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/inquiry?quickFilter=all&inquiryDate=${localDateParam()}`} />
             )}
             {permissions.canFollowup && (
-              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<Clock className="h-4 w-4" />} href={`/followup?status=FollowUp&followUpDateTo=${localDateParam(new Date(Date.now() - 86_400_000))}`} />
+              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<AlertTriangle className="h-4 w-4" />} href="/followup?status=FollowUp" />
             )}
-            {(permissions.canRto || permissions.canInsurance) && (
-              <PendingFilesKpi
-                value={stats.pendingRTO + props.pendingPayments.length + props.pendingPolicies.length}
-                rto={stats.pendingRTO}
-                payments={props.pendingPayments.length}
-                insurance={props.pendingPolicies.length}
-                canRto={permissions.canRto}
-                canInsurance={permissions.canInsurance}
-                onOpen={workspace => openWorkspace(workspace)}
-              />
-            )}
+            {(permissions.canRto || permissions.canInsurance) && <PendingFilesKpi value={stats.pendingRTO + props.pendingPayments.length + props.pendingPolicies.length} rto={stats.pendingRTO} payments={props.pendingPayments.length} insurance={props.pendingPolicies.length} canRto={permissions.canRto} canInsurance={permissions.canInsurance} onOpen={workspace => openWorkspace(workspace)} />}
           </div>
 
-          <div className={`grid min-h-0 gap-3 ${showActionLoad && showDailyTotals ? '2xl:grid-cols-[minmax(0,1fr)_580px]' : ''}`}>
-            <section className="min-h-0 overflow-hidden rounded-lg bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Needs Attention</h2>
-            <p className="text-xs text-gray-500">{attentionDescription}</p>
-            </div>
-            <button type="button" onClick={() => openWorkspace('followups', true)} className="cursor-pointer text-xs font-semibold text-[#C8102E] hover:underline">View All</button>
-          </div>
-          <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No urgent work right now" maxHeight="max-h-[145px]">
-            {attentionItems.slice(0, 7).map(item => (
-              <tr key={item.id} className="hover:bg-gray-50">
-                <td className="px-2 py-2"><Badge label={item.priority === 'High' ? 'Overdue' : item.priority} /></td>
-                <td className="px-2 py-2 font-medium text-gray-900">{item.customer}</td>
-                <td className="px-2 py-2 text-gray-700">{item.type}</td>
-                <td className="px-2 py-2 text-gray-600">{formatDate(item.date)}</td>
-                <td className="px-2 py-2 text-gray-700">{item.status}</td>
-                <td className="whitespace-nowrap px-2 py-2">
-                  <button type="button" onClick={() => openWorkspace(item.workspace, true)} className="mr-3 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">Details</button>
-                  <a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a>
-                </td>
-              </tr>
-            ))}
-          </WorkTable>
-            </section>
-
-            {(showActionLoad || showDailyTotals) && (
-            <section className={`grid min-h-0 gap-3 overflow-hidden ${showActionLoad && showDailyTotals ? 'md:grid-cols-[minmax(270px,1fr)_minmax(270px,1fr)]' : ''}`}>
-              {showActionLoad && (
-                <ActionLoad
-                  overdueFollowups={stats.overdueFollowups}
-                  pendingPayments={props.pendingPayments.length}
-                  insuranceItems={insuranceAttention}
-                  rtoRcPending={rtoRcPending}
-                  permissions={permissions}
-                />
-              )}
-              {showDailyTotals && <DailyTotals stats={stats} todayStats={props.todayStats} permissions={permissions} />}
-            </section>
-            )}
-          </div>
-
-      <section ref={detailWorkspaceRef} className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-white p-3 shadow-sm">
-        <div className="mb-2 shrink-0 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-1 overflow-x-auto">
+      <section ref={detailWorkspaceRef} className="-mt-4 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white/90 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="mb-3 shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
             {tabs.map(tab => (
-              <button key={tab.key} type="button" onClick={() => openWorkspace(tab.key)} className={`cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold ${workspace === tab.key ? 'bg-[#1B2A6B] text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
-                {tab.label} <span className="ml-1 rounded bg-white/20 px-1">{tab.count}</span>
+              <button key={tab.key} type="button" onClick={() => openWorkspace(tab.key)} className={`cursor-pointer whitespace-nowrap rounded-lg px-2.5 py-2 text-[13px] font-semibold leading-none transition-colors ${workspace === tab.key ? 'bg-[#1B2A6B] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-[#1B2A6B]'}`}>
+                {tab.warning && <AlertTriangle aria-label="Overdue items need attention" className={`mr-1 inline-block h-3.5 w-3.5 align-[-2px] ${workspace === tab.key ? 'text-amber-200' : 'text-amber-600'}`} />}
+                {tab.label} <span className={`ml-1.5 rounded px-1.5 py-0.5 text-[11px] ${workspace === tab.key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{tab.count}</span>
               </button>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
-              <input value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="Search workspace" className="h-8 w-48 rounded-md border border-gray-200 bg-white pl-8 pr-3 text-sm outline-none focus:ring-1 focus:ring-[#1B2A6B]" />
+              <Search className="pointer-events-none absolute left-3 top-2 h-3.5 w-3.5 text-slate-400" />
+              <input value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="Search workspace..." className="h-9 w-52 rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-sm outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10" />
             </div>
-            <select value={sort} onChange={event => { setSort(event.target.value as SortMode); setPage(1) }} className="h-8 rounded-md border border-gray-200 bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-[#1B2A6B]">
+            <select value={sort} onChange={event => { setSort(event.target.value as SortMode); setPage(1) }} className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10">
               <option value="priority">Priority</option>
               <option value="dateAsc">Date Asc</option>
               <option value="dateDesc">Date Desc</option>
@@ -886,20 +797,23 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
 
         <div className="min-h-0 flex-1 overflow-hidden">
         {workspace === 'leads' ? (
-          <div className="grid h-full min-h-0 gap-3">
-            <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-            <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count"]} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]" tableClass="w-auto min-w-[700px] [&_th]:py-1 [&_td]:py-1">
-              {filteredLeadDetails.map(row => (
-                <tr key={row.label} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-900">{row.label}</td>
-                  <td className="px-3 py-2"><a href={row.href} className="font-semibold text-[#1B2A6B] hover:underline">{row.total}</a></td>
-                  <td className="px-3 py-2"><a href={row.ownHref} className="font-semibold text-[#1B2A6B] hover:underline">{row.own}</a></td>
-                  <td className="px-3 py-2 font-semibold text-gray-700">{row.other}</td>
-                </tr>
-              ))}
-            </WorkTable>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
+          <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+              <div className="mb-3 flex items-center gap-2"><h2 className="text-base font-bold text-[#172d62]">Lead Details</h2><span className="rounded-full bg-blue-500 px-2 py-0.5 text-[11px] font-bold text-white">{stats.totalInquiries.toLocaleString('en-IN')}</span></div>
+              <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count", 'Own Share']} maxHeight="max-h-[215px] flex-1 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-full" tableClass="w-full [&_th]:py-1 [&_td]:py-1">
+                {filteredLeadDetails.map(row => (
+                  <tr key={row.label} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium text-slate-800">{row.label}</td>
+                    <td className="px-3 py-2"><a href={row.href} className="font-semibold text-blue-600 hover:underline">{row.total}</a></td>
+                    <td className="px-3 py-2"><a href={row.ownHref} className="font-semibold text-blue-600 hover:underline">{row.own}</a></td>
+                    <td className="px-3 py-2 font-semibold text-blue-600">{row.other}</td>
+                    <td className="px-3 py-2"><OwnShareBar total={Number(row.total)} own={Number(row.own)} /></td>
+                  </tr>
+                ))}
+              </WorkTable>
+            </section>
+              <div className="grid min-h-0 gap-3">
+                <section className="min-h-[154px] rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadSourceChart
                     data={props.leadSources}
                     totalLeads={stats.totalInquiries}
@@ -907,7 +821,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                     onSelectSource={source => setSelectedLeadSource(current => current?.sourceCode === source.sourceCode ? null : source)}
                   />
                 </section>
-                <section className="h-[215px] rounded-lg border border-gray-200 bg-white p-3">
+                <section className="min-h-[154px] rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadLocationChart
                     breakdowns={selectedLeadSource?.sourceCode ? props.leadRegionBreakdowns.bySource[selectedLeadSource.sourceCode] ?? { month: [], quarter: [], year: [] } : props.leadRegionBreakdowns.all}
                     selectedSourceName={selectedLeadSource?.name}
@@ -918,7 +832,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                   />
                 </section>
               </div>
-            </div>
           </div>
         ) : workspace === 'followups' ? (
           <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[760px]">
@@ -1039,29 +952,33 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               </tr>
             ))}
           </WorkTable>
-        ) : (
-          <>
-            <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No records found" maxHeight="max-h-[192px] 2xl:h-[calc(100%-2.5rem)] 2xl:max-h-none" tableMinWidth="min-w-[760px]">
-              {pagedAttention.map(item => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2"><Badge label={item.priority === 'High' ? 'Overdue' : item.priority} /></td>
-                  <td className="px-3 py-2 font-medium text-gray-900">{item.customer}</td>
-                  <td className="px-3 py-2 text-gray-700">{item.type}</td>
-                  <td className="px-3 py-2 text-gray-600">{formatDate(item.date)}</td>
-                  <td className="px-3 py-2 text-gray-700">{item.status}</td>
-                  <td className="px-3 py-2"><a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
-                </tr>
-              ))}
-            </WorkTable>
-            <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-              <span>Page {page} of {pageCount}</span>
-              <div className="flex gap-2">
-                <button type="button" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Prev</button>
-                <button type="button" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Next</button>
+        ) : workspace === 'attention' ? (
+          <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+              <div className="mb-3 flex items-center justify-between gap-2"><div><h2 className="text-base font-bold text-[#172d62]">To-do</h2><p className="mt-0.5 text-xs text-slate-500">Priority work awaiting action</p></div><span className="rounded-full bg-[#1B2A6B] px-2 py-0.5 text-[11px] font-bold text-white">{attentionItems.length}</span></div>
+              <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No records found" maxHeight="max-h-[192px] flex-1 2xl:max-h-none" tableMinWidth="min-w-[760px]">
+                {pagedAttention.map(item => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2"><Badge label={item.priority === 'High' ? 'Overdue' : item.priority} /></td>
+                    <td className="px-3 py-2 font-medium text-gray-900">{item.customer}</td>
+                    <td className="px-3 py-2 text-gray-700">{item.type}</td>
+                    <td className="px-3 py-2 text-gray-600">{formatDate(item.date)}</td>
+                    <td className="px-3 py-2 text-gray-700">{item.status}</td>
+                    <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => openWorkspace(item.workspace, true)} className="mr-3 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">Details</button><a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+                  </tr>
+                ))}
+              </WorkTable>
+              <div className="mt-2 flex shrink-0 items-center justify-between text-xs text-gray-500">
+                <span>Page {page} of {pageCount}</span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Prev</button>
+                  <button type="button" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Next</button>
+                </div>
               </div>
-            </div>
-          </>
-        )}
+            </section>
+            <TodoWorkloadSnapshot items={attentionItems} />
+          </div>
+        ) : null}
         </div>
       </section>
         </div>

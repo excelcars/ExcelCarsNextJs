@@ -1,5 +1,8 @@
+'use client'
+
+import { useState } from 'react'
 import { Building2, Eye, FileText, Images, Link2, Mail, Pencil, Phone, Trash2, UserRound, Video } from 'lucide-react'
-import { Badge, IconButton, Table } from '@/components/ui'
+import { Badge, IconButton, Modal, Table } from '@/components/ui'
 import { InventoryDetailCell } from './InventoryDetailCell'
 import type { InventoryRow } from './inventoryTypes'
 
@@ -26,6 +29,12 @@ const vehicleColourSwatches: Array<[string, string]> = [
 function vehicleColourSwatch(colour: string | null | undefined) {
   const normalized = clean(colour).toLowerCase()
   return vehicleColourSwatches.find(([name]) => normalized.includes(name))?.[1] ?? '#94a3b8'
+}
+
+function RemarkPreview({ value, title, onView }: { value: string | null | undefined; title: string; onView: (value: string, title: string) => void }) {
+  const remark = clean(value)
+  if (!remark) return <span className="text-gray-400">—</span>
+  return <div className="w-[140px] max-w-full"><p className="line-clamp-4 break-normal text-sm leading-5 text-gray-700">{remark}</p><button type="button" onClick={() => onView(remark, title)} className="mt-1 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">View more</button></div>
 }
 
 interface InventoryTableProps {
@@ -59,13 +68,15 @@ export function InventoryTable({
   onEdit,
   onDelete,
 }: InventoryTableProps) {
+  const [remarkModal, setRemarkModal] = useState<{ title: string; value: string } | null>(null)
   return (
-    <div className="[&_th]:px-2 [&_td]:px-2">
+    <>
+    <div className="[&_th]:px-2 [&_td]:px-2 [&_td]:[overflow-wrap:normal] [&_th:last-child]:whitespace-nowrap [&_th:last-child]:[overflow-wrap:normal]">
       <Table
         headers={['Select', 'Sr. No.', 'Make / Model / Variant', 'Year / Month / Colour', 'No. of Owners / Tax / Fuel Type', 'Regi. No. / Kms Driven / Insurance Type', 'Price / Status', 'Owner Details', 'Customer Details', 'Remarks', 'Internal Remarks', 'Actions']}
         empty={rows.length === 0}
         minWidthClass="min-w-full"
-        columnWidths={['5%', '4%', '10%', '8%', '11%', '11%', '10%', '10%', '10%', '6%', '7%', '8%']}
+        columnWidths={['5%', '4%', '10%', '8%', '10%', '10%', '9%', '10%', '10%', '7%', '7%', '10%']}
       >
         {rows.map((r, index) => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
@@ -76,36 +87,36 @@ export function InventoryTable({
               <div className="space-y-1.5 text-sm leading-none">
                 <div className="font-semibold text-gray-800">{r.year ?? '—'}</div>
                 <div className="font-medium text-gray-500">{r.month ?? '—'}</div>
-                <div className="flex min-w-0 items-center gap-2 text-gray-600"><span aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/5" style={{ backgroundColor: vehicleColourSwatch(r.colour) }} /><span className="break-words">{clean(r.colour) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2 text-gray-600"><span aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/5" style={{ backgroundColor: vehicleColourSwatch(r.colour) }} /><span className="truncate">{clean(r.colour) || '—'}</span></div>
               </div>
             </td>
             <td className="px-4 py-3"><InventoryDetailCell items={[['No. of Owners', r.noOfOwners], ['Tax', r.tax], ['Fuel Type', r.fuelType]]} /></td>
             <td className="px-4 py-3"><InventoryDetailCell items={[['Regi. No', r.registrationNo], ['Kms Driven', r.kmsDriven !== null ? Number(r.kmsDriven).toFixed(2) : null], ['Insurance Type', r.insuranceType]]} /></td>
             <td className="px-4 py-3">
               <div className="space-y-2">
-                <div className="break-words font-semibold tabular-nums text-gray-800 [overflow-wrap:anywhere]">{formatVehiclePrice(r.price !== null ? Number(r.price) : null)}</div>
+                <div className="truncate font-semibold tabular-nums text-gray-800">{formatVehiclePrice(r.price !== null ? Number(r.price) : null)}</div>
                 {r.status ? <Badge label={r.status} /> : <span className="text-xs text-gray-400">—</span>}
               </div>
             </td>
             <td className="px-4 py-3">
               <div className="space-y-1.5 text-sm leading-6 text-gray-600">
-                <div className="flex min-w-0 items-center gap-2"><Building2 aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-words">{clean(r.ownedType) || '—'}</span></div>
-                <div className="flex min-w-0 items-center gap-2"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-words">{clean(r.ownedBy) || '—'}</span></div>
-                <div className="flex min-w-0 items-center gap-2"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{clean(r.mobileNoOwnedBy) || '—'}</span></div>
-                <div className="flex min-w-0 items-center gap-2"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{clean(r.emailIdOwnedBy) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><Building2 aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.ownedType) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.ownedBy) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.mobileNoOwnedBy) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.emailIdOwnedBy) || '—'}</span></div>
               </div>
             </td>
             <td className="px-4 py-3">
               <div className="space-y-1.5 text-sm leading-6 text-gray-600">
-                <div className="flex min-w-0 items-center gap-2"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-words">{clean(r.customerName ?? r.customer?.custName) || '—'}</span></div>
-                <div className="flex min-w-0 items-center gap-2"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{clean(r.customer?.custMobile) || '—'}</span></div>
-                <div className="flex min-w-0 items-center gap-2"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{clean(r.customer?.custEmail) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><UserRound aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.customerName ?? r.customer?.custName) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.customer?.custMobile) || '—'}</span></div>
+                <div className="flex min-w-0 items-center gap-2"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{clean(r.customer?.custEmail) || '—'}</span></div>
               </div>
             </td>
-            <td className="px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap">{clean(r.otherRemarks) || '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-700 whitespace-pre-wrap">{clean(r.internalComments) || '—'}</td>
+            <td className="px-4 py-3"><RemarkPreview value={r.otherRemarks} title={`Remarks — ${r.registrationNo ?? r.inventoryNumber ?? `Vehicle #${r.inventoryId}`}`} onView={(value, title) => setRemarkModal({ value, title })} /></td>
+            <td className="px-4 py-3"><RemarkPreview value={r.internalComments} title={`Internal remarks — ${r.registrationNo ?? r.inventoryNumber ?? `Vehicle #${r.inventoryId}`}`} onView={(value, title) => setRemarkModal({ value, title })} /></td>
             <td className="px-4 py-3">
-              <div className="flex items-center flex-wrap gap-1">
+              <div className="grid min-w-[96px] grid-cols-3 place-items-center gap-x-2 gap-y-1.5">
                 <IconButton label="View vehicle" onClick={() => onView(r)}><Eye className="h-4 w-4" /></IconButton>
                 <IconButton label="Update linked inquiry" onClick={() => onInquirySync(r)} className="hover:bg-violet-50 hover:text-violet-600"><Link2 className="h-4 w-4" /></IconButton>
                 <IconButton label={`Manage Photos${r._count.inventoryPhotos ? ` (${r._count.inventoryPhotos})` : ''}`} onClick={() => onPhotos(r)}><span className="relative inline-flex"><Images className="h-4 w-4" />{r._count.inventoryPhotos > 0 ? <span className="absolute -right-2.5 -top-2.5 grid h-4 min-w-4 place-items-center rounded-full border-2 border-white bg-[#1B2A6B] px-1 text-[9px] font-bold leading-none text-white shadow-sm">{r._count.inventoryPhotos}</span> : null}</span></IconButton>
@@ -120,5 +131,10 @@ export function InventoryTable({
         ))}
       </Table>
     </div>
+    <Modal title={remarkModal?.title ?? 'Remark'} open={Boolean(remarkModal)} onClose={() => setRemarkModal(null)} width="max-w-lg">
+      <div className="max-h-[55vh] overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-4 text-sm leading-6 text-gray-700">{remarkModal?.value}</div>
+      <div className="mt-4 flex justify-end"><button type="button" onClick={() => setRemarkModal(null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50">Close</button></div>
+    </Modal>
+    </>
   )
 }
