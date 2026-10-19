@@ -97,9 +97,9 @@ async function recordAttempt(prisma, delivery, result) {
 
 async function dispatchDelivery(prisma, delivery, mailer) {
   const policy = await prisma.insuranceMain.findUnique({ where: { insuranceMainId: delivery.insuranceMainId }, select: { policyStatus: true } })
-  if (!policy || policy.policyStatus === 'Received' || policy.policyStatus === 'Renewed') {
+  if (!policy || policy.policyStatus === 'Renewed') {
     await prisma.$transaction([
-      prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy is already received or renewed.' } }),
+      prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy is already renewed.' } }),
       prisma.insuranceReminderDelivery.update({ where: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId }, data: { status: 'Cancelled', nextRetryAt: null, attemptedAt: new Date() } }),
     ])
     return
@@ -137,9 +137,9 @@ export async function retryInsuranceReminders(prisma) {
     take: 50,
   })
   for (const delivery of due) {
-    if (delivery.insuranceMain.policyStatus === 'Received' || delivery.insuranceMain.policyStatus === 'Renewed') {
+    if (delivery.insuranceMain.policyStatus === 'Renewed') {
       await prisma.$transaction([
-        prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy is already received or renewed.' } }),
+        prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy is already renewed.' } }),
         prisma.insuranceReminderDelivery.update({ where: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId }, data: { status: 'Cancelled', nextRetryAt: null, attemptedAt: new Date() } }),
       ])
       continue
@@ -156,7 +156,7 @@ export async function queueDailyInsuranceReminders(prisma) {
   const [template, policies] = await Promise.all([
     prisma.messageTemplate.findFirst({ where: { messageSubject: TEMPLATE_SUBJECT } }),
     prisma.insuranceMain.findMany({
-      where: { expiryDate: { gte: lower, lte: upper }, OR: [{ policyStatus: null }, { policyStatus: { notIn: ['Received', 'Renewed'] } }] },
+      where: { expiryDate: { gte: lower, lte: upper }, OR: [{ policyStatus: null }, { policyStatus: { notIn: ['Renewed'] } }] },
       include: {
         customer: true,
       },
