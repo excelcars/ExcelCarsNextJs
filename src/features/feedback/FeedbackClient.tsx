@@ -1,272 +1,68 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { Plus, Pencil, Trash2, X, Car } from 'lucide-react'
-import { Btn, Input, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { Car, ChevronLeft, ChevronRight, Download, Eye, Loader2, Pencil, Plus, Send, Trash2, X } from 'lucide-react'
+import { Btn, ConfirmDialog, Input, LoadingOverlay, Modal, PageHeader, SearchBar, Table, Textarea } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
-import { createFeedback, updateFeedback, deleteFeedback, type FeedbackFormInput } from './actions'
+import { createFeedback, deleteFeedback, getFeedbackForAction, searchFeedbackVehicles, sendFeedbackInvitation, updateFeedback, type FeedbackFormInput } from './actions'
 import { QUESTIONS } from './queries'
 
-interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
-interface Vehicle {
-  inventoryId: number
-  registrationNo: string | null
-  sku: string | null
-  year: number | null
-  fkVariantId: number | null
-  carVariantMaster: {
-    variant: string | null
-    carMakeMaster: { make: string | null } | null
-    carModelMaster: { model: string | null } | null
-  } | null
+type ListRow = { feedbackId: number; customerName: string | null; customerMob: string | null; customerEmail: string | null; carMakeLegacy: string | null; carModelLegacy: string | null; carVariantLegacy: string | null; carRegistrationNo: string | null; answer_1: string | null; answer_2: string | null; answer_4: string | null; submittedAt: Date | string | null }
+type Detail = ListRow & { customerId: number | null; customerDob: Date | string | null; customerAnniversaryDt: Date | string | null; carYear: number | null; fkVariantId: number | null; answer_3: string | null; answer_5: string | null; comments: string | null }
+type Customer = { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
+type Vehicle = { inventoryId: number; customerId: number | null; registrationNo: string | null; sku: string | null; year: number | null; fkVariantId: number | null; carVariantMaster: { variant: string | null; carMakeMaster: { make: string | null } | null; carModelMaster: { model: string | null } | null } | null }
+
+const clean = (value: string | null | undefined) => !value || ['null', 'na', 'n/a'].includes(value.trim().toLowerCase()) ? '' : value
+const isoDate = (value: Date | string | null) => value ? new Date(value).toISOString().slice(0, 10) : ''
+const displayDate = (value: Date | string | null) => value ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(value)) : '—'
+const displayDateTime = (value: Date | string | null) => value ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }).format(new Date(value)) : '—'
+const vehicleLabel = (vehicle: Vehicle) => `${vehicle.registrationNo ?? vehicle.sku ?? '—'} — ${[clean(vehicle.carVariantMaster?.carMakeMaster?.make), clean(vehicle.carVariantMaster?.carModelMaster?.model), clean(vehicle.carVariantMaster?.variant)].filter(Boolean).join(' ') || 'Vehicle details unavailable'}`
+const emptyForm = (): FeedbackFormInput => ({ customerId: null, customerName: '', customerMob: '', customerEmail: '', customerDob: '', customerAnniversaryDt: '', carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '', fkVariantId: null, answer_1: 'Neutral', answer_2: 'Fair', answer_3: 'Neutral', answer_4: 'Not Sure', answer_5: 'About the Same', comments: '' })
+
+function downloadCsv(rows: Detail[]) {
+  const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+  const headings = ['ID', 'Customer Name', 'Mobile', 'Email', 'DOB', 'Anniversary', 'Make', 'Model', 'Variant', 'Year', 'Registration', 'Answer 1', 'Answer 2', 'Answer 3', 'Answer 4', 'Answer 5', 'Comments']
+  const lines = [headings.map(quote).join(','), ...rows.map(row => [row.feedbackId, row.customerName, row.customerMob, row.customerEmail, displayDate(row.customerDob), displayDate(row.customerAnniversaryDt), row.carMakeLegacy, row.carModelLegacy, row.carVariantLegacy, row.carYear, row.carRegistrationNo, row.answer_1, row.answer_2, row.answer_3, row.answer_4, row.answer_5, row.comments].map(quote).join(','))]
+  const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })); const link = document.createElement('a'); link.href = url; link.download = `feedback-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url)
 }
 
-interface FeedbackRow {
-  feedbackId: number
-  customerId: number | null
-  customerName: string | null
-  customerMob: string | null
-  customerEmail: string | null
-  carMakeLegacy: string | null
-  carModelLegacy: string | null
-  carVariantLegacy: string | null
-  carYear: number | null
-  carRegistrationNo: string | null
-  fkVariantId: number | null
-  answer_1: string | null
-  answer_2: string | null
-  answer_3: string | null
-  answer_4: string | null
-  answer_5: string | null
-  comments: string | null
-}
+export function FeedbackClient({ initialData, total, page, pageCount, pageSize, sort, dir, search }: { initialData: ListRow[]; total: number; page: number; pageCount: number; pageSize: number; sort: string; dir: string; search: string }) {
+  const router = useRouter(); const requestId = useRef(0)
+  const [data, setData] = useState(initialData); const [searchInput, setSearchInput] = useState(search)
+  const [modal, setModal] = useState<'add' | 'edit' | null>(null); const [sendOpen, setSendOpen] = useState(false); const [view, setView] = useState<Detail | null>(null); const [loadingDetail, setLoadingDetail] = useState(false)
+  const [form, setForm] = useState<FeedbackFormInput>(emptyForm()); const [initialForm, setInitialForm] = useState(''); const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]); const [vehicleQuery, setVehicleQuery] = useState(''); const [vehicleOpen, setVehicleOpen] = useState(false); const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
+  const [editId, setEditId] = useState<number | null>(null); const [deleteId, setDeleteId] = useState<number | null>(null); const [discardOpen, setDiscardOpen] = useState(false); const [error, setError] = useState(''); const [actionError, setActionError] = useState(''); const [sendError, setSendError] = useState(''); const [isPending, startTransition] = useTransition(); const [isExporting, startExport] = useTransition(); const [isNavigating, startNavigation] = useTransition()
+  const dirty = !!modal && JSON.stringify(form) !== initialForm
 
-const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
-const clean = (v: string | null | undefined) => (!v || JUNK_VALUES.has(v.trim().toLowerCase()) ? '' : v)
+  useEffect(() => { setData(initialData); setSearchInput(search) }, [initialData, search])
+  useEffect(() => { if (!vehicleOpen) return; const id = ++requestId.current; const timer = setTimeout(async () => { const rows = await searchFeedbackVehicles(vehicleQuery, selectedCustomer?.custId ?? null); if (id === requestId.current) setVehicles(rows) }, 250); return () => clearTimeout(timer) }, [vehicleOpen, vehicleQuery, selectedCustomer])
+  useEffect(() => { if (!dirty) return; const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn) }, [dirty])
 
-function vehicleLabel(v: Vehicle) {
-  const parts = [clean(v.carVariantMaster?.carMakeMaster?.make), clean(v.carVariantMaster?.carModelMaster?.model), clean(v.carVariantMaster?.variant)].filter(Boolean)
-  return `${v.registrationNo ?? v.sku ?? '—'} — ${parts.join(' ')}`
-}
+  const navigate = (changes: Record<string, string | number | undefined>) => { const params = new URLSearchParams(); const values = { search, page, pageSize, sort, dir, ...changes }; Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== '' && !(key === 'page' && Number(value) === 1) && !(key === 'pageSize' && Number(value) === 10) && !(key === 'sort' && value === 'feedbackId') && !(key === 'dir' && value === 'desc')) params.set(key, String(value)) }); startNavigation(() => router.push(`/config/feedback${params.size ? `?${params}` : ''}`)) }
+  const setField = <K extends keyof FeedbackFormInput>(key: K, value: FeedbackFormInput[K]) => setForm(current => ({ ...current, [key]: value }))
+  const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false); setVehicles([]) }
+  const closeForm = () => { if (dirty) setDiscardOpen(true); else forceCloseForm() }
+  const forceCloseForm = () => { setModal(null); setDiscardOpen(false); setError(''); setEditId(null); resetVehicle() }
+  const openAdd = () => { const value = emptyForm(); setForm(value); setInitialForm(JSON.stringify(value)); setSelectedCustomer(null); resetVehicle(); setEditId(null); setError(''); setModal('add') }
+  const loadDetail = async (id: number, mode: 'view' | 'edit') => { const idToken = ++requestId.current; setLoadingDetail(true); setActionError(''); const detail = await getFeedbackForAction(id); if (idToken !== requestId.current) return; setLoadingDetail(false); if (!detail) { setActionError('Feedback record was not found or you are not authorized.'); return }; if (mode === 'view') { setView(detail); return }; const value: FeedbackFormInput = { customerId: detail.customerId, customerName: detail.customerName ?? '', customerMob: detail.customerMob ?? '', customerEmail: detail.customerEmail ?? '', customerDob: isoDate(detail.customerDob), customerAnniversaryDt: isoDate(detail.customerAnniversaryDt), carMakeLegacy: clean(detail.carMakeLegacy), carModelLegacy: clean(detail.carModelLegacy), carVariantLegacy: clean(detail.carVariantLegacy), carYear: detail.carYear, carRegistrationNo: detail.carRegistrationNo ?? '', fkVariantId: detail.fkVariantId, answer_1: detail.answer_1 ?? 'Neutral', answer_2: detail.answer_2 ?? 'Fair', answer_3: detail.answer_3 ?? 'Neutral', answer_4: detail.answer_4 ?? 'Not Sure', answer_5: detail.answer_5 ?? 'About the Same', comments: detail.comments ?? '' }; setForm(value); setInitialForm(JSON.stringify(value)); setSelectedCustomer(detail.customerId ? { custId: detail.customerId, custName: detail.customerName ?? '', custMobile: detail.customerMob, custEmail: detail.customerEmail } : null); setEditId(id); setModal('edit') }
+  const onCustomerChange = (customer: Customer | null) => { setSelectedCustomer(customer); if (selectedVehicle && customer && selectedVehicle.customerId !== customer.custId) { resetVehicle(); setForm(current => ({ ...current, fkVariantId: null, carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '' })) }; setForm(current => ({ ...current, customerId: customer?.custId ?? null, customerName: customer?.custName ?? current.customerName, customerMob: customer?.custMobile ?? current.customerMob, customerEmail: customer?.custEmail ?? current.customerEmail })) }
+  const selectVehicle = (vehicle: Vehicle) => { setSelectedVehicle(vehicle); setVehicleOpen(false); setForm(current => ({ ...current, fkVariantId: vehicle.fkVariantId, carMakeLegacy: clean(vehicle.carVariantMaster?.carMakeMaster?.make), carModelLegacy: clean(vehicle.carVariantMaster?.carModelMaster?.model), carVariantLegacy: clean(vehicle.carVariantMaster?.variant), carYear: vehicle.year, carRegistrationNo: vehicle.registrationNo ?? '' })) }
+  const removeVehicle = () => { resetVehicle(); setForm(current => ({ ...current, fkVariantId: null, carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '' })) }
+  const save = () => { setError(''); startTransition(async () => { const result = editId ? await updateFeedback(editId, form) : await createFeedback(form); if (!result.success) { setError(result.error ?? 'Could not save feedback.'); return }; forceCloseForm(); router.refresh() }) }
+  const remove = () => { if (!deleteId) return; setActionError(''); startTransition(async () => { const result = await deleteFeedback(deleteId); if (!result.success) { setActionError(result.error ?? 'Could not delete feedback.'); return }; setDeleteId(null); router.refresh() }) }
+  const exportRows = () => startExport(async () => { setActionError(''); try { const response = await fetch(`/api/feedback/export${search ? `?search=${encodeURIComponent(search)}` : ''}`); const rows = await response.json(); if (!response.ok || !Array.isArray(rows)) throw new Error(rows?.error ?? 'Export failed.'); downloadCsv(rows) } catch (caught) { setActionError(caught instanceof Error ? caught.message : 'Export failed.') } })
 
-function emptyForm(): FeedbackFormInput {
-  return {
-    customerId: null, customerName: '', customerMob: '', customerEmail: '',
-    carMakeLegacy: '', carModelLegacy: '', carVariantLegacy: '', carYear: null, carRegistrationNo: '', fkVariantId: null,
-    answer_1: QUESTIONS[0].options[0], answer_2: QUESTIONS[1].options[0], answer_3: QUESTIONS[2].options[0],
-    answer_4: QUESTIONS[3].options[0], answer_5: QUESTIONS[4].options[0],
-    comments: '',
-  }
-}
-
-export function FeedbackClient({ initialData, vehicles }: { initialData: FeedbackRow[]; vehicles: Vehicle[] }) {
-  const [data, setData] = useState(initialData)
-  const [search, setSearch] = useState('')
-  const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
-  const [form, setForm] = useState<FeedbackFormInput>(emptyForm())
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null)
-  const [vehicleQuery, setVehicleQuery] = useState('')
-  const [vehicleOpen, setVehicleOpen] = useState(false)
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
-  const [editId, setEditId] = useState<number | null>(null)
-  const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [error, setError] = useState('')
-  const [isPending, startTransition] = useTransition()
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase()
-    return data.filter(r => !q || (r.customerName ?? '').toLowerCase().includes(q) || (r.customerMob ?? '').includes(q) || (r.carRegistrationNo ?? '').toLowerCase().includes(q))
-  }, [data, search])
-
-  const vehicleMatches = useMemo(() => {
-    const q = vehicleQuery.toLowerCase()
-    if (!q) return vehicles.slice(0, 20)
-    return vehicles.filter(v => vehicleLabel(v).toLowerCase().includes(q)).slice(0, 20)
-  }, [vehicles, vehicleQuery])
-
-  const resetVehicle = () => { setSelectedVehicle(null); setVehicleQuery(''); setVehicleOpen(false) }
-
-  const openAdd = () => { setForm(emptyForm()); setSelectedCustomer(null); resetVehicle(); setEditId(null); setError(''); setModal('add') }
-  const openEdit = (r: FeedbackRow) => {
-    setForm({
-      customerId: r.customerId, customerName: r.customerName ?? '', customerMob: r.customerMob ?? '', customerEmail: r.customerEmail ?? '',
-      carMakeLegacy: clean(r.carMakeLegacy), carModelLegacy: clean(r.carModelLegacy), carVariantLegacy: clean(r.carVariantLegacy),
-      carYear: r.carYear, carRegistrationNo: r.carRegistrationNo ?? '', fkVariantId: r.fkVariantId,
-      answer_1: r.answer_1 ?? QUESTIONS[0].options[0], answer_2: r.answer_2 ?? QUESTIONS[1].options[0], answer_3: r.answer_3 ?? QUESTIONS[2].options[0],
-      answer_4: r.answer_4 ?? QUESTIONS[3].options[0], answer_5: r.answer_5 ?? QUESTIONS[4].options[0],
-      comments: r.comments ?? '',
-    })
-    setSelectedCustomer(r.customerId ? { custId: r.customerId, custName: r.customerName ?? '', custMobile: r.customerMob, custEmail: r.customerEmail } : null)
-    setSelectedVehicle(vehicles.find(v => v.fkVariantId === r.fkVariantId) ?? null)
-    setVehicleQuery('')
-    setEditId(r.feedbackId)
-    setError('')
-    setModal('edit')
-  }
-
-  const selectVehicle = (v: Vehicle) => {
-    setSelectedVehicle(v)
-    setVehicleOpen(false)
-    setVehicleQuery('')
-    setForm(f => ({
-      ...f,
-      fkVariantId: v.fkVariantId,
-      carMakeLegacy: clean(v.carVariantMaster?.carMakeMaster?.make),
-      carModelLegacy: clean(v.carVariantMaster?.carModelMaster?.model),
-      carVariantLegacy: clean(v.carVariantMaster?.variant),
-      carYear: v.year,
-      carRegistrationNo: v.registrationNo ?? f.carRegistrationNo,
-    }))
-  }
-
-  const onCustomerChange = (c: CustomerOption | null) => {
-    setSelectedCustomer(c)
-    setForm(f => ({
-      ...f,
-      customerId: c?.custId ?? null,
-      customerName: c?.custName ?? f.customerName,
-      customerMob: c?.custMobile ?? f.customerMob,
-      customerEmail: c?.custEmail ?? f.customerEmail,
-    }))
-  }
-
-  const f = <K extends keyof FeedbackFormInput>(k: K, v: FeedbackFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
-
-  const save = () => {
-    setError('')
-    startTransition(async () => {
-      const result = editId ? await updateFeedback(editId, form) : await createFeedback(form)
-      if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
-        return
-      }
-      setModal(null)
-      window.location.reload()
-    })
-  }
-
-  const del = () => {
-    if (!deleteId) return
-    startTransition(async () => {
-      const result = await deleteFeedback(deleteId)
-      if (result.success) {
-        setData(prev => prev.filter(r => r.feedbackId !== deleteId))
-      } else {
-        setError(result.error ?? 'Could not delete this record.')
-      }
-      setDeleteId(null)
-    })
-  }
-
-  return (
-    <div>
-      <PageHeader
-        title="Customer Feedback"
-        subtitle={`${filtered.length} responses`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Feedback</Btn>}
-      />
-
-      <div className="mb-4"><SearchBar value={search} onChange={setSearch} placeholder="Customer, mobile, reg no..." /></div>
-
-      <Table headers={['Customer', 'Contact', 'Vehicle', 'Satisfaction', 'Experience', 'Recommend', 'Actions']} empty={filtered.length === 0}>
-        {filtered.map(r => (
-          <tr key={r.feedbackId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3 font-medium text-gray-900">{r.customerName ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600 font-mono">{r.customerMob ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{[clean(r.carMakeLegacy), clean(r.carModelLegacy)].filter(Boolean).join(' ') || '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.answer_1 ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.answer_2 ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600">{r.answer_4 ?? '—'}</td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteId(r.feedbackId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
-
-      <Modal title={editId ? 'Edit Feedback' : 'Add Feedback'} open={!!modal} onClose={() => setModal(null)} width="max-w-3xl">
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Name" value={form.customerName} onChange={e => f('customerName', e.target.value)} />
-            <Input label="Mobile" value={form.customerMob} onChange={e => f('customerMob', e.target.value)} />
-            <Input label="Email" type="email" value={form.customerEmail} onChange={e => f('customerEmail', e.target.value)} />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional)</label>
-            {selectedVehicle ? (
-              <div className="flex items-center justify-between border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
-                <div className="flex items-center gap-2 text-sm text-gray-800">
-                  <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
-                </div>
-                <button type="button" onClick={() => { resetVehicle(); setForm(fm => ({ ...fm, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <Input
-                  placeholder="Search our stock by reg no, make, model..."
-                  value={vehicleQuery}
-                  onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
-                  onFocus={() => setVehicleOpen(true)}
-                />
-                {vehicleOpen && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                    {vehicleMatches.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
-                    ) : vehicleMatches.map(v => (
-                      <button key={v.inventoryId} type="button" onClick={() => selectVehicle(v)}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-50 last:border-0">
-                        {vehicleLabel(v)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {QUESTIONS.map((q, i) => {
-              const key = q.key as keyof FeedbackFormInput
-              return (
-                <div key={q.key} className="border border-gray-100 rounded-lg p-3">
-                  <div className="text-sm text-gray-800 mb-2">{i + 1}. {q.text}</div>
-                  <div className="flex flex-wrap gap-4">
-                    {q.options.map(opt => (
-                      <label key={opt} className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
-                        <input type="radio" name={q.key} checked={form[key] === opt} onChange={() => f(key, opt as FeedbackFormInput[typeof key])} className="accent-[#1B2A6B]" />
-                        {opt}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <Textarea label="Comments" value={form.comments} onChange={e => f('comments', e.target.value)} placeholder="Any suggestions, queries..." />
-
-          {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
-
-          <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-            <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Feedback'}</Btn>
-          </div>
-        </div>
-      </Modal>
-
-      <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
-        message="Delete this feedback record? This cannot be undone." />
-    </div>
-  )
+  const sendInvitation = () => { if (!selectedCustomer || !selectedVehicle) { setSendError('Select a customer and their purchased vehicle.'); return }; setSendError(''); startTransition(async () => { const result = await sendFeedbackInvitation(selectedCustomer.custId, selectedVehicle.inventoryId); if (!result.success) { setSendError(result.error ?? 'Could not send feedback invitation.'); return }; setSendError(result.message ?? 'Feedback invitation sent by email and WhatsApp.'); resetVehicle(); setSelectedCustomer(null) }) }
+  return <div className="relative"><LoadingOverlay show={isNavigating} label="Loading feedback..." subtle /><PageHeader title="Customer Feedback" subtitle={`${total} response${total === 1 ? '' : 's'}`} action={<div className="flex gap-2"><Btn size="sm" variant="outline" onClick={exportRows} disabled={isExporting || isNavigating}><Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : 'Export'}</Btn><Btn size="sm" variant="outline" onClick={() => { setSendError(''); setSelectedCustomer(null); resetVehicle(); setSendOpen(true) }}><Send className="w-3.5 h-3.5" />Send Feedback</Btn><Btn size="sm" onClick={openAdd} disabled={isNavigating}><Plus className="w-3.5 h-3.5" />Add Feedback</Btn></div>} />
+    <form className="mb-3 flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); navigate({ search: searchInput.trim(), page: 1 }) }}><SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, registration..." disabled={isNavigating} /><Btn type="submit" variant="outline" disabled={isNavigating}>{isNavigating ? 'Searching...' : 'Search'}</Btn>{search && <Btn variant="ghost" onClick={() => navigate({ search: '', page: 1 })} disabled={isNavigating}>Clear</Btn>}<select disabled={isNavigating} aria-label="Sort feedback" className="rounded-lg border border-gray-300 px-3 text-sm" value={`${sort}:${dir}`} onChange={event => { const [nextSort, nextDir] = event.target.value.split(':'); navigate({ sort: nextSort, dir: nextDir, page: 1 }) }}><option value="feedbackId:desc">Newest first</option><option value="feedbackId:asc">Oldest first</option><option value="customerName:asc">Customer A–Z</option><option value="customerName:desc">Customer Z–A</option><option value="carRegistrationNo:asc">Registration A–Z</option><option value="carRegistrationNo:desc">Registration Z–A</option></select><select disabled={isNavigating} aria-label="Page size" className="rounded-lg border border-gray-300 px-3 text-sm" value={pageSize} onChange={event => navigate({ pageSize: event.target.value, page: 1 })}>{[10, 25, 50, 100].map(size => <option key={size} value={size}>{size} / page</option>)}</select></form>
+    {actionError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
+    <Table headers={['Customer', 'Contact', 'Vehicle', 'Satisfaction', 'Experience', 'Recommend', 'Actions']} empty={data.length === 0} compact minWidthClass="min-w-full" columnWidths={['15%', '19%', '20%', '12%', '12%', '13%', '9%']}>{data.map(row => <tr key={row.feedbackId} className="hover:bg-gray-50"><td className="font-medium">{row.customerName ?? '—'}</td><td>{row.customerMob ?? '—'}<br /><span className="text-gray-500">{row.customerEmail ?? ''}</span></td><td>{[clean(row.carMakeLegacy), clean(row.carModelLegacy), clean(row.carVariantLegacy)].filter(Boolean).join(' ') || '—'}<br /><span className="text-gray-500">{row.carRegistrationNo ?? ''}</span></td><td>{row.answer_1 ?? '—'}</td><td>{row.answer_2 ?? '—'}</td><td>{row.answer_4 ?? '—'}</td><td><div className="flex gap-0.5"><button aria-label="View feedback" onClick={() => loadDetail(row.feedbackId, 'view')} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50"><Eye className="h-4 w-4" /></button>{!row.submittedAt && <button aria-label="Edit feedback" onClick={() => loadDetail(row.feedbackId, 'edit')} className="p-1 text-gray-500 hover:text-[#1B2A6B]"><Pencil className="w-4 h-4" /></button>}<button aria-label="Delete feedback" onClick={() => setDeleteId(row.feedbackId)} className="p-1 text-gray-500 hover:text-red-600"><Trash2 className="w-4 h-4" /></button></div></td></tr>)}</Table>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600"><span>{total} total · Page {page} of {pageCount}</span><div className="flex gap-2"><Btn size="sm" variant="outline" disabled={page <= 1} onClick={() => navigate({ page: page - 1 })}><ChevronLeft className="w-3.5 h-3.5" />Previous</Btn><Btn size="sm" variant="outline" disabled={page >= pageCount} onClick={() => navigate({ page: page + 1 })}>Next<ChevronRight className="w-3.5 h-3.5" /></Btn></div></div>
+    <Modal title={modal === 'edit' ? 'Edit Feedback' : 'Add Feedback'} open={!!modal} onClose={closeForm} width="max-w-3xl"><div className="space-y-4"><div><label className="mb-1 block text-xs font-medium text-gray-600">Customer (optional link)</label><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} allowCreate={false} /></div><div className="grid grid-cols-2 gap-4"><Input label="Customer Name *" maxLength={150} value={form.customerName} onChange={event => setField('customerName', event.target.value)} /><Input label="Customer Mobile *" inputMode="numeric" maxLength={10} value={form.customerMob} onChange={event => setField('customerMob', event.target.value.replace(/\D/g, ''))} /><Input label="Customer Email *" type="email" maxLength={254} value={form.customerEmail} onChange={event => setField('customerEmail', event.target.value)} /><Input label="Date of Birth" type="date" value={form.customerDob} onChange={event => setField('customerDob', event.target.value)} /><Input label="Anniversary Date" type="date" value={form.customerAnniversaryDt} onChange={event => setField('customerAnniversaryDt', event.target.value)} /></div><div><label className="mb-1 block text-xs font-medium text-gray-600">Vehicle (optional)</label>{selectedVehicle ? <div className="flex justify-between rounded-md border p-2 text-sm"><span><Car className="mr-2 inline w-4" />{vehicleLabel(selectedVehicle)}</span><button onClick={removeVehicle}><X className="w-4" /></button></div> : <div className="relative"><Input placeholder="Search stock..." value={vehicleQuery} onFocus={() => setVehicleOpen(true)} onChange={event => { setVehicleQuery(event.target.value); setVehicleOpen(true) }} />{vehicleOpen && <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border bg-white shadow">{vehicles.map(vehicle => <button key={vehicle.inventoryId} onClick={() => selectVehicle(vehicle)} className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-gray-50">{vehicleLabel(vehicle)}</button>)}{!vehicles.length && <div className="p-3 text-sm text-gray-500">No matching vehicles</div>}</div>}</div>}</div><div className="grid grid-cols-2 gap-4"><Input label="Car Make" value={form.carMakeLegacy} onChange={event => setField('carMakeLegacy', event.target.value)} /><Input label="Car Model" value={form.carModelLegacy} onChange={event => setField('carModelLegacy', event.target.value)} /><Input label="Car Variant" value={form.carVariantLegacy} onChange={event => setField('carVariantLegacy', event.target.value)} /><Input label="Car Year" type="number" min="1886" max={new Date().getFullYear() + 1} value={form.carYear ?? ''} onChange={event => setField('carYear', event.target.value ? Number(event.target.value) : null)} /><Input label="Registration Number" value={form.carRegistrationNo} onChange={event => setField('carRegistrationNo', event.target.value)} /></div>{QUESTIONS.map((question, index) => { const key = question.key as keyof FeedbackFormInput; return <div key={question.key} className="rounded-lg border p-3"><div className="mb-2 text-sm">{index + 1}. {question.text}</div>{question.options.map(option => <label key={option} className="mr-4 text-sm"><input type="radio" name={question.key} checked={form[key] === option} onChange={() => setField(key, option as FeedbackFormInput[typeof key])} /> {option}</label>)}</div> })}<Textarea label="Comments" maxLength={1000} value={form.comments} onChange={event => setField('comments', event.target.value)} />{error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}<div className="flex justify-end gap-3"><Btn variant="outline" onClick={closeForm}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Feedback'}</Btn></div></div></Modal>
+    <Modal title={view ? `Feedback #${view.feedbackId}` : 'Feedback'} open={!!view || loadingDetail} onClose={() => { if (!loadingDetail) setView(null) }}>{loadingDetail ? <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-gray-500"><Loader2 className="w-5 animate-spin" />Loading feedback...</div> : view && <div className="space-y-3 text-sm"><div><b>Customer:</b> {view.customerName ?? '—'} · {view.customerMob ?? '—'} · {view.customerEmail ?? '—'}</div>{view.submittedAt && <div><b>Submitted at:</b> {displayDateTime(view.submittedAt)} (customer response)</div>}<div><b>DOB / Anniversary:</b> {displayDate(view.customerDob)} / {displayDate(view.customerAnniversaryDt)}</div><div><b>Vehicle:</b> {[clean(view.carMakeLegacy), clean(view.carModelLegacy), clean(view.carVariantLegacy)].filter(Boolean).join(' ') || '—'} · {view.carYear ?? '—'} · {view.carRegistrationNo ?? '—'}</div>{QUESTIONS.map((question, index) => <div key={question.key}><b>{index + 1}. {question.text}</b><br />{view[question.key as keyof Detail] as string ?? '—'}</div>)}<div><b>Comments:</b><div className="whitespace-pre-wrap">{view.comments || '—'}</div></div></div>}</Modal>
+    <Modal title="Send Feedback" open={sendOpen} onClose={() => setSendOpen(false)}><div className="space-y-4"><div><label className="mb-1 block text-xs font-medium text-gray-600">Customer</label><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} allowCreate={false} /></div><div><label className="mb-1 block text-xs font-medium text-gray-600">Purchased vehicle</label><Input placeholder="Search registration, make, model..." value={vehicleQuery} onFocus={() => setVehicleOpen(true)} onChange={event => { setVehicleQuery(event.target.value); setVehicleOpen(true) }} />{vehicleOpen && <div className="mt-1 max-h-48 overflow-auto rounded border bg-white">{vehicles.map(vehicle => <button key={vehicle.inventoryId} onClick={() => selectVehicle(vehicle)} className="block w-full border-b p-2 text-left text-sm">{vehicleLabel(vehicle)}</button>)}{!vehicles.length && <div className="p-2 text-sm text-gray-500">No matching purchases</div>}</div>}{selectedVehicle && <div className="mt-2 rounded border p-2 text-sm">{vehicleLabel(selectedVehicle)}</div>}</div><p className="text-sm text-gray-600">A one-time survey link valid for 7 days will be sent by email and WhatsApp using the global template. Older pending links for this purchase will stop working.</p>{sendError && <div className={`rounded border p-3 text-sm ${sendError.includes('sent by') ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>{sendError}</div>}<div className="flex justify-end gap-2"><Btn variant="outline" onClick={() => setSendOpen(false)}>Close</Btn><Btn onClick={sendInvitation} disabled={isPending}>{isPending ? 'Sending...' : 'Send Feedback'}</Btn></div></div></Modal>
+    <ConfirmDialog open={deleteId !== null} onClose={() => !isPending && setDeleteId(null)} onConfirm={remove} closeOnConfirm={false} confirmDisabled={isPending} cancelDisabled={isPending} message="Delete this feedback record? This cannot be undone." /><ConfirmDialog open={discardOpen} onClose={() => setDiscardOpen(false)} onConfirm={forceCloseForm} title="Discard changes?" confirmLabel="Discard" message="You have unsaved feedback changes. Discard them?" />
+  </div>
 }

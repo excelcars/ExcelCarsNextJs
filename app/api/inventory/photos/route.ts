@@ -1,0 +1,177 @@
+import { unlink } from 'fs/promises'
+import path from 'path'
+import { randomUUID } from 'crypto'
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db/prisma'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { deleteFromFirebaseStorage, firebasePublicUrl, isFirebaseStoragePath, uploadToFirebaseStorage } from '@/lib/firebase/storage'
+
+const PUBLIC_PREFIX = '/uploads/inventory'
+const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+
+function safeExt(fileName: string, mimeType: string) {
+  const ext = path.extname(fileName).toLowerCase()
+  if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) return ext
+  if (mimeType === 'image/png') return '.png'
+  if (mimeType === 'image/webp') return '.webp'
+  return '.jpg'
+}
+
+function hasAllowedImageSignature(bytes: Buffer, mimeType: string) {
+  if (mimeType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (mimeType === 'image/png') return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  return bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+}
+
+function fileNameFromPath(photoPath: string | null) {
+  if (!photoPath) return 'file'
+  const normalized = photoPath.replace(/\\/g, '/')
+  return normalized.split('/').pop() || normalized
+}
+
+function responsePath(photoPath: string | null) {
+  const firebaseKey = isFirebaseStoragePath(photoPath) ? photoPath!.slice('firebase://'.length) : null
+  return firebaseKey ? firebasePublicUrl(firebaseKey) : photoPath
+}
+
+export async function GET(req: NextRequest) {
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const inventoryId = Number(req.nextUrl.searchParams.get('inventoryId'))
+  const inventoryNumber = req.nextUrl.searchParams.get('inventoryNumber')?.trim() || null
+  if (!inventoryId && !inventoryNumber) return NextResponse.json([])
+
+  const photos = await prisma.inventoryPhotos.findMany({
+    where: {
+      OR: [
+        ...(inventoryId ? [{ fkInventoryId: inventoryId }] : []),
+        ...(inventoryNumber ? [{ inventoryNumberLegacy: inventoryNumber }] : []),
+      ],
+    },
+    orderBy: { documentId: 'desc' },
+  })
+
+  const deduped = Array.from(new Map(photos.map(photo => [photo.documentId, photo])).values())
+  return NextResponse.json(
+    deduped.map(photo => ({
+      documentId: photo.documentId,
+      path: responsePath(photo.path),
+      inventoryNumberLegacy: photo.inventoryNumberLegacy,
+      isUploadedHere: Boolean(photo.path?.startsWith(PUBLIC_PREFIX) || isFirebaseStoragePath(photo.path)),
+      fileName: fileNameFromPath(photo.path),
+    })),
+  )
+}
+
+export async function POST(req: NextRequest) {
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const formData = await req.formData()
+  const inventoryId = Number(formData.get('inventoryId'))
+  const inventoryNumber = String(formData.get('inventoryNumber') || '').trim()
+  const files = formData.getAll('files').filter((value): value is File => value instanceof File)
+
+  if (!inventoryId || !inventoryNumber) {
+    return NextResponse.json({ error: 'Inventory reference is required.' }, { status: 400 })
+  }
+  if (files.length === 0) {
+    return NextResponse.json({ error: 'Select at least one image.' }, { status: 400 })
+  }
+
+  const inventory = await prisma.inventoryManagement.findUnique({
+    where: { inventoryId },
+    select: { inventoryId: true, inventoryNumber: true },
+  })
+  if (!inventory) {
+    return NextResponse.json({ error: 'Vehicle not found.' }, { status: 404 })
+  }
+
+  const results: Array<{ name: string; success: boolean; error?: string; photo?: unknown }> = []
+
+  for (const file of files) {
+    if (!ALLOWED_TYPES.has(file.type)) {
+      results.push({ name: file.name, success: false, error: 'Only JPG, PNG, and WEBP files are allowed.' })
+      continue
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      results.push({ name: file.name, success: false, error: 'File exceeds 10 MB limit.' })
+      continue
+    }
+
+    try {
+      const ext = safeExt(file.name, file.type)
+      const fileName = `${Date.now()}-${randomUUID()}${ext}`
+      const bytes = Buffer.from(await file.arrayBuffer())
+      if (!hasAllowedImageSignature(bytes, file.type)) {
+        results.push({ name: file.name, success: false, error: 'File content does not match an allowed image type.' })
+        continue
+      }
+      const storedPath = await uploadToFirebaseStorage(`inventory/${inventoryId}/${fileName}`, bytes, file.type)
+
+      const photo = await prisma.inventoryPhotos.create({
+        data: {
+          fkInventoryId: inventoryId,
+          inventoryNumberLegacy: inventory.inventoryNumber ?? inventoryNumber,
+          path: storedPath,
+        },
+      })
+
+      results.push({
+        name: file.name,
+        success: true,
+        photo: {
+          documentId: photo.documentId,
+          path: responsePath(photo.path),
+          inventoryNumberLegacy: photo.inventoryNumberLegacy,
+          isUploadedHere: true,
+          fileName,
+        },
+      })
+    } catch {
+      results.push({ name: file.name, success: false, error: 'Upload failed.' })
+    }
+  }
+
+  return NextResponse.json({
+    success: results.some(result => result.success),
+    results,
+  })
+}
+
+export async function DELETE(req: NextRequest) {
+  if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await req.json().catch(() => null)
+  const documentId = Number(body?.documentId)
+  if (!documentId) return NextResponse.json({ error: 'Photo id is required.' }, { status: 400 })
+
+  const photo = await prisma.inventoryPhotos.findUnique({ where: { documentId } })
+  if (!photo) return NextResponse.json({ error: 'Photo not found.' }, { status: 404 })
+
+  if (isFirebaseStoragePath(photo.path)) {
+    try {
+      await deleteFromFirebaseStorage(photo.path)
+    } catch {
+      return NextResponse.json({ error: 'Could not delete the stored file.' }, { status: 500 })
+    }
+  } else if (photo.path?.startsWith(PUBLIC_PREFIX)) {
+    const uploadRoot = path.join(process.cwd(), 'public', 'uploads', 'inventory')
+    const resolvedPath = path.resolve(path.join(process.cwd(), 'public', photo.path.replace(/^\//, '')))
+    const resolvedRoot = path.resolve(uploadRoot)
+    if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) {
+      return NextResponse.json({ error: 'Unsafe photo path.' }, { status: 400 })
+    }
+    try {
+      await unlink(resolvedPath)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT') {
+        return NextResponse.json({ error: 'Could not delete the stored file.' }, { status: 500 })
+      }
+    }
+  }
+
+  await prisma.inventoryPhotos.delete({ where: { documentId } })
+  return NextResponse.json({ success: true })
+}

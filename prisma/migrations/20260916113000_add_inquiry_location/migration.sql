@@ -1,0 +1,2 @@
+ALTER TABLE "inquiry"
+  ADD COLUMN IF NOT EXISTS "location" TEXT;

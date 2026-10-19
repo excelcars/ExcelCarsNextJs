@@ -1,7 +1,67 @@
 @import "tailwindcss";
 
+.login-hero-car-slot {
+  /* Static location for the supplied drift video. */
+  contain: layout paint;
+}
+
+.login-hero-drift-video {
+  /* The source video has an opaque dark studio background. Feather its frame
+     into the existing navy/red hero instead of exposing a hard rectangle. */
+  filter: saturate(1.06) contrast(1.03);
+  -webkit-mask-image: radial-gradient(ellipse 105% 83% at 70% 55%, #000 20%, rgba(0, 0, 0, .9) 36%, rgba(0, 0, 0, .45) 48%, transparent 61%);
+  mask-image: radial-gradient(ellipse 105% 83% at 70% 55%, #000 20%, rgba(0, 0, 0, .9) 36%, rgba(0, 0, 0, .45) 48%, transparent 61%);
+}
+
+/* Dashboard greeting: a restrained highlight and sun motion add life without
+   competing with the KPI cards or dashboard content below. */
+.dashboard-hero-shimmer {
+  background: linear-gradient(105deg, transparent 15%, rgba(255, 255, 255, 0.16) 50%, transparent 85%);
+  transform: skewX(-18deg);
+  animation: dashboard-hero-shimmer 7s ease-in-out infinite;
+}
+
+.dashboard-greeting-sun {
+  animation: dashboard-greeting-pulse 3s ease-in-out infinite;
+}
+
+.dashboard-greeting-sun svg {
+  animation: dashboard-sun-turn 12s linear infinite;
+}
+
+@keyframes dashboard-hero-shimmer {
+  0%, 18% { translate: 0 0; opacity: 0; }
+  38% { opacity: 1; }
+  62%, 100% { translate: 460% 0; opacity: 0; }
+}
+
+@keyframes dashboard-greeting-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0.12); }
+}
+
+@keyframes dashboard-sun-turn {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-hero-drift-video { display: none; }
+  .login-hero-car-poster { display: block; }
+  .dashboard-hero-shimmer,
+  .dashboard-greeting-sun,
+  .dashboard-greeting-sun svg { animation: none; }
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Readable CRM baseline: supporting copy remains compact at 14px, while
+     controls, tables, and normal UI copy use a comfortable 16px. */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
   --color-navy: #1b2a6b;
   --color-navy-dark: #12204f;
   --color-brand-red: #c8102e;
@@ -15,4 +75,43 @@ body {
 
 body {
   font-family: var(--font-sans);
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Keep the sidebar scrollbar subtle so it blends with the dark navigation. */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.28);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.42);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
 }

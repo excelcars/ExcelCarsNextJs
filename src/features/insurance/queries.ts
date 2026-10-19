@@ -1,11 +1,77 @@
 import { prisma } from '@/lib/db/prisma'
 
 export const PAYOUT_STATUSES = ['Pending', 'Paid'] as const
-export const POLICY_STATUSES = ['Pending', 'Received'] as const
+export const POLICY_STATUSES = ['Pending', 'Received', 'Renewed'] as const
 export const CAR_TYPES = ['New', 'PreOwned'] as const
+export const INSURANCE_PAGE_SIZES = [25, 50, 100] as const
 
-export async function listInsurance() {
+function buildInsuranceWhere(search: string, fromDate = '', toDate = '') {
+  const q = search.trim()
+  const where: Record<string, unknown> = {}
+
+  if (fromDate || toDate) {
+    where.entryDate = {
+      ...(fromDate ? { gte: new Date(fromDate) } : {}),
+      ...(toDate ? { lte: new Date(toDate) } : {}),
+    }
+  }
+
+  if (!q) return where
+
+  return {
+    ...where,
+    OR: [
+      { carRegistrationNo: { contains: q, mode: 'insensitive' as const } },
+      { customerNameLegacy: { contains: q, mode: 'insensitive' as const } },
+      { customerMobileLegacy: { contains: q, mode: 'insensitive' as const } },
+      { customerEmailLegacy: { contains: q, mode: 'insensitive' as const } },
+      { agentNameLegacy: { contains: q, mode: 'insensitive' as const } },
+      { agentMobileNoLegacy: { contains: q, mode: 'insensitive' as const } },
+      { agentEmailIdLegacy: { contains: q, mode: 'insensitive' as const } },
+      { carMakeLegacy: { contains: q, mode: 'insensitive' as const } },
+      { carModelLegacy: { contains: q, mode: 'insensitive' as const } },
+      { carVariantLegacy: { contains: q, mode: 'insensitive' as const } },
+      { customer: { custName: { contains: q, mode: 'insensitive' as const } } },
+      { customer: { custMobile: { contains: q, mode: 'insensitive' as const } } },
+      { customer: { custEmail: { contains: q, mode: 'insensitive' as const } } },
+      { partnerMaster: { name: { contains: q, mode: 'insensitive' as const } } },
+      { partnerMaster: { mobile: { contains: q, mode: 'insensitive' as const } } },
+      { partnerMaster: { email: { contains: q, mode: 'insensitive' as const } } },
+    ],
+  }
+}
+
+export async function listInsurance({ search = '', page = 1, pageSize, fromDate = '', toDate = '' }: { search?: string; page?: number; pageSize?: number; fromDate?: string; toDate?: string }) {
+  const where = buildInsuranceWhere(search, fromDate, toDate)
+  const safePageSize = INSURANCE_PAGE_SIZES.includes(pageSize as 25 | 50 | 100) ? pageSize! : 25
+  const total = await prisma.insuranceMain.count({ where })
+  const pageCount = Math.max(1, Math.ceil(total / safePageSize))
+  const safePage = Math.min(Math.max(1, page || 1), pageCount)
+
+  const rows = await prisma.insuranceMain.findMany({
+    where,
+    include: {
+      customer: true,
+      partnerMaster: true,
+    },
+    orderBy: { insuranceMainId: 'desc' },
+    skip: (safePage - 1) * safePageSize,
+    take: safePageSize,
+  })
+
+  return {
+    rows,
+    total,
+    page: safePage,
+    pageCount,
+    pageSize: safePageSize,
+  }
+}
+
+export async function listInsuranceForExport({ search = '', fromDate = '', toDate = '' }: { search?: string; fromDate?: string; toDate?: string }) {
+  const where = buildInsuranceWhere(search, fromDate, toDate)
   return prisma.insuranceMain.findMany({
+    where,
     include: {
       customer: true,
       partnerMaster: true,
@@ -39,6 +105,7 @@ export async function getVehicles() {
   return prisma.inventoryManagement.findMany({
     select: {
       inventoryId: true,
+      fkVariantId: true,
       registrationNo: true,
       sku: true,
       year: true,

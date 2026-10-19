@@ -1,7 +1,9 @@
 import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
-  session: { strategy: "jwt" },
+  // Credentials providers require JWT sessions. Keep them short-lived; the
+  // server-side authVersion check in auth.ts handles revocation.
+  session: { strategy: "jwt", maxAge: 10 * 60 * 60 },
   pages: {
     signIn: "/login",
   },

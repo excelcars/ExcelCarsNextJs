@@ -3,40 +3,32 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedActorForFunctions } from '@/lib/access/accessControl'
+import { CUSTOMER_WRITE_FUNCTION } from '@/lib/access/accessCatalog'
+import { normalizeCustomerName, validateCustomerInput } from './validation'
+import type { CustomerFormInput } from './types'
 
-export interface CustomerFormInput {
-  type: string
-  custName: string
-  custAddress: string
-  custMobile: string
-  mobile_2: string
-  custEmail: string
-  custDob: string
-  custAnniversaryDt: string
-  comments: string
-  companyName: string
-}
+export type { CustomerFormInput } from './types'
 
 export interface ActionResult {
   success: boolean
   error?: string
+  errorField?: keyof CustomerFormInput
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  const actor = await getAuthorizedActorForFunctions([CUSTOMER_WRITE_FUNCTION])
+  return actor?.userId ?? null
 }
 
 function toDate(v: string): Date | null {
-  return v ? new Date(v) : null
+  return v ? new Date(`${v}T00:00:00.000Z`) : null
 }
 
 function buildData(input: CustomerFormInput) {
   return {
     type: input.type || null,
-    custName: input.custName.trim(),
+    custName: input.custName,
     custAddress: input.custAddress || null,
     custMobile: input.custMobile || null,
     mobile_2: input.mobile_2 || null,
@@ -48,21 +40,30 @@ function buildData(input: CustomerFormInput) {
   }
 }
 
+async function findDuplicateCustomer(input: CustomerFormInput, excludeId?: number) {
+  const candidates = await prisma.customer.findMany({
+    where: {
+      ...(input.custMobile
+        ? { custMobile: { equals: input.custMobile, mode: 'insensitive' } }
+        : { custEmail: { equals: input.custEmail, mode: 'insensitive' } }),
+      ...(excludeId ? { NOT: { custId: excludeId } } : {}),
+    },
+    select: { custName: true },
+  })
+  const normalizedName = normalizeCustomerName(input.custName).toLowerCase()
+  return candidates.some(candidate => normalizeCustomerName(candidate.custName).toLowerCase() === normalizedName)
+}
+
 export async function createCustomer(input: CustomerFormInput): Promise<ActionResult> {
-  if (!input.custName.trim()) {
-    return { success: false, error: 'Name is required.' }
-  }
+  const validation = validateCustomerInput(input)
+  if (!validation.value) return { success: false, error: validation.error, errorField: validation.errorField }
+  input = validation.value
 
   const userId = await currentUserId()
-  if (!userId) return { success: false, error: 'Not authenticated.' }
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
-    if (input.custMobile.trim()) {
-      const dup = await prisma.customer.findFirst({
-        where: { custName: input.custName.trim(), custMobile: input.custMobile.trim() },
-      })
-      if (dup) return { success: false, error: 'A customer with this name and mobile already exists.' }
-    }
+    if (await findDuplicateCustomer(input)) return { success: false, error: 'A customer with this name and primary contact already exists.' }
 
     await prisma.customer.create({
       data: {
@@ -82,20 +83,15 @@ export async function createCustomer(input: CustomerFormInput): Promise<ActionRe
 }
 
 export async function updateCustomer(id: number, input: CustomerFormInput): Promise<ActionResult> {
-  if (!input.custName.trim()) {
-    return { success: false, error: 'Name is required.' }
-  }
+  const validation = validateCustomerInput(input, { allowLegacyType: true })
+  if (!validation.value) return { success: false, error: validation.error, errorField: validation.errorField }
+  input = validation.value
 
   const userId = await currentUserId()
-  if (!userId) return { success: false, error: 'Not authenticated.' }
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
-    if (input.custMobile.trim()) {
-      const dup = await prisma.customer.findFirst({
-        where: { custName: input.custName.trim(), custMobile: input.custMobile.trim(), NOT: { custId: id } },
-      })
-      if (dup) return { success: false, error: 'A customer with this name and mobile already exists.' }
-    }
+    if (await findDuplicateCustomer(input, id)) return { success: false, error: 'A customer with this name and primary contact already exists.' }
 
     await prisma.customer.update({
       where: { custId: id },
@@ -114,6 +110,8 @@ export async function updateCustomer(id: number, input: CustomerFormInput): Prom
 }
 
 export async function deleteCustomer(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.customer.delete({ where: { custId: id } })
   } catch (err) {

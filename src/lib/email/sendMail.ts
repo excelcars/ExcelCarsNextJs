@@ -5,6 +5,7 @@ export interface SendEmailInput {
   subject: string
   html: string
   cc?: string
+  attachments?: Array<{ filename: string; path?: string; content?: Buffer; contentType: string }>
 }
 
 export interface SendEmailResult {
@@ -13,6 +14,15 @@ export interface SendEmailResult {
 }
 
 let transporter: ReturnType<typeof nodemailer.createTransport> | null = null
+
+export function isEmailConfigured() {
+  return Boolean(
+    process.env.SMTP_HOST
+    && process.env.SMTP_USER
+    && process.env.SMTP_PASSWORD
+    && process.env.EMAIL_FROM_ADDRESS,
+  )
+}
 
 function getTransporter() {
   if (transporter) return transporter
@@ -35,7 +45,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const fromAddress = process.env.EMAIL_FROM_ADDRESS
   const fromName = process.env.EMAIL_FROM_NAME || 'Excel Cars'
 
-  if (!smtpHost || !smtpUser || !smtpPassword || !fromAddress) {
+  if (!isEmailConfigured() || !smtpHost || !smtpUser || !smtpPassword || !fromAddress) {
     return { success: false, error: 'Email is not configured yet — add SMTP_HOST, SMTP_USER, SMTP_PASSWORD and EMAIL_FROM_ADDRESS to the environment.' }
   }
 
@@ -46,7 +56,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       from: `${fromName} <${fromAddress}>`,
       to: input.to,
       subject: input.subject,
-      html: input.html,
+    html: input.html,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       ...(cc ? { cc } : {}),
     })
     return { success: true }

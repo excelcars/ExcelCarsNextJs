@@ -1,0 +1,67 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '../../../../auth'
+import { listFollowupsForExport } from '@/features/followup/queries'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
+
+export async function GET(req: NextRequest) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!(await canCurrentUserAccessRoute('/followup'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const search = req.nextUrl.searchParams.get('search')?.trim() ?? ''
+  const classification = req.nextUrl.searchParams.get('classification')?.trim() ?? 'All'
+  const contactOutcome = req.nextUrl.searchParams.get('contactOutcome')?.trim() ?? ''
+  const customerName = req.nextUrl.searchParams.get('customerName')?.trim() ?? ''
+  const inquiryDateFrom = req.nextUrl.searchParams.get('inquiryDateFrom')?.trim() ?? ''
+  const inquiryDateTo = req.nextUrl.searchParams.get('inquiryDateTo')?.trim() ?? ''
+  const followUpDateFrom = req.nextUrl.searchParams.get('followUpDateFrom')?.trim() ?? ''
+  const followUpDateTo = req.nextUrl.searchParams.get('followUpDateTo')?.trim() ?? ''
+  const visitedDateFrom = req.nextUrl.searchParams.get('visitedDateFrom')?.trim() ?? ''
+  const visitedDateTo = req.nextUrl.searchParams.get('visitedDateTo')?.trim() ?? ''
+  const budgetFrom = req.nextUrl.searchParams.get('budgetFrom')?.trim() ?? ''
+  const budgetTo = req.nextUrl.searchParams.get('budgetTo')?.trim() ?? ''
+  const status = req.nextUrl.searchParams.get('status')?.trim() ?? 'FollowUp'
+  const subStatus = req.nextUrl.searchParams.get('subStatus')?.trim() ?? ''
+  const website = req.nextUrl.searchParams.get('website')?.trim() ?? ''
+  const customerMobile = req.nextUrl.searchParams.get('customerMobile')?.trim() ?? ''
+  const inquiryId = req.nextUrl.searchParams.get('inquiryId')?.trim() ?? ''
+  const userId = req.nextUrl.searchParams.get('userId')?.trim() ?? ''
+  const makeId = req.nextUrl.searchParams.get('makeId')?.trim() ?? ''
+  const modelId = req.nextUrl.searchParams.get('modelId')?.trim() ?? ''
+  const variantId = req.nextUrl.searchParams.get('variantId')?.trim() ?? ''
+  const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
+
+  const rows = await listFollowupsForExport({
+    search,
+    classification,
+    contactOutcome,
+    customerName,
+    inquiryDateFrom,
+    inquiryDateTo,
+    followUpDateFrom,
+    followUpDateTo,
+    visitedDateFrom,
+    visitedDateTo,
+    budgetFrom,
+    budgetTo,
+    status,
+    subStatus,
+    website,
+    customerMobile,
+    inquiryId,
+    userId,
+    makeId,
+    modelId,
+    variantId,
+    restrictToUserId: ownershipScope.restrictToUserId,
+    ownershipMode: ownershipScope.ownershipMode,
+  })
+
+  return NextResponse.json(rows.map(row => ({
+    ...row,
+    budgetOfCustomer: row.budgetOfCustomer ? row.budgetOfCustomer.toString() : null,
+  })))
+}

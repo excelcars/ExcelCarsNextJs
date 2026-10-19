@@ -53,10 +53,6 @@ Built fresh against live Prisma aggregate queries (stat cards, lead-source chart
 - **Legacy:** tracks an agent handling vehicle registration transfer paperwork, with **three independent status fields** (payment, RC status, transfer status). Real legacy bug: the "Pay" modal updated payment status and RC status on the main record but **silently left transfer status stale**, even though it captured the value.
 - **New:** ✅ built against 33 real rows. **Fixed the legacy bug** — logging a payment now updates all three statuses consistently, not two of three. ⚠️
 
-### DSA Management
-- **Legacy:** the one module confirmed to have **no payment history at all** — a genuinely flat single-record form, opened in context from a specific inventory item, with customer info pulled read-only from that vehicle's own owner fields (not a separately chosen customer).
-- **New:** ✅ built to match that exact shape — vehicle picker is the *required* first field (unlike the optional pickers in Insurance/Loan/RTO), no "Log Payment" history flow, direct edit of payment status/amount instead. This is a deliberate structural difference from the other three referral modules, not an oversight. 0 real rows (confirmed unused in legacy, same pattern as Loan/Checklist).
-
 ---
 
 ## Configuration Screens
@@ -100,9 +96,6 @@ Legacy's "tracking" report is **not** a change-history/audit log (no timestamped
 
 ### Today's Inquiry & Followup
 Legacy filtered on a **date range applied to Followup_Inquiry.Updated_Dt**, defaulting to today, plus a hardcoded row-security rule: an `InquiryAssistant`-role user is always restricted to inquiries *they* created, regardless of what's picked in the "Updated By" dropdown. Both behaviors replicated in the new build with the correct real role name.
-
-### Exception Log
-Legacy's date filter was a **single date expanded into a buggy ~2-day window** (`[date-1 23:59:59, date+1 00:00:00]`). Replaced with a proper from/to date range. ⚠️ Real data: 905 rows spanning 2017–2026, server-paginated.
 
 ---
 

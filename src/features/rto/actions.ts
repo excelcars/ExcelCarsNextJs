@@ -3,15 +3,19 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { auth } from '../../../auth'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface RtoFormInput {
   partnerId: number | null
+  agentNameLegacy: string
+  agentMobileNoLegacy: string
+  agentEmailIdLegacy: string
   customerId: number | null
   customerNameLegacy: string
   customerMobLegacy: string
   customerEmailLegacy: string
   inventoryId: number | null
+  variantId: number | null
   registrationNo: string
   carType: string
   carMakeLegacy: string
@@ -20,6 +24,7 @@ export interface RtoFormInput {
   carYear: number | null
   dateOfEntry: string
   transferCharges: number | null
+  amountPaid: number | null
   paymentStatus: string
   paymentDate: string
   rcStatus: string
@@ -43,18 +48,48 @@ export interface ActionResult {
 }
 
 async function currentUserId(): Promise<number | null> {
-  const session = await auth()
-  const id = session?.user?.id
-  return id ? Number(id) : null
+  return getAuthorizedUserIdForRoute('/rto')
 }
 
 function toDate(v: string): Date | null {
   return v ? new Date(v) : null
 }
 
+function isPastDate(value: string) {
+  if (!value) return false
+  const selected = new Date(`${value}T00:00:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return selected < today
+}
+
+function paymentStatusFor(transferCharges: Prisma.Decimal | number | null, amountPaid: Prisma.Decimal | number | null) {
+  const charges = Number(transferCharges ?? 0)
+  const paid = Number(amountPaid ?? 0)
+  if (paid <= 0) return 'Pending'
+  return charges > 0 && paid >= charges ? 'Fully Paid' : 'Partially Paid'
+}
+
+async function getLatestRtoPaymentDate(rtoAgentMainId: number): Promise<Date | null> {
+  const latestPayment = await prisma.rtoPaymentDetails.findFirst({
+    where: { fkRtoAgentMainId: rtoAgentMainId },
+    orderBy: [
+      { paymentDate: 'desc' },
+      { createdDt: 'desc' },
+      { rtoPaymentId: 'desc' },
+    ],
+    select: { paymentDate: true, createdDt: true },
+  })
+
+  return latestPayment?.paymentDate ?? latestPayment?.createdDt ?? null
+}
+
 function buildData(input: RtoFormInput) {
   return {
     dateOfEntry: toDate(input.dateOfEntry),
+    agentNameLegacy: input.agentNameLegacy || null,
+    agentMobileNoLegacy: input.agentMobileNoLegacy || null,
+    agentEmailIdLegacy: input.agentEmailIdLegacy || null,
     customerNameLegacy: input.customerNameLegacy || null,
     customerMobLegacy: input.customerMobLegacy || null,
     customerEmailLegacy: input.customerEmailLegacy || null,
@@ -74,35 +109,140 @@ function buildData(input: RtoFormInput) {
   }
 }
 
-export async function createRto(input: RtoFormInput): Promise<ActionResult> {
+function validateCreateInput(input: RtoFormInput): string | null {
   if (!input.customerId && !input.customerNameLegacy.trim()) {
-    return { success: false, error: 'Link a customer or enter a name.' }
+    return 'Link a customer or enter a name.'
   }
   if (!input.partnerId) {
-    return { success: false, error: 'Select an RTO agent.' }
+    return 'Select an RTO agent.'
+  }
+
+  const amountPaid = input.amountPaid ?? 0
+  if (amountPaid < 0) {
+    return 'Amount paid cannot be negative.'
+  }
+  if (input.transferCharges !== null && input.transferCharges < 0) {
+    return 'Transfer charges cannot be negative.'
+  }
+  if (isPastDate(input.followupDate)) {
+    return 'Follow-up date cannot be in the past.'
+  }
+  if (!input.remark.trim()) {
+    return 'Remark is required.'
+  }
+  if (amountPaid > 0) {
+    if (input.transferCharges === null) {
+      return 'Enter transfer charges before adding an initial payment.'
+    }
+    if (amountPaid > input.transferCharges) {
+      return 'Amount paid cannot exceed transfer charges.'
+    }
+    if (!input.paymentDate.trim()) {
+      return 'Enter a payment date for the initial payment.'
+    }
+    if (!input.paymentStatus || !input.rcStatus || !input.transferStatus) {
+      return 'Payment, RC, and transfer status are required for the initial payment.'
+    }
+  }
+
+  return null
+}
+
+export async function createRto(input: RtoFormInput): Promise<ActionResult> {
+  const validationError = validateCreateInput(input)
+  if (validationError) {
+    return { success: false, error: validationError }
   }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
+  const now = new Date()
+  const hasInitialPayment = (input.amountPaid ?? 0) > 0
+  const hasInitialFollowup = !!input.followupDate.trim()
+  const paymentDate = hasInitialPayment ? toDate(input.paymentDate) : null
+  const followupDate = hasInitialFollowup ? toDate(input.followupDate) : null
+  const calculatedPaymentStatus = paymentStatusFor(input.transferCharges, input.amountPaid)
 
   try {
-    if (input.registrationNo.trim()) {
-      const dup = await prisma.rtoAgent.findFirst({ where: { carRegistrationNo: input.registrationNo.trim() } })
-      if (dup) return { success: false, error: 'An RTO record already exists for this registration number.' }
-    }
+    await prisma.$transaction(async (tx) => {
+      if (input.registrationNo.trim()) {
+        const dup = await tx.rtoAgent.findFirst({ where: { carRegistrationNo: input.registrationNo.trim() } })
+        if (dup) {
+          throw new Error('An RTO record already exists for this registration number.')
+        }
+      }
 
-    await prisma.rtoAgent.create({
-      data: {
-        ...buildData(input),
-        partnerMaster: { connect: { partnerId: input.partnerId } },
-        ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
-        ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
-        amtPaid: 0,
-        createdDt: new Date(),
-        updatedDt: new Date(),
-        ...(userId ? { createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } } } : {}),
-      },
+      const created = await tx.rtoAgent.create({
+        data: {
+          ...buildData({
+            ...input,
+            paymentStatus: calculatedPaymentStatus,
+            paymentDate: hasInitialPayment ? input.paymentDate : '',
+            followupDate: hasInitialFollowup ? input.followupDate : '',
+          }),
+          partnerMaster: { connect: { partnerId: input.partnerId! } },
+          ...(input.customerId ? { customer: { connect: { custId: input.customerId } } } : {}),
+          ...(input.inventoryId ? { inventoryManagement: { connect: { inventoryId: input.inventoryId } } } : {}),
+          ...(input.variantId ? { carVariantMaster: { connect: { pkVariantId: input.variantId } } } : {}),
+          amtPaid: 0,
+          createdDt: now,
+          updatedDt: now,
+          ...(userId ? { createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } } } : {}),
+        },
+      })
+
+      if (hasInitialPayment) {
+        await tx.rtoPaymentDetails.create({
+          data: {
+            fkRtoAgentMainId: created.rtoAgentMainId,
+            transferCharges: input.transferCharges,
+            amountPaid: input.amountPaid,
+            paymentStatus: calculatedPaymentStatus,
+            paymentDate,
+            rcStatus: input.rcStatus,
+            transferStatus: input.transferStatus,
+            createdDt: now,
+            updatedDt: now,
+            ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+          },
+        })
+      }
+
+      if (hasInitialFollowup) {
+        await tx.rtoFollowupDetails.create({
+          data: {
+            fkRtoAgentMainId: created.rtoAgentMainId,
+            followupDate,
+            remark: input.remark || null,
+            createdDt: now,
+            updatedDt: now,
+            ...(userId ? { createdBy: userId, updatedBy: userId } : {}),
+          },
+        })
+      }
+
+      const sum = await tx.rtoPaymentDetails.aggregate({
+        where: { fkRtoAgentMainId: created.rtoAgentMainId },
+        _sum: { amountPaid: true },
+      })
+
+      await tx.rtoAgent.update({
+        where: { rtoAgentMainId: created.rtoAgentMainId },
+        data: {
+          amtPaid: sum._sum.amountPaid ?? 0,
+          paymentStatus: paymentStatusFor(input.transferCharges, sum._sum.amountPaid),
+          paymentDate,
+          followupDate,
+          remark: input.remark || null,
+          updatedDt: now,
+          ...(userId ? { updatedBy: userId } : {}),
+        },
+      })
     })
   } catch (err) {
+    if (err instanceof Error && err.message === 'An RTO record already exists for this registration number.') {
+      return { success: false, error: err.message }
+    }
     return { success: false, error: describeError(err) }
   }
 
@@ -117,8 +257,15 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
   if (!input.partnerId) {
     return { success: false, error: 'Select an RTO agent.' }
   }
+  if (isPastDate(input.followupDate)) {
+    return { success: false, error: 'Follow-up date cannot be in the past.' }
+  }
+  if (!input.remark.trim()) {
+    return { success: false, error: 'Remark is required.' }
+  }
 
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
 
   try {
     if (input.registrationNo.trim()) {
@@ -128,13 +275,25 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
       if (dup) return { success: false, error: 'An RTO record already exists for this registration number.' }
     }
 
+    const [latestPaymentDate, current] = await Promise.all([
+      getLatestRtoPaymentDate(id),
+      prisma.rtoAgent.findUnique({ where: { rtoAgentMainId: id }, select: { amtPaid: true } }),
+    ])
+    const totalPaid = current?.amtPaid ?? 0
+    if (input.transferCharges !== null && Number(totalPaid) > Number(input.transferCharges)) {
+      return { success: false, error: 'Transfer charges cannot be less than the amount already paid.' }
+    }
+
     await prisma.rtoAgent.update({
       where: { rtoAgentMainId: id },
       data: {
         ...buildData(input),
+        paymentStatus: paymentStatusFor(input.transferCharges, totalPaid),
+        paymentDate: latestPaymentDate ?? toDate(input.paymentDate),
         fkPartnerId: input.partnerId,
         customerId: input.customerId,
         inventoryId: input.inventoryId,
+        fkVariantId: input.variantId,
         updatedDt: new Date(),
         ...(userId ? { updatedBy: userId } : {}),
       },
@@ -148,6 +307,8 @@ export async function updateRto(id: number, input: RtoFormInput): Promise<Action
 }
 
 export async function deleteRto(id: number): Promise<ActionResult> {
+  const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.rtoPaymentDetails.deleteMany({ where: { fkRtoAgentMainId: id } })
     await prisma.rtoFollowupDetails.deleteMany({ where: { fkRtoAgentMainId: id } })
@@ -161,23 +322,63 @@ export async function deleteRto(id: number): Promise<ActionResult> {
 }
 
 export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPaymentInput): Promise<ActionResult> {
-  if (!input.paymentStatus || !input.rcStatus || !input.transferStatus) {
-    return { success: false, error: 'Payment, RC, and transfer status are all required.' }
+  if (!input.rcStatus || !input.transferStatus) {
+    return { success: false, error: 'RC and transfer status are required.' }
   }
-
+  if (!input.remark.trim()) {
+    return { success: false, error: 'Remark is required.' }
+  }
   const userId = await currentUserId()
+  if (!userId) return { success: false, error: 'Not authorized.' }
   const now = new Date()
 
   try {
-    const main = await prisma.rtoAgent.findUnique({ where: { rtoAgentMainId } })
+    const [main, paymentTotal] = await Promise.all([
+      prisma.rtoAgent.findUnique({ where: { rtoAgentMainId } }),
+      prisma.rtoPaymentDetails.aggregate({
+        where: { fkRtoAgentMainId: rtoAgentMainId },
+        _sum: { amountPaid: true },
+      }),
+    ])
     if (!main) return { success: false, error: 'RTO record not found.' }
+    const charges = Number(main.transferCharges ?? 0)
+    // The main record is a cached summary. Use the payment ledger as the
+    // source of truth so legacy/stale summaries cannot reject a valid part payment.
+    const paidBefore = Number(paymentTotal._sum.amountPaid ?? 0)
+    if (charges <= 0) return { success: false, error: 'Set transfer charges before logging a payment.' }
+    if (input.amountPaid === null) {
+      if (paidBefore < charges) return { success: false, error: 'Enter a payment amount greater than zero.' }
+      await prisma.rtoAgent.update({
+        where: { rtoAgentMainId },
+        data: {
+          amtPaid: paymentTotal._sum.amountPaid ?? 0,
+          paymentStatus: paymentStatusFor(main.transferCharges, paymentTotal._sum.amountPaid),
+          rcStatus: input.rcStatus,
+          transferStatus: input.transferStatus,
+          remark: input.remark.trim(),
+          updatedDt: now,
+          ...(userId ? { updatedBy: userId } : {}),
+        },
+      })
+      revalidatePath('/rto')
+      return { success: true }
+    }
+    if (input.amountPaid <= 0) return { success: false, error: 'Enter a payment amount greater than zero.' }
+    if (paidBefore + input.amountPaid > charges) return { success: false, error: 'Payment cannot exceed the remaining RTO balance.' }
+    const calculatedPaymentStatus = paymentStatusFor(main.transferCharges, paidBefore + input.amountPaid)
+    if (calculatedPaymentStatus !== 'Fully Paid') {
+      if (!input.nextFollowUpDate || isPastDate(input.nextFollowUpDate)) {
+        return { success: false, error: 'A current or future follow-up date is required for a pending balance.' }
+      }
+      if (!input.remark.trim()) return { success: false, error: 'Add a remark for the pending balance.' }
+    }
 
     await prisma.rtoPaymentDetails.create({
       data: {
         fkRtoAgentMainId: rtoAgentMainId,
         transferCharges: main.transferCharges,
         amountPaid: input.amountPaid,
-        paymentStatus: input.paymentStatus,
+        paymentStatus: calculatedPaymentStatus,
         paymentDate: now,
         rcStatus: input.rcStatus,
         transferStatus: input.transferStatus,
@@ -205,6 +406,8 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
       _sum: { amountPaid: true },
     })
 
+    const latestPaymentDate = await getLatestRtoPaymentDate(rtoAgentMainId)
+
     // logs all three statuses on the main record — the legacy "Pay" flow only
     // updated payment/RC status and left transfer_status stale, which we treat
     // as an oversight rather than intended behavior
@@ -212,7 +415,8 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
       where: { rtoAgentMainId },
       data: {
         amtPaid: sum._sum.amountPaid ?? 0,
-        paymentStatus: input.paymentStatus,
+        paymentStatus: paymentStatusFor(main.transferCharges, sum._sum.amountPaid),
+        paymentDate: latestPaymentDate,
         rcStatus: input.rcStatus,
         transferStatus: input.transferStatus,
         followupDate: input.nextFollowUpDate ? new Date(input.nextFollowUpDate) : null,
@@ -221,8 +425,8 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
         ...(userId ? { updatedBy: userId } : {}),
       },
     })
-  } catch {
-    return { success: false, error: 'Something went wrong logging this payment.' }
+  } catch (err) {
+    return { success: false, error: describeError(err) }
   }
 
   revalidatePath('/rto')
@@ -231,9 +435,21 @@ export async function logRtoPayment(rtoAgentMainId: number, input: LogRtoPayment
 
 function describeError(err: unknown): string {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === 'P2003') {
-      return 'This record references data that no longer exists.'
+    if (err.code === 'P2002') {
+      return 'An RTO record already exists with these unique details.'
     }
+    if (err.code === 'P2003') {
+      return 'The selected RTO agent, customer, inventory vehicle, or vehicle variant no longer exists. Refresh the page and select it again.'
+    }
+    if (err.code === 'P2025') {
+      return 'One of the selected linked records is no longer available. Refresh the page and select the RTO agent, customer, and vehicle again.'
+    }
+    if (err.code === 'P2004') {
+      return 'One of the selected statuses is not accepted by the database. Refresh the page and try again.'
+    }
+  }
+  if (err instanceof Prisma.PrismaClientValidationError) {
+    return 'The RTO record has an invalid value. Refresh the page and try again.'
   }
   return 'Something went wrong saving this record.'
 }
