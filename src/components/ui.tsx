@@ -68,14 +68,14 @@ export function Input({ label, error, errorMessage, autoComplete, ...props }: In
   const isLookup = typeof props.placeholder === 'string' && /\b(search|find|type)\b/i.test(props.placeholder)
   return (
     <div className="flex flex-col gap-1">
-      {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
+      {label && <label className="text-sm font-medium text-gray-600">{label}</label>}
       <input
         {...props}
         autoComplete={autoComplete ?? (isLookup ? 'new-password' : undefined)}
         className={`min-h-10 border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 ${props.className || ''}`}
         style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
       />
-      {error && errorMessage && <span className="text-xs text-red-600">{errorMessage}</span>}
+      {error && errorMessage && <span className="text-sm text-red-600">{errorMessage}</span>}
     </div>
   )
 }
@@ -83,7 +83,7 @@ export function Input({ label, error, errorMessage, autoComplete, ...props }: In
 export function Select({ label, children, error, errorMessage, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { label?: ReactNode; error?: boolean; errorMessage?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
+      {label && <label className="text-sm font-medium text-gray-600">{label}</label>}
       <div className="relative">
         <select
           {...props}
@@ -93,7 +93,7 @@ export function Select({ label, children, error, errorMessage, ...props }: Selec
         </select>
         <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
       </div>
-      {error && errorMessage && <span className="text-xs text-red-600">{errorMessage}</span>}
+      {error && errorMessage && <span className="text-sm text-red-600">{errorMessage}</span>}
     </div>
   )
 }
@@ -101,12 +101,12 @@ export function Select({ label, children, error, errorMessage, ...props }: Selec
 export function Textarea({ label, error, errorMessage, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: ReactNode; error?: boolean; errorMessage?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
+      {label && <label className="text-sm font-medium text-gray-600">{label}</label>}
       <textarea rows={3} {...props}
         className={`border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400 resize-none ${props.className || ''}`}
         style={{ '--tw-ring-color': error ? '#C8102E' : N } as Record<string, string>}
       />
-      {error && errorMessage && <span className="text-xs text-red-600">{errorMessage}</span>}
+      {error && errorMessage && <span className="text-sm text-red-600">{errorMessage}</span>}
     </div>
   )
 }
