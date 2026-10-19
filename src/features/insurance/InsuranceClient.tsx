@@ -873,7 +873,7 @@ export function InsuranceClient({
             <Select label="Policy Status" value={form.policyStatus} onChange={e => f('policyStatus', e.target.value)}>
               {POLICY_STATUSES.map(s => <option key={s}>{s}</option>)}
             </Select>
-            <div><Input label="Renewal Date *" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} error={errors.renewalDate} />{fieldError('renewalDate')}</div>
+            <div><Input label="Issued/Renewal Date *" type="date" value={form.renewalDate} onChange={e => f('renewalDate', e.target.value)} error={errors.renewalDate} />{fieldError('renewalDate')}</div>
             <div><Input label="Expiry Date *" type="date" value={form.expiryDate} onChange={e => f('expiryDate', e.target.value)} error={errors.expiryDate} />{fieldError('expiryDate')}</div>
             <div><Input label="Follow-up Date *" type="date" min={todayLocalDate()} value={form.followupDate} onChange={e => f('followupDate', e.target.value)} error={errors.followupDate} />{fieldError('followupDate')}</div>
           </div>

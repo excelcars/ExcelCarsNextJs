@@ -35,7 +35,7 @@ export function CustomerDateInput({
 
   return (
     <div className="relative flex flex-col gap-1">
-      <label className="text-xs font-medium text-gray-600">{label}</label>
+      <label className="text-sm font-medium text-gray-600">{label}</label>
       <div className="relative">
         <input value={value} placeholder="DD/MM/YYYY" inputMode="numeric" maxLength={10} onChange={event => onChange(event.target.value)}
           className={`w-full border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 pr-10 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400`}
@@ -43,7 +43,7 @@ export function CustomerDateInput({
         />
         <button type="button" aria-label={`Choose ${label.toLowerCase()}`} onClick={openCalendar} className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-[#1B2A6B]"><CalendarDays className="h-4 w-4" /></button>
       </div>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
       {open && (
         <div className="absolute z-30 top-[calc(100%+4px)] w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
           <div className="mb-3 flex items-center justify-between">
