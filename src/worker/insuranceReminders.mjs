@@ -96,10 +96,10 @@ async function recordAttempt(prisma, delivery, result) {
 }
 
 async function dispatchDelivery(prisma, delivery, mailer) {
-  const policy = await prisma.insuranceMain.findUnique({ where: { insuranceMainId: delivery.insuranceMainId }, select: { policyStatus: true } })
-  if (!policy || policy.policyStatus === 'Received' || policy.policyStatus === 'Renewed') {
+  const policy = await prisma.insuranceMain.findUnique({ where: { insuranceMainId: delivery.insuranceMainId }, select: { insuranceMainId: true } })
+  if (!policy) {
     await prisma.$transaction([
-      prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy is already received or renewed.' } }),
+      prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy no longer exists.' } }),
       prisma.insuranceReminderDelivery.update({ where: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId }, data: { status: 'Cancelled', nextRetryAt: null, attemptedAt: new Date() } }),
     ])
     return
@@ -133,17 +133,9 @@ export async function retryInsuranceReminders(prisma) {
   const mailer = configuredMailer()
   const due = await prisma.insuranceReminderDelivery.findMany({
     where: { status: 'Retrying', nextRetryAt: { lte: new Date() } },
-    include: { insuranceMain: { select: { policyStatus: true } } },
     take: 50,
   })
   for (const delivery of due) {
-    if (delivery.insuranceMain.policyStatus === 'Received' || delivery.insuranceMain.policyStatus === 'Renewed') {
-      await prisma.$transaction([
-        prisma.insuranceReminderAttempt.create({ data: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId, attemptNumber: delivery.retryCount + 1, status: 'Cancelled', errorMessage: 'Policy is already received or renewed.' } }),
-        prisma.insuranceReminderDelivery.update({ where: { insuranceReminderDeliveryId: delivery.insuranceReminderDeliveryId }, data: { status: 'Cancelled', nextRetryAt: null, attemptedAt: new Date() } }),
-      ])
-      continue
-    }
     await dispatchDelivery(prisma, delivery, mailer)
   }
 }
@@ -156,7 +148,7 @@ export async function queueDailyInsuranceReminders(prisma) {
   const [template, policies] = await Promise.all([
     prisma.messageTemplate.findFirst({ where: { messageSubject: TEMPLATE_SUBJECT } }),
     prisma.insuranceMain.findMany({
-      where: { expiryDate: { gte: lower, lte: upper }, OR: [{ policyStatus: null }, { policyStatus: { notIn: ['Received', 'Renewed'] } }] },
+      where: { expiryDate: { gte: lower, lte: upper } },
       include: {
         customer: true,
       },
@@ -186,9 +178,9 @@ export async function queueDailyInsuranceReminders(prisma) {
       const emailHtml = customerEmailHtml
       const whatsAppMessage = customerWhatsAppMessage
       const email = normalizeEmail(recipient.email)
-      if (email) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `email:${email}`, recipientAddress: email, channel: 'Email', daysBeforeExpiry, status: 'Queued', emailSubject: template.messageSubject || TEMPLATE_SUBJECT, emailHtml, whatsAppMessage: null }, mailer)
+      if (email) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, scheduledExpiryDate: policy.expiryDate, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `email:${email}`, recipientAddress: email, channel: 'Email', daysBeforeExpiry, status: 'Queued', emailSubject: template.messageSubject || TEMPLATE_SUBJECT, emailHtml, whatsAppMessage: null }, mailer)
       const whatsApp = normalizeWhatsAppRecipient(recipient.mobile)
-      if (whatsApp) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `whatsapp:${whatsApp}`, recipientAddress: whatsApp, channel: 'WhatsApp', daysBeforeExpiry, status: 'Queued', emailSubject: null, emailHtml: null, whatsAppMessage }, mailer)
+      if (whatsApp) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, scheduledExpiryDate: policy.expiryDate, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `whatsapp:${whatsApp}`, recipientAddress: whatsApp, channel: 'WhatsApp', daysBeforeExpiry, status: 'Queued', emailSubject: null, emailHtml: null, whatsAppMessage }, mailer)
     }
   }
 }

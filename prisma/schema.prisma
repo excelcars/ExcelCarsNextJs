@@ -922,6 +922,7 @@ model InsuranceReminderDelivery {
   daysBeforeExpiry            Int       @map("days_before_expiry")
   status                      String
   recipientAddress            String    @map("recipient_address")
+  scheduledExpiryDate         DateTime  @map("scheduled_expiry_date") @db.Timestamptz(6)
   emailSubject                String?   @map("email_subject")
   emailHtml                   String?   @map("email_html")
   whatsAppMessage             String?   @map("whatsapp_message")
@@ -933,7 +934,7 @@ model InsuranceReminderDelivery {
   insuranceMain               InsuranceMain @relation(fields: [insuranceMainId], references: [insuranceMainId], onDelete: Cascade, onUpdate: NoAction, map: "fk_insurance_reminder_delivery_insurance")
   attempts                    InsuranceReminderAttempt[]
 
-  @@unique([insuranceMainId, recipientKey, channel, daysBeforeExpiry], map: "uq_insurance_reminder_delivery_schedule")
+  @@unique([insuranceMainId, recipientKey, channel, scheduledExpiryDate, daysBeforeExpiry], map: "uq_insurance_reminder_delivery_schedule")
   @@index([status, attemptedAt], map: "ix_insurance_reminder_delivery_status_attempted")
   @@index([insuranceMainId, attemptedAt], map: "ix_insurance_reminder_delivery_insurance_attempted")
   @@map("insurance_reminder_delivery")
