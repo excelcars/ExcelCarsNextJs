@@ -34,7 +34,7 @@ function sanitizeFunctionNames(functionNames: string[]) {
 
 async function ensureRoleAccessAuditTable(tx: Prisma.TransactionClient) {
   const auditTable = await tx.$queryRaw<Array<{ audit_table: string | null }>>(Prisma.sql`
-    SELECT to_regclass('public.role_access_audit') AS audit_table
+    SELECT to_regclass('public.role_access_audit')::text AS audit_table
   `)
 
   if (auditTable[0]?.audit_table) return
