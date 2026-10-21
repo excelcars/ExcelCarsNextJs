@@ -23,6 +23,41 @@ function sanitizeFunctionNames(functionNames: string[]) {
   return [...new Set(functionNames.map(name => name.trim()).filter(name => APP_ACCESS_FUNCTION_NAMES.has(name)))]
 }
 
+async function ensureRoleAccessAuditTable(tx: Prisma.TransactionClient) {
+  const auditTable = await tx.$queryRaw<Array<{ audit_table: string | null }>>(Prisma.sql`
+    SELECT to_regclass('public.role_access_audit') AS audit_table
+  `)
+
+  if (auditTable[0]?.audit_table) return
+
+  await tx.$executeRaw(Prisma.sql`
+    CREATE TABLE IF NOT EXISTS role_access_audit (
+      role_access_audit_id SERIAL PRIMARY KEY,
+      role_id INTEGER NOT NULL,
+      role_name_snapshot TEXT NULL,
+      changed_by_user_id INTEGER NOT NULL,
+      changed_by_user_name TEXT NULL,
+      changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      added_function_names_csv TEXT NULL,
+      removed_function_names_csv TEXT NULL,
+      before_function_names_csv TEXT NULL,
+      after_function_names_csv TEXT NULL
+    )
+  `)
+  await tx.$executeRaw(Prisma.sql`
+    CREATE INDEX IF NOT EXISTS ix_role_access_audit_role_id
+      ON role_access_audit (role_id)
+  `)
+  await tx.$executeRaw(Prisma.sql`
+    CREATE INDEX IF NOT EXISTS ix_role_access_audit_changed_by_user_id
+      ON role_access_audit (changed_by_user_id)
+  `)
+  await tx.$executeRaw(Prisma.sql`
+    CREATE INDEX IF NOT EXISTS ix_role_access_audit_changed_at
+      ON role_access_audit (changed_at DESC)
+  `)
+}
+
 async function ensureCriticalPermissionCoverage(roleId: number, selectedFunctionNames: string[]) {
   const currentMappings = await prisma.accessFunctionRole.findMany({
     where: {
@@ -78,6 +113,8 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
 
   try {
     await prisma.$transaction(async tx => {
+      await ensureRoleAccessAuditTable(tx)
+
       const existingFunctions = await tx.accessFunction.findMany({
         where: { accessFunctionName: { in: APP_ACCESS_CATALOG.map(item => item.functionName) } },
         select: { accessFunctionId: true, accessFunctionName: true },
