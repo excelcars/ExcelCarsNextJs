@@ -15,6 +15,15 @@ export interface RoleActionResult extends ActionResult {
   roleId?: number
 }
 
+interface RoleAccessAuditEntry {
+  roleName: string | null
+  actorName: string | null
+  addedFunctionNames: string[]
+  removedFunctionNames: string[]
+  previousFunctionNames: string[]
+  nextFunctionNames: string[]
+}
+
 function encodeFunctionNames(functionNames: string[]) {
   return [...new Set(functionNames.map(name => name.trim()).filter(Boolean))].sort().join(',')
 }
@@ -56,6 +65,35 @@ async function ensureRoleAccessAuditTable(tx: Prisma.TransactionClient) {
     CREATE INDEX IF NOT EXISTS ix_role_access_audit_changed_at
       ON role_access_audit (changed_at DESC)
   `)
+}
+
+async function writeRoleAccessAudit(entry: RoleAccessAuditEntry, roleId: number, actorUserId: number) {
+  await prisma.$transaction(async tx => {
+    await ensureRoleAccessAuditTable(tx)
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO role_access_audit (
+        role_id,
+        role_name_snapshot,
+        changed_by_user_id,
+        changed_by_user_name,
+        changed_at,
+        added_function_names_csv,
+        removed_function_names_csv,
+        before_function_names_csv,
+        after_function_names_csv
+      ) VALUES (
+        ${roleId},
+        ${entry.roleName},
+        ${actorUserId},
+        ${entry.actorName},
+        ${new Date()},
+        ${encodeFunctionNames(entry.addedFunctionNames) || null},
+        ${encodeFunctionNames(entry.removedFunctionNames) || null},
+        ${encodeFunctionNames(entry.previousFunctionNames) || null},
+        ${encodeFunctionNames(entry.nextFunctionNames) || null}
+      )
+    `)
+  })
 }
 
 async function ensureCriticalPermissionCoverage(roleId: number, selectedFunctionNames: string[]) {
@@ -111,10 +149,10 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
   const criticalCoverageError = await ensureCriticalPermissionCoverage(roleId, selectedFunctionNames)
   if (criticalCoverageError) return { success: false, error: criticalCoverageError }
 
+  let auditEntry: RoleAccessAuditEntry | null = null
+
   try {
     await prisma.$transaction(async tx => {
-      await ensureRoleAccessAuditTable(tx)
-
       const existingFunctions = await tx.accessFunction.findMany({
         where: { accessFunctionName: { in: APP_ACCESS_CATALOG.map(item => item.functionName) } },
         select: { accessFunctionId: true, accessFunctionName: true },
@@ -194,35 +232,27 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
           where: { userId: actor.userId },
           select: { userName: true, displayName: true },
         })
-
-        await tx.$executeRaw(Prisma.sql`
-          INSERT INTO role_access_audit (
-            role_id,
-            role_name_snapshot,
-            changed_by_user_id,
-            changed_by_user_name,
-            changed_at,
-            added_function_names_csv,
-            removed_function_names_csv,
-            before_function_names_csv,
-            after_function_names_csv
-          ) VALUES (
-            ${roleId},
-            ${roleDetails?.roleName ?? null},
-            ${actor.userId},
-            ${actorDetails?.displayName?.trim() || actorDetails?.userName?.trim() || null},
-            ${new Date()},
-            ${encodeFunctionNames(addedFunctionNames) || null},
-            ${encodeFunctionNames(removedFunctionNames) || null},
-            ${encodeFunctionNames(previousFunctionNames) || null},
-            ${encodeFunctionNames(selectedFunctionNames) || null}
-          )
-        `)
+        auditEntry = {
+          roleName: roleDetails?.roleName ?? null,
+          actorName: actorDetails?.displayName?.trim() || actorDetails?.userName?.trim() || null,
+          addedFunctionNames,
+          removedFunctionNames,
+          previousFunctionNames,
+          nextFunctionNames: selectedFunctionNames,
+        }
       }
     })
   } catch (error) {
     console.error('saveRoleAccess transaction failed', error)
     throw new Error('Role access could not be saved.')
+  }
+
+  if (auditEntry) {
+    try {
+      await writeRoleAccessAudit(auditEntry, roleId, actor.userId)
+    } catch (error) {
+      console.error('saveRoleAccess audit write failed', error)
+    }
   }
 
   revalidatePath('/config/role-access')
