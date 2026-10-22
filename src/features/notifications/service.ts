@@ -3,6 +3,9 @@ import { prisma } from '@/lib/db/prisma'
 
 type NotificationClient = Prisma.TransactionClient | typeof prisma
 
+const NOTIFICATION_WRITE_CONCURRENCY = 5
+const USER_SYNC_CONCURRENCY = 2
+
 export type NotificationInput = {
   recipientUserId: number
   type: 'inquiry_assigned' | 'inquiry_reassigned' | 'portal_lead' | 'followup_due' | 'followup_overdue'
@@ -43,6 +46,17 @@ export async function archiveFollowupNotifications(db: NotificationClient, inqui
   })
 }
 
+async function mapWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  const pending = [...items]
+  const workers = Array.from({ length: Math.min(limit, pending.length) }, async () => {
+    while (pending.length) {
+      const item = pending.shift()
+      if (item !== undefined) await worker(item)
+    }
+  })
+  await Promise.all(workers)
+}
+
 function startOfIndiaToday() {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
   const value = (type: string) => parts.find(part => part.type === type)?.value
@@ -53,11 +67,11 @@ function formatDate(value: Date) {
   return new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }).format(value)
 }
 
-export async function syncFollowupNotificationsForUser(userId: number) {
+export async function syncFollowupNotificationsForUser(userId: number, db: NotificationClient = prisma) {
   const today = startOfIndiaToday()
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
-  const dueInquiries = await prisma.inquiry.findMany({
+  const dueInquiries = await db.inquiry.findMany({
     where: {
       status: 'FollowUp',
       followUpDate: { lt: tomorrow },
@@ -72,11 +86,11 @@ export async function syncFollowupNotificationsForUser(userId: number) {
     },
   })
 
-  await Promise.all(dueInquiries.filter(row => row.followUpDate).map(row => {
+  await mapWithConcurrency(dueInquiries.filter(row => row.followUpDate), NOTIFICATION_WRITE_CONCURRENCY, async row => {
     const overdue = row.followUpDate! < today
     const customerName = row.customer?.custName || row.customerNameLegacy || `Inquiry #${row.inquiryId}`
     const type = overdue ? 'followup_overdue' : 'followup_due'
-    return createUserNotification(prisma, {
+    await createUserNotification(db, {
       recipientUserId: userId,
       type,
       title: overdue ? 'Follow-up overdue' : 'Follow-up due today',
@@ -88,11 +102,20 @@ export async function syncFollowupNotificationsForUser(userId: number) {
       entityId: row.inquiryId,
       dedupeKey: `${type}:${userId}:${row.inquiryId}`,
     })
-  }))
+  })
+}
+
+export async function syncFollowupNotificationsForActiveUsers() {
+  const users = await prisma.userTable.findMany({
+    where: { status: 'Active' },
+    select: { userId: true },
+  })
+
+  await mapWithConcurrency(users, USER_SYNC_CONCURRENCY, user => syncFollowupNotificationsForUser(user.userId))
+  return { usersProcessed: users.length }
 }
 
 export async function getNotificationSnapshot(userId: number) {
-  await syncFollowupNotificationsForUser(userId)
   const [items, unreadCount] = await Promise.all([
     prisma.userNotification.findMany({
       where: { recipientUserId: userId, archivedAt: null },
