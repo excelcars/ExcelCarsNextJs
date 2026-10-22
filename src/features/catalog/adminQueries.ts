@@ -25,5 +25,7 @@ export async function listCatalogSummary(search: string, page: number) {
 }
 
 export async function getCatalogMakes() {
-  return prisma.carMakeMaster.findMany({ where: { make: { not: null } }, orderBy: { make: 'asc' } })
+  // Admin repair views need access to unnamed parents; creation pickers filter
+  // incomplete names separately without deleting these historical records.
+  return prisma.carMakeMaster.findMany({ orderBy: { make: 'asc' } })
 }

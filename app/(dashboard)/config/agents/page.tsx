@@ -1,7 +1,10 @@
 import { AGENT_TYPES, listAgentsPaged } from '@/features/agents/adminQueries'
 import { AgentsClient } from '@/features/agents/AgentsClient'
+import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
+import { redirect } from 'next/navigation'
 
 export default async function AgentsPage({ searchParams }: { searchParams: Promise<{ search?: string; type?: string; page?: string }> }) {
+  if (!(await canCurrentUserAccessRoute('/config/agents'))) redirect('/dashboard')
   const sp = await searchParams
   const search = sp.search ?? ''
   const type = AGENT_TYPES.includes(sp.type as typeof AGENT_TYPES[number]) ? sp.type! : 'All'

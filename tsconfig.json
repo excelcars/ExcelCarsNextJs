@@ -37,6 +37,8 @@
     "node_modules/.next-test/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "tests/fixtures/dashboard-ui/.next",
+    "tests/fixtures/dashboard-ui/next-env.d.ts"
   ]
 }
