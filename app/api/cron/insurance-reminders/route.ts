@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
+import { syncFollowupNotificationsForActiveUsers } from '@/features/notifications/service'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,17 +16,31 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized cron request.' }, { status: 401 })
   }
 
-  if (process.env.INSURANCE_REMINDER_ENABLED !== 'true') {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'Insurance reminders are disabled.' })
+  let followupNotifications: { usersProcessed?: number; error?: string }
+  try {
+    followupNotifications = await syncFollowupNotificationsForActiveUsers()
+  } catch (error) {
+    console.error('Follow-up notification sync failed:', error)
+    followupNotifications = { error: error instanceof Error ? error.message : 'Follow-up notification sync failed.' }
   }
 
-  try {
-    const { queueDailyInsuranceReminders, retryInsuranceReminders } = await import('../../../../src/worker/insuranceReminders.mjs')
-    await queueDailyInsuranceReminders(prisma)
-    await retryInsuranceReminders(prisma)
-    return NextResponse.json({ ok: true, ranAt: new Date().toISOString() })
-  } catch (error) {
-    console.error('Insurance reminder cron failed:', error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Insurance reminder cron failed.' }, { status: 500 })
+  let insuranceReminders: { skipped: boolean; error?: string } = { skipped: true }
+  if (process.env.INSURANCE_REMINDER_ENABLED === 'true') {
+    try {
+      const { queueDailyInsuranceReminders, retryInsuranceReminders } = await import('../../../../src/worker/insuranceReminders.mjs')
+      await queueDailyInsuranceReminders(prisma)
+      await retryInsuranceReminders(prisma)
+      insuranceReminders = { skipped: false }
+    } catch (error) {
+      console.error('Insurance reminder cron failed:', error)
+      insuranceReminders = { skipped: false, error: error instanceof Error ? error.message : 'Insurance reminder cron failed.' }
+    }
   }
+
+  const ranAt = new Date().toISOString()
+  if (followupNotifications.error || insuranceReminders.error) {
+    return NextResponse.json({ error: 'Daily reminder cron completed with errors.', followupNotifications, insuranceReminders, ranAt }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, followupNotifications, insuranceReminders, ranAt })
 }

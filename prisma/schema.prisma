@@ -420,6 +420,8 @@ model Inquiry {
   @@index([customerId], map: "idx_16506_ix_inquiry_customer_id")
   @@index([sourceId], map: "idx_inquiry_source_id")
   @@index([locationId], map: "idx_inquiry_location_id")
+  @@index([status, followUpDate], map: "idx_inquiry_status_followup_date")
+  @@index([dateOfInquiry], map: "idx_inquiry_date_of_inquiry")
   @@map("inquiry")
 }
 

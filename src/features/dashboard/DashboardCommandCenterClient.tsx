@@ -738,7 +738,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       </Modal>
       <div className="min-h-full min-w-0 bg-[#f5f8fc] p-3">
         <div className="grid min-w-0 gap-3">
-          <div className="relative min-h-[94px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-5 py-3 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
+          <div className="relative min-h-[118px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-5 py-3 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
             <div className="absolute inset-y-0 left-[27%] right-[24%] bg-[url('/login-hero-car.png')] bg-[length:500px_auto] bg-[position:72%_48%] bg-no-repeat opacity-70 mix-blend-screen" aria-hidden="true" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,24,66,0.25),transparent_48%,rgba(130,16,57,0.12))]" aria-hidden="true" />
             <div className="dashboard-hero-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3" aria-hidden="true" />
@@ -746,7 +746,11 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <div className="text-white">
                 <div className="flex items-center gap-3">
                   <span className="dashboard-greeting-sun grid h-10 w-10 place-items-center rounded-full bg-white/10 text-amber-300 ring-1 ring-white/10"><Sun className="h-5 w-5" /></span>
-                  <div><div className="text-base font-bold">Good morning, {props.firstName}</div><p className="mt-0.5 text-xs text-white/75">Here&apos;s what&apos;s happening with your dealership today.</p></div>
+                  <div>
+                    <p className="text-xs font-medium text-white/65">Hey, {props.firstName} 👋</p>
+                    <h1 className="mt-1 text-2xl font-bold leading-none tracking-tight sm:text-3xl">Drive Your Dealership Forward.</h1>
+                    <p className="mt-1 text-xs text-white/75">Your business at a glance. Your next move starts here.</p>
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
