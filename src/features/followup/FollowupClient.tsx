@@ -1,5 +1,6 @@
 'use client'
 
+import { catalogSelectOptions } from '@/lib/catalogNames'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download, Loader2 } from 'lucide-react'
@@ -1848,9 +1849,9 @@ export function FollowupClient({
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-3 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,.8fr)_minmax(0,.8fr)_minmax(0,1.1fr)_auto]">
-                <FormDropdown label="Make *" value={String(carEditor.selectedMakeId ?? '')} options={makes.map(item => ({ value: String(item.pkMakeId), label: item.make ?? '—' }))} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
-                <FormDropdown label="Model *" value={String(carEditor.selectedModelId ?? '')} options={carEditorModels.map(item => ({ value: String(item.pkModelId), label: item.model ?? '—' }))} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
-                <FormDropdown label="Variant *" value={String(carEditor.fkVariantId ?? '')} options={carEditorVariants.map(item => ({ value: String(item.pkVariantId), label: item.variant ?? '—' }))} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
+                <FormDropdown label="Make *" value={String(carEditor.selectedMakeId ?? '')} options={catalogSelectOptions(makes, item => item.pkMakeId, item => item.make, carEditor.selectedMakeId, 'make')} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
+                <FormDropdown label="Model *" value={String(carEditor.selectedModelId ?? '')} options={catalogSelectOptions(carEditorModels, item => item.pkModelId, item => item.model, carEditor.selectedModelId, 'model')} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
+                <FormDropdown label="Variant *" value={String(carEditor.fkVariantId ?? '')} options={catalogSelectOptions(carEditorVariants, item => item.pkVariantId, item => item.variant, carEditor.fkVariantId, 'variant')} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
                   setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                   setCarEditorError('')
                 }} />

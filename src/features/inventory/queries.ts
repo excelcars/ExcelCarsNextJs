@@ -376,17 +376,17 @@ export async function getInventoryColours() {
   return colours
 }
 
-export async function getModelsByMake(makeId: number) {
+export async function getModelsByMake(makeId: number, includeIncomplete = false) {
   return prisma.carModelMaster.findMany({
-    where: { fkMakeId: makeId, model: { not: null } },
+    where: { fkMakeId: makeId, ...(includeIncomplete ? {} : { model: { not: null } }) },
     orderBy: { model: 'asc' },
-    include: { carVariantMaster: { where: { variant: { not: null } }, orderBy: { variant: 'asc' }, select: { pkVariantId: true, variant: true, fkMakeId: true, fkModelId: true } } },
+    include: { carVariantMaster: { where: includeIncomplete ? {} : { variant: { not: null } }, orderBy: { variant: 'asc' }, select: { pkVariantId: true, variant: true, fkMakeId: true, fkModelId: true } } },
   })
 }
 
-export async function getVariantsByModel(modelId: number) {
+export async function getVariantsByModel(modelId: number, includeIncomplete = false) {
   return prisma.carVariantMaster.findMany({
-    where: { fkModelId: modelId, variant: { not: null } },
+    where: { fkModelId: modelId, ...(includeIncomplete ? {} : { variant: { not: null } }) },
     orderBy: { variant: 'asc' },
   })
 }
