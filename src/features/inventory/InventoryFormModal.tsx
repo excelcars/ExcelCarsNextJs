@@ -1,3 +1,4 @@
+import { catalogTextOptions } from '@/lib/catalogNames'
 import type { ChangeEvent, ReactNode } from 'react'
 import { Btn, Input, Textarea, Modal } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
@@ -85,9 +86,9 @@ export function InventoryFormModal({
             <div className="grid grid-cols-3 gap-4">
               <Input label={fieldLabel('Inventory No')} value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
               <Input label={fieldLabel('SKU')} value={currentSku ?? 'Enter make, model, and colour'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
-              <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={makes.map(make => make.make ?? '').filter(Boolean)} error={errors.fkVariantId} />
-              <CatalogTextPicker label={fieldLabel('Model', true)} value={catalogModelText} onChange={value => void onModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={models.map(model => model.model ?? '').filter(Boolean)} error={errors.fkVariantId} />
-              <CatalogTextPicker label={fieldLabel('Variant', true)} value={catalogVariantText} onChange={onVariantChange} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={variants.map(variant => variant.variant ?? '').filter(Boolean)} error={errors.fkVariantId} />
+              <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={catalogTextOptions(makes.map(make => make.make))} error={errors.fkVariantId} />
+              <CatalogTextPicker label={fieldLabel('Model', true)} value={catalogModelText} onChange={value => void onModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={catalogTextOptions(models.map(model => model.model))} error={errors.fkVariantId} />
+              <CatalogTextPicker label={fieldLabel('Variant', true)} value={catalogVariantText} onChange={onVariantChange} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={catalogTextOptions(variants.map(variant => variant.variant))} error={errors.fkVariantId} />
               <FormDropdown label={fieldLabel('Year', true)} value={form.year ? String(form.year) : ''} options={Array.from({ length: new Date().getFullYear() - 1989 }, (_, index) => String(new Date().getFullYear() + 1 - index)).map(year => ({ value: year, label: year }))} placeholder="Select year" allowClear error={errors.year} onChange={value => f('year', value ? Number(value) : null)} />
               <Input label={fieldLabel('Month')} value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
               <CatalogTextPicker label={fieldLabel('Colour', true)} value={form.colour} onChange={value => f('colour', value)} placeholder="Search or enter colour..." options={inventoryColours} error={errors.colour} />

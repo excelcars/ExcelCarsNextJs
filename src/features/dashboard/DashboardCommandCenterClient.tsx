@@ -720,7 +720,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
         : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4'
   return (
-    <div className="min-h-full 2xl:h-full 2xl:min-h-0 2xl:overflow-hidden">
+    <div className="min-h-full min-w-0">
       <Modal title="Insurance renewal alerts" open={salespersonRenewalAlertOpen} onClose={() => setSalespersonRenewalAlertOpen(false)} width="max-w-2xl">
         <p className="text-sm text-gray-600">The following customers assigned to you have insurance policies expiring within the next 30 days.</p>
         <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200">
@@ -736,8 +736,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         <p className="text-sm text-gray-600">Open work grouped by urgency and module. Select a category to continue in that workspace.</p>
         <div className="mt-4 h-[240px]"><ActionLoad overdueFollowups={stats.overdueFollowups} pendingPayments={props.pendingPayments.length} insuranceItems={insuranceAttention} rtoRcPending={rtoRcPending} permissions={permissions} /></div>
       </Modal>
-      <div className="min-h-full bg-[#f5f8fc] p-3 2xl:h-full 2xl:overflow-hidden">
-        <div className="grid gap-3 2xl:h-full 2xl:grid-rows-[94px_78px_minmax(250px,1fr)]">
+      <div className="min-h-full min-w-0 bg-[#f5f8fc] p-3">
+        <div className="grid min-w-0 gap-3">
           <div className="relative min-h-[94px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-5 py-3 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
             <div className="absolute inset-y-0 left-[27%] right-[24%] bg-[url('/login-hero-car.png')] bg-[length:500px_auto] bg-[position:72%_48%] bg-no-repeat opacity-70 mix-blend-screen" aria-hidden="true" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,24,66,0.25),transparent_48%,rgba(130,16,57,0.12))]" aria-hidden="true" />
@@ -773,8 +773,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </div>
 
       <section ref={detailWorkspaceRef} className="-mt-4 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white/90 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-        <div className="mb-3 shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div role="tablist" aria-label="Dashboard workspaces" className="flex min-w-0 flex-1 flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="mb-3 grid shrink-0 min-w-0 gap-3 border-b border-slate-100 pb-3">
+          <div role="tablist" aria-label="Dashboard workspaces" className="flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
             {tabs.map(tab => (
               <button key={tab.key} role="tab" aria-selected={workspace === tab.key} type="button" onClick={() => openWorkspace(tab.key)} className={`cursor-pointer whitespace-nowrap rounded-lg border px-3 py-2 text-[13px] font-semibold leading-none transition-all focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${workspace === tab.key ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-transparent bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-slate-200 hover:bg-slate-100 hover:text-[#1B2A6B]'}`}>
                 {tab.warning && <AlertTriangle aria-label="Overdue items need attention" className={`mr-1 inline-block h-3.5 w-3.5 align-[-2px] ${workspace === tab.key ? 'text-amber-200' : 'text-amber-600'}`} />}
@@ -782,10 +782,10 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            <div className="relative min-w-0 flex-1 sm:max-w-xs">
               <Search className="pointer-events-none absolute left-3 top-2 h-3.5 w-3.5 text-slate-400" />
-              <input value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="Search workspace..." className="h-9 w-52 rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-sm outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10" />
+              <input aria-label="Search workspace" value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="Search workspace..." className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-sm outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10" />
             </div>
             <select value={sort} onChange={event => { setSort(event.target.value as SortMode); setPage(1) }} className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10">
               <option value="priority">Priority</option>
@@ -795,9 +795,9 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-[520px] min-w-0 flex-1">
         {workspace === 'leads' ? (
-          <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
+          <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
             <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
               <div className="mb-3 flex items-center gap-2"><h2 className="text-base font-bold text-[#172d62]">Lead Details</h2><span className="rounded-full bg-blue-500 px-2 py-0.5 text-[11px] font-bold text-white">{stats.totalInquiries.toLocaleString('en-IN')}</span></div>
               <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count", 'Own Share']} maxHeight="max-h-[215px] flex-1 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-full" tableClass="w-full [&_th]:py-1 [&_td]:py-1">
@@ -812,8 +812,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 ))}
               </WorkTable>
             </section>
-              <div className="grid min-h-0 gap-3">
-                <section className="min-h-[154px] rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+              <div className="grid min-w-0 gap-3">
+                <section className="min-w-0 rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadSourceChart
                     data={props.leadSources}
                     totalLeads={stats.totalInquiries}
@@ -821,7 +821,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                     onSelectSource={source => setSelectedLeadSource(current => current?.sourceCode === source.sourceCode ? null : source)}
                   />
                 </section>
-                <section className="min-h-[154px] rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
+                <section className="min-w-0 rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadLocationChart
                     breakdowns={selectedLeadSource?.sourceCode ? props.leadRegionBreakdowns.bySource[selectedLeadSource.sourceCode] ?? { month: [], quarter: [], year: [] } : props.leadRegionBreakdowns.all}
                     selectedSourceName={selectedLeadSource?.name}

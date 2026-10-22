@@ -276,12 +276,22 @@ export function Layout({
 
   const handleNavigationClick = (event: ReactMouseEvent<HTMLAnchorElement>, label: string) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-    const targetPathname = event.currentTarget.pathname
-    if (targetPathname === pathname) return
-
+    // Close immediately, even when selecting the page that is already open.
+    // Do not let a same-page Link navigation reset the sidebar state.
     event.preventDefault()
+    setSidebarOpen(false)
+    setMobileSidebarOpen(false)
+    const targetPathname = event.currentTarget.pathname
+    const targetHref = `${targetPathname}${event.currentTarget.search}${event.currentTarget.hash}`
+    if (targetPathname === pathname) {
+      if (targetHref !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+        startNavigationTransition(() => router.push(targetHref))
+      }
+      return
+    }
+
     setPendingNavigation({ fromPathname: pathname, label })
-    startNavigationTransition(() => router.push(targetPathname))
+    startNavigationTransition(() => router.push(targetHref))
   }
 
   const isActive = (item: NavItem) => {
@@ -312,11 +322,7 @@ export function Layout({
             {item.href ? (
               <Link
                 href={item.href}
-                onClick={event => {
-                  setSidebarOpen(false)
-                  handleNavigationClick(event, item.label)
-                  setMobileSidebarOpen(false)
-                }}
+                onClick={event => handleNavigationClick(event, item.label)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${pathname === item.href ? 'bg-white/15 text-white font-medium' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
               >
                 {item.icon}
@@ -354,11 +360,7 @@ export function Layout({
                       <Link
                         key={child.href}
                         href={child.href}
-                        onClick={event => {
-                          setSidebarOpen(false)
-                          handleNavigationClick(event, child.label)
-                          setMobileSidebarOpen(false)
-                        }}
+                        onClick={event => handleNavigationClick(event, child.label)}
                         className={`block text-left px-3 py-2 rounded-lg text-sm transition-all ${pathname === child.href || pathname.startsWith(`${child.href}/`) ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
                       >
                         {(pathname === child.href || pathname.startsWith(`${child.href}/`)) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}

@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { AGENT_TYPES } from './adminQueries'
 import { isValidEmail, isValidPhone } from '@/lib/validation'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 
 export interface AgentFormInput {
   partnerType: string
@@ -19,6 +20,7 @@ export interface ActionResult {
 }
 
 export async function createAgent(input: AgentFormInput): Promise<ActionResult> {
+  if (!(await getAuthorizedUserIdForRoute('/config/agents'))) return { success: false, error: 'Not authorized.' }
   if (!AGENT_TYPES.includes(input.partnerType as typeof AGENT_TYPES[number])) return { success: false, error: 'Select a valid agent type.' }
   if (!input.name.trim()) return { success: false, error: 'Name is required.' }
   if (!input.mobile.trim() && !input.email.trim()) return { success: false, error: 'Enter mobile or email.' }
@@ -48,6 +50,7 @@ export async function createAgent(input: AgentFormInput): Promise<ActionResult> 
 }
 
 export async function updateAgent(id: number, input: AgentFormInput): Promise<ActionResult> {
+  if (!(await getAuthorizedUserIdForRoute('/config/agents'))) return { success: false, error: 'Not authorized.' }
   if (!AGENT_TYPES.includes(input.partnerType as typeof AGENT_TYPES[number])) return { success: false, error: 'Select a valid agent type.' }
   if (!input.name.trim()) return { success: false, error: 'Name is required.' }
   if (!input.mobile.trim() && !input.email.trim()) return { success: false, error: 'Enter mobile or email.' }
@@ -78,6 +81,7 @@ export async function updateAgent(id: number, input: AgentFormInput): Promise<Ac
 }
 
 export async function deleteAgent(id: number): Promise<ActionResult> {
+  if (!(await getAuthorizedUserIdForRoute('/config/agents'))) return { success: false, error: 'Not authorized.' }
   try {
     await prisma.partnerMaster.delete({ where: { partnerId: id } })
   } catch (err) {

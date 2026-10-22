@@ -131,6 +131,21 @@ async function ensureCriticalPermissionCoverage(roleId: number, selectedFunction
 }
 
 export async function saveRoleAccess(roleId: number, functionNames: string[]): Promise<ActionResult> {
+  try {
+    return await persistRoleAccess(roleId, functionNames)
+  } catch (error) {
+    console.error('saveRoleAccess failed', error)
+    const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null
+    return {
+      success: false,
+      error: code === 'P2028' || code === 'P2024'
+        ? 'Saving role access timed out. Please try again.'
+        : 'Role access could not be saved. Please try again or contact your administrator.',
+    }
+  }
+}
+
+async function persistRoleAccess(roleId: number, functionNames: string[]): Promise<ActionResult> {
   if (!Number.isInteger(roleId) || roleId <= 0) {
     return { success: false, error: 'Select a valid role.' }
   }
@@ -164,19 +179,28 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
           .map(row => [row.accessFunctionName as string, row.accessFunctionId]),
       )
 
-      for (const catalogEntry of APP_ACCESS_CATALOG) {
-        if (functionIdByName.has(catalogEntry.functionName)) continue
-        const created = await tx.accessFunction.create({
-          data: {
+      // Production may still have only legacy permissions. Seed the missing
+      // catalog in one round trip instead of one insert per permission, which
+      // can exhaust Prisma's default transaction timeout across regions.
+      const missingFunctions = APP_ACCESS_CATALOG.filter(item => !functionIdByName.has(item.functionName))
+      if (missingFunctions.length > 0) {
+        const now = new Date()
+        await tx.accessFunction.createMany({
+          data: missingFunctions.map(catalogEntry => ({
             accessFunctionName: catalogEntry.functionName,
             createdBy: actor.userId,
             updatedBy: actor.userId,
-            createdDate: new Date(),
-            updatedDate: new Date(),
-          },
+            createdDate: now,
+            updatedDate: now,
+          })),
+        })
+        const createdFunctions = await tx.accessFunction.findMany({
+          where: { accessFunctionName: { in: missingFunctions.map(item => item.functionName) } },
           select: { accessFunctionId: true, accessFunctionName: true },
         })
-        if (created.accessFunctionName) functionIdByName.set(created.accessFunctionName, created.accessFunctionId)
+        for (const created of createdFunctions) {
+          if (created.accessFunctionName) functionIdByName.set(created.accessFunctionName, created.accessFunctionId)
+        }
       }
 
       const managedAccessFunctionIds = [...functionIdByName.values()]
@@ -241,10 +265,10 @@ export async function saveRoleAccess(roleId: number, functionNames: string[]): P
           nextFunctionNames: selectedFunctionNames,
         }
       }
-    })
+    }, { maxWait: 10_000, timeout: 15_000 })
   } catch (error) {
     console.error('saveRoleAccess transaction failed', error)
-    throw new Error('Role access could not be saved.')
+    throw error
   }
 
   if (auditEntry) {

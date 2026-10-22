@@ -3,11 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
+import { cleanCatalogName } from '@/lib/catalogNames'
 
 export type CatalogActionResult = { success: boolean; error?: string; id?: number }
 
 export async function createMake(make: string): Promise<CatalogActionResult> {
-  if (!make.trim()) return { success: false, error: 'Make is required.' }
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
+  if (!cleanCatalogName(make)) return { success: false, error: 'Enter a make name; placeholders such as NA or null are not allowed.' }
   try {
     const value = make.trim()
     if (await prisma.carMakeMaster.findFirst({ where: { make: { equals: value, mode: 'insensitive' } } })) return { success: false, error: 'This make already exists.' }
@@ -18,7 +21,8 @@ export async function createMake(make: string): Promise<CatalogActionResult> {
 }
 
 export async function updateMake(id: number, make: string): Promise<CatalogActionResult> {
-  if (!make.trim()) return { success: false, error: 'Make is required.' }
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
+  if (!cleanCatalogName(make)) return { success: false, error: 'Enter a make name; placeholders such as NA or null are not allowed.' }
   try {
     const value = make.trim()
     if (await prisma.carMakeMaster.findFirst({ where: { make: { equals: value, mode: 'insensitive' }, NOT: { pkMakeId: id } } })) return { success: false, error: 'This make already exists.' }
@@ -29,19 +33,23 @@ export async function updateMake(id: number, make: string): Promise<CatalogActio
 }
 
 export async function createModel(model: string, makeId: number): Promise<CatalogActionResult> {
-  if (!model.trim()) return { success: false, error: 'Model is required.' }
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
+  if (!cleanCatalogName(model)) return { success: false, error: 'Enter a model name; placeholders such as NA or null are not allowed.' }
   if (!makeId) return { success: false, error: 'Make is required.' }
   return saveModel(model, makeId)
 }
 
 export async function updateModel(id: number, model: string, makeId: number): Promise<CatalogActionResult> {
-  if (!model.trim()) return { success: false, error: 'Model is required.' }
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
+  if (!cleanCatalogName(model)) return { success: false, error: 'Enter a model name; placeholders such as NA or null are not allowed.' }
   if (!makeId) return { success: false, error: 'Make is required.' }
   return saveModel(model, makeId, id)
 }
 
 async function saveModel(model: string, makeId: number, id?: number): Promise<CatalogActionResult> {
   try {
+    const make = await prisma.carMakeMaster.findUnique({ where: { pkMakeId: makeId }, select: { make: true } })
+    if (!make || !cleanCatalogName(make.make)) return { success: false, error: 'Select a named make. Repair incomplete make records in Vehicle Masters first.' }
     const value = model.trim()
     const duplicate = await prisma.carModelMaster.findFirst({ where: { model: { equals: value, mode: 'insensitive' }, fkMakeId: makeId, ...(id ? { NOT: { pkModelId: id } } : {}) } })
     if (duplicate) return { success: false, error: 'This model already exists for the selected make.' }
@@ -54,19 +62,24 @@ async function saveModel(model: string, makeId: number, id?: number): Promise<Ca
 }
 
 export async function createVariant(variant: string, makeId: number, modelId: number): Promise<CatalogActionResult> {
-  if (!variant.trim()) return { success: false, error: 'Variant is required.' }
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
+  if (!cleanCatalogName(variant)) return { success: false, error: 'Enter a variant name; placeholders such as NA or null are not allowed.' }
   if (!makeId || !modelId) return { success: false, error: 'Make and model are required.' }
   return saveVariant(variant, makeId, modelId)
 }
 
 export async function updateVariant(id: number, variant: string, makeId: number, modelId: number): Promise<CatalogActionResult> {
-  if (!variant.trim()) return { success: false, error: 'Variant is required.' }
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
+  if (!cleanCatalogName(variant)) return { success: false, error: 'Enter a variant name; placeholders such as NA or null are not allowed.' }
   if (!makeId || !modelId) return { success: false, error: 'Make and model are required.' }
   return saveVariant(variant, makeId, modelId, id)
 }
 
 async function saveVariant(variant: string, makeId: number, modelId: number, id?: number): Promise<CatalogActionResult> {
   try {
+    const model = await prisma.carModelMaster.findUnique({ where: { pkModelId: modelId }, select: { model: true, fkMakeId: true, carMakeMaster: { select: { make: true } } } })
+    if (!model || model.fkMakeId !== makeId) return { success: false, error: 'The selected model must belong to the selected make.' }
+    if (!cleanCatalogName(model.model) || !cleanCatalogName(model.carMakeMaster?.make)) return { success: false, error: 'Select a named make and model. Repair incomplete records in Vehicle Masters first.' }
     const value = variant.trim()
     const duplicate = await prisma.carVariantMaster.findFirst({ where: { variant: { equals: value, mode: 'insensitive' }, fkMakeId: makeId, fkModelId: modelId, ...(id ? { NOT: { pkVariantId: id } } : {}) } })
     if (duplicate) return { success: false, error: 'This variant already exists for the selected model.' }
@@ -79,6 +92,7 @@ async function saveVariant(variant: string, makeId: number, modelId: number, id?
 }
 
 export async function deleteMake(id: number) {
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
   return deleteRecord(async () => {
     const variants = await prisma.carVariantMaster.findMany({ where: { fkMakeId: id }, select: { pkVariantId: true } })
     const variantIds = variants.map(variant => variant.pkVariantId)
@@ -94,6 +108,7 @@ export async function deleteMake(id: number) {
 }
 
 export async function deleteModel(id: number) {
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
   return deleteRecord(async () => {
     const variants = await prisma.carVariantMaster.findMany({ where: { fkModelId: id }, select: { pkVariantId: true } })
     const variantIds = variants.map(variant => variant.pkVariantId)
@@ -107,6 +122,7 @@ export async function deleteModel(id: number) {
   })
 }
 export async function deleteVariant(id: number) {
+  if (!(await getAuthorizedUserIdForRoute('/config/catalog'))) return { success: false, error: 'Not authorized.' }
   return deleteRecord(async () => {
     if (await hasVariantDependencies([id])) {
       throw new Error('This variant is in use and cannot be deleted. Remove or change the linked vehicle records first.')
