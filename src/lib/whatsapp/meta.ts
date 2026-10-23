@@ -4,6 +4,14 @@ export interface WhatsAppTemplateResult {
   error?: string
 }
 
+/**
+ * Meta URL-button templates have a fixed URL origin. Use a separately approved
+ * template for each deployed app origin and select it through its environment.
+ */
+export function getEnquiryWhatsAppTemplateName() {
+  return process.env.WHATSAPP_ENQUIRY_TEMPLATE_NAME?.trim() || 'enquiry_temp'
+}
+
 export function normalizeWhatsAppRecipient(value: string | null | undefined) {
   const digits = (value ?? '').replace(/\D/g, '')
   if (!digits) return null
@@ -44,7 +52,7 @@ export async function sendEnquiryTemplate({
         to,
         type: 'template',
         template: {
-          name: 'enquiry_temp',
+          name: getEnquiryWhatsAppTemplateName(),
           language: { code: 'en' },
           components: [
             {
