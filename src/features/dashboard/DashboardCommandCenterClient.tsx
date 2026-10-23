@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   Car,
   ChevronRight,
-  Clock,
   ExternalLink,
   FileText,
   Search,
@@ -161,7 +160,9 @@ export interface DashboardCommandCenterProps {
     canRto: boolean
   }
   stats: DashboardStats
-  todayStats: TodayStats
+  // Retained for compatibility with existing dashboard fixtures. The page no longer
+  // fetches this unused data on every request.
+  todayStats?: TodayStats
   leadSources: LeadSourceBreakdown[]
   leadRegionBreakdowns: LeadRegionBreakdowns
   leadDetails: LeadRow[]
@@ -376,72 +377,6 @@ function PendingFilesKpi({ value, rto, payments, insurance, canRto, canInsurance
   return <div className="grid h-[78px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)]"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><FileText className="h-4 w-4" /></span><div className="min-w-0"><span className="block truncate text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending Files</span><div className="mt-1 flex items-baseline gap-2"><span className="text-xl font-bold leading-none text-[#11275B]">{value}</span><span className="text-xs font-medium text-slate-500">pending</span></div></div></div><PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} /></div>
 }
 
-function ActionLoad({
-  overdueFollowups,
-  pendingPayments,
-  insuranceItems,
-  rtoRcPending,
-  permissions,
-}: {
-  overdueFollowups: number
-  pendingPayments: number
-  insuranceItems: number
-  rtoRcPending: number
-  permissions: DashboardCommandCenterProps['permissions']
-}) {
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const rows = [
-    { show: permissions.canFollowup, label: 'Overdue Follow-up', value: overdueFollowups, color: '#dc5f5f', href: `/followup?status=FollowUp&followUpDateTo=${localDateParam(yesterday)}` },
-    { show: permissions.canRto, label: 'Pending Payments', value: pendingPayments, color: '#9a7378', href: '/dashboard?workspace=payments' },
-    { show: permissions.canInsurance, label: 'Insurance', value: insuranceItems, color: '#8f969e', href: '/dashboard?workspace=insurance' },
-    { show: permissions.canRto, label: 'RTO', value: rtoRcPending, color: '#c6ced6', href: '/dashboard?workspace=rto' },
-  ].filter(row => row.show)
-  const total = rows.reduce((sum, row) => sum + row.value, 0)
-  const max = Math.max(...rows.map(row => row.value), 1)
-  const segments = rows.reduce<Array<{ row: typeof rows[number]; start: number; end: number }>>((acc, row) => {
-    const start = acc.length ? acc[acc.length - 1].end : 0
-    const size = total ? (row.value / total) * 100 : 0
-    acc.push({ row, start, end: start + size })
-    return acc
-  }, [])
-  const donut = total
-    ? `conic-gradient(${segments.map(segment => `${segment.row.color} ${segment.start}% ${segment.end}%`).join(', ')}, #e5e7eb 0)`
-    : '#e5e7eb'
-  return (
-    <div className="h-full overflow-hidden rounded-lg bg-white p-4">
-      <h3 className="text-base font-semibold text-gray-900">Action Load Analyzer</h3>
-      <div className="mt-3 grid h-[calc(100%-2rem)] grid-cols-[118px_minmax(0,1fr)] items-center gap-2">
-        <div className="grid h-[108px] w-[108px] place-items-center justify-self-center rounded-full shadow-[0_0_18px_rgba(239,107,104,0.25)]" style={{ background: donut }}>
-          <div className="grid h-[74px] w-[74px] place-items-center rounded-full bg-white text-center">
-            <div>
-              <div className="text-2xl font-bold leading-none text-gray-900">{total}</div>
-              <div className="mt-1 text-xs leading-tight text-gray-500">total open<br />attention</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="min-w-0 space-y-2">
-          {rows.map((row, index) => {
-            const sizes = ['h-10 w-10', 'h-8 w-8', 'h-8 w-8', 'h-8 w-8']
-            return (
-              <a key={row.label} href={row.href} className="grid grid-cols-[40px_minmax(0,1fr)_28px] items-center gap-2 rounded-md transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/25">
-                <div className={`grid ${sizes[index]} place-items-center rounded-full shadow-md`} style={{ background: `conic-gradient(${row.color} ${Math.max(8, Math.round((row.value / max) * 100))}%, #e5e7eb 0)` }}>
-                  <div className="h-2/3 w-2/3 rounded-full bg-white" />
-                </div>
-                <div className="min-w-0 text-xs leading-tight text-gray-700">
-                  <div>{row.label}</div>
-                </div>
-                <strong className="shrink-0 text-right text-sm leading-none text-gray-900">{row.value}</strong>
-              </a>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function TodoWorkloadSnapshot({ items }: { items: AttentionItem[] }) {
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
@@ -499,7 +434,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const [page, setPage] = useState(1)
   const [selectedLeadSource, setSelectedLeadSource] = useState<LeadSourceBreakdown | null>(null)
   const [salespersonRenewalAlertOpen, setSalespersonRenewalAlertOpen] = useState(props.assignedExpiryRenewalPolicies.length > 0)
-  const [attentionBreakdownOpen, setAttentionBreakdownOpen] = useState(false)
   const detailWorkspaceRef = useRef<HTMLElement>(null)
   const { permissions, stats } = props
 
@@ -683,18 +617,11 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const pageCount = Math.max(1, Math.ceil(currentRows.length / pageSize))
   const pagedAttention = currentRows.slice((page - 1) * pageSize, page * pageSize)
 
-  const openWorkspace = (next: Workspace, focusDetail = false) => {
-    setWorkspace(next)
-    setQuery('')
-    setSort('priority')
-    setPage(1)
+  const openWorkspace = (next: Workspace) => {
     if (typeof window !== 'undefined') {
-      window.history.pushState({ workspace: next }, '', workspaceHref(next))
-      if (focusDetail) {
-        window.requestAnimationFrame(() => {
-          detailWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-        })
-      }
+      // A full dashboard payload is intentionally not retained client-side. Navigate
+      // to the selected workspace so the server retrieves only that workspace's data.
+      window.location.assign(workspaceHref(next))
     }
   }
 
@@ -704,8 +631,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     return () => window.removeEventListener('popstate', syncWorkspace)
   }, [])
 
-  const rtoRcPending = props.rtoPending.filter(row => row.rcStatus === 'Pending').length
-  const insuranceAttention = props.expiryRenewalPolicies.length + props.pendingPolicies.length
   const kpiCount = [
     permissions.canInventory,
     permissions.canInquiry && permissions.canFollowup,
@@ -732,10 +657,6 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </table>
         </div>
       </Modal>
-      <Modal title="Needs attention" open={attentionBreakdownOpen} onClose={() => setAttentionBreakdownOpen(false)} width="max-w-2xl">
-        <p className="text-sm text-gray-600">Open work grouped by urgency and module. Select a category to continue in that workspace.</p>
-        <div className="mt-4 h-[240px]"><ActionLoad overdueFollowups={stats.overdueFollowups} pendingPayments={props.pendingPayments.length} insuranceItems={insuranceAttention} rtoRcPending={rtoRcPending} permissions={permissions} /></div>
-      </Modal>
       <div className="min-h-full min-w-0 bg-[#f5f8fc] p-3">
         <div className="grid min-w-0 gap-3">
           <div className="relative min-h-[118px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-5 py-3 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
@@ -755,7 +676,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm font-medium text-white/80">{props.todayLabel}</span>
-                <button type="button" onClick={() => setAttentionBreakdownOpen(true)} className="flex items-center gap-2 rounded-lg border border-red-100/80 bg-white/95 px-3 py-2 text-left text-red-800 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-red-200">
+                <button type="button" onClick={() => openWorkspace('attention')} className="flex items-center gap-2 rounded-lg border border-red-100/80 bg-white/95 px-3 py-2 text-left text-red-800 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-red-200">
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-red-500 text-white"><AlertTriangle className="h-3.5 w-3.5" /></span>
                   <div><div className="text-xs font-bold">Action Required</div><div className="mt-0.5 text-[11px] text-red-700">{stats.overdueFollowups} items need your attention.</div></div><ChevronRight className="h-3.5 w-3.5 text-red-500" />
                 </button>
@@ -968,7 +889,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                     <td className="px-3 py-2 text-gray-700">{item.type}</td>
                     <td className="px-3 py-2 text-gray-600">{formatDate(item.date)}</td>
                     <td className="px-3 py-2 text-gray-700">{item.status}</td>
-                    <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => openWorkspace(item.workspace, true)} className="mr-3 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">Details</button><a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+                    <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => openWorkspace(item.workspace)} className="mr-3 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">Details</button><a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
                   </tr>
                 ))}
               </WorkTable>
