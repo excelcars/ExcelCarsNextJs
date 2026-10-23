@@ -436,12 +436,13 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const [salespersonRenewalAlertOpen, setSalespersonRenewalAlertOpen] = useState(props.assignedExpiryRenewalPolicies.length > 0)
   const detailWorkspaceRef = useRef<HTMLElement>(null)
   const { permissions, stats } = props
+  const data = props
 
   const attentionItems = useMemo<AttentionItem[]>(() => {
     const today = todayStart()
     const items: AttentionItem[] = []
 
-    props.followups.forEach(row => {
+    data.followups.forEach(row => {
       const due = row.followupDate ? new Date(row.followupDate) : null
       const overdue = due ? due < today : false
       items.push({
@@ -457,7 +458,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       })
     })
 
-    props.expiryRenewalPolicies.forEach(row => {
+    data.expiryRenewalPolicies.forEach(row => {
       items.push({
         id: `insurance-expiry-${row.insuranceMainId}`,
         priority: 'High',
@@ -471,7 +472,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       })
     })
 
-    props.pendingPolicies.forEach(row => {
+    data.pendingPolicies.forEach(row => {
       items.push({
         id: `insurance-pending-${row.insuranceMainId}`,
         priority: 'Medium',
@@ -485,7 +486,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       })
     })
 
-    props.pendingPayments.forEach(row => {
+    data.pendingPayments.forEach(row => {
       items.push({
         id: `payment-${row.id}`,
         priority: 'Medium',
@@ -499,7 +500,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       })
     })
 
-    props.rtoPending.forEach(row => {
+    data.rtoPending.forEach(row => {
       items.push({
         id: `rto-${row.rtoAgentMainId}`,
         priority: row.rcStatus === 'Pending' ? 'Medium' : 'Normal',
@@ -514,7 +515,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     })
 
     return items.sort((a, b) => a.rank - b.rank || new Date(a.date ?? 0).getTime() - new Date(b.date ?? 0).getTime())
-  }, [props.expiryRenewalPolicies, props.followups, props.pendingPayments, props.pendingPolicies, props.rtoPending])
+  }, [data.expiryRenewalPolicies, data.followups, data.pendingPayments, data.pendingPolicies, data.rtoPending])
 
   const currentRows = useMemo(() => {
     const q = query.trim()
@@ -529,16 +530,16 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const filteredLeadDetails = useMemo(() => {
     // This is the legacy operational sequence, not a ranked report. Preserve it
     // even when dashboard sorting is changed for the other workspaces.
-    return props.leadDetails.filter(row => textMatches([row.label, row.total, row.own, row.other], query))
-  }, [props.leadDetails, query])
+    return data.leadDetails.filter(row => textMatches([row.label, row.total, row.own, row.other], query))
+  }, [data.leadDetails, query])
 
   const filteredFollowups = useMemo(() => {
-    const rows = props.followups.filter(row => textMatches([row.customerName, row.mobile, row.classification, row.status, formatDate(row.followupDate)], query))
+    const rows = data.followups.filter(row => textMatches([row.customerName, row.mobile, row.classification, row.status, formatDate(row.followupDate)], query))
     return sortByMode(rows, sort, row => row.followupDate, row => dateMs(row.followupDate))
-  }, [props.followups, query, sort])
+  }, [data.followups, query, sort])
 
   const insuranceRows = useMemo(() => [
-    ...props.pendingPolicies.map(row => ({
+    ...data.pendingPolicies.map(row => ({
       id: `p-${row.insuranceMainId}`,
       type: 'Pending Policy',
       reg: row.carRegistrationNo,
@@ -552,7 +553,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       status: row.policyStatus ?? 'Pending',
       priority: 2,
     })),
-    ...props.expiryRenewalPolicies.map(row => ({
+    ...data.expiryRenewalPolicies.map(row => ({
       id: `e-${row.insuranceMainId}`,
       type: 'Expiring Soon',
       reg: row.carRegistrationNo,
@@ -566,7 +567,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       status: 'Expiring Soon',
       priority: 1,
     })),
-  ], [props.expiryRenewalPolicies, props.pendingPolicies])
+  ], [data.expiryRenewalPolicies, data.pendingPolicies])
 
   const filteredInsuranceRows = useMemo(() => {
     const rows = insuranceRows.filter(row => textMatches([row.type, row.reg, row.name, row.mobile, row.agent, row.agentMobile, row.status, formatDate(row.expiryDate), formatDate(row.renewalDate)], query))
@@ -576,38 +577,38 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const filteredExpiryInsuranceRows = filteredInsuranceRows.filter(row => row.type === 'Expiring Soon')
 
   const filteredRtoRows = useMemo(() => {
-    const rows = props.rtoPending.filter(row => textMatches([row.carRegistrationNo, customerName(row), customerMobile(row), agentName(row), agentMobile(row), row.transferStatus, row.rcStatus], query))
+    const rows = data.rtoPending.filter(row => textMatches([row.carRegistrationNo, customerName(row), customerMobile(row), agentName(row), agentMobile(row), row.transferStatus, row.rcStatus], query))
     return sortByMode(rows, sort, () => null, row => row.rcStatus === 'Pending' ? 1 : row.transferStatus === 'Pending' ? 2 : 3)
-  }, [props.rtoPending, query, sort])
+  }, [data.rtoPending, query, sort])
 
   const filteredPaymentRows = useMemo(() => {
-    const rows = props.pendingPayments.filter(row => textMatches([row.type, row.registrationNo, row.customerName, row.customerMobile, row.agentName, row.agentMobile, row.balance, formatDate(row.followupDate)], query))
+    const rows = data.pendingPayments.filter(row => textMatches([row.type, row.registrationNo, row.customerName, row.customerMobile, row.agentName, row.agentMobile, row.balance, formatDate(row.followupDate)], query))
     return sortByMode(rows, sort, row => row.followupDate, row => -row.balance)
-  }, [props.pendingPayments, query, sort])
+  }, [data.pendingPayments, query, sort])
 
   const filteredLoanRows = useMemo(() => {
-    const rows = props.pendingPayments.filter(row => row.type === 'Loan' && textMatches([row.registrationNo, row.customerName, row.customerMobile, row.agentName, row.agentMobile, row.balance, formatDate(row.followupDate)], query))
+    const rows = data.pendingPayments.filter(row => row.type === 'Loan' && textMatches([row.registrationNo, row.customerName, row.customerMobile, row.agentName, row.agentMobile, row.balance, formatDate(row.followupDate)], query))
     return sortByMode(rows, sort, row => row.followupDate, row => -row.balance)
-  }, [props.pendingPayments, query, sort])
+  }, [data.pendingPayments, query, sort])
 
   const filteredReminderRows = useMemo(() => {
-    const rows = props.reminders.filter(row => textMatches([row.name, row.mobile, row.email, row.type], query))
+    const rows = data.reminders.filter(row => textMatches([row.name, row.mobile, row.email, row.type], query))
     if (sort === 'dateDesc') return [...rows].sort((a, b) => b.name.localeCompare(a.name))
     return [...rows].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))
-  }, [props.reminders, query, sort])
+  }, [data.reminders, query, sort])
   const filteredBirthdayRows = filteredReminderRows.filter(row => row.type === 'Birth Day')
   const filteredAnniversaryRows = filteredReminderRows.filter(row => row.type === 'Anniversary')
-  const birthdayCount = props.reminders.filter(row => row.type === 'Birth Day').length
-  const anniversaryCount = props.reminders.filter(row => row.type === 'Anniversary').length
-  const loanCount = props.pendingPayments.filter(row => row.type === 'Loan').length
+  const birthdayCount = data.reminders.filter(row => row.type === 'Birth Day').length
+  const anniversaryCount = data.reminders.filter(row => row.type === 'Anniversary').length
+  const loanCount = data.pendingPayments.filter(row => row.type === 'Loan').length
 
   const tabs = [
-    { key: 'leads' as const, label: 'Lead Details', count: props.leadDetails.find(row => row.label === 'All Leads')?.total ?? 0, show: permissions.canFollowup },
+    { key: 'leads' as const, label: 'Lead Details', count: data.leadDetails.find(row => row.label === 'All Leads')?.total ?? stats.totalInquiries, show: permissions.canFollowup },
     { key: 'attention' as const, label: 'To-do', count: currentRows.length, show: true, warning: hasOverdueAttention },
     { key: 'followups' as const, label: 'Follow-ups', count: stats.pendingFollowups, show: permissions.canFollowup },
-    { key: 'insurance' as const, label: 'Insurance', count: props.pendingPolicies.length + props.expiryRenewalPolicies.length, show: permissions.canInsurance },
-    { key: 'rto' as const, label: 'RTO', count: props.rtoPending.length, show: permissions.canRto },
-    { key: 'payments' as const, label: 'Payments', count: props.pendingPayments.filter(row => row.type !== 'Loan').length, show: permissions.canRto || permissions.canInsurance },
+    { key: 'insurance' as const, label: 'Insurance', count: data.pendingPolicies.length + data.expiryRenewalPolicies.length, show: permissions.canInsurance },
+    { key: 'rto' as const, label: 'RTO', count: data.rtoPending.length, show: permissions.canRto },
+    { key: 'payments' as const, label: 'Payments', count: data.pendingPayments.filter(row => row.type !== 'Loan').length, show: permissions.canRto || permissions.canInsurance },
     { key: 'loans' as const, label: 'Loans', count: loanCount, show: permissions.canLoan },
     { key: 'birthdays' as const, label: 'Birthdays', count: birthdayCount, show: true },
     { key: 'anniversaries' as const, label: 'Anniversaries', count: anniversaryCount, show: true },
@@ -617,11 +618,14 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
   const pageCount = Math.max(1, Math.ceil(currentRows.length / pageSize))
   const pagedAttention = currentRows.slice((page - 1) * pageSize, page * pageSize)
 
-  const openWorkspace = (next: Workspace) => {
+  const openWorkspace = (next: Workspace, focusDetail = false) => {
+    setWorkspace(next)
+    setQuery('')
+    setSort('priority')
+    setPage(1)
     if (typeof window !== 'undefined') {
-      // A full dashboard payload is intentionally not retained client-side. Navigate
-      // to the selected workspace so the server retrieves only that workspace's data.
-      window.location.assign(workspaceHref(next))
+      window.history.pushState({ workspace: next }, '', workspaceHref(next))
+      if (focusDetail) window.requestAnimationFrame(() => detailWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
     }
   }
 
@@ -652,7 +656,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           <table className="min-w-[620px] w-full text-sm">
             <thead><tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Registration</th><th className="px-3 py-2">Expiry date</th><th className="px-3 py-2">Renewal date</th></tr></thead>
             <tbody className="divide-y divide-gray-100">
-              {props.assignedExpiryRenewalPolicies.map(row => <tr key={row.insuranceMainId}><td className="px-3 py-2 font-medium text-gray-900"><div>{customerName(row)}</div><div className="font-mono text-xs font-normal text-gray-500">{customerMobile(row)}</div></td><td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.expiryDate)}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.renewalDate)}</td></tr>)}
+              {data.assignedExpiryRenewalPolicies.map(row => <tr key={row.insuranceMainId}><td className="px-3 py-2 font-medium text-gray-900"><div>{customerName(row)}</div><div className="font-mono text-xs font-normal text-gray-500">{customerMobile(row)}</div></td><td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.expiryDate)}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.renewalDate)}</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -694,7 +698,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             {permissions.canFollowup && (
               <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<AlertTriangle className="h-4 w-4" />} href="/followup?status=FollowUp" />
             )}
-            {(permissions.canRto || permissions.canInsurance) && <PendingFilesKpi value={stats.pendingRTO + props.pendingPayments.length + props.pendingPolicies.length} rto={stats.pendingRTO} payments={props.pendingPayments.length} insurance={props.pendingPolicies.length} canRto={permissions.canRto} canInsurance={permissions.canInsurance} onOpen={workspace => openWorkspace(workspace)} />}
+            {(permissions.canRto || permissions.canInsurance) && <PendingFilesKpi value={stats.pendingRTO + data.pendingPayments.length + data.pendingPolicies.length} rto={stats.pendingRTO} payments={data.pendingPayments.length} insurance={data.pendingPolicies.length} canRto={permissions.canRto} canInsurance={permissions.canInsurance} onOpen={workspace => openWorkspace(workspace)} />}
           </div>
 
       <section ref={detailWorkspaceRef} className="-mt-4 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white/90 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
@@ -740,7 +744,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <div className="grid min-w-0 gap-3">
                 <section className="min-w-0 rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadSourceChart
-                    data={props.leadSources}
+                    data={data.leadSources}
                     totalLeads={stats.totalInquiries}
                     selectedSourceCode={selectedLeadSource?.sourceCode}
                     onSelectSource={source => setSelectedLeadSource(current => current?.sourceCode === source.sourceCode ? null : source)}
@@ -748,7 +752,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 </section>
                 <section className="min-w-0 rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadLocationChart
-                    breakdowns={selectedLeadSource?.sourceCode ? props.leadRegionBreakdowns.bySource[selectedLeadSource.sourceCode] ?? { month: [], quarter: [], year: [] } : props.leadRegionBreakdowns.all}
+                    breakdowns={selectedLeadSource?.sourceCode ? data.leadRegionBreakdowns.bySource[selectedLeadSource.sourceCode] ?? { month: [], quarter: [], year: [] } : data.leadRegionBreakdowns.all}
                     selectedSourceName={selectedLeadSource?.name}
                     selectedSourceCode={selectedLeadSource?.sourceCode}
                     onClearSource={() => setSelectedLeadSource(null)}
@@ -889,7 +893,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                     <td className="px-3 py-2 text-gray-700">{item.type}</td>
                     <td className="px-3 py-2 text-gray-600">{formatDate(item.date)}</td>
                     <td className="px-3 py-2 text-gray-700">{item.status}</td>
-                    <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => openWorkspace(item.workspace)} className="mr-3 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">Details</button><a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+                    <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={() => openWorkspace(item.workspace, true)} className="mr-3 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">Details</button><a href={item.actionHref} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
                   </tr>
                 ))}
               </WorkTable>
