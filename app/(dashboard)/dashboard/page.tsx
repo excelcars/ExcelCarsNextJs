@@ -11,7 +11,6 @@ import {
   getPendingInsurancePolicies,
   getPendingPayments,
   getRtoTransferPendingRcPending,
-  getTodayActivityStats,
 } from '@/features/dashboard/queries'
 import {
   DashboardCommandCenterClient,
@@ -19,7 +18,7 @@ import {
 } from '@/features/dashboard/DashboardCommandCenterClient'
 import { getCurrentUserAccessProfile } from '@/lib/access/accessControl'
 
-const DASHBOARD_WORKSPACES = ['leads', 'followups', 'insurance', 'rto', 'payments', 'loans', 'birthdays', 'anniversaries'] as const
+const DASHBOARD_WORKSPACES = ['attention', 'leads', 'followups', 'insurance', 'rto', 'payments', 'loans', 'birthdays', 'anniversaries'] as const
 type DashboardWorkspace = typeof DASHBOARD_WORKSPACES[number]
 
 function isDashboardWorkspace(value: string | undefined): value is DashboardWorkspace {
@@ -52,9 +51,17 @@ export default async function DashboardPage({
     canRto: hasAny(granted, ['RTO_Management', 'RTO_Agent_Management']),
   }
 
+  // The workspace controls which detail set is loaded. Previously this page fetched
+  // every dashboard panel on each visit, even though the browser renders only one.
+  const loadLeadDetails = initialWorkspace === 'leads'
+  const loadFollowups = initialWorkspace === 'followups' || initialWorkspace === 'attention'
+  const loadInsurance = initialWorkspace === 'insurance' || initialWorkspace === 'attention'
+  const loadRto = initialWorkspace === 'rto' || initialWorkspace === 'attention'
+  const loadPayments = initialWorkspace === 'payments' || initialWorkspace === 'loans' || initialWorkspace === 'attention'
+  const loadReminders = initialWorkspace === 'birthdays' || initialWorkspace === 'anniversaries'
+
   const [
     stats,
-    todayStats,
     leadSources,
     leadRegionBreakdowns,
     followups,
@@ -74,23 +81,16 @@ export default async function DashboardPage({
       includeInsurance: permissions.canInsurance,
       includeRto: permissions.canRto,
     }),
-    getTodayActivityStats({
-      includeInventory: permissions.canInventory,
-      includeFollowup: permissions.canFollowup,
-      includeLoan: permissions.canLoan,
-      includeInsurance: permissions.canInsurance,
-      includeRto: permissions.canRto,
-    }),
-    permissions.canInquiry ? getLeadSourceBreakdown() : Promise.resolve([]),
-    permissions.canInquiry ? getLeadRegionBreakdowns() : Promise.resolve({ all: { month: [], quarter: [], year: [] }, bySource: {} }),
-    permissions.canFollowup ? getPendingFollowups(null) : Promise.resolve([]),
-    profile && permissions.canFollowup ? getLegacyLeadDetails({ userId: profile.userId, roleId: profile.roleId }) : Promise.resolve([]),
-    getBirthdayAnniversaryReminders(),
-    permissions.canInsurance ? getPendingInsurancePolicies() : Promise.resolve([]),
-    permissions.canInsurance ? getExpiryRenewalPolicies() : Promise.resolve([]),
-    profile ? getAssignedExpiryRenewalPolicies(profile.userId) : Promise.resolve([]),
-    permissions.canRto ? getRtoTransferPendingRcPending() : Promise.resolve([]),
-    getPendingPayments({ includeRto: permissions.canRto, includeLoan: permissions.canLoan, includeInsurance: permissions.canInsurance }),
+    permissions.canInquiry && loadLeadDetails ? getLeadSourceBreakdown() : Promise.resolve([]),
+    permissions.canInquiry && loadLeadDetails ? getLeadRegionBreakdowns() : Promise.resolve({ all: { month: [], quarter: [], year: [] }, bySource: {} }),
+    permissions.canFollowup && loadFollowups ? getPendingFollowups(null) : Promise.resolve([]),
+    profile && permissions.canFollowup && loadLeadDetails ? getLegacyLeadDetails({ userId: profile.userId, roleId: profile.roleId }) : Promise.resolve([]),
+    loadReminders ? getBirthdayAnniversaryReminders() : Promise.resolve([]),
+    permissions.canInsurance && loadInsurance ? getPendingInsurancePolicies() : Promise.resolve([]),
+    permissions.canInsurance && loadInsurance ? getExpiryRenewalPolicies() : Promise.resolve([]),
+    profile && loadInsurance ? getAssignedExpiryRenewalPolicies(profile.userId) : Promise.resolve([]),
+    permissions.canRto && loadRto ? getRtoTransferPendingRcPending() : Promise.resolve([]),
+    loadPayments ? getPendingPayments({ includeRto: permissions.canRto, includeLoan: permissions.canLoan, includeInsurance: permissions.canInsurance }) : Promise.resolve([]),
   ])
 
   const todayLabel = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }).format(new Date())
@@ -104,7 +104,6 @@ export default async function DashboardPage({
         initialWorkspace,
         permissions,
         stats,
-        todayStats,
         leadSources,
         leadRegionBreakdowns,
         followups,

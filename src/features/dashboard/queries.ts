@@ -1,7 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
-import type { Prisma } from '@prisma/client'
-
-type LeadCondition = Prisma.InquiryWhereInput
+import { Prisma } from '@prisma/client'
 
 function startOfDay(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -13,6 +11,13 @@ function addDays(date: Date, days: number) {
   return d
 }
 
+function dateParam(date: Date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function startOfMonth() {
   const d = new Date()
   return new Date(d.getFullYear(), d.getMonth(), 1)
@@ -22,30 +27,10 @@ function startOfToday() {
   return startOfDay()
 }
 
-function dateRange(date: Date) {
-  const start = startOfDay(date)
-  return { gte: start, lt: addDays(start, 1) }
-}
-
 function toNumber(value: Prisma.Decimal | number | string | null | undefined) {
   if (value == null) return 0
   const n = Number(value)
   return Number.isFinite(n) ? n : 0
-}
-
-function ownWhere(userId: number, condition: LeadCondition): LeadCondition {
-  return { AND: [condition, { createdBy: userId }] }
-}
-
-function otherWhere(userId: number, condition: LeadCondition): LeadCondition {
-  return { AND: [condition, { createdBy: { not: userId } }] }
-}
-
-function dateParam(date: Date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
 }
 
 export async function getDashboardStats({
@@ -137,63 +122,83 @@ export async function getLegacyLeadDetails({ userId, roleId }: { userId: number;
   const isRestricted = roleId === 4
   const rows = [
     {
+      key: 'all',
       label: 'All Leads',
-      condition: {} satisfies LeadCondition,
       href: '/inquiry?quickFilter=all',
       ownHref: `/inquiry?quickFilter=all&userId=${userId}`,
     },
     {
+      key: 'fresh',
       label: 'Fresh Leads',
-      condition: { dateOfInquiry: dateRange(today) } satisfies LeadCondition,
       href: `/inquiry?quickFilter=all&inquiryDate=${dateParam(today)}`,
       ownHref: `/inquiry?quickFilter=all&inquiryDate=${dateParam(today)}&userId=${userId}`,
     },
     {
+      key: 'appointment',
       label: "Today's Appointment Fixed",
-      condition: { followUpDate: dateRange(today), status: 'FollowUp', subStatus: 'Appt. Fixed' } satisfies LeadCondition,
       href: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&subStatus=${encodeURIComponent('Appt. Fixed')}`,
       ownHref: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&subStatus=${encodeURIComponent('Appt. Fixed')}&userId=${userId}`,
     },
     {
+      key: 'todayFollowup',
       label: 'Follow up Today',
-      condition: { followUpDate: dateRange(today), status: 'FollowUp' } satisfies LeadCondition,
       href: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}`,
       ownHref: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&userId=${userId}`,
     },
     {
+      key: 'pending',
       label: 'Pending Follow up',
-      condition: { followUpDate: { lt: today }, status: 'FollowUp' } satisfies LeadCondition,
       href: `/followup?status=FollowUp&followUpDateTo=${dateParam(yesterday)}`,
       ownHref: `/followup?status=FollowUp&followUpDateTo=${dateParam(yesterday)}&userId=${userId}`,
     },
     {
+      key: 'upcoming',
       label: 'Follow up (Upcoming)',
-      condition: { followUpDate: { gte: tomorrow }, status: 'FollowUp' } satisfies LeadCondition,
       href: `/followup?status=FollowUp&followUpDateFrom=${dateParam(tomorrow)}`,
       ownHref: `/followup?status=FollowUp&followUpDateFrom=${dateParam(tomorrow)}&userId=${userId}`,
     },
     {
+      key: 'closed',
       label: 'Closed',
-      condition: { status: 'Closed' } satisfies LeadCondition,
       href: '/followup?status=Closed',
       ownHref: `/followup?status=Closed&userId=${userId}`,
     },
   ]
 
-  const counts = await Promise.all(rows.flatMap(row => [
-    prisma.inquiry.count({ where: isRestricted ? ownWhere(userId, row.condition) : row.condition }),
-    prisma.inquiry.count({ where: ownWhere(userId, row.condition) }),
-    isRestricted ? Promise.resolve(0) : prisma.inquiry.count({ where: otherWhere(userId, row.condition) }),
-  ]))
+  // One aggregate scan replaces 21 concurrent count queries on every lead-dashboard load.
+  // The values deliberately retain the existing definitions used by the linked screens.
+  const [counts] = await prisma.$queryRaw<Array<Record<string, number>>>(Prisma.sql`
+    SELECT
+      COUNT(*)::integer AS "all",
+      COUNT(*) FILTER (WHERE date_of_inquiry >= ${today} AND date_of_inquiry < ${tomorrow})::integer AS fresh,
+      COUNT(*) FILTER (WHERE status = 'FollowUp' AND sub_status = 'Appt. Fixed' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS appointment,
+      COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS "todayFollowup",
+      COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date < ${today})::integer AS pending,
+      COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS upcoming,
+      COUNT(*) FILTER (WHERE status = 'Closed')::integer AS closed,
+      COUNT(*) FILTER (WHERE created_by = ${userId})::integer AS "own_all",
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND date_of_inquiry >= ${today} AND date_of_inquiry < ${tomorrow})::integer AS own_fresh,
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND sub_status = 'Appt. Fixed' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS own_appointment,
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS "own_todayFollowup",
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date < ${today})::integer AS own_pending,
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS own_upcoming,
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'Closed')::integer AS own_closed
+    FROM inquiry
+  `)
 
-  return rows.map((row, index) => ({
+  return rows.map(row => {
+    const all = Number(counts?.[row.key] ?? 0)
+    const own = Number(counts?.[`own_${row.key}`] ?? 0)
+    const total = isRestricted ? own : all
+    return {
     label: row.label,
-    total: counts[index * 3],
-    own: counts[index * 3 + 1],
-    other: counts[index * 3 + 2],
+    total,
+    own,
+    other: isRestricted ? 0 : Math.max(all - own, 0),
     href: isRestricted ? row.ownHref : row.href,
     ownHref: row.ownHref,
-  }))
+    }
+  })
 }
 
 export async function getBirthdayAnniversaryReminders() {
