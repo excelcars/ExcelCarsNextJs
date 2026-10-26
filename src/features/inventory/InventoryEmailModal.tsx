@@ -79,6 +79,16 @@ export function InventoryEmailModal({
     setActiveChannel('email')
     setSelectedInterestedIds([])
     setInterestedMessage(null)
+    if (row) return
+
+    // These fields belong to this modal (rather than the inventory page), so
+    // clear them explicitly when the parent closes the modal.
+    setDirectEmail('')
+    setDirectEmailError('')
+    setWhatsAppNumbers('')
+    setWhatsAppMessage('')
+    setWhatsAppRecipients([])
+    setWhatsAppContactType('customer')
   }, [row?.inventoryId])
   const addCustomer = (customer: CustomerOption) => {
     onAddRecipient({ key: `customer-${customer.custId}`, recipientType: 'customer', recipientId: customer.custId, name: customer.custName, email: customer.custEmail, meta: customer.custMobile ?? 'Customer' })

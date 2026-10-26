@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShieldCheck, RefreshCcw, Save, Plus, Pencil, Trash2, History } from 'lucide-react'
-import { Btn, ConfirmDialog, Input, LoadingOverlay, Modal, PageHeader, SearchBar } from '@/components/ui'
+import { ActionAlert, Btn, ConfirmDialog, Input, LoadingOverlay, Modal, PageHeader, SearchBar } from '@/components/ui'
 import { APP_ACCESS_CATALOG, ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION } from '@/lib/access/accessCatalog'
 import { createRole, deleteRole, saveRoleAccess, updateRole } from './actions'
 import type { RoleAccessActor, RoleAccessFunctionRow, RoleAccessMappingRow, RoleAccessRoleRow } from './queries'
@@ -52,6 +52,8 @@ export function RoleAccessClient({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isPending, startTransition] = useTransition()
   const [isRoutePending, startRouteTransition] = useTransition()
 
@@ -210,9 +212,13 @@ export function RoleAccessClient({
         : await updateRole(selectedRoleId as number, roleNameInput)
 
       if (!result.success) {
-        setRoleFormError(result.error ?? `Could not ${roleModal === 'add' ? 'create' : 'update'} role.`)
+        const message = result.error ?? `Could not ${roleModal === 'add' ? 'create' : 'update'} role.`
+        setRoleFormError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+
+      setSaveFeedback({ type: 'success', message: `Role ${roleModal === 'add' ? 'created' : 'updated'} successfully.` })
 
       setRoleModal(null)
       setRoleNameInput('')
@@ -233,15 +239,20 @@ export function RoleAccessClient({
       try {
         const result = await saveRoleAccess(selectedRoleId, draftFunctionNames)
         if (!result.success) {
-          setError(result.error ?? 'Could not save role access.')
+          const message = result.error ?? 'Could not save role access.'
+          setError(message)
+          setSaveFeedback({ type: 'error', message })
           return
         }
         const next = [...draftFunctionNames].sort()
         setSavedFunctionNames(next)
         setDraftFunctionNames(next)
         setSuccess('Role access saved successfully.')
+        setSaveFeedback({ type: 'success', message: 'Role access saved successfully.' })
       } catch {
-        setError('A server error occurred while saving role access.')
+        const message = 'A server error occurred while saving role access.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
       }
     })
   }
@@ -254,11 +265,16 @@ export function RoleAccessClient({
     startTransition(async () => {
       const result = await deleteRole(selectedRoleId)
       if (!result.success) {
-        setError(result.error ?? 'Could not delete role.')
+        const message = result.error ?? 'Could not delete role.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
+        setDeleteConfirmOpen(false)
         return
       }
       setSelectedRoleId(null)
       setSuccess('Role deleted successfully.')
+      setDeleteFeedback({ type: 'success', message: 'Role deleted successfully.' })
+      setDeleteConfirmOpen(false)
       router.refresh()
     })
   }
@@ -449,6 +465,8 @@ export function RoleAccessClient({
         confirmLabel="Discard"
         message="You have unsaved role access changes. Discard them and switch roles?"
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Role deleted" errorTitle="Role not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Role saved" errorTitle="Role not saved" />
 
       <ConfirmDialog
         open={deleteConfirmOpen}
@@ -475,9 +493,8 @@ export function RoleAccessClient({
             onChange={e => setRoleNameInput(e.target.value)}
             maxLength={100}
             error={!!roleFormError}
+            errorMessage={roleFormError}
           />
-
-          {roleFormError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{roleFormError}</div>}
 
           <div className="flex justify-end gap-3 pt-2">
             <Btn variant="outline" onClick={() => { setRoleModal(null); setRoleFormError('') }} disabled={isPending}>Cancel</Btn>

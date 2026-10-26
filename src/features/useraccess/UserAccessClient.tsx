@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, Pencil, Search, Trash2 } from 'lucide-react'
-import { Badge, Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createUserAccount, updateUserAccount, deactivateUserAccount, type UserAccessFormInput } from './actions'
 import { GENDERS, STATUSES, USER_ACCESS_PAGE_SIZE } from './queries'
 import { PASSWORD_POLICY_MESSAGE, passwordPolicyError, PROFILE_FIELD_LIMITS } from '@/lib/profileValidation'
@@ -305,6 +305,7 @@ export function UserAccessClient({
   const [editId, setEditId] = useState<number | null>(null)
   const [deactivateId, setDeactivateId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [isPending, startTransition] = useTransition()
   const [isRoutePending, startRouteTransition] = useTransition()
@@ -456,9 +457,12 @@ export function UserAccessClient({
     startTransition(async () => {
       const result = editId ? await updateUserAccount(editId, form) : await createUserAccount(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this user account.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `User account ${editId ? 'updated' : 'created'} successfully.` })
       closeForm()
       router.refresh()
     })
@@ -698,6 +702,7 @@ export function UserAccessClient({
         confirmLabel="Discard"
         message="You have unsaved changes in this user access form. Discard them and close?"
       />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="User account saved" errorTitle="User account not saved" />
     </div>
   )
 }

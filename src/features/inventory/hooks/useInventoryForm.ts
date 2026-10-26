@@ -27,6 +27,12 @@ export function useInventoryForm(initialForm: InventoryFormInput, options: { mak
 
   const fieldChange = <K extends keyof InventoryFormInput>(key: K, value: InventoryFormInput[K]) => {
     setForm(prev => ({ ...prev, [key]: value }))
+    if (key === 'registrationNo') {
+      setErrors(current => {
+        const { registrationNo: _required, registrationDuplicate: _duplicate, ...remaining } = current
+        return remaining
+      })
+    }
     if (key === 'colour') {
       const make = options.makes.find(item => item.pkMakeId === selectedMakeId)?.make ?? form.makeLegacy
       const model = models.find(item => item.pkModelId === selectedModelId)?.model ?? form.modelLegacy

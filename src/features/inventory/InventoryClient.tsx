@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Upload, Loader2 } from 'lucide-react'
-import { Btn, Input, Modal } from '@/components/ui'
+import { ActionAlert, Btn, Input, Modal } from '@/components/ui'
 import { deleteInventory, sendInventoryEmail, sendBulkInventoryEmail, getInventoryBulkEmailConfig, syncInventoryToInquiry, updateInventoryInquiry, updateInventoryEmailRecipient, getNextInventoryNumber } from './actions'
 import { isValidEmail, normalizeRegistrationNo } from '@/lib/validation'
 import type { CarMakeMaster, Dealer, InventoryRow, InventoryPhoto, UploadQueueItem, InquiryOption, EmailRecipient, InventoryFilters } from './inventoryTypes'
@@ -175,8 +175,10 @@ function exportInventoryCsv(rows: InventoryRow[], filters: InventoryFilters) {
   URL.revokeObjectURL(url)
 }
 
-async function exportInventoryCsvFromServer(filters: InventoryFilters) {
-  const params = buildInventoryExportParams(filters)
+async function exportInventoryCsvFromServer(filters: InventoryFilters, inventoryIds: number[] = []) {
+  const params = inventoryIds.length > 0
+    ? new URLSearchParams({ inventoryIds: inventoryIds.join(',') })
+    : buildInventoryExportParams(filters)
   const res = await fetch(`/api/inventory/export${params.toString() ? `?${params.toString()}` : ''}`)
   const payload = await readJsonResponse<InventoryRow[] | { error?: string }>(res)
   if (!res.ok) {
@@ -308,6 +310,8 @@ export function InventoryClient({
   const { selectedMakeId, selectedModelId, catalogMakeText, catalogModelText, catalogVariantText, catalogAddType, catalogAddValue, catalogAddError, catalogAddPending, models, variants } = inventoryForm.catalogState
   const { setForm, setEditId, setOriginalStatus, setCurrentInventoryNumber, setCurrentSku, setError, setErrors, setSelectedCustomer, setSelectedMakeId, setSelectedModelId, setCatalogMakeText, setCatalogModelText, setCatalogVariantText, setCatalogAddType, setCatalogAddValue, setModels, setVariants, fieldChange, onCustomerChange: formCustomerChange, addCatalogValue } = inventoryForm.actions
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isPending, startTransition] = useTransition()
   const [isDeletingInventory, startInventoryDeleteTransition] = useTransition()
   const [viewRow, setViewRow] = useState<InventoryRow | null>(null)
@@ -1139,8 +1143,10 @@ export function InventoryClient({
     setErrors,
     setError,
     startTransition,
+    onSaveError: message => setSaveFeedback({ type: 'error', message }),
     onSaved: (result, saveForm, savedEditId) => {
       setModal(null)
+      setSaveFeedback({ type: 'success', message: `Vehicle ${savedEditId ? 'updated' : 'added'} successfully.` })
       const savedInventoryId = result.inventoryId
       const shouldPromptInquiry = savedInventoryId !== undefined && (
         savedEditId
@@ -1152,28 +1158,37 @@ export function InventoryClient({
         openInquirySync(buildInventoryRowFromForm(savedInventoryId, result.inventoryNumber ?? currentInventoryNumber))
         return
       }
-      window.location.reload()
+      router.refresh()
     },
   })
 
   const del = () => {
     if (!deleteId) return
     startInventoryDeleteTransition(async () => {
-      const result = await deleteInventory(deleteId)
-      if (result.success) {
-        setData(prev => prev.filter(r => r.inventoryId !== deleteId))
-      } else {
-        setError(result.error ?? 'Could not delete this record.')
+      try {
+        const result = await deleteInventory(deleteId)
+        if (result.success) {
+          setData(prev => prev.filter(r => r.inventoryId !== deleteId))
+          setDeleteFeedback({ type: 'success', message: 'Vehicle deleted successfully.' })
+        } else {
+          const message = result.error ?? 'Could not delete this vehicle.'
+          setError(message)
+          setDeleteFeedback({ type: 'error', message })
+        }
+      } catch {
+        const message = 'Could not delete this vehicle. Please try again.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
       }
       setDeleteId(null)
     })
   }
 
-  const exportAllMatchingRows = () => {
+  const exportRows = () => {
     setExportError('')
     startExportTransition(async () => {
       try {
-        await exportInventoryCsvFromServer(filters)
+        await exportInventoryCsvFromServer(filters, selectedInventoryIds)
       } catch (err) {
         setExportError(err instanceof Error ? err.message : 'Could not export inventory.')
       }
@@ -1183,6 +1198,7 @@ export function InventoryClient({
   const formModalProps = {
     open: modal === 'add' || modal === 'edit',
     isEditing: editId !== null,
+    editingInventoryId: editId,
     title: editId ? 'Edit Vehicle' : 'Add New Vehicle',
     detailLoading: detailLoading && !!editId,
     detailError: editId ? detailError : '',
@@ -1232,7 +1248,7 @@ export function InventoryClient({
 
   return (
     <div>
-      <InventoryHeader total={total} status={filters.status} selectedCount={selectedInventoryIds.length} selectionMode={selectionMode} hasActiveFilters={hasActiveFilters} isExporting={isExporting} onBulkEmail={openBulkEmail} onToggleSelectionMode={() => { if (selectionMode) setSelectedInventoryIds([]); setSelectionMode(current => !current) }} onExport={exportAllMatchingRows} onAdd={openAdd} />
+      <InventoryHeader total={total} status={filters.status} selectedCount={selectedInventoryIds.length} selectionMode={selectionMode} exportSelected={selectedInventoryIds.length > 0} hasActiveFilters={hasActiveFilters} isExporting={isExporting} onBulkEmail={openBulkEmail} onToggleSelectionMode={() => { if (selectionMode) setSelectedInventoryIds([]); setSelectionMode(current => !current) }} onExport={exportRows} onAdd={openAdd} />
 
       {exportError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
@@ -1313,6 +1329,9 @@ export function InventoryClient({
         onDelete={del}
         isDeleting={isDeletingInventory}
       />
+
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Vehicle deleted" errorTitle="Vehicle not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Vehicle saved" errorTitle="Vehicle not saved" />
 
       <InventoryEmailModal {...emailModalProps} />
 

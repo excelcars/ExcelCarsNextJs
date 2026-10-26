@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 
 export function FormDropdown({
-  label, value, options, placeholder, onChange, disabled = false, allowClear = false, error = false, className = '',
+  label, value, options, placeholder, onChange, disabled = false, allowClear = false, error = false, errorMessage, className = '',
 }: {
   label?: ReactNode
   value: string
@@ -15,6 +15,7 @@ export function FormDropdown({
   disabled?: boolean
   allowClear?: boolean
   error?: boolean
+  errorMessage?: string
   className?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -76,6 +77,7 @@ export function FormDropdown({
     <button type="button" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} onClick={() => { if (!disabled) { setOpen(current => !current); setQuery('') } }} className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-md border bg-white px-3 py-2 text-left text-sm text-gray-800 outline-none focus:ring-1 focus:ring-[#1B2A6B] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${error ? 'border-red-500' : 'border-gray-200'}`}>
       <span className={`min-w-0 break-words ${value ? '' : 'text-gray-400'}`}>{selected || placeholder}</span><ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
     </button>
+    {error && errorMessage ? <span className="text-sm text-red-600">{errorMessage}</span> : null}
     {open && menuStyle && typeof document !== 'undefined' ? createPortal(
       <div ref={menuRef} className="z-[100] flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" style={menuStyle}>
         <div className="shrink-0 border-b border-gray-100 p-2"><div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input autoFocus autoComplete="new-password" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} placeholder="Search options..." className="w-full rounded-md border border-gray-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-[#1B2A6B] focus:ring-1 focus:ring-[#1B2A6B]" /></div></div>

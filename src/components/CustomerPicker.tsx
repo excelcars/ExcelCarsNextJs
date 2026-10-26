@@ -16,11 +16,13 @@ export function CustomerPicker({
   value,
   onChange,
   error: pickerError,
+  errorMessage,
   allowCreate = true,
 }: {
   value: CustomerOption | null
   onChange: (customer: CustomerOption | null) => void
   error?: boolean
+  errorMessage?: string
   allowCreate?: boolean
 }) {
   const [query, setQuery] = useState('')
@@ -111,14 +113,17 @@ export function CustomerPicker({
 
   if (value) {
     return (
-      <div className={`flex items-center justify-between border ${pickerError ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
-        <div>
-          <div className="text-sm font-medium text-gray-800">{value.custName}</div>
-          <div className="text-xs text-gray-500">{value.custMobile ?? '—'} {value.custEmail ? `· ${value.custEmail}` : ''}</div>
+      <div className="space-y-1">
+        <div className={`flex items-center justify-between border ${pickerError ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
+          <div>
+            <div className="text-sm font-medium text-gray-800">{value.custName}</div>
+            <div className="text-xs text-gray-500">{value.custMobile ?? '—'} {value.custEmail ? `· ${value.custEmail}` : ''}</div>
+          </div>
+          <button type="button" onClick={() => onChange(null)} className="text-gray-400 hover:text-red-600">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-        <button type="button" onClick={() => onChange(null)} className="text-gray-400 hover:text-red-600">
-          <X className="w-4 h-4" />
-        </button>
+        {pickerError && errorMessage ? <span className="block text-sm text-red-600">{errorMessage}</span> : null}
       </div>
     )
   }
@@ -139,6 +144,7 @@ export function CustomerPicker({
           if (!pickerRef.current?.contains(document.activeElement)) setOpen(false)
         }, 120)}
         error={pickerError}
+        errorMessage={errorMessage}
       />
       {open && query.trim().length >= 2 && (
         <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">

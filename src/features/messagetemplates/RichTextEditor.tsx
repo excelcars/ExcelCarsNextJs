@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { Bold, Italic, Underline, List, ListOrdered, Link, RemoveFormatting } from 'lucide-react'
 
-export function RichTextEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function RichTextEditor({ value, onChange, errorMessage }: { value: string; onChange: (value: string) => void; errorMessage?: string }) {
   const editorRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-gray-600">Body *</label>
-      <div className="rounded-md border border-gray-200 overflow-hidden focus-within:ring-1" style={{ '--tw-ring-color': '#1B2A6B' } as Record<string, string>}>
+      <div className={`overflow-hidden rounded-md border focus-within:ring-1 ${errorMessage ? 'border-red-500' : 'border-gray-200'}`} style={{ '--tw-ring-color': errorMessage ? '#C8102E' : '#1B2A6B' } as Record<string, string>}>
         <div className="flex flex-wrap gap-1 border-b border-gray-100 bg-gray-50 p-1.5">
           {controls.map(control => {
             const Icon = control.icon
@@ -45,6 +45,7 @@ export function RichTextEditor({ value, onChange }: { value: string; onChange: (
         <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" onInput={event => onChange(event.currentTarget.innerHTML)} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); onChange(editorRef.current?.innerHTML ?? '') }} className="min-h-36 px-3 py-2 text-sm text-gray-800 outline-none" />
       </div>
       <p className="text-xs text-gray-500">Formatting is sent in the email. Pasted content is added as plain text.</p>
+      {errorMessage ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
     </div>
   )
 }

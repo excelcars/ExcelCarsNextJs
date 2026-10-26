@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, Send, X, Paperclip, History } from 'lucide-react'
-import { Badge, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createTemplate, updateTemplate, deleteTemplate, findMessageRecipients, getTemplateDeliveryHistory, sendTemplateEmail, type TemplateFormInput } from './actions'
 import { MESSAGE_TYPES } from './queries'
 import { RECIPIENT_GROUPS, type RecipientGroup, type RecipientOption } from './recipients'
@@ -42,13 +43,17 @@ function emptyForm(): TemplateFormInput {
 }
 
 export function TemplatesClient({ initialData }: { initialData: TemplateRow[] }) {
+  const router = useRouter()
   const [data, setData] = useState(initialData)
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [form, setForm] = useState<TemplateFormInput>(emptyForm())
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isPending, startTransition] = useTransition()
   const [isSearchingRecipients, startRecipientSearch] = useTransition()
 
@@ -78,26 +83,35 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
     })
   }, [data, search])
 
-  const openAdd = () => { setForm(emptyForm()); setEditId(null); setError(''); setModal('add') }
+  const openAdd = () => { setForm(emptyForm()); setEditId(null); setError(''); setFieldErrors({}); setModal('add') }
   const openEdit = (r: TemplateRow) => {
     setForm({ messageType: r.messageType ?? 'Email', messageSubject: r.messageSubject ?? '', messageBody: r.messageBody ?? '' })
     setEditId(r.typeId)
     setError('')
+    setFieldErrors({})
     setModal('edit')
   }
 
-  const f = <K extends keyof TemplateFormInput>(k: K, v: TemplateFormInput[K]) => setForm(prev => ({ ...prev, [k]: v }))
+  const f = <K extends keyof TemplateFormInput>(k: K, v: TemplateFormInput[K]) => { setForm(prev => ({ ...prev, [k]: v })); setFieldErrors(prev => { if (!prev[k]) return prev; const next = { ...prev }; delete next[k]; return next }) }
 
   const save = () => {
     setError('')
+    const nextErrors: Record<string, string> = {}
+    if (!form.messageSubject.trim()) nextErrors.messageSubject = 'Subject is required.'
+    if (!form.messageBody.trim()) nextErrors.messageBody = 'Email body is required.'
+    if (Object.keys(nextErrors).length) { setFieldErrors(nextErrors); return }
+    setFieldErrors({})
     startTransition(async () => {
       const result = editId ? await updateTemplate(editId, form) : await createTemplate(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this message template.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `Message template ${editId ? 'updated' : 'created'} successfully.` })
       setModal(null)
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -202,8 +216,11 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
       const result = await deleteTemplate(deleteId)
       if (result.success) {
         setData(prev => prev.filter(r => r.typeId !== deleteId))
+        setDeleteFeedback({ type: 'success', message: 'Message template deleted successfully.' })
       } else {
-        setError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this message template.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
       }
       setDeleteId(null)
     })
@@ -253,9 +270,9 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
             <Select label="Type" value={form.messageType} onChange={e => f('messageType', e.target.value)}>
               {MESSAGE_TYPES.map(t => <option key={t}>{t}</option>)}
             </Select>
-            <Input label="Subject *" value={form.messageSubject} onChange={e => f('messageSubject', e.target.value)} />
+            <Input label="Subject *" value={form.messageSubject} onChange={e => f('messageSubject', e.target.value)} error={!!fieldErrors.messageSubject} errorMessage={fieldErrors.messageSubject} />
           </div>
-          <RichTextEditor value={form.messageBody} onChange={value => f('messageBody', value)} />
+          <RichTextEditor value={form.messageBody} onChange={value => f('messageBody', value)} errorMessage={fieldErrors.messageBody} />
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
@@ -268,6 +285,8 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this template? This cannot be undone." />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Template deleted" errorTitle="Template not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Template saved" errorTitle="Template not saved" />
 
       <Modal title={`Send — ${sendRow?.messageSubject ?? ''}`} open={!!sendRow} onClose={() => setSendRow(null)}>
         {sendResult ? (

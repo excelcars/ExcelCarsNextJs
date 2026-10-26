@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   Btn,
+  ActionAlert,
   Input,
   Modal,
   Table,
@@ -21,7 +22,7 @@ import {
   ConfirmDialog,
 } from "@/components/ui";
 import { FormDropdown } from "@/components/FormDropdown";
-import { catalogDisplayName, catalogSelectOptions } from "@/lib/catalogNames";
+import { catalogDisplayName, catalogSelectOptions, cleanCatalogName } from "@/lib/catalogNames";
 import {
   createMake,
   updateMake,
@@ -126,7 +127,10 @@ export function CatalogClient({
     name: string;
   } | null>(null);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [deleteError, setDeleteError] = useState("");
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -178,6 +182,7 @@ export function CatalogClient({
     setAddingModel(false);
     setAddingVariant(false);
     setError("");
+    setFieldErrors({});
     setModal(true);
   };
   const openAddModel = (makeId: number) => {
@@ -201,6 +206,7 @@ export function CatalogClient({
     setSelectedMakeId(target.makeId);
     setSelectedModelId(target.modelId);
     setError("");
+    setFieldErrors({});
     setModal(true);
   };
   const openEditModel = (row: ModelOption) =>
@@ -220,7 +226,15 @@ export function CatalogClient({
       modelId: row.fkModelId ?? 0,
     });
 
-  const add = (kind: "make" | "model" | "variant") =>
+  const add = (kind: "make" | "model" | "variant") => {
+    const value = kind === "make" ? newMake : kind === "model" ? newModel : newVariant;
+    const field = `new${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+    if (!cleanCatalogName(value)) {
+      setFieldErrors({ [field]: `Enter a valid ${kind} name.` });
+      return;
+    }
+    setFieldErrors({});
+    setError("");
     startTransition(async () => {
       const result =
         kind === "make"
@@ -229,9 +243,12 @@ export function CatalogClient({
             ? await createModel(newModel, selectedMakeId)
             : await createVariant(newVariant, selectedMakeId, selectedModelId);
       if (!result.success) {
-        setError(result.error ?? "Something went wrong.");
+        const message = result.error ?? `Could not save this ${kind}.`;
+        setFieldErrors({ [field]: message });
+        setSaveFeedback({ type: "error", message });
         return;
       }
+      setSaveFeedback({ type: "success", message: `${kind.charAt(0).toUpperCase() + kind.slice(1)} created successfully.` });
       if (kind === "make") {
         setNewMake("");
         setAddingMake(false);
@@ -250,7 +267,18 @@ export function CatalogClient({
       }
       router.refresh();
     });
-  const save = () =>
+  };
+  const save = () => {
+    const nextErrors: Record<string, string> = {};
+    if (!cleanCatalogName(name)) nextErrors.name = `Enter a valid ${editTarget?.kind ?? "vehicle master"} name.`;
+    if (editTarget?.kind !== "make" && !selectedMakeId) nextErrors.make = "Select a make.";
+    if (editTarget?.kind === "variant" && !selectedModelId) nextErrors.model = "Select a model.";
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+    setFieldErrors({});
+    setError("");
     startTransition(async () => {
       let result;
       if (editTarget?.kind === "make")
@@ -265,12 +293,16 @@ export function CatalogClient({
           selectedModelId,
         );
       if (!result || !result.success) {
-        setError(result?.error ?? "Something went wrong.");
+        const message = result?.error ?? `Could not save this ${editTarget?.kind ?? "catalog item"}.`;
+        setFieldErrors({ name: message });
+        setSaveFeedback({ type: "error", message });
         return;
       }
+      setSaveFeedback({ type: "success", message: `${editTarget?.kind?.charAt(0).toUpperCase()}${editTarget?.kind?.slice(1)} updated successfully.` });
       setModal(false);
       router.refresh();
     });
+  };
   const del = () => {
     if (!deleteTarget) return;
     startTransition(async () => {
@@ -281,9 +313,12 @@ export function CatalogClient({
             ? await deleteModel(deleteTarget.id)
             : await deleteVariant(deleteTarget.id);
       if (!result.success) {
-        setDeleteError(result.error ?? "Could not delete this record.");
+        const message = result.error ?? `Could not delete this ${deleteTarget.kind}.`;
+        setDeleteError(message);
+        setDeleteFeedback({ type: "error", message });
       } else {
         setDeleteError("");
+        setDeleteFeedback({ type: "success", message: `${deleteTarget.kind.charAt(0).toUpperCase() + deleteTarget.kind.slice(1)} deleted successfully.` });
         if (deleteTarget.kind === "make") {
           setManager(null);
         } else {
@@ -376,6 +411,8 @@ export function CatalogClient({
                   ? setNewModel(e.target.value)
                   : setNewVariant(e.target.value)
             }
+            error={Boolean(fieldErrors[`new${kind.charAt(0).toUpperCase()}${kind.slice(1)}`])}
+            errorMessage={fieldErrors[`new${kind.charAt(0).toUpperCase()}${kind.slice(1)}`]}
           />
           <Btn size="sm" onClick={() => add(kind)} disabled={isPending}>
             Add
@@ -478,15 +515,17 @@ export function CatalogClient({
                 onChange={(e) => setName(e.target.value)}
                 placeholder={`Enter ${editTarget.kind} name`}
                 autoFocus
+                error={Boolean(fieldErrors.name)}
+                errorMessage={fieldErrors.name}
               />
               {editTarget.kind !== "make" && (
-                <FormDropdown label="Make *" value={String(selectedMakeId || '')} options={catalogSelectOptions(makes, make => make.pkMakeId, make => make.make, selectedMakeId, 'make')} placeholder="Select the Make" allowClear onChange={(value) => {
+                <FormDropdown label="Make *" value={String(selectedMakeId || '')} options={catalogSelectOptions(makes, make => make.pkMakeId, make => make.make, selectedMakeId, 'make')} placeholder="Select the Make" allowClear error={Boolean(fieldErrors.make)} errorMessage={fieldErrors.make} onChange={(value) => {
                     setSelectedMakeId(Number(value));
                     setSelectedModelId(0);
                   }} />
               )}
               {editTarget.kind === "variant" && (
-                <FormDropdown label="Model *" value={String(selectedModelId || '')} options={catalogSelectOptions(models, model => model.pkModelId, model => model.model, selectedModelId, 'model')} placeholder="Select the Model" allowClear onChange={value => setSelectedModelId(Number(value))} />
+                <FormDropdown label="Model *" value={String(selectedModelId || '')} options={catalogSelectOptions(models, model => model.pkModelId, model => model.model, selectedModelId, 'model')} placeholder="Select the Model" allowClear error={Boolean(fieldErrors.model)} errorMessage={fieldErrors.model} onChange={value => setSelectedModelId(Number(value))} />
               )}
             </>
           ) : (
@@ -645,6 +684,8 @@ export function CatalogClient({
         onConfirm={del}
         message={`Delete this ${deleteTarget?.kind ?? "record"}? This cannot be undone.`}
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Catalog item deleted" errorTitle="Catalog item not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Catalog item saved" errorTitle="Catalog item not saved" />
     </div>
   );
 }

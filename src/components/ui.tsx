@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, type ReactNode, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { X, ChevronDown, Loader2, Search } from 'lucide-react'
+import { X, ChevronDown, Loader2, Search, CheckCircle2, CircleAlert } from 'lucide-react'
 
 export const R = '#C8102E'
 export const N = '#1B2A6B'
@@ -141,6 +141,30 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
         <div className="overflow-y-auto flex-1 px-6 py-4">{children}</div>
       </div>
     </div>
+  )
+}
+
+export function ActionAlert({
+  result,
+  onClose,
+  successTitle = 'Completed',
+  errorTitle = 'Could not complete action',
+}: {
+  result: { type: 'success' | 'error'; message: string } | null
+  onClose: () => void
+  successTitle?: string
+  errorTitle?: string
+}) {
+  return (
+    <Modal title={result?.type === 'success' ? successTitle : errorTitle} open={result !== null} onClose={onClose} width="max-w-sm">
+      <div className="space-y-5 text-center">
+        {result?.type === 'success'
+          ? <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" aria-hidden="true" />
+          : <CircleAlert className="mx-auto h-12 w-12 text-red-600" aria-hidden="true" />}
+        <p className="text-sm text-gray-700">{result?.message}</p>
+        <div className="flex justify-center"><Btn onClick={onClose}>OK</Btn></div>
+      </div>
+    </Modal>
   )
 }
 
