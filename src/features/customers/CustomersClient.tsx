@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CalendarDays, Eye, Mail, Phone } from 'lucide-react'
-import { Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createCustomer, updateCustomer, deleteCustomer, type CustomerFormInput } from './adminActions'
 import { CUSTOMER_TYPES } from './adminQueries'
 import { CUSTOMER_FIELD_LIMITS, LEGACY_CUSTOMER_TYPES, validateCustomerInput } from './validation'
@@ -169,6 +169,8 @@ export function CustomersClient({
   const [editId, setEditId] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<CustomerRow | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [deleteError, setDeleteError] = useState('')
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
@@ -251,14 +253,17 @@ export function CustomersClient({
     startTransition(async () => {
       const result = editId ? await updateCustomer(editId, validatedForm) : await createCustomer(validatedForm)
       if (!result.success) {
+        const message = result.error ?? 'Could not save this customer.'
         if (result.errorField) {
-          setFieldErrors({ [result.errorField]: result.error ?? 'Check this field.' })
+          setFieldErrors({ [result.errorField]: message })
           setError('')
         } else {
-          setError(result.error ?? 'Something went wrong.')
+          setError(message)
         }
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `Customer ${editId ? 'updated' : 'created'} successfully.` })
       setModal(null)
       router.refresh()
     })
@@ -270,10 +275,14 @@ export function CustomersClient({
     startTransition(async () => {
       const result = await deleteCustomer(deleteId)
       if (!result.success) {
-        setDeleteError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this customer.'
+        setDeleteError(message)
+        setDeleteFeedback({ type: 'error', message })
+        setDeleteId(null)
         return
       }
       setDeleteId(null)
+      setDeleteFeedback({ type: 'success', message: 'Customer deleted successfully.' })
       router.refresh()
     })
   }
@@ -420,6 +429,8 @@ export function CustomersClient({
         confirmDisabled={isPending}
         cancelDisabled={isPending}
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Customer deleted" errorTitle="Customer not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Customer saved" errorTitle="Customer not saved" />
       <ConfirmDialog
         open={discardOpen}
         onClose={() => setDiscardOpen(false)}

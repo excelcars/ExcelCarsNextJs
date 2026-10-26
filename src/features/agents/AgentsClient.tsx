@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Phone } from 'lucide-react'
-import { Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { isValidEmail, isValidPhone } from '@/lib/validation'
 import { createAgent, updateAgent, deleteAgent, type AgentFormInput } from './adminActions'
@@ -35,6 +35,8 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
   const [form, setForm] = useState<AgentFormInput>(emptyForm())
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AgentFormInput, string>>>({})
   const [isPending, startTransition] = useTransition()
@@ -79,7 +81,8 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
 
     startTransition(async () => {
       const result = editId ? await updateAgent(editId, form) : await createAgent(form)
-      if (!result.success) { setError(result.error ?? 'Something went wrong.'); return }
+      if (!result.success) { const message = result.error ?? 'Could not save this agent.'; setError(message); setSaveFeedback({ type: 'error', message }); return }
+      setSaveFeedback({ type: 'success', message: `Agent ${editId ? 'updated' : 'created'} successfully.` })
       setModal(null); router.refresh()
     })
   }
@@ -88,8 +91,15 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
     if (!deleteId) return
     startTransition(async () => {
       const result = await deleteAgent(deleteId)
-      if (!result.success) setError(result.error ?? 'Could not delete this record.')
-      setDeleteId(null); router.refresh()
+      if (result.success) {
+        setDeleteFeedback({ type: 'success', message: 'Agent deleted successfully.' })
+        router.refresh()
+      } else {
+        const message = result.error ?? 'Could not delete this agent.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
+      }
+      setDeleteId(null)
     })
   }
 
@@ -130,5 +140,7 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
       <div className="flex gap-3 justify-end pt-2"><Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Agent'}</Btn></div>
     </div></Modal>
     <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del} message="Delete this agent? This cannot be undone." />
+    <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Agent saved" errorTitle="Agent not saved" />
+    <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Agent deleted" errorTitle="Agent not deleted" />
   </div>
 }

@@ -4,7 +4,7 @@ import { catalogSelectOptions } from '@/lib/catalogNames'
 import { useState, useTransition, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CarFront, Database, Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
-import { Badge, Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS, inquiryStatusLabel } from './queries'
@@ -659,6 +659,7 @@ function FormDropdown({
   allowClear = false,
   allowCustom = false,
   error = false,
+  errorMessage,
 }: {
   label: ReactNode
   value: string
@@ -669,6 +670,7 @@ function FormDropdown({
   allowClear?: boolean
   allowCustom?: boolean
   error?: boolean
+  errorMessage?: string
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -709,6 +711,7 @@ function FormDropdown({
         <span className={value ? '' : 'text-gray-400'}>{availableOptions.find(option => option.value === value)?.label || placeholder}</span>
         <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
+      {error && errorMessage ? <span className="text-sm text-red-600">{errorMessage}</span> : null}
       {open ? (
         <div className="absolute z-30 mt-1 w-full min-w-64 max-w-[calc(100vw-3rem)] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
           <div className="border-b border-gray-100 p-2">
@@ -772,6 +775,8 @@ export function InquiryClient({
   const [savedCustomerSnapshot, setSavedCustomerSnapshot] = useState<string>('null')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveAlert, setSaveAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
   const [saveFeedback, setSaveFeedback] = useState<{ ok: boolean; message: string } | null>(null)
@@ -1001,6 +1006,8 @@ export function InquiryClient({
   const customerDetailsLocked = Boolean(selectedCustomer || form.customerId)
   const isMissingFollowUpDate = followUpDateRequired && !form.followUpDate.trim()
   const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
+  const carEditorCatalogError = Boolean(carEditorError) && (!carEditor.selectedMakeId || !carEditor.selectedModelId || !carEditor.fkVariantId)
+  const carEditorYearError = Boolean(carEditorError) && (carEditor.carYear === null || !isValidYear(carEditor.carYear))
   const hasInventoryRequirements = Boolean(
     carEditor.selectedMakeId || carEditor.selectedModelId || carEditor.fkVariantId ||
     form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId),
@@ -1551,13 +1558,7 @@ export function InquiryClient({
     setError('')
     const validation = validateInquiryFormInput(form)
     if (validation.error) {
-      const labels: Record<string, string> = {
-        customer: 'Customer', mobileno: 'Customer Mobile No.', email: 'Customer Email', website: 'Reference Website / Source',
-        budgetOfCustomer: 'Budget of customer', inquiryCars: 'Car Details', dateOfInquiry: 'Date of Inquiry',
-        followUpDate: 'FollowUp Date', visitedDateOfCustomer: 'Visited Date of customer',
-      }
-      const invalidFields = Object.keys(validation.fieldErrors).map(key => labels[key] ?? (key.startsWith('carYear-') ? 'Car Year' : key.startsWith('noOfOwners-') ? 'Number of Owners' : key))
-      setError(invalidFields.length > 0 ? `Complete or correct: ${invalidFields.join(', ')}.` : validation.error)
+      setError('')
       setErrors(validation.fieldErrors)
       return
     }
@@ -1567,10 +1568,13 @@ export function InquiryClient({
         ? await updateInquiry(editId, form)
         : await createInquiry(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this inquiry.'
+        setError(message)
+        setSaveAlert({ type: 'error', message })
         setSaveFeedback(null)
         return
       }
+      setSaveAlert({ type: 'success', message: result.message ?? `Inquiry ${editId ? 'updated' : 'created'} successfully.` })
       setSaveFeedback(result.message ? { ok: true, message: result.message } : null)
       setSavedFormSnapshot(JSON.stringify(form))
       setSavedCustomerSnapshot(customerSnapshot(selectedCustomer))
@@ -1586,6 +1590,9 @@ export function InquiryClient({
       setSaveFeedback(result.success
         ? { ok: true, message: result.message ?? 'Inquiry deleted successfully.' }
         : { ok: false, message: result.error ?? 'Could not delete this record.' })
+      setDeleteFeedback(result.success
+        ? { type: 'success', message: result.message ?? 'Inquiry deleted successfully.' }
+        : { type: 'error', message: result.error ?? 'Could not delete this inquiry.' })
       setDeleteId(null)
       if (result.success) router.refresh()
     })
@@ -1833,7 +1840,7 @@ export function InquiryClient({
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <Input label={fieldLabel('Inquiry No', true)} value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
-            <Input label={fieldLabel('Date of Inquiry', true)} type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} />
+            <Input label={fieldLabel('Date of Inquiry', true)} type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} errorMessage="Inquiry date cannot be after the follow-up or visited date." />
             <FormDropdown
               label={fieldLabel('Reference Website / Source', true)}
               value={form.sourceCode}
@@ -1841,6 +1848,7 @@ export function InquiryClient({
               placeholder="Select source"
               allowClear
               error={errors.website}
+              errorMessage="Select a reference website or source."
               onChange={value => {
                 const selected = sourceOptions.find(source => source.code === value)
                 setForm(previous => ({
@@ -1864,7 +1872,7 @@ export function InquiryClient({
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Link Existing Customer</label>
-            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} />
+            <CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customer} errorMessage="Select a customer or enter the customer name below." />
           </div>
 
           {customerDetailsLocked ? (
@@ -1874,9 +1882,9 @@ export function InquiryClient({
           ) : null}
 
           <div className="grid grid-cols-3 gap-4">
-            <Input label={fieldLabel('Customer Name', true)} value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.customer} />
-            <Input label={fieldLabel('Customer Mobile No', true)} value={form.mobileno} onChange={e => f('mobileno', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.mobileno} />
-            <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} />
+            <Input label={fieldLabel('Customer Name', true)} value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.customer} errorMessage="Customer name is required." />
+            <Input label={fieldLabel('Customer Mobile No', true)} value={form.mobileno} onChange={e => f('mobileno', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.mobileno} errorMessage="Enter a valid customer mobile number." />
+            <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} errorMessage="Enter a valid customer email address." />
           </div>
           {previousInquiryAlert}
           <div className="grid grid-cols-2 gap-4">
@@ -1896,13 +1904,13 @@ export function InquiryClient({
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,1fr)_auto] [&_label]:whitespace-nowrap">
-              <FormDropdown label={fieldLabel('Make', true)} value={String(carEditor.selectedMakeId ?? '')} options={catalogSelectOptions(makes, item => item.pkMakeId, item => item.make, carEditor.selectedMakeId, 'make')} placeholder="Select make" allowClear onChange={value => onCarEditorMakeChange(Number(value))} />
-              <FormDropdown label={fieldLabel('Model', true)} value={String(carEditor.selectedModelId ?? '')} options={catalogSelectOptions(carEditorModels, item => item.pkModelId, item => item.model, carEditor.selectedModelId, 'model')} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} onChange={value => onCarEditorModelChange(Number(value))} />
-              <FormDropdown label={fieldLabel('Variant', true)} value={String(carEditor.fkVariantId ?? '')} options={catalogSelectOptions(carEditorVariants, item => item.pkVariantId, item => item.variant, carEditor.fkVariantId, 'variant')} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} onChange={value => {
+              <FormDropdown label={fieldLabel('Make', true)} value={String(carEditor.selectedMakeId ?? '')} options={catalogSelectOptions(makes, item => item.pkMakeId, item => item.make, carEditor.selectedMakeId, 'make')} placeholder="Select make" allowClear error={carEditorCatalogError} errorMessage="Select make, model, and variant." onChange={value => onCarEditorMakeChange(Number(value))} />
+              <FormDropdown label={fieldLabel('Model', true)} value={String(carEditor.selectedModelId ?? '')} options={catalogSelectOptions(carEditorModels, item => item.pkModelId, item => item.model, carEditor.selectedModelId, 'model')} placeholder="Select model" allowClear disabled={!carEditor.selectedMakeId} error={carEditorCatalogError} errorMessage="Select make, model, and variant." onChange={value => onCarEditorModelChange(Number(value))} />
+              <FormDropdown label={fieldLabel('Variant', true)} value={String(carEditor.fkVariantId ?? '')} options={catalogSelectOptions(carEditorVariants, item => item.pkVariantId, item => item.variant, carEditor.fkVariantId, 'variant')} placeholder="Select variant" allowClear disabled={!carEditor.selectedModelId} error={carEditorCatalogError} errorMessage="Select make, model, and variant." onChange={value => {
                 setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                 setCarEditorError('')
               }} />
-              <FormDropdown label={fieldLabel('Year', true)} value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear onChange={value => {
+              <FormDropdown label={fieldLabel('Year', true)} value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear error={carEditorYearError} errorMessage={carEditor.carYear === null ? 'Select the vehicle year.' : 'Select a valid vehicle year.'} onChange={value => {
                 setCarEditor(prev => ({ ...prev, carYear: value ? Number(value) : null }))
                 setCarEditorError('')
               }} />
@@ -1921,9 +1929,7 @@ export function InquiryClient({
               </div>
             </div>
 
-            {carEditorError ? (
-              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{carEditorError}</div>
-            ) : null}
+            {errors.inquiryCars ? <p className="mt-3 text-sm text-red-600">Add at least one car of interest before saving the inquiry.</p> : null}
 
             <InquiryCarTable
               cars={form.inquiryCars}
@@ -1954,9 +1960,10 @@ export function InquiryClient({
                 f('budgetOfCustomer', digits ? Number(digits) : null)
               }}
               error={errors.budgetOfCustomer}
+              errorMessage="Budget must be greater than zero."
             />
             <FormDropdown label={fieldLabel('Classification', true)} value={form.classification} options={INQUIRY_CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => f('classification', value)} />
-            <Input label="Visited Date of customer" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} />
+            <Input label="Visited Date of customer" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} errorMessage={visitedSelected && !form.visitedDateOfCustomer ? 'Visited date is required when sub-status is Visited.' : 'Visited date cannot be before the inquiry date.'} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -1973,6 +1980,7 @@ export function InquiryClient({
               value={form.followUpDate}
               onChange={e => f('followUpDate', e.target.value)}
               error={errors.followUpDate}
+              errorMessage={!form.followUpDate ? 'Follow-up date is required for Open or FollowUp status.' : 'Follow-up date cannot be before the inquiry date.'}
               disabled={!followUpDateRequired}
             />
             <Textarea label="Remark" value={form.remark} onChange={e => f('remark', e.target.value)} placeholder="Notes about this inquiry..." />
@@ -2055,6 +2063,8 @@ export function InquiryClient({
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this inquiry record? This cannot be undone." />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Inquiry deleted" errorTitle="Inquiry not deleted" />
+      <ActionAlert result={saveAlert} onClose={() => setSaveAlert(null)} successTitle="Inquiry saved" errorTitle="Inquiry not saved" />
       <ConfirmDialog
         open={discardOpen}
         onClose={() => setDiscardOpen(false)}

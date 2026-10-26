@@ -307,7 +307,7 @@ export function Layout({
       {/* Logo */}
       <div className={`h-16 flex items-center border-b border-white/10 flex-shrink-0 ${sidebarOpen ? 'px-5' : 'justify-center px-1'}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-excel-car.png" alt="Excel Cars" className={sidebarOpen ? 'h-10 w-32 rounded-lg bg-white px-2 py-1 object-contain object-left shadow-sm' : 'h-10 w-11 rounded-lg bg-white px-1 py-1 object-contain shadow-sm'} />
+        <img src="/logo-excel-car.png" alt="Excel Cars" className={sidebarOpen ? 'h-14 w-28 rounded-xl border border-white/20 bg-white p-1 object-contain shadow-sm' : 'h-10 w-11 rounded-lg border border-white/20 bg-white p-1 object-contain shadow-sm'} />
         {sidebarOpen && <span className="ml-3 text-white/60 text-xs font-mono uppercase tracking-widest">CRM</span>}
       </div>
 

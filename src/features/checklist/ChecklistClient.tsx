@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, ClipboardList, FileText, History, Plus, Trash2, X, Car, Download, Loader2, Pencil } from 'lucide-react'
-import { Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { ListPagination } from '@/components/ListPagination'
 import { ChecklistTable } from './ChecklistTable'
 import { ChecklistYesNoToggle } from './ChecklistYesNoToggle'
@@ -305,6 +305,8 @@ export function ChecklistClient({
   const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [deleteDocIndex, setDeleteDocIndex] = useState<number | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
@@ -538,6 +540,12 @@ export function ChecklistClient({
     if (!form.registrationNo?.trim()) {
       newErrors.registrationNo = true
     }
+    if (!form.make.trim()) newErrors.make = true
+    if (!form.model.trim()) newErrors.model = true
+    if (!form.variant.trim()) newErrors.variant = true
+    if (!form.colour.trim()) newErrors.colour = true
+    if (!form.fuelType.trim()) newErrors.fuelType = true
+    if (form.year === null) newErrors.year = true
     if (form.customerMobileLegacy && !isValidPhone(form.customerMobileLegacy)) {
       newErrors.customerMobileLegacy = true
     }
@@ -547,14 +555,13 @@ export function ChecklistClient({
     if (form.year !== null && !isValidYear(form.year)) {
       newErrors.year = true
     }
+    if (!form.customerMobileLegacy || !isValidPhone(form.customerMobileLegacy)) newErrors.customerMobileLegacy = true
+    if (!form.customerEmailLegacy || !isValidEmail(form.customerEmailLegacy)) newErrors.customerEmailLegacy = true
+    if (!form.docs.some(doc => doc.documentName.trim())) newErrors.docs = true
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
-      if (newErrors.registrationNo) setError('Registration number is required.')
-      else if (newErrors.customerMobileLegacy) setError('Customer mobile must contain exactly 10 digits.')
-      else if (newErrors.customerEmailLegacy) setError('Enter a valid customer email address.')
-      else if (newErrors.year) setError('Enter a valid vehicle year.')
-      else setError('Complete the required checklist information.')
+      setError('')
       return
     }
     setErrors({})
@@ -562,14 +569,17 @@ export function ChecklistClient({
     startTransition(async () => {
       const result = editId ? await updateChecklist(editId, form) : await createChecklist(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this checklist record.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `Checklist record ${editId ? 'updated' : 'created'} successfully.` })
       setSavedFormSnapshot(JSON.stringify(form))
       setSavedCustomerSnapshot(optionSnapshot(selectedCustomer))
       setSavedVehicleSnapshot(optionSnapshot(selectedVehicle))
       closeForm()
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -579,8 +589,11 @@ export function ChecklistClient({
       const result = await deleteChecklist(deleteId)
       if (result.success) {
         setData(prev => prev.filter(r => r.documentId !== deleteId))
+        setDeleteFeedback({ type: 'success', message: 'Checklist record deleted successfully.' })
       } else {
-        setError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this checklist record.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
       }
       setDeleteId(null)
     })
@@ -702,6 +715,7 @@ export function ChecklistClient({
               onChange={e => entryMode === 'existing' ? (onRegistrationChange(e.target.value), setRegistrationOpen(true)) : setForm(f => ({ ...f, registrationNo: e.target.value }))}
               onFocus={() => entryMode === 'existing' && setRegistrationOpen(true)}
               error={errors.registrationNo}
+              errorMessage={errors.registrationNo ? 'Registration number is required.' : undefined}
             />
             {entryMode === 'existing' && registrationOpen && !selectedVehicle && (
               <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -763,14 +777,14 @@ export function ChecklistClient({
           <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="mb-3"><h3 className="text-sm font-semibold text-slate-900">Car details</h3><p className="text-xs text-slate-500">Confirm or enter the vehicle information for this checklist.</p></div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <Input label="Make *" value={form.make} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} />
-              <Input label="Model *" value={form.model} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
-              <Input label="Variant *" value={form.variant} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, variant: e.target.value }))} />
-              <Input label="Colour *" value={form.colour} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, colour: e.target.value }))} />
-              <Input label="Year *" type="number" value={form.year ?? ''} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, year: e.target.value ? Number(e.target.value) : null }))} />
-              <Input label="Fuel Type *" value={form.fuelType} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value }))} />
+              <Input label="Make *" value={form.make} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} error={errors.make} errorMessage="Vehicle make is required." />
+              <Input label="Model *" value={form.model} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} error={errors.model} errorMessage="Vehicle model is required." />
+              <Input label="Variant *" value={form.variant} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, variant: e.target.value }))} error={errors.variant} errorMessage="Vehicle variant is required." />
+              <Input label="Colour *" value={form.colour} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, colour: e.target.value }))} error={errors.colour} errorMessage="Vehicle colour is required." />
+              <Input label="Year *" type="number" value={form.year ?? ''} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, year: e.target.value ? Number(e.target.value) : null }))} error={errors.year} errorMessage={form.year === null ? 'Vehicle year is required.' : 'Enter a valid vehicle year.'} />
+              <Input label="Fuel Type *" value={form.fuelType} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, fuelType: e.target.value }))} error={errors.fuelType} errorMessage="Vehicle fuel type is required." />
             </div>
-            {entryMode === 'existing' ? <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Customer</div>{form.customerNameLegacy ? <><div className="mt-0.5 text-sm font-medium text-slate-800">{form.customerNameLegacy}</div><div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div></> : <div className="mt-2"><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} /></div>}</div> : <div className="mt-3"><div className="mb-2 text-xs font-medium text-slate-600">Customer details</div><div className="grid grid-cols-1 gap-3 md:grid-cols-3"><Input label="Customer name" value={form.customerNameLegacy} onChange={e => setForm(f => ({ ...f, customerNameLegacy: e.target.value }))} /><Input label="Customer mobile" value={form.customerMobileLegacy} error={errors.customerMobileLegacy} onChange={e => setForm(f => ({ ...f, customerMobileLegacy: e.target.value.replace(/\D/g, '') }))} /><Input label="Customer email" type="email" value={form.customerEmailLegacy} error={errors.customerEmailLegacy} onChange={e => setForm(f => ({ ...f, customerEmailLegacy: e.target.value }))} /></div></div>}
+          {entryMode === 'existing' ? <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2"><div className="text-xs font-medium text-slate-500">Customer</div>{form.customerNameLegacy ? <><div className="mt-0.5 text-sm font-medium text-slate-800">{form.customerNameLegacy}</div><div className="text-xs text-slate-500">{form.customerMobileLegacy || '—'} {form.customerEmailLegacy ? `· ${form.customerEmailLegacy}` : ''}</div></> : <div className="mt-2"><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} /></div>}</div> : <div className="mt-3"><div className="mb-2 text-xs font-medium text-slate-600">Customer details</div><div className="grid grid-cols-1 gap-3 md:grid-cols-3"><Input label="Customer name" value={form.customerNameLegacy} onChange={e => setForm(f => ({ ...f, customerNameLegacy: e.target.value }))} /><Input label="Customer mobile" value={form.customerMobileLegacy} error={errors.customerMobileLegacy} errorMessage="Enter a valid customer mobile number." onChange={e => setForm(f => ({ ...f, customerMobileLegacy: e.target.value.replace(/\D/g, '') }))} /><Input label="Customer email" type="email" value={form.customerEmailLegacy} error={errors.customerEmailLegacy} errorMessage="Enter a valid customer email address." onChange={e => setForm(f => ({ ...f, customerEmailLegacy: e.target.value }))} /></div></div>}
           </section>
 
           <div>
@@ -792,6 +806,7 @@ export function ChecklistClient({
                 {LEGACY_DOCS.map(d => <option key={d} value={d} />)}
               </datalist>
             </div>
+            {errors.docs ? <p className="mt-2 text-sm text-red-600">Add at least one document.</p> : null}
           </div>
 
           <div className="flex gap-3 justify-end pt-2">
@@ -939,6 +954,8 @@ export function ChecklistClient({
         cancelDisabled={isPending}
         closeOnConfirm={false}
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Checklist deleted" errorTitle="Checklist not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Checklist saved" errorTitle="Checklist not saved" />
       <ConfirmDialog
         open={deleteDocIndex !== null}
         onClose={() => setDeleteDocIndex(null)}

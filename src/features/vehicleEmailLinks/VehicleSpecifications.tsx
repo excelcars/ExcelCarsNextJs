@@ -6,9 +6,9 @@ import { CalendarDays, CarFront, FileText, Fuel, Gauge, Palette, ReceiptText, Sh
 type Specification = [label: string, value: string]
 
 const tabs = [
-  { key: 'highlights', label: 'Key Highlights' },
-  { key: 'ownership', label: 'Ownership & History' },
-  { key: 'performance', label: 'Engine & Performance' },
+  { key: 'highlights', label: 'Key Highlights', compactLabel: 'Highlights' },
+  { key: 'ownership', label: 'Ownership & History', compactLabel: 'Ownership' },
+  { key: 'performance', label: 'Engine & Performance', compactLabel: 'Engine' },
 ] as const
 
 type TabKey = (typeof tabs)[number]['key']
@@ -35,17 +35,18 @@ export function VehicleSpecifications({ highlights, ownership, performance }: Re
   return (
     <section className="rounded-3xl border border-[#e4e9f2] bg-white p-5 shadow-sm sm:p-6">
       <h2 className="text-xl font-bold tracking-tight text-[#101b38]">Vehicle Specifications</h2>
-      <div className="mt-4 flex gap-1 overflow-x-auto border-b border-[#e4e9f2]" role="tablist" aria-label="Vehicle specifications">
+      <div className="mt-4 grid grid-cols-3 border-b border-[#e4e9f2]" role="tablist" aria-label="Vehicle specifications">
         {tabs.map(tab => {
           const selected = selectedTab === tab.key
           return (
-            <button key={tab.key} type="button" role="tab" aria-selected={selected} onClick={() => setSelectedTab(tab.key)} className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium transition ${selected ? 'border-[#d7194a] text-[#142b62]' : 'border-transparent text-gray-500 hover:text-[#142b62]'}`}>
-              {tab.label}
+            <button key={tab.key} type="button" role="tab" aria-selected={selected} onClick={() => setSelectedTab(tab.key)} className={`flex min-h-12 items-center justify-center border-b-2 px-1 py-2 text-center text-xs font-medium leading-tight transition sm:px-3 sm:py-3 sm:text-sm ${selected ? 'border-[#d7194a] text-[#142b62]' : 'border-transparent text-gray-500 hover:text-[#142b62]'}`}>
+              <span className="sm:hidden">{tab.compactLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </button>
           )
         })}
       </div>
-      <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {specifications[selectedTab].map(([label, value]) => {
           const Icon = iconByLabel[label] ?? CarFront
           return (

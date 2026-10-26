@@ -10,6 +10,7 @@ export function CatalogTextPicker({
   onChange,
   options,
   error,
+  errorMessage,
   onAdd,
 }: {
   label: ReactNode
@@ -18,6 +19,7 @@ export function CatalogTextPicker({
   onChange: (value: string) => void
   options: string[]
   error?: boolean
+  errorMessage?: string
   onAdd?: (value: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -49,6 +51,7 @@ export function CatalogTextPicker({
         onFocus={() => setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         error={error}
+        errorMessage={errorMessage}
       />
       {open && (
         <div className="absolute z-30 mt-1 w-full min-w-64 max-w-[calc(100vw-3rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg max-h-56">

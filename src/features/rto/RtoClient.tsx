@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { CalendarDays, Mail, Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2, Phone, UserRound, Building2, CircleDollarSign, FileText, WalletCards } from 'lucide-react'
-import { Badge, Btn, FilterPanel, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, FilterPanel, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { PartnerPicker } from '@/components/PartnerPicker'
@@ -287,6 +288,7 @@ export function RtoClient({
   initialSearch?: string
   initialRegistrationNo?: string
 }) {
+  const router = useRouter()
   const [data, setData] = useState(initialData)
   const [filters, setFilters] = useState<RtoFilters>(() => ({
     ...emptyFilters(),
@@ -327,6 +329,8 @@ export function RtoClient({
   const [vehicleEntryMode, setVehicleEntryMode] = useState<'existing' | 'manual'>('manual')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [error, setError] = useState('')
   const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [isPending, startTransition] = useTransition()
@@ -740,7 +744,7 @@ export function RtoClient({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
-      setError('Please correct the highlighted fields before saving.')
+      setError('')
       return
     }
     setErrors({})
@@ -748,11 +752,14 @@ export function RtoClient({
     startTransition(async () => {
       const result = editId ? await updateRto(editId, form) : await createRto(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this RTO record.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `RTO record ${editId ? 'updated' : 'created'} successfully.` })
       closeForm()
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -762,8 +769,11 @@ export function RtoClient({
       const result = await deleteRto(deleteId)
       if (result.success) {
         setData(prev => prev.filter(r => r.rtoAgentMainId !== deleteId))
+        setDeleteFeedback({ type: 'success', message: 'RTO record deleted successfully.' })
       } else {
-        setError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this RTO record.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
       }
       setDeleteId(null)
     })
@@ -1301,7 +1311,7 @@ export function RtoClient({
             {vehicleEntryMode === 'manual' ? (
               <Input label="Registration No *" placeholder="Enter registration number" value={form.registrationNo} onChange={e => onRegistrationChange(e.target.value)} error={errors.registrationNo} errorMessage={errors.registrationNo ? 'Registration number is required for a manual entry.' : undefined} />
             ) : (
-              <CatalogTextPicker label="Registration No" placeholder="Search registration..." value={form.registrationNo} onChange={onRegistrationChange} options={registrationOptions} error={errors.registrationNo} />
+              <CatalogTextPicker label="Registration No" placeholder="Search registration..." value={form.registrationNo} onChange={onRegistrationChange} options={registrationOptions} error={errors.registrationNo} errorMessage="Registration number is required for a manual entry." />
             )}
             <Input label="Year" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={errors.carYear} errorMessage={errors.carYear ? 'Enter a valid vehicle year.' : undefined} />
           </div>
@@ -1473,6 +1483,8 @@ export function RtoClient({
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this RTO record? This cannot be undone." />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="RTO record deleted" errorTitle="RTO record not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="RTO record saved" errorTitle="RTO record not saved" />
 
       <ConfirmDialog
         open={discardOpen}

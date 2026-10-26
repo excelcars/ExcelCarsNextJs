@@ -6,6 +6,7 @@ export function InventoryHeader({
   status,
   selectedCount,
   selectionMode,
+  exportSelected,
   hasActiveFilters,
   isExporting,
   onBulkEmail,
@@ -17,6 +18,7 @@ export function InventoryHeader({
   status: string
   selectedCount: number
   selectionMode: boolean
+  exportSelected: boolean
   hasActiveFilters: boolean
   isExporting: boolean
   onBulkEmail: () => void
@@ -36,8 +38,8 @@ export function InventoryHeader({
           <Btn variant="outline" size="sm" onClick={onBulkEmail} disabled={selectedCount === 0}>
             <Mail className="w-3.5 h-3.5" />Send Email{selectedCount > 0 ? ` (${selectedCount})` : ''}
           </Btn>
-          <Btn variant="outline" size="sm" onClick={onExport} disabled={isExporting || total === 0}>
-            <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}
+          <Btn variant="outline" size="sm" onClick={onExport} disabled={isExporting || (!exportSelected && total === 0)}>
+            <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : exportSelected ? `Export Selected (${selectedCount})` : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}
           </Btn>
           <Btn size="sm" onClick={onAdd}><Plus className="w-3.5 h-3.5" />Add Vehicle</Btn>
         </div>

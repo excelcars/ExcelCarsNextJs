@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2, Mail, Phone, Banknote, Building2, CalendarClock, CircleDollarSign, Landmark, ReceiptText, UserRound, WalletCards } from 'lucide-react'
-import { Badge, Btn, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, ConfirmDialog } from '@/components/ui'
 import { LoanFiltersPanel } from './LoanFiltersPanel'
 import { LoanPagination } from './LoanPagination'
 import { LoanCustomerLookup, type LoanCustomerOption } from './LoanCustomerLookup'
@@ -215,6 +215,8 @@ export function LoanClient({
   const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
   const [error, setError] = useState('')
@@ -506,15 +508,18 @@ export function LoanClient({
     startTransition(async () => {
       const result = editId ? await updateLoan(editId, form) : await createLoan(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this loan record.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `Loan record ${editId ? 'updated' : 'created'} successfully.` })
       setSavedFormSnapshot(JSON.stringify(form))
       setSavedCustomerSnapshot(optionSnapshot(selectedCustomer))
       setSavedBankContactSnapshot(optionSnapshot(selectedBankContact))
       setSavedVehicleSnapshot(optionSnapshot(selectedVehicle))
       closeForm()
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -524,8 +529,11 @@ export function LoanClient({
       const result = await deleteLoan(deleteId)
       if (result.success) {
         setData(prev => prev.filter(r => r.loanManagementId !== deleteId))
+        setDeleteFeedback({ type: 'success', message: 'Loan record deleted successfully.' })
       } else {
-        setError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this loan record.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
       }
       setDeleteId(null)
     })
@@ -719,8 +727,7 @@ export function LoanClient({
 
           {loanMode === 'existing' ? <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer *</label>
-            <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={!!errors.customer} />
-            {errors.customer && <p className="mt-1 text-xs text-red-600">{errors.customer}</p>}
+            <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={!!errors.customer} errorMessage={errors.customer} />
           </div> : <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
             <Input label="Customer Name *" value={form.customerNameLegacy} onChange={event => f('customerNameLegacy', event.target.value)} error={!!errors.customerNameLegacy} errorMessage={errors.customerNameLegacy} />
             <Input label="Customer Mobile" inputMode="numeric" maxLength={10} value={form.customerMobileLegacy} onChange={event => f('customerMobileLegacy', event.target.value.replace(/\D/g, ''))} error={!!errors.customerMobileLegacy} errorMessage={errors.customerMobileLegacy} />
@@ -730,13 +737,16 @@ export function LoanClient({
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
-              <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
-                <div className="flex items-center gap-2 text-sm text-gray-800">
-                  <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
+              <div className="space-y-1">
+                <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
+                  <div className="flex items-center gap-2 text-sm text-gray-800">
+                    <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
+                  </div>
+                  <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
-                  <X className="w-4 h-4" />
-                </button>
+                {errors.inventoryId ? <p className="text-sm text-red-600">{errors.inventoryId}</p> : null}
               </div>
             ) : (
               <div className="relative">
@@ -746,6 +756,7 @@ export function LoanClient({
                   onChange={e => { setVehicleQuery(e.target.value); setVehicleOpen(true) }}
                   onFocus={() => setVehicleOpen(true)}
                   error={!!errors.inventoryId}
+                  errorMessage={errors.inventoryId}
                 />
                 {vehicleOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
@@ -1064,6 +1075,8 @@ export function LoanClient({
 
       <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del}
         message="Delete this loan record? This cannot be undone." />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Loan deleted" errorTitle="Loan not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Loan saved" errorTitle="Loan not saved" />
       <ConfirmDialog
         open={discardOpen}
         onClose={() => setDiscardOpen(false)}

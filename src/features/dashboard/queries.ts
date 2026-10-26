@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 
+const OTHER_LEAD_SOURCES_CODE = '__OTHER__'
+
 function startOfDay(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
@@ -447,7 +449,7 @@ export async function getLeadSourceBreakdown() {
   const topSources = rows.slice(0, 5).map(row => ({ name: row.displayName, sourceCode: row.code, value: row._count.inquiries }))
   const otherSources = totalInquiries - topSources.reduce((total, row) => total + row.value, 0)
 
-  return otherSources > 0 ? [...topSources, { name: 'Other', value: otherSources }] : topSources
+  return otherSources > 0 ? [...topSources, { name: 'Other', sourceCode: OTHER_LEAD_SOURCES_CODE, value: otherSources }] : topSources
 }
 
 function countLeadDimensions(values: Array<string | null | undefined>) {
@@ -464,18 +466,28 @@ export async function getLeadRegionBreakdowns() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
   const yearStart = new Date(now.getFullYear(), 0, 1)
-  const rows = await prisma.inquiry.findMany({
-    where: { locationId: { not: null }, dateOfInquiry: { gte: yearStart, lt: now } },
-    select: {
-      dateOfInquiry: true,
-      source: { select: { code: true } },
-      reportingLocation: { select: { region: true } },
-    },
-  })
+  const [rows, sourceRows] = await Promise.all([
+    prisma.inquiry.findMany({
+      where: { locationId: { not: null }, dateOfInquiry: { gte: yearStart, lt: now } },
+      select: {
+        dateOfInquiry: true,
+        source: { select: { code: true } },
+        reportingLocation: { select: { region: true } },
+      },
+    }),
+    prisma.inquirySourceMaster.findMany({
+      where: { inquiries: { some: {} } },
+      select: { code: true, _count: { select: { inquiries: true } } },
+      orderBy: { inquiries: { _count: 'desc' } },
+      take: 5,
+    }),
+  ])
 
   const ranges = { month: monthStart, quarter: quarterStart, year: yearStart } as const
   const all = { month: [] as string[], quarter: [] as string[], year: [] as string[] }
   const bySource: Record<string, { month: string[]; quarter: string[]; year: string[] }> = {}
+  const topSourceCodes = new Set(sourceRows.map(row => row.code))
+  bySource[OTHER_LEAD_SOURCES_CODE] = { month: [], quarter: [], year: [] }
 
   for (const row of rows) {
     if (!row.dateOfInquiry || !row.reportingLocation?.region) continue
@@ -486,6 +498,7 @@ export async function getLeadRegionBreakdowns() {
       if (row.dateOfInquiry < start) continue
       all[period].push(row.reportingLocation.region)
       if (sourceCode) bySource[sourceCode][period].push(row.reportingLocation.region)
+      if (!sourceCode || !topSourceCodes.has(sourceCode)) bySource[OTHER_LEAD_SOURCES_CODE][period].push(row.reportingLocation.region)
     }
   }
 
