@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Download, Plus, Pencil, Trash2 } from 'lucide-react'
-import { Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { createDealer, updateDealer, deleteDealer, type DealerFormInput } from './actions'
 import { DealerNameAutocomplete } from './DealerNameAutocomplete'
@@ -93,6 +93,8 @@ export function DealersClient({
   const [discardChangesOpen, setDiscardChangesOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [exportError, setExportError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [error, setError] = useState('')
@@ -211,9 +213,12 @@ export function DealersClient({
     startTransition(async () => {
       const result = editId ? await updateDealer(editId, form) : await createDealer(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this dealer.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `Dealer ${editId ? 'updated' : 'created'} successfully.` })
       closeModal()
       setSuccessMessage(editId ? 'Dealer updated successfully.' : 'Dealer saved successfully.')
       router.refresh()
@@ -226,7 +231,11 @@ export function DealersClient({
     startTransition(async () => {
       const result = await deleteDealer(deleteId)
       if (!result.success) {
-        setDeleteError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this dealer.'
+        setDeleteError(message)
+        setDeleteFeedback({ type: 'error', message })
+      } else {
+        setDeleteFeedback({ type: 'success', message: 'Dealer deleted successfully.' })
       }
       setDeleteId(null)
       setIsDeleting(false)
@@ -357,6 +366,8 @@ export function DealersClient({
         message="Your edits have not been saved. Do you want to discard them?"
         confirmLabel="Discard"
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Dealer deleted" errorTitle="Dealer not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Dealer saved" errorTitle="Dealer not saved" />
 
       <ConfirmDialog
         open={deleteId !== null}

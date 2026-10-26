@@ -5,6 +5,7 @@ import { summarizeVehicleEmailInteractions } from '@/features/vehicleEmailLinks/
 export const INVENTORY_STATUSES = ['In Stock', 'Booked', 'Loan Process', 'Not Available', 'Sold', 'RTO Process'] as const
 
 export interface InventoryListParams {
+  inventoryIds?: number[]
   search?: string
   status?: string
   make?: string
@@ -39,6 +40,7 @@ export interface InventoryListParams {
 }
 
 function buildInventoryWhere({
+  inventoryIds,
   search = '',
   status = 'All',
   make = '',
@@ -70,6 +72,10 @@ function buildInventoryWhere({
 }: InventoryListParams) {
   const where: Prisma.InventoryManagementWhereInput = {}
   const andConditions: Prisma.InventoryManagementWhereInput[] = []
+
+  if (inventoryIds?.length) {
+    where.inventoryId = { in: inventoryIds }
+  }
 
   if (status !== 'All') {
     where.status = status

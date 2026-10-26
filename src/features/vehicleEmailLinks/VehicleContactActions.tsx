@@ -108,8 +108,8 @@ export function VehicleContactActions({
       </div>
 
       {enquiryOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onMouseDown={closeEnquiry}>
-          <section className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="vehicle-enquiry-title" onMouseDown={event => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/50 p-3 sm:items-center sm:p-4" role="presentation" onMouseDown={closeEnquiry}>
+          <section className="my-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6" role="dialog" aria-modal="true" aria-labelledby="vehicle-enquiry-title" onMouseDown={event => event.stopPropagation()}>
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 id="vehicle-enquiry-title" className="text-xl font-bold text-[#142b62]">Send an enquiry</h2>

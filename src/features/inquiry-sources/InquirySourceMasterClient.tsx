@@ -1,24 +1,36 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
-import { Btn, ConfirmDialog, Input, Modal, PageHeader, SearchBar, Table } from '@/components/ui'
+import { ActionAlert, Btn, ConfirmDialog, Input, Modal, PageHeader, SearchBar, Table } from '@/components/ui'
 import { createInquirySource, deleteInquirySource, updateInquirySource } from './actions'
 import type { InquirySourceFormInput, InquirySourceMasterRow } from './types'
+
+function validateFields(form: InquirySourceFormInput): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(form.code.trim().toUpperCase().replace(/\s+/g, '_'))) errors.code = 'Code must use uppercase letters, numbers, and underscores.'
+  if (!form.displayName.trim()) errors.displayName = 'Source name is required.'
+  else if (form.displayName.trim().length > 100) errors.displayName = 'Source name must be 100 characters or fewer.'
+  if (!form.category.trim()) errors.category = 'Category is required.'
+  else if (form.category.trim().length > 100) errors.category = 'Category must be 100 characters or fewer.'
+  if (!Number.isInteger(Number(form.reportingSort)) || Number(form.reportingSort) < 1 || Number(form.reportingSort) > 9999) errors.reportingSort = 'Reporting order must be a whole number from 1 to 9999.'
+  return errors
+}
 
 function emptyForm(): InquirySourceFormInput {
   return { code: '', displayName: '', category: '', requiresDetail: false, isActive: true, reportingSort: 1 }
 }
 
-function SourceForm({ form, onChange }: { form: InquirySourceFormInput; onChange: (next: InquirySourceFormInput) => void }) {
+function SourceForm({ form, errors, onChange }: { form: InquirySourceFormInput; errors: Record<string, string>; onChange: (next: InquirySourceFormInput) => void }) {
   const set = <K extends keyof InquirySourceFormInput>(key: K, value: InquirySourceFormInput[K]) => onChange({ ...form, [key]: value })
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Input label="Source Name *" value={form.displayName} onChange={event => set('displayName', event.target.value)} placeholder="e.g. CarWale" />
-      <Input label="Code *" value={form.code} onChange={event => set('code', event.target.value)} placeholder="e.g. CARWALE" />
-      <Input label="Category *" value={form.category} onChange={event => set('category', event.target.value)} placeholder="e.g. Portal" />
-      <Input label="Reporting Order *" type="number" min={1} value={form.reportingSort} onChange={event => set('reportingSort', Number(event.target.value))} />
+      <Input label="Source Name *" value={form.displayName} onChange={event => set('displayName', event.target.value)} placeholder="e.g. CarWale" error={!!errors.displayName} errorMessage={errors.displayName} />
+      <Input label="Code *" value={form.code} onChange={event => set('code', event.target.value)} placeholder="e.g. CARWALE" error={!!errors.code} errorMessage={errors.code} />
+      <Input label="Category *" value={form.category} onChange={event => set('category', event.target.value)} placeholder="e.g. Portal" error={!!errors.category} errorMessage={errors.category} />
+      <Input label="Reporting Order *" type="number" min={1} value={form.reportingSort} onChange={event => set('reportingSort', Number(event.target.value))} error={!!errors.reportingSort} errorMessage={errors.reportingSort} />
       <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.requiresDetail} onChange={event => set('requiresDetail', event.target.checked)} /> Require detail</label>
       <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.isActive} onChange={event => set('isActive', event.target.checked)} /> Active</label>
     </div>
@@ -38,12 +50,16 @@ export function InquirySourceMasterClient({
   pageCount: number
   search: string
 }) {
+  const router = useRouter()
   const [searchInput, setSearchInput] = useState(search)
   const [modal, setModal] = useState<null | 'add' | 'edit'>(null)
   const [form, setForm] = useState<InquirySourceFormInput>(emptyForm())
   const [editRow, setEditRow] = useState<InquirySourceMasterRow | null>(null)
   const [deleteRow, setDeleteRow] = useState<InquirySourceMasterRow | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isPending, startTransition] = useTransition()
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -61,19 +77,23 @@ export function InquirySourceMasterClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput])
 
-  const openAdd = () => { setForm(emptyForm()); setEditRow(null); setError(''); setModal('add') }
+  const openAdd = () => { setForm(emptyForm()); setEditRow(null); setError(''); setFieldErrors({}); setModal('add') }
   const openEdit = (row: InquirySourceMasterRow) => {
     setForm({ code: row.code, displayName: row.displayName, category: row.category, requiresDetail: row.requiresDetail, isActive: row.isActive, reportingSort: row.reportingSort })
-    setEditRow(row); setError(''); setModal('edit')
+    setEditRow(row); setError(''); setFieldErrors({}); setModal('edit')
   }
 
   const save = () => {
     setError('')
+    const nextErrors = validateFields(form)
+    if (Object.keys(nextErrors).length) { setFieldErrors(nextErrors); return }
+    setFieldErrors({})
     startTransition(async () => {
       const result = editRow ? await updateInquirySource(editRow.sourceId, form) : await createInquirySource(form)
-      if (!result.success) { setError(result.error ?? 'Something went wrong.'); return }
+      if (!result.success) { const message = result.error ?? 'Could not save this inquiry source.'; setError(message); setSaveFeedback({ type: 'error', message }); return }
+      setSaveFeedback({ type: 'success', message: `Inquiry source ${editRow ? 'updated' : 'created'} successfully.` })
       setModal(null)
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -81,9 +101,15 @@ export function InquirySourceMasterClient({
     if (!deleteRow) return
     startTransition(async () => {
       const result = await deleteInquirySource(deleteRow.sourceId)
-      if (!result.success) setError(result.error ?? 'Could not delete this source.')
+      if (!result.success) {
+        const message = result.error ?? 'Could not delete this source.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
+      } else {
+        setDeleteFeedback({ type: 'success', message: 'Inquiry source deleted successfully.' })
+        router.refresh()
+      }
       setDeleteRow(null)
-      if (result.success) window.location.reload()
     })
   }
 
@@ -133,7 +159,7 @@ export function InquirySourceMasterClient({
       </div></div>}
 
       <Modal title={modal === 'edit' ? 'Edit Inquiry Source' : 'Add Inquiry Source'} open={modal !== null} onClose={() => setModal(null)}>
-        <div className="space-y-5"><SourceForm form={form} onChange={setForm} />
+        <div className="space-y-5"><SourceForm form={form} errors={fieldErrors} onChange={next => { setForm(next); setFieldErrors({}) }} />
           {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
           <div className="flex justify-end gap-3"><Btn variant="outline" onClick={() => setModal(null)} disabled={isPending}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Source'}</Btn></div>
         </div>
@@ -149,6 +175,8 @@ export function InquirySourceMasterClient({
         title="Delete Inquiry Source"
         message={deleteRow ? `Delete ${deleteRow.displayName}? It has no linked inquiries. Historic source mapping rows will also be removed.` : ''}
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Inquiry source deleted" errorTitle="Inquiry source not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Inquiry source saved" errorTitle="Inquiry source not saved" />
     </div>
   )
 }

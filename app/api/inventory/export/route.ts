@@ -6,11 +6,16 @@ function toStringParam(value: string | null) {
   return value?.trim() ?? ''
 }
 
+function inventoryIdsParam(value: string | null) {
+  return [...new Set((value ?? '').split(',').map(Number).filter(id => Number.isInteger(id) && id > 0))]
+}
+
 export async function GET(req: NextRequest) {
   if (!(await getAuthorizedUserIdForRoute('/inventory'))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const searchParams = req.nextUrl.searchParams
   const filters: InventoryListParams = {
+    inventoryIds: inventoryIdsParam(searchParams.get('inventoryIds')),
     search: toStringParam(searchParams.get('search')),
     status: toStringParam(searchParams.get('status')) || 'All',
     make: toStringParam(searchParams.get('make')),

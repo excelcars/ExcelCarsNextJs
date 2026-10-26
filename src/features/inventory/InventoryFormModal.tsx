@@ -1,5 +1,5 @@
 import { catalogTextOptions } from '@/lib/catalogNames'
-import type { ChangeEvent, ReactNode } from 'react'
+import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Btn, Input, Textarea, Modal } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { CustomerPicker } from '@/components/CustomerPicker'
@@ -7,8 +7,9 @@ import { CatalogTextPicker } from '@/components/CatalogTextPicker'
 import type { InventoryFormInput } from './actions'
 import type { CarMakeMaster, CarModelMaster, CarVariantMaster, CustomerOption, Dealer } from './inventoryTypes'
 import { InventoryFormFooter } from './InventoryFormFooter'
-import { normalizeRegistrationNo } from '@/lib/validation'
+import { isCompleteVehicleRegistrationNo, normalizeRegistrationNo } from '@/lib/validation'
 import { INVENTORY_STATUSES } from './queries'
+import { checkInventoryRegistrationNumber } from './actions'
 
 type FieldChange = <K extends keyof InventoryFormInput>(field: K, value: InventoryFormInput[K]) => void
 
@@ -19,6 +20,7 @@ function fieldLabel(text: string, required = false): ReactNode {
 interface InventoryFormModalProps {
   open: boolean
   isEditing: boolean
+  editingInventoryId: number | null
   title: string
   detailLoading: boolean
   detailError: string
@@ -53,7 +55,7 @@ interface InventoryFormModalProps {
 }
 
 export function InventoryFormModal({
-  open, isEditing, title, detailLoading, detailError, form, errors, error, isPending,
+  open, isEditing, editingInventoryId, title, detailLoading, detailError, form, errors, error, isPending,
   currentInventoryNumber, currentSku, catalogMakeText, catalogModelText,
   catalogVariantText, selectedMakeId, selectedModelId, selectedCustomer,
   makes, models, variants, dealers, inventoryColours, fuelTypes, onClose,
@@ -61,6 +63,30 @@ export function InventoryFormModal({
   onDealerChange, onCustomerChange, onSave, formatPriceInput,
 }: InventoryFormModalProps) {
   const f = onFieldChange
+  const [registrationDuplicateError, setRegistrationDuplicateError] = useState('')
+
+  useEffect(() => {
+    const registrationNo = normalizeRegistrationNo(form.registrationNo)
+    if (!open || form.isCarRegistered !== true || !isCompleteVehicleRegistrationNo(registrationNo)) {
+      setRegistrationDuplicateError('')
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      void checkInventoryRegistrationNumber(registrationNo, editingInventoryId).then(result => {
+        if (!cancelled) setRegistrationDuplicateError(result.duplicate ? 'This registration number is already active on another vehicle in stock.' : '')
+      }).catch(() => {
+        if (!cancelled) setRegistrationDuplicateError('')
+      })
+    }, 300)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [editingInventoryId, form.isCarRegistered, form.registrationNo, open])
+
   const numberInput = (event: ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value.replace(/,/g, '').replace(/[^\d.]/g, '')
     const parts = raw.split('.')
@@ -86,12 +112,12 @@ export function InventoryFormModal({
             <div className="grid grid-cols-3 gap-4">
               <Input label={fieldLabel('Inventory No')} value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
               <Input label={fieldLabel('SKU')} value={currentSku ?? 'Enter make, model, and colour'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
-              <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={catalogTextOptions(makes.map(make => make.make))} error={errors.fkVariantId} />
-              <CatalogTextPicker label={fieldLabel('Model', true)} value={catalogModelText} onChange={value => void onModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={catalogTextOptions(models.map(model => model.model))} error={errors.fkVariantId} />
-              <CatalogTextPicker label={fieldLabel('Variant', true)} value={catalogVariantText} onChange={onVariantChange} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={catalogTextOptions(variants.map(variant => variant.variant))} error={errors.fkVariantId} />
-              <FormDropdown label={fieldLabel('Year', true)} value={form.year ? String(form.year) : ''} options={Array.from({ length: new Date().getFullYear() - 1989 }, (_, index) => String(new Date().getFullYear() + 1 - index)).map(year => ({ value: year, label: year }))} placeholder="Select year" allowClear error={errors.year} onChange={value => f('year', value ? Number(value) : null)} />
+              <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={catalogTextOptions(makes.map(make => make.make))} error={errors.fkVariantId} errorMessage="Select a make, model, and variant." />
+              <CatalogTextPicker label={fieldLabel('Model', true)} value={catalogModelText} onChange={value => void onModelChange(value)} placeholder={selectedMakeId ? 'Search model...' : 'Select make first'} options={catalogTextOptions(models.map(model => model.model))} error={errors.fkVariantId} errorMessage="Select a make, model, and variant." />
+              <CatalogTextPicker label={fieldLabel('Variant', true)} value={catalogVariantText} onChange={onVariantChange} placeholder={selectedModelId ? 'Search variant...' : 'Select model first'} options={catalogTextOptions(variants.map(variant => variant.variant))} error={errors.fkVariantId} errorMessage="Select a make, model, and variant." />
+              <FormDropdown label={fieldLabel('Year', true)} value={form.year ? String(form.year) : ''} options={Array.from({ length: new Date().getFullYear() - 1989 }, (_, index) => String(new Date().getFullYear() + 1 - index)).map(year => ({ value: year, label: year }))} placeholder="Select year" allowClear error={errors.year} errorMessage="Select a valid year." onChange={value => f('year', value ? Number(value) : null)} />
               <Input label={fieldLabel('Month')} value={form.month} onChange={e => f('month', e.target.value)} placeholder="Jan / Feb / Mar" />
-              <CatalogTextPicker label={fieldLabel('Colour', true)} value={form.colour} onChange={value => f('colour', value)} placeholder="Search or enter colour..." options={inventoryColours} error={errors.colour} />
+              <CatalogTextPicker label={fieldLabel('Colour', true)} value={form.colour} onChange={value => f('colour', value)} placeholder="Search or enter colour..." options={inventoryColours} error={errors.colour} errorMessage="Colour is required." />
             </div>
           </section>
 
@@ -106,31 +132,32 @@ export function InventoryFormModal({
                 placeholder={form.isCarRegistered === true ? 'Enter registration number' : 'Available when car is registered'}
                 readOnly={form.isCarRegistered !== true}
                 className={form.isCarRegistered !== true ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
-                error={errors.registrationNo}
+                error={Boolean(errors.registrationNo) || Boolean(errors.registrationDuplicate) || Boolean(registrationDuplicateError)}
+                errorMessage={registrationDuplicateError || (errors.registrationDuplicate ? 'This registration number is already active on another vehicle in stock.' : errors.registrationNo ? 'Registration number is required.' : undefined)}
               />
-              <FormDropdown label={fieldLabel('Fuel Type', form.isCarRegistered === true)} value={form.fuelType} options={Array.from(new Set(form.fuelType ? [form.fuelType, ...fuelTypes] : fuelTypes)).map(value => ({ value, label: value }))} placeholder="Select fuel type" allowClear error={errors.fuelType} onChange={value => f('fuelType', value)} />
-              <Input label={fieldLabel('No. of Owners', form.isCarRegistered === true)} type="number" min={0} step={1} value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} />
-              <FormDropdown label={fieldLabel('Tax', form.isCarRegistered === true)} value={form.tax} options={[{ value: 'Individual', label: 'Individual' }, { value: 'Corporate', label: 'Corporate' }]} placeholder="Select tax type" allowClear error={errors.tax} onChange={value => f('tax', value)} />
-              <Input label={fieldLabel('KM Driven', form.isCarRegistered === true)} type="text" inputMode="decimal" value={formatPriceInput(form.kmsDriven)} onChange={e => { const value = numberInput(e); f('kmsDriven', value ? Number(value) : null) }} error={errors.kmsDriven} />
-              <Input label={fieldLabel('Insurance Type', form.isCarRegistered === true)} value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" error={errors.insuranceType} />
+              <FormDropdown label={fieldLabel('Fuel Type', form.isCarRegistered === true)} value={form.fuelType} options={Array.from(new Set(form.fuelType ? [form.fuelType, ...fuelTypes] : fuelTypes)).map(value => ({ value, label: value }))} placeholder="Select fuel type" allowClear error={errors.fuelType} errorMessage="Fuel type is required for registered vehicles." onChange={value => f('fuelType', value)} />
+              <Input label={fieldLabel('No. of Owners', form.isCarRegistered === true)} type="number" min={0} step={1} value={form.noOfOwners ?? ''} onChange={e => f('noOfOwners', e.target.value ? +e.target.value : null)} error={errors.noOfOwners} errorMessage={form.isCarRegistered === true ? 'Enter at least one owner.' : 'Enter a whole number of owners.'} />
+              <FormDropdown label={fieldLabel('Tax', form.isCarRegistered === true)} value={form.tax} options={[{ value: 'Individual', label: 'Individual' }, { value: 'Corporate', label: 'Corporate' }]} placeholder="Select tax type" allowClear error={errors.tax} errorMessage="Tax type is required for registered vehicles." onChange={value => f('tax', value)} />
+              <Input label={fieldLabel('KM Driven', form.isCarRegistered === true)} type="text" inputMode="decimal" value={formatPriceInput(form.kmsDriven)} onChange={e => { const value = numberInput(e); f('kmsDriven', value ? Number(value) : null) }} error={errors.kmsDriven} errorMessage={form.kmsDriven !== null && form.kmsDriven < 0 ? 'KM driven cannot be negative.' : 'KM driven is required for registered vehicles.'} />
+              <Input label={fieldLabel('Insurance Type', form.isCarRegistered === true)} value={form.insuranceType} onChange={e => f('insuranceType', e.target.value)} placeholder="Comprehensive / Expired" error={errors.insuranceType} errorMessage="Insurance type is required for registered vehicles." />
             </div>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Sale and ownership</p>
             <div className="grid grid-cols-3 gap-4">
-              <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" onChange={value => f('status', value)} />
-              <Input label={fieldLabel('Price (₹)', true)} type="text" inputMode="decimal" value={formatPriceInput(form.price)} onChange={e => { const value = numberInput(e); f('price', value ? Number(value) : null) }} error={errors.price} />
-              <FormDropdown label={fieldLabel('Owner Type', true)} value={form.ownedType} options={[{ value: 'Excel Cars', label: 'Excel Cars' }, { value: 'Dealer', label: 'Dealer' }, { value: 'Individual', label: 'Individual' }]} placeholder="Select owner type" allowClear error={errors.ownedType} onChange={onOwnerTypeChange} />
-              {form.ownedType === 'Dealer' ? <CatalogTextPicker label={fieldLabel('Name of Owner', true)} value={form.ownedBy} onChange={onDealerChange} placeholder="Search dealer..." options={dealers.map(dealer => dealer.dealerName ?? '').filter(Boolean)} error={errors.ownedBy} /> : <Input label={fieldLabel('Name of Owner', true)} value={form.ownedBy} autoComplete="new-password" onChange={e => f('ownedBy', e.target.value)} error={errors.ownedBy} />}
-              <Input label={fieldLabel('Owner Mobile')} value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" maxLength={11} error={errors.mobileNoOwnedBy} />
-              <Input label={fieldLabel('Owner Email')} type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} />
+              <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" error={errors.status} errorMessage="Status is required." onChange={value => f('status', value)} />
+              <Input label={fieldLabel('Price (₹)', true)} type="text" inputMode="decimal" value={formatPriceInput(form.price)} onChange={e => { const value = numberInput(e); f('price', value ? Number(value) : null) }} error={errors.price} errorMessage="Enter a price greater than zero." />
+              <FormDropdown label={fieldLabel('Owner Type', true)} value={form.ownedType} options={[{ value: 'Excel Cars', label: 'Excel Cars' }, { value: 'Dealer', label: 'Dealer' }, { value: 'Individual', label: 'Individual' }]} placeholder="Select owner type" allowClear error={errors.ownedType} errorMessage="Select a valid owner type." onChange={onOwnerTypeChange} />
+              {form.ownedType === 'Dealer' ? <CatalogTextPicker label={fieldLabel('Name of Owner', true)} value={form.ownedBy} onChange={onDealerChange} placeholder="Search dealer..." options={dealers.map(dealer => dealer.dealerName ?? '').filter(Boolean)} error={errors.ownedBy} errorMessage="Owner name is required." /> : <Input label={fieldLabel('Name of Owner', true)} value={form.ownedBy} autoComplete="new-password" onChange={e => f('ownedBy', e.target.value)} error={errors.ownedBy} errorMessage="Owner name is required." />}
+              <Input label={fieldLabel('Owner Mobile')} value={form.mobileNoOwnedBy} onChange={e => f('mobileNoOwnedBy', e.target.value.replace(/\D/g, '').slice(0, 11))} inputMode="numeric" maxLength={11} error={errors.mobileNoOwnedBy} errorMessage="Enter a valid owner mobile number." />
+              <Input label={fieldLabel('Owner Email')} type="email" value={form.emailIdOwnedBy} onChange={e => f('emailIdOwnedBy', e.target.value)} error={errors.emailIdOwnedBy} errorMessage="Enter a valid owner email address." />
             </div>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Customer link</p>
-            <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-xs font-medium text-gray-600">{fieldLabel('Customer', form.status === 'Sold')}</label><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customerId} /></div></div>
+            <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-xs font-medium text-gray-600">{fieldLabel('Customer', form.status === 'Sold')}</label><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customerId} errorMessage="Select a customer for sold inventory." /></div></div>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">

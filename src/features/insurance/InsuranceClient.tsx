@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, X, Car, Download, Loader2, Pencil, IndianRupee } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, Modal, PageHeader, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, Input, Select, Textarea, Modal, PageHeader, ConfirmDialog } from '@/components/ui'
 import { InsuranceFilters } from './InsuranceFilters'
 import { InsurancePagination } from './InsurancePagination'
 import { InsuranceTable } from './InsuranceTable'
@@ -292,6 +292,8 @@ export function InsuranceClient({
   const [savedVehicleSnapshot, setSavedVehicleSnapshot] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteFeedback, setDeleteFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [vehicleLookupMessage, setVehicleLookupMessage] = useState('')
   const [discardOpen, setDiscardOpen] = useState(false)
   const [error, setError] = useState('')
@@ -575,15 +577,18 @@ export function InsuranceClient({
     startTransition(async () => {
       const result = editId ? await updateInsurance(editId, form) : await createInsurance(form)
       if (!result.success) {
-        setError(result.error ?? 'Something went wrong.')
+        const message = result.error ?? 'Could not save this insurance record.'
+        setError(message)
+        setSaveFeedback({ type: 'error', message })
         return
       }
+      setSaveFeedback({ type: 'success', message: `Insurance record ${editId ? 'updated' : 'created'} successfully.` })
       setSavedFormSnapshot(JSON.stringify(form))
       setSavedCustomerSnapshot(optionSnapshot(selectedCustomer))
       setSavedAgentSnapshot(optionSnapshot(selectedAgent))
       setSavedVehicleSnapshot(optionSnapshot(selectedVehicle))
       closeForm()
-      window.location.reload()
+      router.refresh()
     })
   }
 
@@ -593,8 +598,11 @@ export function InsuranceClient({
       const result = await deleteInsurance(deleteId)
       if (result.success) {
         setData(prev => prev.filter(r => r.insuranceMainId !== deleteId))
+        setDeleteFeedback({ type: 'success', message: 'Insurance record deleted successfully.' })
       } else {
-        setError(result.error ?? 'Could not delete this record.')
+        const message = result.error ?? 'Could not delete this insurance record.'
+        setError(message)
+        setDeleteFeedback({ type: 'error', message })
       }
       setDeleteId(null)
     })
@@ -1107,6 +1115,8 @@ export function InsuranceClient({
         cancelDisabled={isPending}
         closeOnConfirm={false}
       />
+      <ActionAlert result={deleteFeedback} onClose={() => setDeleteFeedback(null)} successTitle="Insurance deleted" errorTitle="Insurance not deleted" />
+      <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Insurance saved" errorTitle="Insurance not saved" />
       <ConfirmDialog
         open={discardOpen}
         onClose={() => setDiscardOpen(false)}

@@ -54,9 +54,9 @@ export default async function PublicVehiclePage({
   return (
     <div className="min-h-screen bg-[#f7f9fc] text-gray-900">
       <header className="border-b border-[#e4e9f2] bg-white text-[#142b62]">
-        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-excel-car.png" alt="Excel Cars" className="h-14 w-auto object-contain" />
+          <img src="/logo-excel-car.png" alt="Excel Cars" className="h-11 w-auto object-contain sm:h-14" />
           <div className="hidden items-center gap-8 text-sm md:flex">
             <a href={phoneHref} className="flex items-center gap-2 font-medium hover:text-[#d7194a]"><Phone className="h-4 w-4" />Call Now</a>
             <a href={whatsappHref} target="_blank" rel="noreferrer" className="flex items-center gap-2 font-medium hover:text-[#d7194a]"><MessageCircle className="h-4 w-4" />WhatsApp Us</a>
@@ -64,8 +64,8 @@ export default async function PublicVehiclePage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1240px] px-4 py-4 sm:px-6 sm:py-8">
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,0.85fr)]">
+      <main className="mx-auto max-w-[1240px] px-3 py-3 sm:px-6 sm:py-8">
+        <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,0.85fr)]">
           <section className="space-y-6">
             <VehicleGallery photos={vehicle.gallery} videos={vehicle.videos} />
             <VehicleSpecifications
@@ -90,17 +90,17 @@ export default async function PublicVehiclePage({
             />
           </section>
 
-          <aside className="space-y-5 rounded-3xl border border-[#e4e9f2] bg-white p-5 shadow-sm lg:sticky lg:top-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+          <aside className="order-first space-y-5 rounded-2xl border border-[#e4e9f2] bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6 lg:order-none lg:sticky lg:top-5">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-[#101b38] sm:text-3xl">{vehicle.heading}</h1>
-                <p className="mt-1 text-lg text-gray-600">{vehicle.subheading}</p>
+                <p className="mt-1 text-base text-gray-600 sm:text-lg">{vehicle.subheading}</p>
               </div>
-              <span className="rounded-full bg-[#fff0f4] px-3 py-1.5 text-xs font-semibold text-[#d7194a]">{vehicle.status}</span>
+              <span className="shrink-0 rounded-full bg-[#fff0f4] px-3 py-1.5 text-xs font-semibold text-[#d7194a]">{vehicle.status}</span>
             </div>
 
             <div>
-              <div className="text-4xl font-bold text-[#d7194a]">{vehicle.price ? `₹${vehicle.price}` : 'On Request'}</div>
+              <div className="text-3xl font-bold text-[#d7194a] sm:text-4xl">{vehicle.price ? `₹${vehicle.price}` : 'On Request'}</div>
               <div className="mt-1 text-sm text-gray-500">Inclusive of all taxes</div>
             </div>
 

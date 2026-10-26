@@ -11,11 +11,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    const nextErrors: { username?: string; password?: string } = {}
+    if (!username.trim()) nextErrors.username = 'Username is required.'
+    if (!password) nextErrors.password = 'Password is required.'
+    if (Object.keys(nextErrors).length) { setFieldErrors(nextErrors); return }
+    setFieldErrors({})
     setLoading(true)
 
     try {
@@ -26,7 +32,7 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        setError('Invalid username or password, or account is inactive.')
+        setFieldErrors({ password: 'Invalid username or password, or account is inactive.' })
         setLoading(false)
         return
       }
@@ -93,18 +99,19 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="relative mt-8 space-y-5" aria-busy={loading}>
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">Username</label>
-              <div className="relative"><UserRound aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" /><input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username" className="w-full rounded-lg border border-slate-200 py-3 pl-11 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#1B2A6B] focus:ring-4 focus:ring-[#1B2A6B]/10" required disabled={loading} autoComplete="username" /></div>
+              <div className="relative"><UserRound aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" /><input type="text" value={username} onChange={e => { setUsername(e.target.value); setFieldErrors(current => ({ ...current, username: undefined })) }} placeholder="Enter your username" className={`w-full rounded-lg border py-3 pl-11 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:ring-4 ${fieldErrors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-[#1B2A6B] focus:ring-[#1B2A6B]/10'}`} required disabled={loading} autoComplete="username" /></div>{fieldErrors.username ? <p className="mt-1 text-sm text-red-600">{fieldErrors.username}</p> : null}
             </div>
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
               <div className="relative">
                 <LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" className="w-full rounded-lg border border-slate-200 py-3 pl-11 pr-11 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#1B2A6B] focus:ring-4 focus:ring-[#1B2A6B]/10" required disabled={loading} autoComplete="current-password" />
+                <input type={showPw ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setFieldErrors(current => ({ ...current, password: undefined })) }} placeholder="Enter your password" className={`w-full rounded-lg border py-3 pl-11 pr-11 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:ring-4 ${fieldErrors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-[#1B2A6B] focus:ring-[#1B2A6B]/10'}`} required disabled={loading} autoComplete="current-password" />
                 <button type="button" onClick={() => setShowPw(!showPw)} disabled={loading}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600">
                   {showPw ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+              {fieldErrors.password ? <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p> : null}
             </div>
 
             <div className="flex items-center justify-between text-sm"><label className="flex cursor-pointer items-center gap-2 text-slate-600"><input type="checkbox" defaultChecked className="h-4 w-4 rounded border-slate-300 text-[#1B2A6B] focus:ring-[#1B2A6B]" />Remember me</label><button type="button" className="font-medium text-blue-600 hover:text-blue-700">Forgot password?</button></div>

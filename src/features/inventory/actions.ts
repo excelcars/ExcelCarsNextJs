@@ -286,7 +286,7 @@ export async function createInventory(input: InventoryFormInput): Promise<Action
     })
 
     if ('duplicateRegistration' in outcome) {
-      return { success: false, error: 'This registration number already exists on another vehicle in Inventory.' }
+      return { success: false, error: 'This registration number is already active on another vehicle in stock.' }
     }
     const { created } = outcome
 
@@ -318,7 +318,7 @@ export async function updateInventory(id: number, input: InventoryFormInput): Pr
         where: { registrationNo: normalizedRegistrationNo, NOT: { inventoryId: id } },
         select: { inventoryId: true },
       })
-      if (duplicate) return { success: false, error: 'This registration number already exists on another vehicle in Inventory.' }
+      if (duplicate) return { success: false, error: 'This registration number is already active on another vehicle in stock.' }
     }
 
     const updated = await prisma.inventoryManagement.update({
@@ -336,6 +336,24 @@ export async function updateInventory(id: number, input: InventoryFormInput): Pr
   } catch (err) {
     return { success: false, error: describeError(err) }
   }
+}
+
+/** Checks a completed registration number while the inventory form is being edited. */
+export async function checkInventoryRegistrationNumber(registrationNo: string, excludeInventoryId?: number | null) {
+  if (!(await currentUserId())) return { duplicate: false }
+
+  const normalizedRegistrationNo = normalizeRegistrationNo(registrationNo)
+  if (!isCompleteVehicleRegistrationNo(normalizedRegistrationNo)) return { duplicate: false }
+
+  const duplicate = await prisma.inventoryManagement.findFirst({
+    where: {
+      registrationNo: normalizedRegistrationNo,
+      ...(excludeInventoryId ? { NOT: { inventoryId: excludeInventoryId } } : {}),
+    },
+    select: { inventoryId: true },
+  })
+
+  return { duplicate: Boolean(duplicate) }
 }
 
 export async function deleteInventory(id: number): Promise<ActionResult> {
