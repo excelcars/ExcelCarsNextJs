@@ -15,9 +15,6 @@ interface VehicleDetailsEmailInput {
   viewDetailsUrl?: string | null
 }
 
-const row = (label: string, value: string) =>
-  `<tr><td style="padding:8px 14px;border:1px solid #dce4f2;background:#f4f7fc;color:#142b62;font-weight:600;">${escapeHtml(label)}</td><td style="padding:8px 14px;border:1px solid #dce4f2;color:#263651;white-space:pre-wrap;">${escapeHtml(value) || '—'}</td></tr>`
-
 export function vehicleDetailsSubject(input: Pick<VehicleDetailsEmailInput, 'make' | 'model' | 'variant' | 'colour'>) {
   const clean = (value: string) => value.replace(/\s+/g, ' ').trim()
   const vehicle = [input.make, input.model, input.variant].map(clean).filter(Boolean).join(' ')
@@ -26,51 +23,34 @@ export function vehicleDetailsSubject(input: Pick<VehicleDetailsEmailInput, 'mak
 }
 
 export function vehicleDetailsEmail(input: VehicleDetailsEmailInput): { subject: string; html: string } {
-  // Customer emails show only the RTO prefix (for example, MH14), never the vehicle series.
-  const registration = input.registrationNo?.trim().replace(/\s+/g, '') ?? ''
-  const maskedReg = registration.match(/^[A-Za-z]{2}\d{2}/)?.[0]?.toUpperCase() ?? registration.slice(0, 4).toUpperCase()
-  const price = input.price ? `₹${Number(input.price).toLocaleString('en-IN')}` : ''
-  const km = input.kmsDriven ? `${Number(input.kmsDriven).toLocaleString('en-IN')} km` : ''
-  const ctaHtml = input.viewDetailsUrl
+  const name = escapeHtml(input.customerName || 'Customer')
+  const makeAndModel = [input.make, input.model, input.variant].filter(Boolean).join(' ')
+  const price = input.price != null && input.price !== '' ? `₹${Number(input.price).toLocaleString('en-IN')}` : ''
+  const km = input.kmsDriven != null && input.kmsDriven !== '' ? `${Number(input.kmsDriven).toLocaleString('en-IN')} km` : ''
+  const viewDetailsUrl = input.viewDetailsUrl?.trim()
+  const ctaHtml = viewDetailsUrl
     ? `
-      <div style="margin:24px 0;">
-        <a href="${input.viewDetailsUrl}" style="display:inline-block;background:#142b62;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:700;">
-          View Full Vehicle Details &rarr;
-        </a>
-      </div>
-      <p style="font-size:12px;color:#6b7280;word-break:break-all;margin-top:8px;">
-        If the button does not work, open this link:<br>
-        <a href="${input.viewDetailsUrl}" style="color:#d7194a;text-decoration:underline;">${input.viewDetailsUrl}</a>
+      <p style="margin:20px 0;">
+        <a href="${escapeHtml(viewDetailsUrl ?? '')}" style="color:#d7194a;text-decoration:underline;font-weight:700;">View the car</a>
       </p>
     `
     : ''
 
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;color:#263651;line-height:1.6;max-width:560px;">
-      <p>Dear ${input.customerName},</p>
-      <p>Thank you for choosing Excel Cars for buying your dream car.</p>
-      <p>Below are the car details:</p>
-      <table style="border-collapse:collapse;width:100%;margin:16px 0;">
-        ${row('Make', input.make)}
-        ${row('Model / Variant', [input.model, input.variant].filter(Boolean).join(' / '))}
-        ${row('Year', input.year ? String(input.year) : '')}
-        ${row('Colour', input.colour)}
-        ${row('Fuel Type', input.fuelType)}
-        ${row('No. of Owners', input.noOfOwners != null ? String(input.noOfOwners) : '')}
-        ${row('Registration', maskedReg)}
-        ${row('Kilometers', km)}
-        ${row('Price', price)}
-        ${row('Remarks', input.remarks)}
-      </table>
+      <p>Dear ${name},</p>
+      <p>Thank you for your interest in Excel Cars. The vehicle you enquired for is detailed below.</p>
+      <p style="margin-bottom:8px;font-weight:700;color:#142b62;">YOUR SELECTED VEHICLE</p>
+      <ul style="margin-top:0;padding-left:22px;">
+        <li><strong>Make &amp; Model:</strong> ${escapeHtml(makeAndModel) || '—'}</li>
+        <li><strong>Year:</strong> ${escapeHtml(input.year != null ? String(input.year) : '') || '—'}</li>
+        <li><strong>Fuel Type:</strong> ${escapeHtml(input.fuelType) || '—'}</li>
+        <li><strong>Kms Driven:</strong> ${escapeHtml(km) || '—'}</li>
+        <li><strong>Price:</strong> ${escapeHtml(price) || '—'}</li>
+      </ul>
       ${ctaHtml}
-      <p>Hope you have a splendid buying experience with Excel Cars' wide range and easy financing options.</p>
-      <p>For more information and personal assistance, walk in to our showroom at:<br>
-      Excel Cars, Gujral House, 167, CST Road, Kolivery Village,<br>
-      MMRDA Area, Kalina, Santacruz East, Mumbai, Maharashtra 400098.<br>
-      <a href="https://maps.app.goo.gl/fh48FW9PvXE6WHzdA" style="color:#d7194a;text-decoration:underline;">Google Maps location</a>.<br>
-      Call Excel Cars: 9820344002 or 9820344332, or email naziya@excelcarsmumbai.com.</p>
-      <p>Happy buying with Excel Cars.</p>
-      <p>Best Regards,<br>${input.signedBy}</p>
+      <p>To know more or arrange a showroom visit, call 9820344332 / 9820344002 or email <a href="mailto:naziya@excelcarsmumbai.com" style="color:#d7194a;text-decoration:underline;">naziya@excelcarsmumbai.com</a>.</p>
+      <p>Warm regards,<br>Team Excel Cars<br>Your Trusted Car Buying Partner</p>
     </div>
   `
 
