@@ -10,7 +10,7 @@ import { requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inq
 import { sendEmail } from '@/lib/email/sendMail'
 import { noInventoryEnquiryEmail, vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
-import { normalizeWhatsAppRecipient, sendEnquiryTemplate, sendNoInventoryEnquiryTemplate } from '@/lib/whatsapp/meta'
+import { getEnquiryWhatsAppTemplateName, getNoInventoryWhatsAppTemplateName, normalizeWhatsAppRecipient, sendEnquiryTemplate, sendNoInventoryEnquiryTemplate } from '@/lib/whatsapp/meta'
 import { getInquiryActivityEvents, logInquiryEvent } from './eventLog'
 import { archiveFollowupNotifications, createUserNotification } from '@/features/notifications/service'
 import { INQUIRY_INVENTORY_WORKFLOW_OPTIONS, type InquiryInventoryWorkflowType } from './workflow'
@@ -1015,7 +1015,7 @@ async function sendInquiryInventoryWhatsApp(inquiryId: number, inventoryId: numb
         inventoryId,
         recipientMobile: recipientMobile || '',
         recipientName: customerName,
-        templateName: 'enquiry_temp',
+        templateName: getEnquiryWhatsAppTemplateName(),
         templateLanguage: 'en',
         vehicleName,
         status: 'Preparing',
@@ -1149,7 +1149,7 @@ async function sendNoInventoryWhatsApp(inquiryId: number): Promise<NotificationA
   if (!inquiry) return { status: 'failed', error: 'Inquiry not found.' }
   const customerName = inquiry.customer?.custName?.trim() || inquiry.customerNameLegacy?.trim() || 'Customer'
   const recipientMobile = normalizeWhatsAppRecipient(inquiry.customer?.custMobile || inquiry.mobileno)
-  const log = await createNoInventoryNotificationLog({ inquiryId, channel: 'WhatsApp', recipient: recipientMobile || '', templateName: 'enquiry_noinventory' })
+  const log = await createNoInventoryNotificationLog({ inquiryId, channel: 'WhatsApp', recipient: recipientMobile || '', templateName: getNoInventoryWhatsAppTemplateName() })
   if (!log) return { status: 'skipped' }
   if (!recipientMobile) {
     await prisma.inquiryNoInventoryNotificationLog.update({ where: { inquiryNoInventoryNotificationLogId: log.inquiryNoInventoryNotificationLogId }, data: { status: 'Failed', errorMessage: 'The inquiry has no valid 10-digit customer mobile number.', attemptedAt: new Date() } })

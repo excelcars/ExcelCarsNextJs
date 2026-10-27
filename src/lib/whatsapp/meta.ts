@@ -12,6 +12,10 @@ export function getEnquiryWhatsAppTemplateName() {
   return process.env.WHATSAPP_ENQUIRY_TEMPLATE_NAME?.trim() || 'enquiry_temp'
 }
 
+export function getNoInventoryWhatsAppTemplateName() {
+  return process.env.WHATSAPP_NO_INVENTORY_TEMPLATE_NAME?.trim() || 'enquiry_noinventory'
+}
+
 export function normalizeWhatsAppRecipient(value: string | null | undefined) {
   const digits = (value ?? '').replace(/\D/g, '')
   if (!digits) return null
@@ -100,7 +104,7 @@ export async function sendNoInventoryEnquiryTemplate({ to, customerName }: { to:
         to,
         type: 'template',
         template: {
-          name: 'enquiry_noinventory',
+          name: getNoInventoryWhatsAppTemplateName(),
           language: { code: 'en' },
           components: [{ type: 'body', parameters: [{ type: 'text', text: customerName }] }],
         },
