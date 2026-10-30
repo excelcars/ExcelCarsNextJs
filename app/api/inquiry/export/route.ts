@@ -4,6 +4,9 @@ import { INQUIRY_QUICK_FILTERS, listInquiriesForExport, type InquiryQuickFilter 
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 const csvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
 const clean = (value: string | null | undefined) => !value || ['null', 'na', 'n/a'].includes(value.trim().toLowerCase()) ? '' : value
 const indiaDateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' })
@@ -59,9 +62,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return new NextResponse(`\uFEFF${lines.join('\n')}`, {
+  // Large exports exceed Vercel's uncompressed serverless-response allowance.
+  // Browsers transparently decompress this before `response.blob()` downloads it.
+  const body = new Blob([`\uFEFF${lines.join('\n')}`]).stream().pipeThrough(new CompressionStream('gzip'))
+  return new NextResponse(body, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Encoding': 'gzip',
       'Content-Disposition': 'attachment; filename="inquiries.csv"',
       'Cache-Control': 'private, no-store',
     },
