@@ -4,7 +4,7 @@ import { catalogSelectOptions } from '@/lib/catalogNames'
 import { useState, useTransition, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CarFront, Database, Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
-import { ActionAlert, Badge, Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, Input, Textarea, PageHeader, ConfirmDialog, Modal } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS, inquiryStatusLabel } from './queries'
@@ -908,6 +908,9 @@ export function InquiryClient({
   const [inventoryMatchError, setInventoryMatchError] = useState('')
   const [exportError, setExportError] = useState('')
   const [isExporting, startExportTransition] = useTransition()
+  const [exportRangeOpen, setExportRangeOpen] = useState(false)
+  const [exportFrom, setExportFrom] = useState('')
+  const [exportTo, setExportTo] = useState('')
   const followUpDateRequired = requiresInquiryFollowupDate(form.status)
   const visitedSelected = isVisitedSubStatus(form.subStatus)
   const customerDetailsLocked = Boolean(selectedCustomer || form.customerId)
@@ -1523,7 +1526,9 @@ export function InquiryClient({
     })
   }
 
-  const exportAllMatchingInquiries = () => {
+  const exportFilteredInquiries = () => {
+    if (!exportFrom || !exportTo) { setExportError('Choose both From and To dates before exporting.'); return }
+    if (exportFrom > exportTo) { setExportError('From date must be before To date.'); return }
     setExportError('')
     startExportTransition(async () => {
       try {
@@ -1539,6 +1544,8 @@ export function InquiryClient({
         if (subStatus !== 'All') params.set('subStatus', subStatus)
         if (followUpDate) params.set('followUpDate', followUpDate)
         if (inquiryDate) params.set('inquiryDate', inquiryDate)
+        params.set('inquiryDateFrom', exportFrom)
+        params.set('inquiryDateTo', exportTo)
         if (visitedDate) params.set('visitedDate', visitedDate)
         if (budgetMin) params.set('budgetMin', budgetMin)
         if (budgetMax) params.set('budgetMax', budgetMax)
@@ -1558,6 +1565,7 @@ export function InquiryClient({
         link.download = 'inquiries.csv'
         link.click()
         URL.revokeObjectURL(url)
+        setExportRangeOpen(false)
       } catch (err) {
         setExportError(err instanceof Error ? err.message : 'Could not export inquiries.')
       }
@@ -1603,8 +1611,8 @@ export function InquiryClient({
         subtitle={`${total.toLocaleString('en-IN')} inquiries`}
         action={
           <div className="flex items-center gap-2">
-            <Btn variant="outline" size="sm" onClick={exportAllMatchingInquiries} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || locationId || location.trim() || subStatus !== 'All' || !!followUpDate || !!visitedDate || !!budgetMin || !!budgetMax || !!makeId || !!modelId || !!variantId ? 'Export Filtered' : 'Export All'} (${total})`}
+            <Btn variant="outline" size="sm" onClick={() => { setExportError(''); setExportRangeOpen(true) }} disabled={total === 0}>
+              <Download className="w-3.5 h-3.5" />Export
             </Btn>
             <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />New Inquiry</Btn>
           </div>
@@ -1614,6 +1622,17 @@ export function InquiryClient({
       {exportError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
+
+      <Modal title="Export filtered inquiries" open={exportRangeOpen} onClose={() => { if (!isExporting) setExportRangeOpen(false) }}>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Choose an inquiry date range. Exports are limited to 5,000 inquiries.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">From<input type="date" value={exportFrom} onChange={event => setExportFrom(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
+            <label className="text-sm font-medium text-gray-700">To<input type="date" value={exportTo} onChange={event => setExportTo(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
+          </div>
+          <div className="flex justify-end gap-2"><Btn variant="outline" onClick={() => setExportRangeOpen(false)} disabled={isExporting}>Cancel</Btn><Btn onClick={exportFilteredInquiries} disabled={isExporting}>{isExporting ? 'Exporting...' : 'Export'}</Btn></div>
+        </div>
+      </Modal>
 
       <InquiryFilters
         search={searchInput}
