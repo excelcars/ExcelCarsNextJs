@@ -3,7 +3,7 @@
 import { catalogSelectOptions } from '@/lib/catalogNames'
 import { useState, useTransition, useEffect, useRef, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CarFront, Database, Plus, Download, Loader2, ChevronDown, Search } from 'lucide-react'
+import { CarFront, Database, Plus, Loader2, ChevronDown, Search } from 'lucide-react'
 import { ActionAlert, Badge, Btn, Input, Textarea, PageHeader, ConfirmDialog } from '@/components/ui'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { InquiryDetailView } from './InquiryDetailView'
@@ -906,8 +906,6 @@ export function InquiryClient({
   const [inventoryMatches, setInventoryMatches] = useState<InventoryMatch[]>([])
   const [inventoryMatchLoading, setInventoryMatchLoading] = useState(false)
   const [inventoryMatchError, setInventoryMatchError] = useState('')
-  const [exportError, setExportError] = useState('')
-  const [isExporting, startExportTransition] = useTransition()
   const followUpDateRequired = requiresInquiryFollowupDate(form.status)
   const visitedSelected = isVisitedSubStatus(form.subStatus)
   const customerDetailsLocked = Boolean(selectedCustomer || form.customerId)
@@ -1523,47 +1521,6 @@ export function InquiryClient({
     })
   }
 
-  const exportAllMatchingInquiries = () => {
-    setExportError('')
-    startExportTransition(async () => {
-      try {
-        const params = new URLSearchParams()
-        if (search.trim()) params.set('search', search)
-        if (status !== 'All') params.set('status', status)
-        if (classification !== 'All') params.set('classification', classification)
-        if (source !== 'All') params.set('source', source)
-        if (locationId) params.set('locationId', locationId)
-        if (location.trim()) params.set('location', location)
-        if (region.trim()) params.set('region', region)
-        if (regionPeriod) params.set('regionPeriod', regionPeriod)
-        if (subStatus !== 'All') params.set('subStatus', subStatus)
-        if (followUpDate) params.set('followUpDate', followUpDate)
-        if (inquiryDate) params.set('inquiryDate', inquiryDate)
-        if (visitedDate) params.set('visitedDate', visitedDate)
-        if (budgetMin) params.set('budgetMin', budgetMin)
-        if (budgetMax) params.set('budgetMax', budgetMax)
-        if (makeId) params.set('makeId', makeId)
-        if (modelId) params.set('modelId', modelId)
-        if (variantId) params.set('variantId', variantId)
-        if (quickFilter !== 'active') params.set('quickFilter', quickFilter)
-        const res = await fetch(`/api/inquiry/export${params.toString() ? `?${params.toString()}` : ''}`)
-        if (!res.ok) {
-          const payload = await res.json().catch(() => null)
-          throw new Error(payload?.error ?? 'Could not export inquiries.')
-        }
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'inquiries.csv'
-        link.click()
-        URL.revokeObjectURL(url)
-      } catch (err) {
-        setExportError(err instanceof Error ? err.message : 'Could not export inquiries.')
-      }
-    })
-  }
-
   const resetFilters = () => {
     setSearchInput('')
     setLocationInput('')
@@ -1602,18 +1559,9 @@ export function InquiryClient({
         title="Inquiry Management"
         subtitle={`${total.toLocaleString('en-IN')} inquiries`}
         action={
-          <div className="flex items-center gap-2">
-            <Btn variant="outline" size="sm" onClick={exportAllMatchingInquiries} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() || status !== 'All' || classification !== 'All' || source !== 'All' || locationId || location.trim() || subStatus !== 'All' || !!followUpDate || !!visitedDate || !!budgetMin || !!budgetMax || !!makeId || !!modelId || !!variantId ? 'Export Filtered' : 'Export All'} (${total})`}
-            </Btn>
-            <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />New Inquiry</Btn>
-          </div>
+          <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />New Inquiry</Btn>
         }
       />
-
-      {exportError ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
-      ) : null}
 
       <InquiryFilters
         search={searchInput}
