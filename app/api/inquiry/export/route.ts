@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
   const subStatus = req.nextUrl.searchParams.get('subStatus')?.trim() ?? 'All'
   const followUpDate = req.nextUrl.searchParams.get('followUpDate')?.trim() ?? ''
   const inquiryDate = req.nextUrl.searchParams.get('inquiryDate')?.trim() ?? ''
+  const inquiryDateFrom = req.nextUrl.searchParams.get('inquiryDateFrom')?.trim() ?? ''
+  const inquiryDateTo = req.nextUrl.searchParams.get('inquiryDateTo')?.trim() ?? ''
   const visitedDate = req.nextUrl.searchParams.get('visitedDate')?.trim() ?? ''
   const budgetMin = req.nextUrl.searchParams.get('budgetMin')?.trim() ?? ''
   const budgetMax = req.nextUrl.searchParams.get('budgetMax')?.trim() ?? ''
@@ -44,7 +46,9 @@ export async function GET(req: NextRequest) {
   const quickFilter: InquiryQuickFilter = INQUIRY_QUICK_FILTERS.includes(requestedQuickFilter as InquiryQuickFilter) ? requestedQuickFilter as InquiryQuickFilter : 'active'
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
-  const rows = await listInquiriesForExport({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId: ownershipScope.restrictToUserId })
+  if (!inquiryDateFrom || !inquiryDateTo) return NextResponse.json({ error: 'Choose both From and To dates before exporting.' }, { status: 400 })
+  const rows = await listInquiriesForExport({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, inquiryDateFrom, inquiryDateTo, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId: ownershipScope.restrictToUserId })
+  if (rows.length > 5000) return NextResponse.json({ error: 'This range contains more than 5,000 inquiries. Please choose a smaller date range.' }, { status: 400 })
   const headers = ['Date of Inquiry', 'Inquiry No', 'WebSite', 'Source Detail', 'Location', 'Customer', 'MobileNo', 'Email', 'Model', 'Variant', 'Sub Variant', 'Year', 'Budget of Customer', 'Visited Date of Customer', 'Classification', 'Status', 'Sub Status', 'Follow Up Date', 'Remark']
   const lines = [headers.map(csvValue).join(',')]
 
