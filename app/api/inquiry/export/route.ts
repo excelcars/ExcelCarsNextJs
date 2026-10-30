@@ -4,6 +4,15 @@ import { INQUIRY_QUICK_FILTERS, listInquiriesForExport, type InquiryQuickFilter 
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
 
+const csvValue = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+const clean = (value: string | null | undefined) => !value || ['null', 'na', 'n/a'].includes(value.trim().toLowerCase()) ? '' : value
+const indiaDateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' })
+
+function exportDate(value: Date | null) {
+  if (!value || Number.isNaN(value.getTime())) return ''
+  return indiaDateFormatter.format(value).replaceAll('/', '-')
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,9 +42,28 @@ export async function GET(req: NextRequest) {
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
   const rows = await listInquiriesForExport({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId: ownershipScope.restrictToUserId })
+  const headers = ['Date of Inquiry', 'Inquiry No', 'WebSite', 'Source Detail', 'Location', 'Customer', 'MobileNo', 'Email', 'Model', 'Variant', 'Sub Variant', 'Year', 'Budget of Customer', 'Visited Date of Customer', 'Classification', 'Status', 'Sub Status', 'Follow Up Date', 'Remark']
+  const lines = [headers.map(csvValue).join(',')]
 
-  return NextResponse.json(rows.map(row => ({
-    ...row,
-    budgetOfCustomer: row.budgetOfCustomer ? row.budgetOfCustomer.toString() : null,
-  })))
+  for (const row of rows) {
+    for (const car of row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails : [null]) {
+      lines.push([
+        exportDate(row.dateOfInquiry), row.inquiryNo, row.website, row.sourceDetail, row.location,
+        row.customer?.custName ?? row.customerNameLegacy, row.mobileno, row.email,
+        car ? (clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy)) : '',
+        car ? (clean(car.carVariantMaster?.variant) || clean(car.variantLegacy)) : '',
+        car ? clean(car.subVariant) : '', car?.year ?? '', row.budgetOfCustomer?.toString(),
+        exportDate(row.visitedDateOfCustomer), row.classification, row.status, row.subStatus,
+        exportDate(row.followUpDate), row.remark,
+      ].map(csvValue).join(','))
+    }
+  }
+
+  return new NextResponse(`\uFEFF${lines.join('\n')}`, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="inquiries.csv"',
+      'Cache-Control': 'private, no-store',
+    },
+  })
 }

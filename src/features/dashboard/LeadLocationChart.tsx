@@ -9,6 +9,8 @@ export interface LeadLocationBreakdowns {
   month: { name: string; value: number }[]
   quarter: { name: string; value: number }[]
   year: { name: string; value: number }[]
+  // Includes leads without a controlled location, which cannot be plotted by region.
+  totalLeads?: { month: number; quarter: number; year: number }
 }
 
 export interface LeadRegionBreakdowns {
@@ -26,7 +28,8 @@ export function LeadLocationChart({ breakdowns, selectedSourceName, selectedSour
   const [period, setPeriod] = useState<(typeof PERIODS)[number]['key']>('month')
   const router = useRouter()
   const data = breakdowns[period]
-  const totalLeads = useMemo(() => data.reduce((total, item) => total + item.value, 0), [data])
+  const regionalLeadTotal = useMemo(() => data.reduce((total, item) => total + item.value, 0), [data])
+  const totalLeads = breakdowns.totalLeads?.[period] ?? regionalLeadTotal
 
   return (
     <div className="min-w-0">

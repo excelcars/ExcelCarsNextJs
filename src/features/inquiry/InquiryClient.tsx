@@ -530,99 +530,6 @@ export function buildInquiryActivityItems(inquiry: InquiryRow) {
   })
 }
 
-function csvValue(value: string | number | boolean | null | undefined) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
-}
-
-function fmtExportDate(d: Date | string | null | undefined) {
-  if (!d) return ''
-  const value = new Date(d)
-  if (Number.isNaN(value.getTime())) return ''
-  const day = String(value.getDate()).padStart(2, '0')
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const year = value.getFullYear()
-  return `${day}-${month}-${year}`
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-function buildInquiryExportFileName(rows: InquiryRow[], search: string, status: string, classification: string) {
-  const today = new Date().toISOString().slice(0, 10)
-  const parts = ['inquiry']
-  if (status && status !== 'All') parts.push(slugify(status))
-  if (classification && classification !== 'All') parts.push(slugify(classification))
-  if (search.trim()) parts.push('search')
-  if (parts.length === 1) parts.push(`${rows.length}-rows`)
-  parts.push(today)
-  return `${parts.join('-')}.csv`
-}
-
-function exportInquiryCsv(rows: InquiryRow[], search: string, status: string, classification: string) {
-  const headers = [
-    'Date of Inquiry',
-    'Inquiry No',
-    'WebSite',
-    'Source Detail',
-    'Location',
-    'Customer',
-    'MobileNo',
-    'Email',
-    'Model',
-    'Variant',
-    'Sub Variant',
-    'Year',
-    'Budget of Customer',
-    'Visited Date of Customer',
-    'Classification',
-    'Status',
-    'Sub Status',
-    'Follow Up Date',
-    'Remark',
-  ]
-
-  const lines = [headers.map(csvValue).join(',')]
-  for (const row of rows) {
-    const carRows = row.inquiryCarDetails.length > 0 ? row.inquiryCarDetails : [null]
-    for (const car of carRows) {
-      const line = [
-        fmtExportDate(row.dateOfInquiry),
-        row.inquiryNo,
-        row.website,
-        row.sourceDetail,
-        row.location,
-        row.customer?.custName ?? row.customerNameLegacy,
-        row.mobileno,
-        row.email,
-        car ? (clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy)) : '',
-        car ? (clean(car.carVariantMaster?.variant) || clean(car.variantLegacy)) : '',
-        car ? clean(car.subVariant) : '',
-        car?.year ?? '',
-        row.budgetOfCustomer,
-        fmtExportDate(row.visitedDateOfCustomer),
-        row.classification,
-        row.status,
-        row.subStatus,
-        fmtExportDate(row.followUpDate),
-        row.remark,
-      ]
-      lines.push(line.map(csvValue).join(','))
-    }
-  }
-
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = buildInquiryExportFileName(rows, search, status, classification)
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
 function emptyInquiryCar(): InquiryCarInput {
   return {
     inquiryCarDetailsId: null,
@@ -1640,11 +1547,17 @@ export function InquiryClient({
         if (variantId) params.set('variantId', variantId)
         if (quickFilter !== 'active') params.set('quickFilter', quickFilter)
         const res = await fetch(`/api/inquiry/export${params.toString() ? `?${params.toString()}` : ''}`)
-        const payload = await res.json().catch(() => null)
-        if (!res.ok || !Array.isArray(payload)) {
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null)
           throw new Error(payload?.error ?? 'Could not export inquiries.')
         }
-        exportInquiryCsv(payload as InquiryRow[], search, status, classification)
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'inquiries.csv'
+        link.click()
+        URL.revokeObjectURL(url)
       } catch (err) {
         setExportError(err instanceof Error ? err.message : 'Could not export inquiries.')
       }

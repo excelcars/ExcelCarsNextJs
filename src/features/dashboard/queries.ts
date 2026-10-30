@@ -2,6 +2,9 @@ import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 
 const OTHER_LEAD_SOURCES_CODE = '__OTHER__'
+// Partner portals should remain visible even while their lead volume is still low,
+// rather than being folded into the aggregate "Other" bar.
+const PINNED_LEAD_SOURCE_CODES = ['CARDEKHO']
 
 function startOfDay(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -446,10 +449,15 @@ export async function getLeadSourceBreakdown() {
       orderBy: { inquiries: { _count: 'desc' } },
     }),
   ])
-  const topSources = rows.slice(0, 5).map(row => ({ name: row.displayName, sourceCode: row.code, value: row._count.inquiries }))
-  const otherSources = totalInquiries - topSources.reduce((total, row) => total + row.value, 0)
+  const topRows = rows.slice(0, 5)
+  const visibleRows = [
+    ...topRows,
+    ...rows.filter(row => PINNED_LEAD_SOURCE_CODES.includes(row.code) && !topRows.some(topRow => topRow.code === row.code)),
+  ]
+  const visibleSources = visibleRows.map(row => ({ name: row.displayName, sourceCode: row.code, value: row._count.inquiries }))
+  const otherSources = totalInquiries - visibleSources.reduce((total, row) => total + row.value, 0)
 
-  return otherSources > 0 ? [...topSources, { name: 'Other', sourceCode: OTHER_LEAD_SOURCES_CODE, value: otherSources }] : topSources
+  return otherSources > 0 ? [...visibleSources, { name: 'Other', sourceCode: OTHER_LEAD_SOURCES_CODE, value: otherSources }] : visibleSources
 }
 
 function countLeadDimensions(values: Array<string | null | undefined>) {
@@ -468,7 +476,7 @@ export async function getLeadRegionBreakdowns() {
   const yearStart = new Date(now.getFullYear(), 0, 1)
   const [rows, sourceRows] = await Promise.all([
     prisma.inquiry.findMany({
-      where: { locationId: { not: null }, dateOfInquiry: { gte: yearStart, lt: now } },
+      where: { dateOfInquiry: { gte: yearStart, lt: now } },
       select: {
         dateOfInquiry: true,
         source: { select: { code: true } },
@@ -485,20 +493,30 @@ export async function getLeadRegionBreakdowns() {
 
   const ranges = { month: monthStart, quarter: quarterStart, year: yearStart } as const
   const all = { month: [] as string[], quarter: [] as string[], year: [] as string[] }
+  const allTotals = { month: 0, quarter: 0, year: 0 }
   const bySource: Record<string, { month: string[]; quarter: string[]; year: string[] }> = {}
+  const totalsBySource: Record<string, { month: number; quarter: number; year: number }> = {}
   const topSourceCodes = new Set(sourceRows.map(row => row.code))
   bySource[OTHER_LEAD_SOURCES_CODE] = { month: [], quarter: [], year: [] }
+  totalsBySource[OTHER_LEAD_SOURCES_CODE] = { month: 0, quarter: 0, year: 0 }
 
   for (const row of rows) {
-    if (!row.dateOfInquiry || !row.reportingLocation?.region) continue
+    if (!row.dateOfInquiry) continue
     const sourceCode = row.source?.code
     if (sourceCode && !bySource[sourceCode]) bySource[sourceCode] = { month: [], quarter: [], year: [] }
+    if (sourceCode && !totalsBySource[sourceCode]) totalsBySource[sourceCode] = { month: 0, quarter: 0, year: 0 }
 
     for (const [period, start] of Object.entries(ranges) as Array<[keyof typeof ranges, Date]>) {
       if (row.dateOfInquiry < start) continue
-      all[period].push(row.reportingLocation.region)
-      if (sourceCode) bySource[sourceCode][period].push(row.reportingLocation.region)
-      if (!sourceCode || !topSourceCodes.has(sourceCode)) bySource[OTHER_LEAD_SOURCES_CODE][period].push(row.reportingLocation.region)
+      allTotals[period]++
+      if (sourceCode) totalsBySource[sourceCode][period]++
+      if (!sourceCode || !topSourceCodes.has(sourceCode)) totalsBySource[OTHER_LEAD_SOURCES_CODE][period]++
+
+      const region = row.reportingLocation?.region?.trim()
+      if (!region) continue
+      all[period].push(region)
+      if (sourceCode) bySource[sourceCode][period].push(region)
+      if (!sourceCode || !topSourceCodes.has(sourceCode)) bySource[OTHER_LEAD_SOURCES_CODE][period].push(region)
     }
   }
 
@@ -507,11 +525,13 @@ export async function getLeadRegionBreakdowns() {
       month: countLeadDimensions(all.month),
       quarter: countLeadDimensions(all.quarter),
       year: countLeadDimensions(all.year),
+      totalLeads: allTotals,
     },
     bySource: Object.fromEntries(Object.entries(bySource).map(([sourceCode, breakdowns]) => [sourceCode, {
       month: countLeadDimensions(breakdowns.month),
       quarter: countLeadDimensions(breakdowns.quarter),
       year: countLeadDimensions(breakdowns.year),
+      totalLeads: totalsBySource[sourceCode] ?? { month: 0, quarter: 0, year: 0 },
     }])),
   }
 }
