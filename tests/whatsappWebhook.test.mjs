@@ -22,6 +22,8 @@ const event = { object: 'whatsapp_business_account', entry: [{ changes: [{ field
 } }] }] }
 function harness({ configured = true, fails = false } = {}) {
   const saved = new Map()
+  const savedStatuses = new Map()
+  const logs = []
   let calls = 0
   const handlers = load('app/api/webhooks/whatsapp/route.ts', {
     'next/server': { NextResponse: Response }, '@/lib/whatsapp/webhook': parser,
@@ -29,15 +31,21 @@ function harness({ configured = true, fails = false } = {}) {
       calls++
       assert.equal(skipDuplicates, true)
       if (fails) throw new Error('DB unavailable')
+      const before = saved.size
       for (const message of data) if (!saved.has(message.providerMessageId)) saved.set(message.providerMessageId, message)
+      return { count: saved.size - before }
+    } }, whatsAppMessageStatus: { async createMany({ data, skipDuplicates }) {
+      assert.equal(skipDuplicates, true)
+      if (fails) throw new Error('DB unavailable')
+      for (const item of data) savedStatuses.set(`${item.providerMessageId}:${item.status}:${item.occurredAt.toISOString()}`, item)
     } } } },
-  }, { process: { env: configured ? env : {} } })
+  }, { process: { env: configured ? env : {} }, console: { error() {}, info: (...args) => logs.push(args) } })
   function request(body = JSON.stringify(event), signature) {
     return new Request('https://example.test/api/webhooks/whatsapp', { method: 'POST', headers: {
       'Content-Type': 'application/json', 'X-Hub-Signature-256': signature ?? `sha256=${createHmac('sha256', env.WHATSAPP_APP_SECRET).update(body).digest('hex')}`,
     }, body })
   }
-  return { ...handlers, saved, request, calls: () => calls }
+  return { ...handlers, saved, savedStatuses, logs, request, calls: () => calls }
 }
 
 test('GET handshake requires configured matching token and returns raw challenge', async () => {
@@ -51,8 +59,14 @@ test('GET handshake requires configured matching token and returns raw challenge
 
 test('POST saves valid events and duplicate retries are idempotent', async () => {
   const h = harness()
-  assert.equal((await h.POST(h.request())).status, 200)
-  assert.equal((await h.POST(h.request())).status, 200)
+  const first = await h.POST(h.request())
+  assert.equal(first.status, 200)
+  assert.equal((await first.json()).savedMessages, 1)
+  const retry = await h.POST(h.request())
+  assert.equal(retry.status, 200)
+  const summary = await retry.json()
+  assert.equal(summary.savedMessages, 0)
+  assert.equal(summary.duplicateMessages, 1)
   assert.equal(h.saved.size, 1)
   assert.equal(h.saved.get('wamid.1').body, 'Hello')
 })
@@ -77,8 +91,75 @@ test('POST returns retryable failure when persistence fails', async () => {
 test('POST acknowledges status-only notifications without saving inbox rows', async () => {
   const h = harness()
   const status = { object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: '123' }, statuses: [{ status: 'delivered' }] } }] }] }
-  assert.equal((await h.POST(h.request(JSON.stringify(status)))).status, 200)
+  const response = await h.POST(h.request(JSON.stringify(status)))
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).statusUpdates, 1)
   assert.equal(h.calls(), 0)
+})
+
+test('POST reports skipped phone IDs without logging personal data or secrets', async () => {
+  const h = harness()
+  const otherNumber = structuredClone(event)
+  otherNumber.entry[0].changes[0].value.metadata.phone_number_id = '999'
+  const response = await h.POST(h.request(JSON.stringify(otherNumber)))
+  assert.equal(response.status, 200)
+  const summary = await response.json()
+  assert.equal(summary.incomingMessages, 1)
+  assert.equal(summary.skippedPhoneNumberMessages, 1)
+  assert.equal(summary.savedMessages, 0)
+  assert.equal(h.calls(), 0)
+  const logs = JSON.stringify(h.logs)
+  for (const sensitive of ['919876543210', 'Hello', env.WHATSAPP_APP_SECRET, 'wamid.1']) assert.equal(logs.includes(sensitive), false)
+})
+
+test('POST persists delivery failures and excludes raw error details from logs', async () => {
+  const h = harness()
+  const payload = structuredClone(event)
+  delete payload.entry[0].changes[0].value.messages
+  payload.entry[0].changes[0].value.statuses = [{ id: 'wamid.template', status: 'failed', timestamp: '1793664000',
+    errors: [{ code: 131049, title: 'Not delivered', error_data: { details: 'Private provider detail' } }] }]
+  for (let i = 0; i < 2; i++) {
+    const response = await h.POST(h.request(JSON.stringify(payload)))
+    assert.equal(response.status, 200)
+    const summary = await response.json()
+    assert.deepEqual(summary.failureCodes, [131049])
+    assert.equal(summary.savedMessages, 0)
+  }
+  assert.equal(h.saved.size, 0)
+  assert.equal(h.savedStatuses.size, 1)
+  assert.match([...h.savedStatuses.values()][0].errorMessage, /131049/)
+  assert.equal(JSON.stringify(h.logs).includes('Private provider detail'), false)
+})
+
+test('POST skips delivery callbacks for another business number', async () => {
+  const h = harness()
+  const payload = structuredClone(event)
+  payload.entry[0].changes[0].value.metadata.phone_number_id = '999'
+  payload.entry[0].changes[0].value.statuses = [{ id: 'wamid.other', status: 'delivered', timestamp: '1793664000' }]
+  assert.equal((await h.POST(h.request(JSON.stringify(payload)))).status, 200)
+  assert.equal(h.savedStatuses.size, 0)
+})
+
+test('delivery history matches provider IDs and never regresses delivered to sent or failed', async () => {
+  const handler = load('app/api/messages/delivery/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/access/accessControl': { getAuthorizedActorForFunctions: async () => ({ userId: 1 }) },
+    '@/lib/access/accessCatalog': { WHATSAPP_INBOX_FUNCTION: 'WhatsApp_Inbox' },
+    '@/lib/db/prisma': { prisma: {
+      whatsAppDeliveryLog: { findMany: async () => [{ inquiryId: 7, providerMessageId: 'wamid.template', status: 'Submitted', createdAt: new Date(), errorMessage: null }] },
+      inquiryNoInventoryNotificationLog: { findMany: async () => [] },
+      whatsAppMessageStatus: { findMany: async () => [
+        { providerMessageId: 'wamid.other', status: 'read', occurredAt: new Date() },
+        { providerMessageId: 'wamid.template', status: 'failed', errorMessage: 'late failure', occurredAt: new Date() },
+        { providerMessageId: 'wamid.template', status: 'delivered', errorMessage: null, occurredAt: new Date() },
+      ] },
+    } },
+  })
+  const response = await handler.GET()
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  assert.equal(result.deliveries[0].status, 'delivered')
+  assert.equal(result.deliveries[0].errorMessage, null)
 })
 
 test('inbox APIs deny unauthorized reads and mutations before database access', async () => {

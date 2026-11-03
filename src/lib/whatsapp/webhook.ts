@@ -23,16 +23,38 @@ export type ReceivedWhatsAppMessage = {
   messageType: string; body: string; mediaId: string | null; sentAt: Date
 }
 
-export function parseWhatsAppMessages(payload: unknown, allowedPhoneNumberId: string): ReceivedWhatsAppMessage[] {
+export function inspectWhatsAppEvent(payload: unknown, allowedPhoneNumberId: string) {
   const root = object(payload)
   if (root.object !== 'whatsapp_business_account') throw new Error('Invalid WhatsApp event')
   const result: ReceivedWhatsAppMessage[] = []
+  const deliveryStatuses: { providerMessageId: string; status: string; occurredAt: Date; errorMessage: string | null }[] = []
+  const failureCodes: number[] = []
+  let incomingMessages = 0
+  let statusUpdates = 0
+  let skippedPhoneNumberMessages = 0
   for (const entry of list(root.entry)) for (const change of list(object(entry).changes)) {
     if (object(change).field !== 'messages') continue
     const value = object(object(change).value)
+    const incoming = list(value.messages)
+    incomingMessages += incoming.length
+    statusUpdates += list(value.statuses).length
     const phoneNumberId = text(object(value.metadata).phone_number_id, 100)
-    if (!allowedPhoneNumberId || phoneNumberId !== allowedPhoneNumberId) continue
-    for (const item of list(value.messages)) {
+    if (!allowedPhoneNumberId || phoneNumberId !== allowedPhoneNumberId) {
+      skippedPhoneNumberMessages += incoming.length
+      continue
+    }
+    for (const item of list(value.statuses)) {
+      const delivery = object(item)
+      const providerMessageId = text(delivery.id, 512)
+      const status = text(delivery.status, 32)
+      const occurredAt = new Date(Number(delivery.timestamp) * 1000)
+      if (!providerMessageId || !['sent', 'delivered', 'read', 'failed'].includes(status) || !Number.isFinite(occurredAt.getTime()) || occurredAt.getTime() <= 0) continue
+      const errors = list(delivery.errors).map(object)
+      for (const error of errors) if (typeof error.code === 'number' && Number.isSafeInteger(error.code)) failureCodes.push(error.code)
+      const errorMessage = errors.map(error => [typeof error.code === 'number' ? String(error.code) : '', text(error.title, 200), text(object(error.error_data).details, 500)].filter(Boolean).join(': ')).join('; ').slice(0, 1000) || null
+      deliveryStatuses.push({ providerMessageId, status, occurredAt, errorMessage })
+    }
+    for (const item of incoming) {
       const message = object(item)
       const providerMessageId = text(message.id, 512)
       const senderMobile = text(message.from, 32)
@@ -60,5 +82,9 @@ export function parseWhatsAppMessages(payload: unknown, allowedPhoneNumberId: st
         messageType, body: body.slice(0, 4096) || `[${messageType}]`, mediaId: text(content.id, 512) || null, sentAt })
     }
   }
-  return result
+  return { messages: result, deliveryStatuses, failureCodes, incomingMessages, statusUpdates, skippedPhoneNumberMessages }
+}
+
+export function parseWhatsAppMessages(payload: unknown, allowedPhoneNumberId: string): ReceivedWhatsAppMessage[] {
+  return inspectWhatsAppEvent(payload, allowedPhoneNumberId).messages
 }

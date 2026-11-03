@@ -35,7 +35,7 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Operations', label: 'Inventory', functionName: INVENTORY_FUNCTION, route: '/inventory', description: 'Manage inventory records.' },
   { group: 'Operations', label: 'Checklist / Docs', functionName: 'Checklist_Management', route: '/checklist', description: 'Manage vehicle checklist and document records.' },
   { group: 'Operations', label: 'Inquiries', functionName: 'Inquiry_Management', route: '/inquiry', description: 'Manage customer inquiries.' },
-  { group: 'Operations', label: 'WhatsApp Inbox', functionName: WHATSAPP_INBOX_FUNCTION, route: '/messages', description: 'View all incoming WhatsApp Business messages and mark them as read.' },
+  { group: 'Operations', label: 'WhatsApp Inbox', functionName: WHATSAPP_INBOX_FUNCTION, route: '/messages', description: 'View all incoming WhatsApp Business messages, mark them as read, and send text replies.' },
   { group: 'Operations', label: 'Loan Management', functionName: 'Loan_Management', route: '/loan', description: 'Manage loan referrals and payments.' },
   { group: 'Operations', label: 'Insurance', functionName: 'Insurance_Management', route: '/insurance', description: 'Manage insurance referrals and payouts.' },
   { group: 'Operations', label: 'RTO Management', functionName: 'RTO_Management', route: '/rto', description: 'Manage RTO transfer and payment records.' },
