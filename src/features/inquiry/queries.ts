@@ -43,6 +43,8 @@ export interface ListInquiriesParams {
   subStatus: string
   followUpDate: string
   inquiryDate: string
+  inquiryDateFrom?: string
+  inquiryDateTo?: string
   visitedDate: string
   budgetMin: string
   budgetMax: string
@@ -54,7 +56,7 @@ export interface ListInquiriesParams {
   restrictToUserId?: number | null
 }
 
-function buildInquiryWhere({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
+function buildInquiryWhere({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, inquiryDateFrom = '', inquiryDateTo = '', visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'inquiryDateFrom' | 'inquiryDateTo' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
   const where: Prisma.InquiryWhereInput = {}
   const andConditions: Prisma.InquiryWhereInput[] = []
 
@@ -110,7 +112,12 @@ function buildInquiryWhere({ search, status, classification, source, locationId,
       lt: end,
     }
   }
-  if (inquiryDate) {
+  if (inquiryDateFrom || inquiryDateTo) {
+    const range: Prisma.DateTimeNullableFilter<'Inquiry'> = {}
+    if (inquiryDateFrom) range.gte = new Date(`${inquiryDateFrom}T00:00:00.000`)
+    if (inquiryDateTo) { const end = new Date(`${inquiryDateTo}T00:00:00.000`); end.setDate(end.getDate() + 1); range.lt = end }
+    where.dateOfInquiry = range
+  } else if (inquiryDate) {
     const start = new Date(`${inquiryDate}T00:00:00.000`)
     const end = new Date(start)
     end.setDate(end.getDate() + 1)
@@ -330,12 +337,13 @@ export async function getInquiryById(id: number) {
   })
 }
 
-export async function listInquiriesForExport({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
-  const where = buildInquiryWhere({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId })
+export async function listInquiriesForExport({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, inquiryDateFrom = '', inquiryDateTo = '', visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'inquiryDateFrom' | 'inquiryDateTo' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
+  const where = buildInquiryWhere({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, inquiryDateFrom, inquiryDateTo, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId })
   return prisma.inquiry.findMany({
     where,
     include: inquiryDetailInclude(),
     orderBy: inquiryOrderBy(quickFilter),
+    take: 5001,
   })
 }
 

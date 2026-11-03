@@ -139,7 +139,10 @@ export function InquiryFilters({
         <DateFilterInput label="Follow-up Date" value={followUpDate} onChange={onFollowUpDateChange} disabled={isRoutePending} />
         <DateFilterInput label="Visited Date" value={visitedDate} onChange={onVisitedDateChange} disabled={isRoutePending} />
         <Input label="Budget From" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMin)} onChange={event => setDraftBudgetMin(normalizeIntegerInput(event.target.value))} placeholder="Minimum budget" disabled={isRoutePending} />
-        <div className="flex items-end gap-2"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMax)} onChange={event => setDraftBudgetMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum budget" disabled={isRoutePending} /><Btn variant="outline" size="sm" onClick={() => onBudgetApply(draftBudgetMin, draftBudgetMax)} disabled={isRoutePending || (draftBudgetMin === budgetMin && draftBudgetMax === budgetMax)}>Apply Budget</Btn></div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-48 flex-1"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMax)} onChange={event => setDraftBudgetMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum budget" disabled={isRoutePending} /></div>
+          <Btn className="shrink-0 whitespace-nowrap" variant="outline" size="sm" onClick={() => onBudgetApply(draftBudgetMin, draftBudgetMax)} disabled={isRoutePending || (draftBudgetMin === budgetMin && draftBudgetMax === budgetMax)}>Apply Budget</Btn>
+        </div>
         <div className="flex flex-col gap-1 md:col-span-2">
           <label className="text-xs font-medium text-gray-600">Classification</label>
           <div className="flex flex-wrap gap-1.5">

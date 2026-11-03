@@ -784,6 +784,24 @@ model VehicleEmailLink {
   @@map("vehicle_email_links")
 }
 
+model WhatsAppReceivedMessage {
+  id                Int       @id @default(autoincrement())
+  providerMessageId String    @unique @map("provider_message_id")
+  phoneNumberId     String    @map("phone_number_id")
+  senderMobile      String    @map("sender_mobile")
+  senderName        String?   @map("sender_name")
+  messageType       String    @map("message_type")
+  body              String
+  mediaId           String?   @map("media_id")
+  sentAt            DateTime  @map("sent_at") @db.Timestamptz(6)
+  receivedAt        DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  readAt            DateTime? @map("read_at") @db.Timestamptz(6)
+
+  @@index([receivedAt, id])
+  @@index([readAt, receivedAt])
+  @@map("whatsapp_received_messages")
+}
+
 model WhatsAppDeliveryLog {
   whatsAppDeliveryLogId Int               @id @default(autoincrement()) @map("whatsapp_delivery_log_id")
   inquiryId             Int               @map("inquiry_id")
