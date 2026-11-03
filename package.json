@@ -26,6 +26,7 @@
     "lint": "eslint .",
     "test": "node --test --experimental-strip-types tests/legacyPermissionMigration.test.mjs tests/moduleAuthorization.test.mjs tests/dashboardLayout.test.mjs tests/sidebarNavigation.test.mjs src/lib/catalogNames.test.ts src/lib/access/accessCatalog.test.ts src/lib/vehicleEmailLinks.test.ts src/lib/whatsapp/meta.test.ts src/lib/inquiryFollowupValidation.test.ts src/lib/validation.test.ts src/features/checklist/validation.test.ts src/features/inquiry/sourceMaster.test.ts src/features/insurance/paymentValidation.test.ts src/features/loan/paymentValidation.test.ts src/features/loan/loanRules.test.ts src/features/reports/outstanding/outstandingRules.test.ts src/features/reports/today/date.test.ts src/features/reports/today/filters.test.ts src/features/reports/today/formatters.test.ts src/features/reports/today/queryContract.test.ts",
     "test:vehicle-email-links": "node --test --experimental-strip-types src/lib/vehicleEmailLinks.test.ts",
+    "test:whatsapp-webhook": "node --test --experimental-strip-types src/lib/whatsapp/webhook.test.ts tests/whatsappWebhook.test.mjs",
     "typecheck": "tsc --noEmit",
     "db:migrate:dev": "npx prisma migrate dev",
     "db:migrate:status": "npx prisma migrate status",
