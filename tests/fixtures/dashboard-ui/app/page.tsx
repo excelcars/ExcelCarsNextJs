@@ -17,8 +17,15 @@ const props: DashboardCommandCenterProps = {
   leadRegionBreakdowns: { all: breakdowns, bySource: { Quikr: breakdowns } },
   leadDetails: [{ label: 'All Leads', total: 53501, own: 11, other: 53490, href: '#all', ownHref: '#own' }],
   followups: [{ id: 1, customerName: 'Sample customer', mobile: '0000000000', followupDate: '2026-10-22', classification: 'Warm', status: 'FollowUp' }],
-  reminders: [{ id: '1', name: 'Sample reminder', mobile: null, email: null, type: 'Anniversary' }],
-  pendingPolicies: [], expiryRenewalPolicies: [], assignedExpiryRenewalPolicies: [], rtoPending: [], pendingPayments: [],
+  reminders: [
+    { id: '1', name: 'Sample reminder', mobile: null, email: 'sample-long-email-address@example.test', type: 'Anniversary' },
+    { id: '2', name: 'Sample birthday', mobile: '0000000000', email: null, type: 'Birth Day' },
+  ],
+  pendingPolicies: [{ insuranceMainId: 1, customerNameLegacy: 'Sample insurance customer', customerMobileLegacy: '0000000000', carRegistrationNo: 'MH00AB1234', policyStatus: 'Pending', agentNameLegacy: 'Sample agent', agentMobileNoLegacy: '0000000000', customer: null, partnerMaster: null }],
+  expiryRenewalPolicies: [{ insuranceMainId: 2, customerNameLegacy: 'Sample renewal customer', customerMobileLegacy: '0000000000', carRegistrationNo: 'MH00CD5678', agentNameLegacy: 'Sample agent', agentMobileNoLegacy: '0000000000', expiryDate: '2026-11-20', renewalDate: '2026-11-19', customer: null, partnerMaster: null }],
+  assignedExpiryRenewalPolicies: [],
+  rtoPending: [{ rtoAgentMainId: 1, customerNameLegacy: 'Sample RTO customer', customerMobLegacy: '0000000000', carRegistrationNo: 'MH00AB1234', rcStatus: 'Pending', transferStatus: 'Pending', agentNameLegacy: 'Sample agent', agentMobileNoLegacy: '0000000000', customer: null, partnerMaster: null }],
+  pendingPayments: ['Insurance', 'Loan'].map((type, index) => ({ id: String(index), type, registrationNo: 'MH00AB1234', href: `/${type.toLowerCase()}`, customerName: 'Sample payment customer', customerMobile: '0000000000', agentName: 'Sample agent', agentMobile: '0000000000', followupDate: '2026-11-10', actual: 100000, received: 25000, balance: 75000 })),
 }
 
 export default function Page() {

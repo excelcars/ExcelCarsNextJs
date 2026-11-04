@@ -47,6 +47,36 @@ function OutstandingBadge({ label, kind }: { label: string; kind: 'type' | 'stat
   return <span className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold leading-none ${tone} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}><span>{label}</span></span>
 }
 
+function OutstandingMobileCard({ row, serialNo }: { row: OutstandingRow; serialNo: number }) {
+  return (
+    <article className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm [overflow-wrap:anywhere]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-medium text-gray-500">#{serialNo}</span>
+        <div className="flex flex-wrap gap-2"><OutstandingBadge label={row.type} kind="type" />{row.paymentStatus ? <OutstandingBadge label={row.paymentStatus} kind="status" /> : null}</div>
+      </div>
+      <h2 className="mt-3 text-base font-bold text-gray-900">{row.customerName ?? '—'}</h2>
+      {row.registrationNo ? <Link href={getOutstandingDrillThroughHref(row.type, row.registrationNo)} className="inline-flex min-h-11 items-center font-mono text-sm font-semibold text-blue-800 underline underline-offset-4">{row.registrationNo}</Link> : <p className="mt-2 text-sm text-gray-500">No registration number</p>}
+      <div className="mt-1 space-y-1 text-sm">
+        {row.customerMobile ? <a href={`tel:${row.customerMobile}`} className="flex min-h-11 items-center gap-2 text-blue-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0" />{row.customerMobile}</a> : <p className="text-gray-500">No mobile number</p>}
+        {row.customerEmail ? <a href={`mailto:${row.customerEmail}`} className="flex min-h-11 items-center gap-2 text-blue-700"><Mail aria-hidden="true" className="h-4 w-4 shrink-0" />{row.customerEmail}</a> : null}
+      </div>
+      <div className="mt-3 rounded-lg bg-gray-50 p-3">
+        <div className="text-xs font-medium text-gray-500">Balance amount</div>
+        <div className={`mt-1 text-xl font-bold ${row.balance > 0 ? 'text-red-600' : row.balance < 0 ? 'text-green-600' : 'text-gray-700'}`}>{fmtMoney(row.balance)}</div>
+        <dl className="mt-3 grid grid-cols-1 gap-3 text-sm min-[360px]:grid-cols-2">
+          {[
+            ['Total amount', fmtMoney(row.totalAmount)],
+            ['% of payout', fmtPercent(row.percentageOfPayout)],
+            [row.type === 'RTO' ? 'Payout / Transfer charges' : 'Payout amount', fmtMoney(row.payoutAmount)],
+            ['Amount paid', fmtMoney(row.amountPaid)],
+          ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs text-gray-500">{label}</dt><dd className="mt-1 font-medium text-gray-800">{value}</dd></div>)}
+        </dl>
+      </div>
+      <dl className="mt-3 space-y-3 text-sm"><div><dt className="text-xs text-gray-500">Next follow-up</dt><dd className="mt-1 text-gray-700">{fmtDate(row.followupDate)}</dd></div><div><dt className="text-xs text-gray-500">Remark</dt><dd className="mt-1 whitespace-pre-wrap text-gray-700">{row.remark ?? '—'}</dd></div></dl>
+    </article>
+  )
+}
+
 function buildExportParams(filters: {
   customerName: string
   customerMobile: string
@@ -122,7 +152,7 @@ function AutocompleteInput({
   renderSuggestion: (item: string | CustomerSuggestion) => { key: string; title: string; subtitle?: string | null; value: string }
 }) {
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <Input
         label={label}
         value={value}
@@ -148,7 +178,7 @@ function AutocompleteInput({
                   type="button"
                   onMouseDown={event => event.preventDefault()}
                   onClick={() => onSelect(suggestion.value)}
-                  className="w-full border-b border-gray-50 px-3 py-2 text-left text-sm hover:bg-gray-50 last:border-0"
+                  className="min-h-11 w-full border-b border-gray-50 px-3 py-2 text-left text-sm [overflow-wrap:anywhere] hover:bg-gray-50 last:border-0"
                 >
                   <div className="font-medium text-gray-800">{suggestion.title}</div>
                   {suggestion.subtitle ? <div className="text-xs text-gray-500">{suggestion.subtitle}</div> : null}
@@ -390,19 +420,19 @@ export function OutstandingClient({
   }, [initialCustomerMobile, initialCustomerName, initialPaymentStatus, initialRegistrationNo, initialType])
 
   return (
-    <div>
+    <div className="min-w-0 [&>div:first-child]:flex-col [&>div:first-child]:sm:flex-row">
       <PageHeader
         title="Outstanding Payments"
         subtitle={`${total.toLocaleString('en-IN')} records · Page ${page} of ${pageCount} · ${pageSize} per page`}
         action={
-          <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting}>
+          <Btn variant="outline" size="sm" className="min-h-11" onClick={exportRows} disabled={isExporting}>
             <Download className="w-3.5 h-3.5" />
             {isExporting ? 'Exporting...' : 'Export'}
           </Btn>
         }
       />
 
-      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      <div className="mb-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-6 [&>*]:min-w-0 [&_input]:min-h-11 [&_select]:min-h-11 [&_input]:text-base [&_select]:text-base sm:[&_input]:text-sm sm:[&_select]:text-sm">
         <AutocompleteInput
           label="Customer Name"
           value={customerName}
@@ -435,6 +465,7 @@ export function OutstandingClient({
         />
         <Input
           label="Customer Mobile"
+          inputMode="tel"
           value={customerMobile}
           onChange={event => setCustomerMobile(event.target.value)}
           placeholder="Filter by customer mobile"
@@ -506,7 +537,7 @@ export function OutstandingClient({
         </Select>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 [&>button]:min-h-11">
         <Btn onClick={applyFilters} disabled={isPending}>{isPending ? 'Applying...' : 'Apply Filters'}</Btn>
         <Btn variant="outline" onClick={clearFilters} disabled={isPending || !hasActiveFilters}>Clear</Btn>
         <div className="text-sm text-gray-500">
@@ -518,7 +549,7 @@ export function OutstandingClient({
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
 
-      <div className={`space-y-3 transition-opacity ${isPending ? 'opacity-60' : 'opacity-100'}`}>
+      <div aria-busy={isPending} className={`min-w-0 space-y-3 transition-opacity ${isPending ? 'opacity-60' : 'opacity-100'}`}>
         {isPending ? (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -526,6 +557,15 @@ export function OutstandingClient({
           </div>
         ) : null}
 
+        <div className="space-y-3 lg:hidden">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 [overflow-wrap:anywhere]">
+            <div className="text-sm font-medium text-gray-600">Total Balance (all filtered rows)</div>
+            <div className={`mt-1 text-2xl font-bold ${totalBalance > 0 ? 'text-red-600' : totalBalance < 0 ? 'text-green-600' : 'text-gray-700'}`}>{fmtMoney(totalBalance)}</div>
+            <div className="mt-1 text-xs text-gray-500">{total.toLocaleString('en-IN')} matching records</div>
+          </div>
+          {rows.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-500">No matching payments found.</div> : rows.map((row, index) => <OutstandingMobileCard key={row.key} row={row} serialNo={(page - 1) * pageSize + index + 1} />)}
+        </div>
+        <div className="hidden lg:block">
         <Table
           headers={[
             'Sr. No.',
@@ -599,13 +639,14 @@ export function OutstandingClient({
             </tr>
           )}
         </Table>
+        </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="text-sm text-gray-500">
           {total === 0 ? 'No matching rows found.' : `Showing ${pageStart}-${pageEnd} of ${total.toLocaleString('en-IN')} rows.`}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto [&>button]:min-h-11">
           <Btn
             variant="outline"
             onClick={() => pushQuery({

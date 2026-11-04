@@ -167,18 +167,20 @@ function DropdownField({
   }, [options, query, searchable])
 
   return (
-    <div className="flex flex-col" ref={rootRef}>
+    <div className="flex min-w-0 flex-col" ref={rootRef}>
       <label className="text-xs font-medium text-gray-600 mb-1">{label}</label>
       <div className="relative">
         <button
           type="button"
           disabled={disabled}
+          aria-label={label}
+          aria-expanded={open}
           onClick={() => {
             if (disabled) return
             setOpen(prev => !prev)
             setQuery('')
           }}
-          className={`w-full rounded-md border px-3 py-2.5 text-left text-sm transition-all ${
+          className={`min-h-11 w-full rounded-md border py-2.5 pl-3 pr-9 text-left text-sm [overflow-wrap:anywhere] transition-all ${
             error
               ? 'border-red-500 bg-red-50/40 text-gray-800'
               : 'border-gray-200 bg-white text-gray-800 hover:border-gray-300'
@@ -212,7 +214,7 @@ function DropdownField({
                   setOpen(false)
                   setQuery('')
                 }}
-                className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm text-gray-500 hover:bg-gray-50"
+                className="flex min-h-11 w-full items-center justify-between px-3 py-2.5 text-left text-sm text-gray-500 hover:bg-gray-50"
               >
                 <span>{placeholder}</span>
                 {!selected && <Check className="h-4 w-4 text-[#1B2A6B]" />}
@@ -232,7 +234,7 @@ function DropdownField({
                         setOpen(false)
                         setQuery('')
                       }}
-                      className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm transition ${
+                      className={`flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm [overflow-wrap:anywhere] transition ${
                         isSelected ? 'bg-blue-50 text-[#1B2A6B]' : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
@@ -260,7 +262,7 @@ function emptyForm(): UserAccessFormInput {
 
 function ViewField({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+    <div className="min-w-0 rounded-lg border border-gray-200 bg-white px-4 py-3 [overflow-wrap:anywhere]">
       <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</div>
       <div className="mt-1 break-words text-sm text-gray-800">{value?.trim() ? value : '—'}</div>
     </div>
@@ -309,6 +311,7 @@ export function UserAccessClient({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [isPending, startTransition] = useTransition()
   const [isRoutePending, startRouteTransition] = useTransition()
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const roleOptions = useMemo<DropdownOption[]>(() => roles.map(role => ({ value: String(role.roleId), label: role.roleName ?? `Role #${role.roleId}` })), [roles])
   const filterRoleOptions = useMemo<DropdownOption[]>(() => filterRoles.map(role => ({ value: String(role.roleId), label: role.roleName ?? `Role #${role.roleId}` })), [filterRoles])
@@ -482,20 +485,28 @@ export function UserAccessClient({
   }
 
   return (
-    <div>
+    <div className="min-w-0 [&>div:first-child]:flex-col [&>div:first-child]:sm:flex-row">
       <PageHeader
         title="User Access"
         subtitle={`${total.toLocaleString('en-IN')} accounts${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add User</Btn>}
+        action={<Btn size="sm" className="min-h-11" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add User</Btn>}
       />
 
       <div className="relative mb-4 space-y-3">
         <LoadingOverlay show={isRoutePending} label="Loading users..." subtle />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:hidden">
+          <button type="button" onClick={() => setFiltersExpanded(value => !value)} aria-expanded={filtersExpanded} aria-controls="user-access-filters" className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700">{filtersExpanded ? 'Hide filters' : `More filters${activeFilterCount ? ` (${activeFilterCount})` : ''}`}</button>
+        </div>
+        <div className="grid min-w-0 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
+          <div>
+          <div className="mb-1 text-xs font-medium text-gray-600">Search users</div>
           <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, username, email, mobile..." disabled={isRoutePending} />
+          </div>
+          <div id="user-access-filters" className={`${filtersExpanded ? 'grid' : 'hidden lg:grid'} min-w-0 gap-3 sm:grid-cols-3 lg:col-span-3 [&>*]:min-w-0`}>
           <DropdownField label="Status" value={status === 'All' ? '' : status} onChange={value => pushQuery({ status: value || 'All' })} options={STATUS_OPTIONS} placeholder="All Statuses" disabled={isRoutePending} />
           <DropdownField label="Role" value={roleId} onChange={value => pushQuery({ roleId: value })} options={filterRoleOptions} placeholder="All Roles" searchable disabled={isRoutePending} />
           <DropdownField label="State" value={stateId} onChange={value => pushQuery({ stateId: value })} options={stateOptions} placeholder="All States" searchable disabled={isRoutePending} />
+          </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
           <div className="text-sm text-gray-600">
@@ -514,8 +525,33 @@ export function UserAccessClient({
         </div>
       </div>
 
-      <div className="relative">
+      <div className="relative min-w-0" aria-busy={isRoutePending}>
         <LoadingOverlay show={isRoutePending} label="Loading users..." />
+        <div className="space-y-3 lg:hidden">
+          {data.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-500">No user accounts found.</div> : data.map(r => (
+            <article key={r.userId} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm [overflow-wrap:anywhere]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><h2 className="text-base font-bold text-gray-900">{userDisplayName(r)}</h2><div className="mt-1 font-mono text-xs text-gray-500">User #{r.userId} · Employee {r.employee?.empId ?? '—'}</div></div>
+                {r.status ? <Badge label={r.status} /> : null}
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="min-w-0"><dt className="text-xs text-gray-500">Username</dt><dd className="mt-1 font-medium text-gray-800">{r.userName ?? '—'}</dd></div>
+                <div className="min-w-0"><dt className="text-xs text-gray-500">Role</dt><dd className="mt-1 font-medium text-gray-800">{r.roleName ?? '—'}</dd></div>
+                <div className="col-span-2 min-w-0"><dt className="text-xs text-gray-500">Mobile</dt><dd className="mt-1 text-gray-800">{contactMobile(r) !== '—' ? <a href={`tel:${contactMobile(r)}`} className="inline-flex min-h-11 items-center text-blue-700">{contactMobile(r)}</a> : '—'}</dd></div>
+                <div className="col-span-2 min-w-0"><dt className="text-xs text-gray-500">Email</dt><dd className="mt-1 text-gray-800">{contactEmail(r) !== '—' ? <a href={`mailto:${contactEmail(r)}`} className="inline-flex min-h-11 items-center text-blue-700">{contactEmail(r)}</a> : '—'}</dd></div>
+                <div className="col-span-2 min-w-0"><dt className="text-xs text-gray-500">Address</dt><dd className="mt-1 text-gray-700">{formatAddress(r.employee)}</dd></div>
+              </dl>
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+                <button type="button" onClick={() => setViewRow(r)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"><Eye aria-hidden="true" className="h-4 w-4" />View</button>
+                {canManageRow(r) ? <>
+                  <button type="button" onClick={() => openEdit(r)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-blue-200 px-3 text-sm font-medium text-blue-700 hover:bg-blue-50"><Pencil aria-hidden="true" className="h-4 w-4" />Edit</button>
+                  <button type="button" onClick={() => setDeactivateId(r.userId)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-red-200 px-3 text-sm font-medium text-red-600 hover:bg-red-50"><Trash2 aria-hidden="true" className="h-4 w-4" />Deactivate</button>
+                </> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="hidden lg:block">
         <Table
           headers={['User ID', 'Employee ID', 'Name', 'Username', 'Contact', 'Address', 'Role', 'Status', 'Actions']}
           empty={data.length === 0}
@@ -552,10 +588,11 @@ export function UserAccessClient({
             </tr>
           ))}
         </Table>
+        </div>
       </div>
 
       {pageCount > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <div className="text-xs text-gray-500">
             Showing {((page - 1) * USER_ACCESS_PAGE_SIZE) + (data.length ? 1 : 0)}-{((page - 1) * USER_ACCESS_PAGE_SIZE) + data.length} of {total.toLocaleString('en-IN')} · Page {page} of {pageCount}
           </div>
@@ -631,7 +668,7 @@ export function UserAccessClient({
 
       <Modal title={editId ? 'Edit User' : 'Add User'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 [&>*]:min-w-0">
             <div>
               <CountedInput label="First Name *" value={form.empFirstName} onChange={e => f('empFirstName', e.target.value)} error={!!fieldErrors.empFirstName} maxLength={50} />
               <FieldMessage message={fieldErrors.empFirstName} />
@@ -668,7 +705,7 @@ export function UserAccessClient({
             <FieldMessage />
           </div>
 
-          <div className="border-t border-gray-100 pt-4 grid grid-cols-3 gap-4">
+          <div className="border-t border-gray-100 pt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 [&>*]:min-w-0">
             <div>
               <CountedInput label="Username *" value={form.userName} onChange={e => f('userName', e.target.value)} error={!!fieldErrors.userName} disabled={!!editId} className={editId ? 'bg-gray-50' : ''} maxLength={50} />
               <FieldMessage message={fieldErrors.userName} />
@@ -685,7 +722,7 @@ export function UserAccessClient({
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="flex flex-wrap gap-3 justify-end pt-2 [&>button]:min-h-11">
             <Btn variant="outline" onClick={requestCloseForm}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save User'}</Btn>
           </div>

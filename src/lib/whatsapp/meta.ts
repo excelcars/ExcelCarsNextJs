@@ -1,4 +1,5 @@
 import { sendLoggedWhatsAppTemplate } from './templateSender.mjs'
+import { renderNoInventoryMessage } from './messageText.mjs'
 
 export interface WhatsAppTemplateResult { success: boolean; providerMessageId?: string; error?: string }
 export function getEnquiryWhatsAppTemplateName() { return process.env.WHATSAPP_ENQUIRY_TEMPLATE_NAME?.trim() || 'enquiry_temp' }
@@ -29,7 +30,7 @@ export async function sendEnquiryTemplate({ to, customerName, vehicleName, butto
 }
 
 export async function sendNoInventoryEnquiryTemplate({ to, customerName }: { to: string; customerName: string }): Promise<WhatsAppTemplateResult> {
-  return send({ to, customerName, templateName: getNoInventoryWhatsAppTemplateName(), body: `Customer: ${customerName}`,
+  return send({ to, customerName, templateName: getNoInventoryWhatsAppTemplateName(), body: renderNoInventoryMessage(customerName),
     components: [{ type: 'body', parameters: [{ type: 'text', text: customerName }] }],
   })
 }

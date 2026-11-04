@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, X, Car, Download, Loader2, Pencil, IndianRupee } from 'lucide-react'
-import { ActionAlert, Badge, Btn, Input, Select, Textarea, Modal, PageHeader, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, Input, Select, Textarea, Modal, ConfirmDialog } from '@/components/ui'
 import { InsuranceFilters } from './InsuranceFilters'
 import { InsurancePagination } from './InsurancePagination'
 import { InsuranceTable } from './InsuranceTable'
@@ -15,7 +15,7 @@ import {
   createInsurance, updateInsurance, deleteInsurance, logInsurancePayment,
   type InsuranceFormInput, type LogPaymentInput,
 } from './actions'
-import { PAYOUT_STATUSES, POLICY_STATUSES, CAR_TYPES } from './queries'
+import { PAYOUT_STATUSES, POLICY_STATUSES, CAR_TYPES } from './constants'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
 
 interface CustomerOption { custId: number; custName: string; custMobile: string | null; custEmail: string | null }
@@ -760,20 +760,14 @@ export function InsuranceClient({
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Insurance Management"
-        subtitle={`${total} referral policies`}
-        action={
-          <div className="flex items-center gap-2">
-            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() ? 'Export Filtered' : 'Export All'} (${total})`}
-            </Btn>
-            <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Insurance</Btn>
-          </div>
-        }
-      />
-
+    <div className="min-w-0">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div><h1 className="text-xl font-bold text-gray-900">Insurance Management</h1><p className="mt-0.5 text-sm text-gray-500">{total} referral policies</p></div>
+        <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:flex [&_button]:min-h-11 [&_button]:justify-center">
+          <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || total === 0}><Download className="h-3.5 w-3.5 shrink-0" />{isExporting ? 'Exporting...' : `${search.trim() ? 'Export Filtered' : 'Export All'} (${total})`}</Btn>
+          <Btn size="sm" onClick={openAdd}><Plus className="h-3.5 w-3.5 shrink-0" />Add Insurance</Btn>
+        </div>
+      </div>
       <InsuranceFilters search={search} fromDate={fromDate} toDate={toDate} pending={isRoutePending}
         onSearch={setSearch} onFromDate={setFromDate} onToDate={setToDate} onReset={resetFilters} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
@@ -784,8 +778,8 @@ export function InsuranceClient({
       <InsurancePagination total={total} page={page} pageSize={pageSize} pageCount={pageCount} pending={isRoutePending} onNavigate={navigatePage} />
 
       <Modal title={editId ? 'Edit Insurance' : 'Add Insurance'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input]:min-h-11 [&_input]:text-base sm:[&_input]:text-sm [&_select]:min-h-11 [&_select]:text-base sm:[&_select]:text-sm [&_textarea]:text-base sm:[&_textarea]:text-sm">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:min-w-0">
             <div>
               <label className="text-xs font-medium text-gray-600 mb-1 block">Insurance Agent *</label>
               <PartnerPicker partnerType="Insurance Agent" label="Agent" value={selectedAgent} onChange={onAgentChange} error={errors.agentPartnerId} />
@@ -798,7 +792,7 @@ export function InsuranceClient({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 [&>*]:min-w-0">
             <Input label="Agent Name" value={form.agentNameLegacy} onChange={e => f('agentNameLegacy', e.target.value)} />
             <div><Input label="Agent Mobile" value={form.agentMobileNoLegacy} onChange={e => f('agentMobileNoLegacy', e.target.value)} error={errors.agentMobileNoLegacy} />{fieldError('agentMobileNoLegacy')}</div>
             <div><Input label="Agent Email" value={form.agentEmailIdLegacy} onChange={e => f('agentEmailIdLegacy', e.target.value)} error={errors.agentEmailIdLegacy} />{fieldError('agentEmailIdLegacy')}</div>
@@ -808,10 +802,10 @@ export function InsuranceClient({
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle (optional — link if from our stock)</label>
             {selectedVehicle ? (
               <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
-                <div className="flex items-center gap-2 text-sm text-gray-800">
-                  <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
+                <div className="flex min-w-0 items-center gap-2 text-sm text-gray-800 [overflow-wrap:anywhere]">
+                  <Car className="w-4 h-4 shrink-0 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
-                <button type="button" onClick={() => { setSelectedVehicle(null); setVehicleLookupMessage(''); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
+                <button type="button" onClick={() => { setSelectedVehicle(null); setVehicleLookupMessage(''); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} aria-label="Unlink vehicle" className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -840,7 +834,7 @@ export function InsuranceClient({
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 [&>*]:min-w-0">
             <div><Select label="Car Type" value={form.carType} onChange={e => f('carType', e.target.value)} error={errors.carType}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>{fieldError('carType')}</div>
@@ -851,7 +845,7 @@ export function InsuranceClient({
             <div className="space-y-1">
               <Input label="Registration No" value={form.carRegistrationNo} onChange={e => { f('carRegistrationNo', e.target.value); setVehicleLookupMessage('') }} error={errors.carRegistrationNo} />
               {fieldError('carRegistrationNo')}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 [&_button]:min-h-11">
                 <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration}>
                   Find by Registration
                 </Btn>
@@ -860,7 +854,7 @@ export function InsuranceClient({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 [&>*]:min-w-0">
             <div><Input label="Entry Date *" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} error={errors.entryDate} />{fieldError('entryDate')}</div>
             <div><Input label="Insurance Premium (₹)" type="number" value={form.insurancePremium ?? ''} onChange={e => f('insurancePremium', e.target.value ? +e.target.value : null)} error={errors.insurancePremium} />{fieldError('insurancePremium')}</div>
             <div><Input label="O.D. Premium (₹)" type="number" value={form.oDPremium ?? ''} onChange={e => f('oDPremium', e.target.value ? +e.target.value : null)} error={errors.oDPremium} />{fieldError('oDPremium')}</div>
@@ -889,7 +883,7 @@ export function InsuranceClient({
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="grid grid-cols-1 gap-3 pt-2 sm:flex sm:justify-end [&_button]:min-h-11 [&_button]:justify-center">
             <Btn variant="outline" onClick={requestCloseForm} disabled={isPending}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Insurance'}</Btn>
           </div>
@@ -1048,7 +1042,7 @@ export function InsuranceClient({
 
       <Modal title={`Log Payment${payRow ? ` — ${payRow.carRegistrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
         {payRow && (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input]:min-h-11 [&_input]:text-base sm:[&_input]:text-sm [&_select]:min-h-11 [&_select]:text-base sm:[&_select]:text-sm [&_textarea]:text-base sm:[&_textarea]:text-sm">
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1.5">Payment history</div>
               {historyLoading ? (
@@ -1061,7 +1055,7 @@ export function InsuranceClient({
               ) : (
                 <div className="space-y-1.5 max-h-32 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                   {payments.map(p => (
-                    <div key={p.insurancePaymentId} className="text-xs text-gray-600 flex gap-2">
+                    <div key={p.insurancePaymentId} className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                       <span className="text-gray-400 whitespace-nowrap">{fmtDate(p.createdDt)}</span>
                       <span className="font-medium">{fmtMoney(p.amountReceived)}</span>
                       {p.payoutPaymentStatus && <Badge label={p.payoutPaymentStatus} />}
@@ -1086,7 +1080,7 @@ export function InsuranceClient({
 
             <InsurancePaymentWorkflow payoutPaymentStatus={payRow.payoutPaymentStatus} policyStatus={payRow.policyStatus} />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>*]:min-w-0">
               <div><Input label="Amount Received (₹) *" type="number" value={payForm.amountReceived ?? ''} onChange={e => pf('amountReceived', e.target.value ? +e.target.value : null)} error={errors.amountReceived} />{fieldError('amountReceived')}</div>
               <Select label="Payout Status *" value={payForm.payoutPaymentStatus} onChange={e => pf('payoutPaymentStatus', e.target.value)}>
                 {PAYOUT_STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -1100,7 +1094,7 @@ export function InsuranceClient({
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="grid grid-cols-1 gap-3 pt-2 sm:flex sm:justify-end [&_button]:min-h-11 [&_button]:justify-center">
               <Btn variant="outline" onClick={() => setPayRow(null)}>Cancel</Btn>
               <Btn onClick={savePayment} disabled={isPending}>{isPending ? 'Saving...' : 'Save Payment'}</Btn>
             </div>

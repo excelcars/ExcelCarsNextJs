@@ -8,7 +8,7 @@ import type { InventoryFormInput } from './actions'
 import type { CarMakeMaster, CarModelMaster, CarVariantMaster, CustomerOption, Dealer } from './inventoryTypes'
 import { InventoryFormFooter } from './InventoryFormFooter'
 import { isCompleteVehicleRegistrationNo, normalizeRegistrationNo } from '@/lib/validation'
-import { INVENTORY_STATUSES } from './queries'
+import { INVENTORY_STATUSES } from './inventoryConstants'
 import { checkInventoryRegistrationNumber } from './actions'
 
 type FieldChange = <K extends keyof InventoryFormInput>(field: K, value: InventoryFormInput[K]) => void
@@ -106,10 +106,10 @@ export function InventoryFormModal({
           <div className="flex justify-end"><Btn variant="outline" onClick={onClose}>Close</Btn></div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="min-w-0 space-y-3 [&_input]:min-w-0 [&_input]:min-h-11 [&_button]:min-h-11 [&_textarea]:min-w-0">
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Vehicle identity</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>div]:min-w-0">
               <Input label={fieldLabel('Inventory No')} value={currentInventoryNumber ?? 'Auto-generated on save'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
               <Input label={fieldLabel('SKU')} value={currentSku ?? 'Enter make, model, and colour'} readOnly disabled className={`bg-gray-100 text-gray-500 cursor-not-allowed ${isEditing ? 'border-dashed opacity-65' : ''}`} />
               <CatalogTextPicker label={fieldLabel('Make', true)} value={catalogMakeText} onChange={value => void onMakeChange(value)} placeholder="Search make..." options={catalogTextOptions(makes.map(make => make.make))} error={errors.fkVariantId} errorMessage="Select a make, model, and variant." />
@@ -123,7 +123,7 @@ export function InventoryFormModal({
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Registration and vehicle condition</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>div]:min-w-0">
               <FormDropdown label="Car Registered" value={form.isCarRegistered === null ? '' : form.isCarRegistered ? 'yes' : 'no'} options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} placeholder="Select" allowClear onChange={value => f('isCarRegistered', value === 'yes' ? true : value === 'no' ? false : null)} />
               <Input
                 label={fieldLabel('Registration No', form.isCarRegistered === true)}
@@ -145,7 +145,7 @@ export function InventoryFormModal({
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Sale and ownership</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>div]:min-w-0">
               <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="Select status" error={errors.status} errorMessage="Status is required." onChange={value => f('status', value)} />
               <Input label={fieldLabel('Price (₹)', true)} type="text" inputMode="decimal" value={formatPriceInput(form.price)} onChange={e => { const value = numberInput(e); f('price', value ? Number(value) : null) }} error={errors.price} errorMessage="Enter a price greater than zero." />
               <FormDropdown label={fieldLabel('Owner Type', true)} value={form.ownedType} options={[{ value: 'Excel Cars', label: 'Excel Cars' }, { value: 'Dealer', label: 'Dealer' }, { value: 'Individual', label: 'Individual' }]} placeholder="Select owner type" allowClear error={errors.ownedType} errorMessage="Select a valid owner type." onChange={onOwnerTypeChange} />
@@ -157,12 +157,12 @@ export function InventoryFormModal({
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Customer link</p>
-            <div className="grid grid-cols-2 gap-4"><div className="space-y-1"><label className="text-xs font-medium text-gray-600">{fieldLabel('Customer', form.status === 'Sold')}</label><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customerId} errorMessage="Select a customer for sold inventory." /></div></div>
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>div]:min-w-0"><div className="space-y-1"><label className="text-xs font-medium text-gray-600">{fieldLabel('Customer', form.status === 'Sold')}</label><CustomerPicker value={selectedCustomer} onChange={onCustomerChange} error={errors.customerId} errorMessage="Select a customer for sold inventory." /></div></div>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
             <p className="mb-3 text-xs font-medium text-gray-500">Additional information</p>
-            <div className="grid grid-cols-2 gap-4"><Textarea label={fieldLabel('Internal Comments')} value={form.internalComments} onChange={e => f('internalComments', e.target.value)} /><Textarea label={fieldLabel('Remarks')} value={form.otherRemarks} onChange={e => f('otherRemarks', e.target.value)} /></div>
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 [&>div]:min-w-0"><Textarea label={fieldLabel('Internal Comments')} value={form.internalComments} onChange={e => f('internalComments', e.target.value)} /><Textarea label={fieldLabel('Remarks')} value={form.otherRemarks} onChange={e => f('otherRemarks', e.target.value)} /></div>
           </section>
 
           <div className="sticky bottom-[-1rem] -mx-6 -mb-4 border-t border-gray-200 bg-white px-6 pb-4 pt-3">

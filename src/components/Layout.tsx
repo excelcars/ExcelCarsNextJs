@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard, ChevronDown, ChevronRight, Menu, LogOut,
-  Package, BarChart3, Wrench, UserRound, LockKeyhole, ChevronUp
+  Package, BarChart3, Wrench, UserRound, LockKeyhole, ChevronUp, X
 } from 'lucide-react'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 
@@ -81,7 +81,7 @@ function ProfileMenu({
         title={isSidebar && !showSidebarDetails ? displayName : undefined}
         className={isSidebar
           ? `w-full flex items-center gap-3 cursor-pointer ${showSidebarDetails ? 'px-2' : 'justify-center px-0'} py-2 rounded-lg text-left transition-all ${open ? 'bg-white/10' : 'hover:bg-white/10'}`
-          : 'flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 text-white transition hover:bg-white/10'
+          : 'flex min-h-11 min-w-11 items-center justify-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 text-white transition hover:bg-white/10'
         }
       >
         <div className={`${isSidebar ? 'w-8 h-8 bg-[#C8102E] text-sm' : 'w-7 h-7 bg-[#1B2A6B] text-xs'} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}>
@@ -94,7 +94,7 @@ function ProfileMenu({
           </div>
         )}
         {!isSidebar && (
-          <span className="hidden text-sm font-medium text-white sm:block">{displayName}</span>
+          <span className="hidden max-w-48 truncate text-sm font-medium text-white sm:block">{displayName}</span>
         )}
         {isSidebar && showSidebarDetails && (open ? <ChevronUp className="w-4 h-4 text-white/60" /> : <ChevronDown className="w-4 h-4 text-white/60" />)}
       </button>
@@ -170,6 +170,7 @@ const navItems: NavItem[] = [
       { label: 'Checklist / Docs', href: '/checklist' },
       { label: 'Inquiries', href: '/inquiry' },
       { label: 'WhatsApp Inbox', href: '/messages' },
+      { label: 'Meta Message Logs', href: '/messages/logs' },
       { label: 'Loan Management', href: '/loan' },
       { label: 'Insurance', href: '/insurance' },
       { label: 'RTO Management', href: '/rto' },
@@ -214,6 +215,9 @@ export function Layout({
   roleName?: string
 }) {
   const pathname = usePathname()
+  const activeChildHref = navItems.flatMap(item => item.children ?? [])
+    .filter(child => pathname === child.href || pathname.startsWith(`${child.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href
   const router = useRouter()
   const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -223,8 +227,25 @@ export function Layout({
   const [pendingNavigation, setPendingNavigation] = useState<{ fromPathname: string; label: string } | null>(null)
   const desktopNavRef = useRef<HTMLElement>(null)
   const mobileNavRef = useRef<HTMLElement>(null)
+  const mobileDialogRef = useRef<HTMLDialogElement>(null)
   const sidebarScrollPositionRef = useRef(0)
   const accessibleRouteSet = new Set(accessibleRoutes)
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return
+    const dialog = mobileDialogRef.current
+    dialog?.showModal()
+    const desktop = window.matchMedia('(min-width: 768px)')
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileSidebarOpen(false)
+    }
+    closeOnDesktop()
+    desktop.addEventListener('change', closeOnDesktop)
+    return () => {
+      desktop.removeEventListener('change', closeOnDesktop)
+      dialog?.close()
+    }
+  }, [mobileSidebarOpen])
 
   const rememberSidebarScroll = (scrollTop: number) => {
     sidebarScrollPositionRef.current = scrollTop
@@ -303,18 +324,23 @@ export function Layout({
   const displayName = initialDisplayName || session?.user?.name || session?.user?.username || 'User'
   const roleName = initialRoleName || session?.user?.roleName || ''
 
-  const renderSidebarContent = (navRef: React.RefObject<HTMLElement | null>) => (
-    <div className="flex flex-col h-full">
+  const renderSidebarContent = (navRef: React.RefObject<HTMLElement | null>, mobile = false) => {
+    // Mobile navigation always shows labels, independently of the desktop rail.
+    const showDetails = mobile || sidebarOpen
+    return (
+    <div className="flex min-h-0 flex-col h-full">
       {/* Logo */}
-      <div className={`h-16 flex items-center border-b border-white/10 flex-shrink-0 ${sidebarOpen ? 'px-5' : 'justify-center px-1'}`}>
+      <div className={`h-16 flex items-center border-b border-white/10 flex-shrink-0 ${showDetails ? 'px-5' : 'justify-center px-1'}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-excel-car.png" alt="Excel Cars" className={sidebarOpen ? 'h-14 w-28 rounded-xl border border-white/20 bg-white p-1 object-contain shadow-sm' : 'h-10 w-11 rounded-lg border border-white/20 bg-white p-1 object-contain shadow-sm'} />
-        {sidebarOpen && <span className="ml-3 text-white/60 text-xs font-mono uppercase tracking-widest">CRM</span>}
+        <img src="/logo-excel-car.png" alt="Excel Cars" className={showDetails ? 'h-14 w-28 rounded-xl border border-white/20 bg-white p-1 object-contain shadow-sm' : 'h-10 w-11 rounded-lg border border-white/20 bg-white p-1 object-contain shadow-sm'} />
+        {showDetails && <span className="ml-3 text-white/60 text-xs font-mono uppercase tracking-widest">CRM</span>}
+        {mobile && <button type="button" autoFocus onClick={() => setMobileSidebarOpen(false)} aria-label="Close navigation" className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white hover:bg-white/10"><X className="h-5 w-5" /></button>}
       </div>
 
       {/* Nav */}
       <nav
         ref={navRef}
+        aria-label={mobile ? 'Mobile navigation' : 'Main navigation'}
         onScroll={event => rememberSidebarScroll(event.currentTarget.scrollTop)}
         className="sidebar-scrollbar flex-1 overflow-y-auto py-4 px-2"
       >
@@ -327,7 +353,7 @@ export function Layout({
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${pathname === item.href ? 'bg-white/15 text-white font-medium' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
               >
                 {item.icon}
-                {sidebarOpen && <span>{item.label}</span>}
+                {showDetails && <span>{item.label}</span>}
               </Link>
             ) : (
               <div>
@@ -336,7 +362,7 @@ export function Layout({
                   onClick={() => {
                     // A collapsed sidebar uses the icon as the entry point;
                     // open it first so the section label and children are visible.
-                    if (!sidebarOpen) {
+                    if (!showDetails) {
                       setSidebarOpen(true)
                       return
                     }
@@ -345,14 +371,14 @@ export function Layout({
                   className={`w-full flex cursor-pointer items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${isActive(item) || expanded[item.label] ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
                 >
                   {item.icon}
-                  {sidebarOpen && (
+                  {showDetails && (
                     <>
                       <span className="flex-1 text-left">{item.label}</span>
                       {expanded[item.label] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                     </>
                   )}
                 </button>
-                {sidebarOpen && expanded[item.label] && item.children && (
+                {showDetails && expanded[item.label] && item.children && (
                   <div className="ml-7 mt-0.5 space-y-0.5">
                     {item.children.length === 0 && (
                       <div className="px-3 py-2 text-xs text-white/35">No accessible pages</div>
@@ -362,9 +388,9 @@ export function Layout({
                         key={child.href}
                         href={child.href}
                         onClick={event => handleNavigationClick(event, child.label)}
-                        className={`block text-left px-3 py-2 rounded-lg text-sm transition-all ${pathname === child.href || pathname.startsWith(`${child.href}/`) ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+                        className={`flex min-h-11 items-center text-left px-3 py-2 rounded-lg text-sm transition-all ${activeChildHref === child.href ? 'text-white font-medium' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
                       >
-                        {(pathname === child.href || pathname.startsWith(`${child.href}/`)) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}
+                        {activeChildHref === child.href && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#C8102E] mr-2 mb-0.5" />}
                         {child.label}
                       </Link>
                     ))}
@@ -382,16 +408,17 @@ export function Layout({
           displayName={displayName}
           roleName={roleName}
           placement="sidebar"
-          sidebarOpen={sidebarOpen}
+          sidebarOpen={showDetails}
           onNavigate={() => setMobileSidebarOpen(false)}
           onExpand={() => setSidebarOpen(true)}
         />
       </div>
     </div>
   )
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-dvh bg-gray-50 overflow-hidden">
       {/* Desktop Sidebar */}
       <aside
         className="hidden md:flex flex-col flex-shrink-0 transition-all duration-200"
@@ -402,12 +429,11 @@ export function Layout({
 
       {/* Mobile Sidebar */}
       {mobileSidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileSidebarOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-64 flex flex-col" style={{ background: 'linear-gradient(165deg, #0d1f50 0%, #123b68 55%, #8c143d 100%)' }}>
-            {renderSidebarContent(mobileNavRef)}
+        <dialog ref={mobileDialogRef} id="mobile-navigation" aria-label="Navigation" onCancel={() => setMobileSidebarOpen(false)} onClick={event => { if (event.target === event.currentTarget) setMobileSidebarOpen(false) }} className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-transparent p-0 text-inherit backdrop:bg-black/50 md:hidden">
+          <aside className="flex h-full w-80 max-w-[calc(100vw-2rem)] flex-col pb-[env(safe-area-inset-bottom)]" style={{ background: 'linear-gradient(165deg, #0d1f50 0%, #123b68 55%, #8c143d 100%)' }}>
+            {renderSidebarContent(mobileNavRef, true)}
           </aside>
-        </div>
+        </dialog>
       )}
 
       {/* Main */}
@@ -415,8 +441,21 @@ export function Layout({
         {/* Header */}
         <header className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-white/10 bg-[linear-gradient(105deg,#0d1f50_0%,#123b68_52%,#8c143d_100%)] px-4 text-white shadow-sm">
           <button
-            onClick={() => { setSidebarOpen(!sidebarOpen); setMobileSidebarOpen(!mobileSidebarOpen) }}
-            className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
+            type="button"
+            onClick={() => setMobileSidebarOpen(true)}
+            aria-label="Open navigation"
+            aria-expanded={mobileSidebarOpen}
+            aria-haspopup="dialog"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/10 hover:text-white md:hidden"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(value => !value)}
+            aria-label={sidebarOpen ? 'Collapse navigation' : 'Expand navigation'}
+            aria-expanded={sidebarOpen}
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white/80 transition hover:bg-white/10 hover:text-white md:flex"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -428,7 +467,7 @@ export function Layout({
         </header>
 
         {/* Page Content */}
-        <main className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-6'}`} aria-busy={Boolean(pendingNavigation)}>
+        <main className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto ${pathname === '/dashboard' ? 'p-0' : 'p-3 sm:p-4 lg:p-6'}`} aria-busy={Boolean(pendingNavigation)}>
           {pendingNavigation ? (
             <div className="flex min-h-full w-full flex-1 flex-col items-center justify-center bg-gray-50" role="status" aria-live="polite" aria-label={`Loading ${pendingNavigation.label}`}>
               <span className="h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#C8102E]" />

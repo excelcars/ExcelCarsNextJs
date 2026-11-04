@@ -1,9 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
+import { INSURANCE_PAGE_SIZES } from './constants'
 
-export const PAYOUT_STATUSES = ['Pending', 'Paid'] as const
-export const POLICY_STATUSES = ['Pending', 'Received', 'Renewed'] as const
-export const CAR_TYPES = ['New', 'PreOwned'] as const
-export const INSURANCE_PAGE_SIZES = [25, 50, 100] as const
+export { PAYOUT_STATUSES, POLICY_STATUSES, CAR_TYPES, INSURANCE_PAGE_SIZES } from './constants'
 
 function buildInsuranceWhere(search: string, fromDate = '', toDate = '') {
   const q = search.trim()

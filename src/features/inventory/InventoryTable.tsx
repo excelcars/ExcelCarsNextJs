@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Building2, Eye, FileText, Images, Link2, Mail, Pencil, Phone, Trash2, UserRound, Video } from 'lucide-react'
 import { IconButton, Modal, Table } from '@/components/ui'
 import { InventoryDetailCell } from './InventoryDetailCell'
+import { InventoryMobileCard } from './InventoryMobileCard'
 import type { InventoryRow } from './inventoryTypes'
 
 const clean = (value: string | null | undefined) => {
@@ -66,7 +67,7 @@ function RemarkPreview({ value, title, onView }: { value: string | null | undefi
   return <div className="w-full"><p ref={textRef} className="line-clamp-4 break-words [overflow-wrap:anywhere] text-sm leading-5 text-gray-700">{remark}</p>{isTruncated ? <button type="button" onClick={() => onView(remark, title)} className="mt-1 cursor-pointer text-xs font-semibold text-[#1B2A6B] hover:underline">View more</button> : null}</div>
 }
 
-interface InventoryTableProps {
+export interface InventoryTableProps {
   rows: InventoryRow[]
   selectionMode: boolean
   selectedInventoryIds: number[]
@@ -108,11 +109,14 @@ export function InventoryTable({
     : ['4%', '10%', '8%', '10%', '10%', '10%', '10%', '10%', '8.5%', '9.5%', '10%']
   return (
     <>
-    <div className="[&_th]:px-2 [&_td]:px-2 [&_th:last-child]:whitespace-nowrap [&_th:last-child]:[overflow-wrap:normal]">
+    <div className="grid min-w-0 gap-3 lg:grid-cols-2 xl:hidden" aria-label="Vehicles">
+      {rows.length === 0 ? <p className="col-span-full rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No records found</p> : rows.map((row, index) => <InventoryMobileCard key={row.inventoryId} row={row} position={(page - 1) * pageSize + index + 1} selectionMode={selectionMode} selectedInventoryIds={selectedInventoryIds} onSelectionChange={onSelectionChange} onView={onView} onInquirySync={onInquirySync} onPhotos={onPhotos} onVideos={onVideos} onDocuments={onDocuments} onEmail={onEmail} onEdit={onEdit} onDelete={onDelete} />)}
+    </div>
+    <div className="hidden xl:block [&_th]:px-2 [&_td]:px-2 [&_th:last-child]:whitespace-nowrap [&_th:last-child]:[overflow-wrap:normal]">
       <Table
         headers={headers}
         empty={rows.length === 0}
-        minWidthClass="min-w-full"
+        minWidthClass="min-w-[1400px]"
         columnWidths={columnWidths}
       >
         {rows.map((r, index) => (
@@ -128,7 +132,7 @@ export function InventoryTable({
               </div>
             </td>
             <td className="px-4 py-3"><InventoryDetailCell items={[['No. of Owners', r.noOfOwners], ['Tax', r.tax], ['Fuel Type', r.fuelType]]} /></td>
-            <td className="px-4 py-3"><InventoryDetailCell items={[['Regi. No', r.registrationNo], ['Kms Driven', r.kmsDriven !== null ? Number(r.kmsDriven).toFixed(2) : null], ['Insurance Type', r.insuranceType]]} /></td>
+            <td className="px-4 py-3"><InventoryDetailCell items={[['Regi. No', r.registrationNo], ['Kms Driven', r.kmsDriven !== null ? Number(r.kmsDriven).toLocaleString('en-IN') : null], ['Insurance Type', r.insuranceType]]} /></td>
             <td className="px-4 py-3">
               <div className="space-y-2">
                 <div className="truncate font-semibold tabular-nums text-gray-800">{formatVehiclePrice(r.price !== null ? Number(r.price) : null)}</div>

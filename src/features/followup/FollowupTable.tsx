@@ -4,8 +4,9 @@ import type { ReactNode } from 'react'
 import { AlertTriangle, CalendarDays, CircleHelp, ClipboardPenLine, ContactRound, Mail, MapPin, Phone, UserRound } from 'lucide-react'
 import { Badge, Table } from '@/components/ui'
 import { formatListDate, formatListMoney } from '@/lib/listFormatters'
+import { FollowupMobileCards } from './FollowupMobileCards'
 
-type FollowupTableRow = {
+export type FollowupTableRow = {
   inquiryId: number; inquiryNo?: string | null; dateOfInquiry: Date | string | null; website: string | null; sourceDetail?: string | null; location?: string | null
   customerNameLegacy: string | null; mobileno: string | null; email: string | null; budgetOfCustomer?: string | number | null; classification: string | null; status?: string | null; subStatus: string | null; followUpDate: Date | string | null; visitedDateOfCustomer?: Date | string | null; remark: string | null
   followupInquiry?: Array<{ contactOutcome?: string | null }>; createdBy?: number | null; createdByUser?: { userName: string | null; displayName: string | null } | null
@@ -23,12 +24,14 @@ function DetailCell({ items }: { items: Array<[string, string | number | null | 
   return <div className="space-y-0.5 text-sm leading-6 text-gray-600">{items.map(([label, value]) => <div key={label}><span className="font-semibold text-gray-700">{label}:</span>{' '}<span>{value === null || value === undefined || value === '' ? '—' : String(value)}</span></div>)}</div>
 }
 
-type InlineCells = { followup: ReactNode; classification: ReactNode; remark: ReactNode; actions: ReactNode }
-type FollowupTableProps<T extends FollowupTableRow> = { rows: T[]; page: number; pageSize: number; onLogFollowup: (row: T) => void; renderInlineCells?: (row: T) => InlineCells | null; onViewFollowup: (inquiryId: number) => void; onEditInquiry: (inquiryId: number) => void }
+export type InlineCells = { followup: ReactNode; classification: ReactNode; remark: ReactNode; actions: ReactNode }
+export type FollowupTableProps<T extends FollowupTableRow> = { rows: T[]; page: number; pageSize: number; onLogFollowup: (row: T) => void; renderInlineCells?: (row: T) => InlineCells | null; onViewFollowup: (inquiryId: number) => void; onEditInquiry: (inquiryId: number) => void }
 
 export function FollowupTable<T extends FollowupTableRow>({ rows, page, pageSize, onLogFollowup, renderInlineCells, onViewFollowup, onEditInquiry }: FollowupTableProps<T>) {
   return (
-    <div className="[&_th]:px-2 [&_td]:px-2 [&_input]:h-9 [&_input]:px-2 [&_label]:font-semibold [&_textarea]:px-2 [&_th:first-child]:w-12 [&_th:first-child]:min-w-12 [&_th:first-child]:max-w-12 [&_td:first-child]:w-12 [&_td:first-child]:min-w-12 [&_td:first-child]:max-w-12">
+    <>
+    <FollowupMobileCards rows={rows} page={page} pageSize={pageSize} onLogFollowup={onLogFollowup} renderInlineCells={renderInlineCells} onViewFollowup={onViewFollowup} onEditInquiry={onEditInquiry} />
+    <div className="hidden xl:block [&_th]:px-2 [&_td]:px-2 [&_input]:h-9 [&_input]:px-2 [&_label]:font-semibold [&_textarea]:px-2 [&_th:first-child]:w-12 [&_th:first-child]:min-w-12 [&_th:first-child]:max-w-12 [&_td:first-child]:w-12 [&_td:first-child]:min-w-12 [&_td:first-child]:max-w-12">
       <Table headers={['Sr. No.', 'Inquiry', 'Customer Details', 'Vehicle', 'Budget / Visited Date', 'Follow-up Status', 'Classification / Outcome', 'Remark', 'Actions']} empty={rows.length === 0} minWidthClass="min-w-[1100px]" stickyLastColumn>
         {rows.map((row, index) => {
           const name = row.customer?.custName ?? row.customerNameLegacy ?? ''
@@ -54,5 +57,6 @@ export function FollowupTable<T extends FollowupTableRow>({ rows, page, pageSize
         })}
       </Table>
     </div>
+    </>
   )
 }
