@@ -3,8 +3,8 @@
 import { catalogSelectOptions } from '@/lib/catalogNames'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, Loader2 } from 'lucide-react'
-import { Badge, Btn, Input, Select, Textarea, PageHeader } from '@/components/ui'
+import { Loader2 } from 'lucide-react'
+import { Badge, Btn, Input, Select, Textarea } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { logFollowup, type LogFollowupInput } from './actions'
 import { CustomerPicker } from '@/components/CustomerPicker'
@@ -16,8 +16,11 @@ import { FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, resolveFollowupSu
 import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
+import type { InquiryLocationOption } from '@/features/inquiry/locationMaster'
 import { FollowupFilters } from './FollowupFilters'
 import { FollowupTable } from './FollowupTable'
+import { FollowupHeader } from './FollowupHeader'
+import { FollowupHistoryList } from './FollowupHistoryList'
 import { ListPagination } from '@/components/ListPagination'
 import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
 import { buildFollowupExportFileName, csvValue, FOLLOWUP_EXPORT_HEADERS } from './followupExportHelpers'
@@ -493,6 +496,8 @@ export function FollowupClient({
   subStatus: initialSubStatus,
   website: initialWebsite,
   sourceOptions,
+  locationOptions,
+  subStatusSuggestions,
   customerMobile: initialCustomerMobile,
   users,
   userId: initialUserId,
@@ -526,6 +531,8 @@ export function FollowupClient({
   subStatus: string
   website: string
   sourceOptions: InquirySourceOption[]
+  locationOptions: InquiryLocationOption[]
+  subStatusSuggestions: string[]
   customerMobile: string
   users: UserOption[]
   userId: string
@@ -848,11 +855,7 @@ export function FollowupClient({
       setCarEditorError('Select make, model, and variant before adding the vehicle row.')
       return
     }
-    if (carEditor.carYear === null) {
-      setCarEditorError('Select the vehicle year before adding the vehicle row.')
-      return
-    }
-    if (!isValidYear(carEditor.carYear)) {
+    if (carEditor.carYear !== null && !isValidYear(carEditor.carYear)) {
       setCarEditorError('Select a valid vehicle year before adding the vehicle row.')
       return
     }
@@ -912,6 +915,7 @@ export function FollowupClient({
   }
 
   const openLog = async (r: FollowupRow) => {
+    setSuccessMessage('')
     const requestId = historyRequestRef.current + 1
     historyRequestRef.current = requestId
     setLogRow(r)
@@ -1303,25 +1307,26 @@ export function FollowupClient({
   const resultLabel = status === 'Closed' ? 'closed inquiries' : status === 'All' ? 'matching inquiries' : status === 'FollowUp' ? 'active follow-ups' : 'open inquiries'
 
   return (
-    <div>
-      <PageHeader
-        title="Follow-up Queue"
+    <div className="min-w-0">
+      <FollowupHeader
+        total={total}
+        filtered={hasActiveFilters}
+        exporting={isExporting}
+        onExport={exportAllMatchingFollowups}
         subtitle={`${total.toLocaleString('en-IN')} ${resultLabel}${overdueCount && status !== 'Closed' ? ` · ${overdueCount} overdue on this page` : ''}${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}`}
-        action={
-          <Btn variant="outline" size="sm" onClick={exportAllMatchingFollowups} disabled={isExporting || total === 0}>
-            <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${hasActiveFilters ? 'Export Filtered' : 'Export All'} (${total})`}
-          </Btn>
-        }
       />
 
       {exportError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>
       ) : null}
       {successMessage ? (
-        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
+        <div role="status" aria-live="polite" className="fixed right-4 top-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-4 rounded-lg border border-green-200 bg-white px-4 py-3 text-sm text-green-700 shadow-lg sm:right-6 sm:top-6">
+          <span>{successMessage}</span>
+          <button type="button" onClick={() => setSuccessMessage('')} className="font-medium text-green-800 hover:text-green-950" aria-label="Dismiss success message">Dismiss</button>
+        </div>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick follow-up filters">
+      <div className="mb-4 flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1 sm:flex-wrap" aria-label="Quick follow-up filters">
         {[
           ['active', 'Active'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
         ].map(([preset, label]) => (
@@ -1331,7 +1336,7 @@ export function FollowupClient({
             onClick={() => applyQuickFilter(preset as 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all')}
             disabled={isRoutePending}
             aria-pressed={activeQuickFilter === preset}
-            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${activeQuickFilter === preset ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}
+            className={`min-h-11 shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${activeQuickFilter === preset ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-[#1B2A6B] hover:bg-blue-50 hover:text-[#1B2A6B]'}`}
           >
             {label}
           </button>
@@ -1394,7 +1399,7 @@ export function FollowupClient({
       />
 
       <div className="mb-4 flex justify-end">
-        <Btn variant="outline" size="sm" onClick={() => { setSuccessMessage(''); resetFilters() }} disabled={isRoutePending || !hasActiveFilters}>
+        <Btn variant="outline" size="sm" className="min-h-11" onClick={() => { setSuccessMessage(''); resetFilters() }} disabled={isRoutePending || !hasActiveFilters}>
           Reset Filters
         </Btn>
       </div>
@@ -1415,7 +1420,7 @@ export function FollowupClient({
               classification: <div className="space-y-2"><FormDropdown label="Classification" value={form.classification} options={CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select" error={errors.classification} errorMessage="Classification is required." onChange={value => f('classification', value)} /><FormDropdown label="Status" value={form.status} options={STATUSES.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up' : value }))} placeholder="Select" error={errors.status} errorMessage="Status is required." onChange={value => { f('status', value); if (value === 'Closed') f('nextFollowUpDate', '') }} /><FormDropdown label="Sub-status" value={form.useOtherSubStatus ? FOLLOWUP_OTHER_SUB_STATUS_VALUE : form.subStatus} options={[...SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value })), { value: FOLLOWUP_OTHER_SUB_STATUS_VALUE, label: 'OTHER' }]} placeholder="Select" allowClear onChange={value => { if (value === FOLLOWUP_OTHER_SUB_STATUS_VALUE) { f('useOtherSubStatus', true); f('subStatus', ''); return }; f('useOtherSubStatus', false); f('otherSubStatus', ''); f('subStatus', value) }} />{form.useOtherSubStatus ? <Input label="Other sub-status" value={form.otherSubStatus ?? ''} error={errors.otherSubStatus} errorMessage="Enter the custom sub-status." onChange={event => f('otherSubStatus', event.target.value)} /> : null}</div>,
               followup: <div className="space-y-2"><Input label="Follow-up date" type="date" value={form.nextFollowUpDate} error={errors.nextFollowUpDate} errorMessage="Select a follow-up date today or later." disabled={!isFollowupStatus(form.status)} onChange={event => f('nextFollowUpDate', event.target.value)} /><div className="pt-1 text-xs text-gray-500"><span className="font-semibold text-gray-700">Inquiry made by:</span> {row.createdByUser?.displayName ?? row.createdByUser?.userName ?? (row.createdBy ? `User #${row.createdBy}` : '—')}</div></div>,
               remark: <div className="min-w-0"><Textarea label="Remark *" value={form.comments} error={errors.comments} errorMessage="Remark is required." onChange={event => f('comments', event.target.value)} placeholder="Update..." className="min-h-20 min-w-0 w-full" />{error ? <div className="mt-2 text-xs font-medium text-red-600">{error}</div> : null}</div>,
-              actions: <><button type="button" onClick={save} disabled={isPending} className="rounded p-1.5 text-green-600 transition hover:bg-green-50 disabled:opacity-50" title="Save follow-up">{isPending ? '…' : '✓'}</button><button type="button" onClick={() => setLogRow(null)} disabled={isPending} className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100 disabled:opacity-50" title="Cancel inline edit">×</button></>,
+              actions: <><button type="button" onClick={save} disabled={isPending} className="min-h-11 rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:opacity-50" title="Save follow-up">{isPending ? 'Saving...' : 'Save'}</button><button type="button" onClick={() => setLogRow(null)} disabled={isPending} className="min-h-11 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 disabled:opacity-50" title="Cancel inline edit">Cancel</button></>,
             } : null}
             onViewFollowup={openFollowupView}
             onEditInquiry={openInquiryEdit}
@@ -1430,7 +1435,7 @@ export function FollowupClient({
         total={total}
         showingText={`Showing ${((page - 1) * initialData.length) + (initialData.length ? 1 : 0)}-${((page - 1) * 25) + initialData.length}`}
         pending={isRoutePending}
-        className="mt-4"
+        className="mt-4 flex-col gap-3 sm:flex-row [&_button]:min-h-11"
         onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
       />
 
@@ -1721,32 +1726,7 @@ export function FollowupClient({
                       </Btn>
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-sm">
-                      <thead className="bg-[#1B2A6B] text-left text-xs font-semibold uppercase tracking-wide text-white">
-                        <tr>
-                          <th className="w-16 px-5 py-3">Sr. No.</th>
-                          <th className="px-5 py-3">Entry Date</th>
-                          <th className="px-5 py-3">Follow-up Date</th>
-                          <th className="px-5 py-3">Status</th>
-                          <th className="px-5 py-3">Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {sortedHistory.length === 0 ? (
-                          <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">No follow-up history recorded yet.</td></tr>
-                        ) : sortedHistory.map((entry, index) => (
-                          <tr key={entry.pkFollowupId} className="bg-white hover:bg-gray-50">
-                            <td className="px-5 py-3 text-gray-500">{index + 1}</td>
-                            <td className="whitespace-nowrap px-5 py-3 text-gray-700">{fmtDate(entry.createdDt ?? entry.followupDate) || '—'}</td>
-                            <td className="whitespace-nowrap px-5 py-3 text-gray-700">{fmtDate(entry.followupDate) || '—'}</td>
-                            <td className="px-5 py-3 text-gray-700">{formatFriendlyStatus(entry.followupStatus ?? '', entry.followupSubStatus ?? '')}</td>
-                            <td className="max-w-xl px-5 py-3 text-gray-700">{clean(entry.comments) || '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <FollowupHistoryList history={sortedHistory} formatDate={fmtDate} formatStatus={formatFriendlyStatus} cleanRemark={clean} />
                 </div>
               )
             })()
@@ -1837,7 +1817,10 @@ export function FollowupClient({
               <Input label="Customer Mobile No *" value={editInquiryForm.mobileno} onChange={e => updateInquiryField('mobileno', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.mobileno} />
               <Input label="Customer Email" type="email" value={editInquiryForm.email} onChange={e => updateInquiryField('email', e.target.value)} disabled={!!selectedCustomer} error={editInquiryErrors.email} />
             </div>
-            <Input label="Location" value={editInquiryForm.location} onChange={e => updateInquiryField('location', e.target.value)} placeholder="e.g. Andheri West, Pune, Dubai" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormDropdown label="City / Reporting Location (Optional)" value={String(editInquiryForm.locationId ?? '')} options={locationOptions.map(item => ({ value: String(item.locationId), label: `${item.displayName} · ${item.region}` }))} placeholder="Select reporting location" allowClear error={editInquiryErrors.locationId} onChange={value => updateInquiryField('locationId', Number(value) || null)} />
+              <Input label="Area / Locality" value={editInquiryForm.location} onChange={e => updateInquiryField('location', e.target.value)} placeholder="e.g. Andheri West, Kothrud, JLT" />
+            </div>
 
             <div className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
@@ -1855,7 +1838,7 @@ export function FollowupClient({
                   setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                   setCarEditorError('')
                 }} />
-                <FormDropdown label="Year *" value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear onChange={value => {
+                <FormDropdown label="Year (Optional)" value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear onChange={value => {
                   setCarEditor(prev => ({ ...prev, carYear: value ? Number(value) : null }))
                   setCarEditorError('')
                 }} />
@@ -1891,7 +1874,7 @@ export function FollowupClient({
               <FormDropdown label="Classification *" value={editInquiryForm.classification} options={INQUIRY_CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => updateInquiryField('classification', value)} />
               <Input label="Visited Date of customer" type="date" value={editInquiryForm.visitedDateOfCustomer} onChange={e => updateInquiryField('visitedDateOfCustomer', e.target.value)} error={editInquiryErrors.visitedDateOfCustomer} />
               <FormDropdown label="Status *" value={editInquiryForm.status} options={INQUIRY_STATUSES.map(value => ({ value, label: inquiryStatusLabel(value) }))} placeholder="Select status" onChange={value => updateInquiryField('status', value)} />
-              <FormDropdown label="Sub Status" value={editInquiryForm.subStatus} options={SUB_STATUS_SUGGESTIONS.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear onChange={value => updateInquiryField('subStatus', value)} />
+              <FormDropdown label="Sub Status" value={editInquiryForm.subStatus} options={subStatusSuggestions.map(value => ({ value, label: value }))} placeholder="Select sub status" allowClear onChange={value => updateInquiryField('subStatus', value)} />
               <Input
                 label={isFollowupStatus(editInquiryForm.status) ? 'FollowUp Date*' : 'FollowUp Date'}
                 type="date"

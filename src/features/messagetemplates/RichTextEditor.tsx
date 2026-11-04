@@ -33,16 +33,16 @@ export function RichTextEditor({ value, onChange, errorMessage }: { value: strin
   ]
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label className="text-xs font-medium text-gray-600">Body *</label>
-      <div className={`overflow-hidden rounded-md border focus-within:ring-1 ${errorMessage ? 'border-red-500' : 'border-gray-200'}`} style={{ '--tw-ring-color': errorMessage ? '#C8102E' : '#1B2A6B' } as Record<string, string>}>
+      <div className={`min-w-0 overflow-hidden rounded-md border focus-within:ring-1 ${errorMessage ? 'border-red-500' : 'border-gray-200'}`} style={{ '--tw-ring-color': errorMessage ? '#C8102E' : '#1B2A6B' } as Record<string, string>}>
         <div className="flex flex-wrap gap-1 border-b border-gray-100 bg-gray-50 p-1.5">
           {controls.map(control => {
             const Icon = control.icon
-            return <button key={control.label} type="button" title={control.label} aria-label={control.label} onMouseDown={event => event.preventDefault()} onClick={control.action} className="rounded p-1.5 text-gray-600 hover:bg-white hover:text-[#1B2A6B]"><Icon className="h-4 w-4" /></button>
+            return <button key={control.label} type="button" title={control.label} aria-label={control.label} onMouseDown={event => event.preventDefault()} onClick={control.action} className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-gray-600 hover:bg-white hover:text-[#1B2A6B]"><Icon className="h-4 w-4" /></button>
           })}
         </div>
-        <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-multiline="true" onInput={event => onChange(event.currentTarget.innerHTML)} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); onChange(editorRef.current?.innerHTML ?? '') }} className="min-h-36 px-3 py-2 text-sm text-gray-800 outline-none" />
+        <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="Email body" aria-required="true" aria-invalid={Boolean(errorMessage)} aria-multiline="true" onInput={event => onChange(event.currentTarget.innerHTML)} onPaste={event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); onChange(editorRef.current?.innerHTML ?? '') }} className="min-h-36 min-w-0 max-w-full overflow-x-auto break-words [overflow-wrap:anywhere] px-3 py-2 text-base text-gray-800 outline-none [&_img]:h-auto [&_img]:max-w-full" />
       </div>
       <p className="text-xs text-gray-500">Formatting is sent in the email. Pasted content is added as plain text.</p>
       {errorMessage ? <p className="text-sm text-red-600">{errorMessage}</p> : null}

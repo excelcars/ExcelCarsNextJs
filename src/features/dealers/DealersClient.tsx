@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Download, Plus, Pencil, Trash2 } from 'lucide-react'
-import { ActionAlert, Btn, Input, LoadingOverlay, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
-import { FormDropdown } from '@/components/FormDropdown'
+import { ChevronLeft, ChevronRight, Download, Plus } from 'lucide-react'
+import { ActionAlert, Btn, PageHeader, ConfirmDialog } from '@/components/ui'
 import { createDealer, updateDealer, deleteDealer, type DealerFormInput } from './actions'
-import { DealerNameAutocomplete } from './DealerNameAutocomplete'
-import { DealerMobileAutocomplete } from './DealerMobileAutocomplete'
+import { DealersTable } from './DealersTable'
+import { DealersFilterBar } from './DealersFilterBar'
+import { DealerFormModal } from './DealerFormModal'
 import type { DealerFieldErrors, DealerRow } from './types'
 
 function emptyForm(): DealerFormInput {
@@ -103,16 +103,6 @@ export function DealersClient({
   const [isNavigating, startNavigationTransition] = useTransition()
   const [isExporting, startExportTransition] = useTransition()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const searchFieldLabel = {
-    all: 'all dealer details',
-    name: 'dealer name',
-    primaryMobile: 'primary mobile',
-    secondaryMobile: 'second mobile',
-    email: 'email address',
-    company: 'company name',
-    address: 'address',
-    website: 'website',
-  }[field] ?? 'all dealer details'
   const hasUnsavedChanges = useMemo(() => modal !== null && Object.keys(form).some(key => {
     const fieldKey = key as keyof DealerFormInput
     return form[fieldKey] !== initialForm[fieldKey]
@@ -262,12 +252,12 @@ export function DealersClient({
   }
 
   return (
-    <div>
+    <div className="min-w-0 [&>div:first-child]:flex-col [&>div:first-child]:sm:flex-row [&>div:first-child>div:last-child]:w-full [&>div:first-child>div:last-child]:sm:w-auto">
       <PageHeader
         title="Dealers"
         subtitle={`${total.toLocaleString('en-IN')} dealers`}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 [&>button]:min-h-11">
             <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || total === 0}>
               <Download className="w-3.5 h-3.5" />
               {isExporting ? 'Exporting...' : search.trim() ? `Export Filtered (${total})` : `Export All (${total})`}
@@ -277,56 +267,18 @@ export function DealersClient({
         }
       />
 
-      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
-        <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_11rem_11rem_auto]">
-          <div className="flex flex-col gap-1 sm:col-span-2 xl:col-span-1">
-            <label className="text-xs font-medium text-gray-600">Search value</label>
-            <SearchBar value={searchInput} onChange={setSearchInput} placeholder={`Type ${searchFieldLabel}...`} />
-          </div>
-          <FormDropdown label="Search in" value={field} options={[['all', 'All fields'], ['name', 'Name'], ['primaryMobile', 'Primary mobile'], ['secondaryMobile', 'Mobile 2'], ['email', 'Email'], ['company', 'Company'], ['address', 'Address'], ['website', 'Website']].map(([value, label]) => ({ value, label }))} placeholder="All fields" onChange={value => pushQuery({ field: value })} className="w-full" />
-          <FormDropdown label="Sort by" value={sort} options={[['nameAsc', 'Name: A–Z'], ['nameDesc', 'Name: Z–A'], ['newest', 'Newest added'], ['oldest', 'Oldest added']].map(([value, label]) => ({ value, label }))} placeholder="Sort by" onChange={value => pushQuery({ sort: value })} className="w-full" />
-          {(search || searchInput || field !== 'all' || sort !== 'nameAsc') && <Btn variant="outline" size="sm" onClick={resetFilters}>Reset Filters</Btn>}
-          <p className="text-xs text-gray-500 sm:col-span-2 xl:col-span-4">Choose where to search, then type the value above. Sorting applies immediately; filtering starts after you type.</p>
-        </div>
-      </div>
+      <DealersFilterBar search={search} searchInput={searchInput} field={field} sort={sort} onSearchChange={setSearchInput} onQueryChange={pushQuery} onReset={resetFilters} />
 
-      {successMessage && <div role="status" className="fixed right-6 top-6 z-50 flex items-center gap-4 rounded-lg border border-green-200 bg-white px-4 py-3 text-sm text-green-700 shadow-lg"><span>{successMessage}</span><button type="button" onClick={() => setSuccessMessage('')} className="font-medium text-green-800 hover:text-green-950" aria-label="Dismiss success message">Dismiss</button></div>}
+      {successMessage && <div role="status" className="fixed left-4 right-4 top-4 z-50 flex items-center gap-4 sm:left-auto sm:right-6 sm:top-6 rounded-lg border border-green-200 bg-white px-4 py-3 text-sm text-green-700 shadow-lg"><span>{successMessage}</span><button type="button" onClick={() => setSuccessMessage('')} className="font-medium text-green-800 hover:text-green-950" aria-label="Dismiss success message">Dismiss</button></div>}
       {deleteError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</div>}
       {exportError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <div className="relative" aria-busy={isNavigating}>
-        <LoadingOverlay show={isNavigating} label="Loading dealers..." subtle />
-      <Table headers={['Dealer', 'Contact', 'Address', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
-        {initialData.map(r => (
-          <tr key={r.dealerId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3">
-              <div className="font-medium text-gray-900">{r.dealerName ?? '—'}</div>
-              {r.dealerCompanyName && <div className="mt-1 text-sm text-gray-600">{r.dealerCompanyName}</div>}
-              {r.dealerWebsite && <div className="mt-0.5 max-w-56 truncate text-xs text-gray-500" title={r.dealerWebsite}>{r.dealerWebsite}</div>}
-            </td>
-            <td className="px-4 py-3">
-              <div className="font-mono text-sm text-gray-700">{r.dealerMobileNo ?? '—'}</div>
-              {r.dealerMobileNo_2 && <div className="mt-0.5 font-mono text-xs text-gray-500">{r.dealerMobileNo_2}</div>}
-              {r.dealerEmail && <div className="mt-0.5 max-w-56 truncate text-xs text-gray-500" title={r.dealerEmail}>{r.dealerEmail}</div>}
-            </td>
-            <td className="max-w-64 px-4 py-3 text-sm text-gray-600">
-              <div className="truncate" title={r.dealerAddress ?? undefined}>{r.dealerAddress ?? '—'}</div>
-            </td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => { setDeleteError(''); setDeleteId(r.dealerId) }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
-      </div>
+      <DealersTable rows={initialData} loading={isNavigating} onEdit={openEdit} onDelete={dealerId => { setDeleteError(''); setDeleteId(dealerId) }} />
 
       {pageCount > 1 && (
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <div className="text-xs text-gray-500">Page {page} of {pageCount}</div>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 [&>button]:min-h-11">
             <Btn variant="outline" size="sm" disabled={isNavigating || page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}>
               <ChevronLeft className="w-3.5 h-3.5" />Prev
             </Btn>
@@ -337,26 +289,7 @@ export function DealersClient({
         </div>
       )}
 
-      <Modal title={editId ? 'Edit Dealer' : 'Add Dealer'} open={!!modal} onClose={requestCloseModal}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div><DealerNameAutocomplete value={form.dealerName} onChange={value => f('dealerName', value)} error={!!fieldErrors.dealerName} />{fieldErrors.dealerName && <p className="mt-1 text-xs text-red-600">{fieldErrors.dealerName}</p>}</div>
-            <div><DealerMobileAutocomplete value={form.dealerMobileNo} onChange={value => f('dealerMobileNo', value)} error={!!fieldErrors.dealerMobileNo} />{fieldErrors.dealerMobileNo && <p className="mt-1 text-xs text-red-600">{fieldErrors.dealerMobileNo}</p>}</div>
-            <div><Input label="Mobile 2" value={form.dealerMobileNo_2} onChange={e => f('dealerMobileNo_2', e.target.value)} inputMode="numeric" maxLength={11} pattern="[0-9]{10,11}" error={!!fieldErrors.dealerMobileNo_2} />{fieldErrors.dealerMobileNo_2 && <p className="mt-1 text-xs text-red-600">{fieldErrors.dealerMobileNo_2}</p>}</div>
-            <div><Input label="Email" type="text" inputMode="email" value={form.dealerEmail} onChange={e => f('dealerEmail', e.target.value)} error={!!fieldErrors.dealerEmail} />{fieldErrors.dealerEmail && <p className="mt-1 text-xs text-red-600">{fieldErrors.dealerEmail}</p>}</div>
-            <Input label="Company Name" value={form.dealerCompanyName} onChange={e => f('dealerCompanyName', e.target.value)} />
-            <div><Input label="Website" value={form.dealerWebsite} onChange={e => f('dealerWebsite', e.target.value)} error={!!fieldErrors.dealerWebsite} />{fieldErrors.dealerWebsite && <p className="mt-1 text-xs text-red-600">{fieldErrors.dealerWebsite}</p>}</div>
-          </div>
-          <Input label="Address" value={form.dealerAddress} onChange={e => f('dealerAddress', e.target.value)} />
-
-          {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
-
-          <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={requestCloseModal} disabled={isPending}>Cancel</Btn>
-            <Btn onClick={save} disabled={isPending || !hasUnsavedChanges}>{isPending ? 'Saving...' : modal === 'edit' && !hasUnsavedChanges ? 'No changes to save' : 'Save Dealer'}</Btn>
-          </div>
-        </div>
-      </Modal>
+      <DealerFormModal mode={modal} form={form} errors={fieldErrors} error={error} pending={isPending} hasChanges={hasUnsavedChanges} onClose={requestCloseModal} onSave={save} onChange={f} />
 
       <ConfirmDialog
         open={discardChangesOpen}

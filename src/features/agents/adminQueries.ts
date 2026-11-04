@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 
-export const AGENT_TYPES = ['Insurance Agent', 'RTO Agent'] as const
+import { AGENT_TYPES } from './constants'
+export { AGENT_TYPES } from './constants'
 export const PAGE_SIZE = 25
 
 export interface ListAgentsParams {

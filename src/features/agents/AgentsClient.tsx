@@ -2,20 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Mail, Phone } from 'lucide-react'
-import { ActionAlert, Btn, Input, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
-import { FormDropdown } from '@/components/FormDropdown'
+import { ActionAlert, Btn, Modal, ConfirmDialog } from '@/components/ui'
 import { isValidEmail, isValidPhone } from '@/lib/validation'
 import { createAgent, updateAgent, deleteAgent, type AgentFormInput } from './adminActions'
-import { AGENT_TYPES } from './adminQueries'
-
-interface AgentRow {
-  partnerId: number
-  partnerType: string
-  name: string
-  mobile: string | null
-  email: string | null
-}
+import { AGENT_TYPES } from './constants'
+import { AgentsHeader, AgentsFilters, AgentsList, AgentsPagination, AgentFormFields, type AgentRow } from './AgentsUI'
 
 function emptyForm(): AgentFormInput {
   return { partnerType: AGENT_TYPES[0], name: '', mobile: '', email: '' }
@@ -103,41 +94,16 @@ export function AgentsClient({ initialData, total, page, pageCount, search, type
     })
   }
 
-  return <div>
-    <PageHeader title="Agents" subtitle={`${total.toLocaleString('en-IN')} agents`} action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Agent</Btn>} />
+  return <div className="min-w-0 [&_button]:min-h-11">
+    <AgentsHeader total={total} onAdd={openAdd} />
+    <AgentsFilters search={searchInput} type={type} onSearch={setSearchInput} onType={value => pushQuery({ type: value })} />
+    <AgentsList rows={initialData} onEdit={openEdit} onDelete={setDeleteId} />
+    <AgentsPagination page={page} pageCount={pageCount} onPage={value => pushQuery({ page: String(value) })} />
 
-    <div className="flex flex-wrap gap-3 mb-4">
-      <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email..." />
-      <div className="flex flex-wrap gap-1.5">
-        {['All', ...AGENT_TYPES].map(agentType => <button key={agentType} onClick={() => pushQuery({ type: agentType })}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${type === agentType || (type === 'All' && agentType === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-          style={type === agentType || (type === 'All' && agentType === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>{agentType}</button>)}
-      </div>
-    </div>
-
-    <Table headers={['Agent', 'Agent Type', 'Mobile', 'Email', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
-      {initialData.map(row => <tr key={row.partnerId} className="hover:bg-gray-50 transition">
-        <td className="px-4 py-3 font-medium text-gray-900">{row.name}</td>
-        <td className="px-4 py-3 text-sm text-gray-700">{row.partnerType}</td>
-        <td className="px-4 py-3"><div className="flex items-center gap-2 font-mono text-sm text-gray-700"><Phone aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" />{row.mobile ?? '—'}</div></td>
-        <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-2 text-sm text-gray-600"><Mail aria-hidden="true" className="h-4 w-4 shrink-0 text-gray-400" /><span className="break-all">{row.email ?? '—'}</span></div></td>
-        <td className="px-4 py-3"><div className="flex items-center gap-1">
-          <button onClick={() => openEdit(row)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
-          <button onClick={() => setDeleteId(row.partnerId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
-        </div></td>
-      </tr>)}
-    </Table>
-
-    {pageCount > 1 && <div className="flex items-center justify-between mt-4"><div className="text-xs text-gray-500">Page {page} of {pageCount}</div><div className="flex gap-1.5">
-      <Btn variant="outline" size="sm" disabled={page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}><ChevronLeft className="w-3.5 h-3.5" />Prev</Btn>
-      <Btn variant="outline" size="sm" disabled={page >= pageCount} onClick={() => pushQuery({ page: String(page + 1) })}>Next<ChevronRight className="w-3.5 h-3.5" /></Btn>
-    </div></div>}
-
-    <Modal title={editId ? 'Edit Agent' : 'Add Agent'} open={!!modal} onClose={() => setModal(null)}><div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4"><FormDropdown label="Type" value={form.partnerType} options={AGENT_TYPES.map(value => ({ value, label: value }))} placeholder="Select type" onChange={value => f('partnerType', value)} />
-        <Input label="Name *" value={form.name} onChange={e => f('name', e.target.value)} error={!!fieldErrors.name} errorMessage={fieldErrors.name} /><Input label="Mobile" value={form.mobile} inputMode="numeric" maxLength={10} onChange={e => f('mobile', e.target.value.replace(/\D/g, ''))} error={!!fieldErrors.mobile} errorMessage={fieldErrors.mobile} /><Input label="Email" type="email" value={form.email} onChange={e => f('email', e.target.value)} error={!!fieldErrors.email} errorMessage={fieldErrors.email} /></div>
+    <Modal title={editId ? 'Edit Agent' : 'Add Agent'} open={!!modal} onClose={() => setModal(null)}><div className="min-w-0 space-y-4 [overflow-wrap:anywhere]">
+      <AgentFormFields form={form} errors={fieldErrors} onChange={f} />
       {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
-      <div className="flex gap-3 justify-end pt-2"><Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Agent'}</Btn></div>
+      <div className="grid grid-cols-1 gap-3 pt-2 sm:flex sm:justify-end [&_button]:min-h-11 [&_button]:justify-center"><Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Agent'}</Btn></div>
     </div></Modal>
     <ConfirmDialog open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={del} message="Delete this agent? This cannot be undone." />
     <ActionAlert result={saveFeedback} onClose={() => setSaveFeedback(null)} successTitle="Agent saved" errorTitle="Agent not saved" />

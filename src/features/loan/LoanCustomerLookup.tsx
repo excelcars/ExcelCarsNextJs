@@ -117,11 +117,11 @@ export function LoanCustomerLookup({
     return (
       <div className="space-y-1">
         <div className={`flex items-center justify-between rounded-md border px-3 py-2 ${error ? 'border-red-500' : 'border-gray-200'} bg-gray-50`}>
-          <div>
+          <div className="min-w-0 [overflow-wrap:anywhere]">
             <div className="text-sm font-medium text-gray-800">{value.custName}</div>
             <div className="text-xs text-gray-500">{value.custMobile ?? 'No mobile'}{value.custEmail ? `· ${value.custEmail}` : ''}</div>
           </div>
-          <button type="button" onClick={() => onChange(null)} className="text-gray-400 hover:text-red-600" aria-label="Clear selected customer"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={() => onChange(null)} className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600" aria-label="Clear selected customer"><X className="h-4 w-4" /></button>
         </div>
         {error && errorMessage ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
       </div>
@@ -129,8 +129,8 @@ export function LoanCustomerLookup({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
+    <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
+      <div className="flex flex-col gap-2 sm:flex-row [&_button]:min-h-11 [&_button]:justify-center">
         <div className="min-w-0 flex-1"><Input placeholder="Enter mobile number first" inputMode="numeric" value={mobile} onChange={event => setMobile(event.target.value.replace(/\D/g, '').slice(0, 10))} error={error} errorMessage={errorMessage} /></div>
         <Btn type="button" variant="outline" onClick={openCreate}><UserPlus className="mr-1 h-4 w-4" />Create Customer</Btn>
       </div>
@@ -142,7 +142,7 @@ export function LoanCustomerLookup({
         <div className="overflow-hidden rounded-lg border border-gray-200">
           {matches.length === 0 ? <div className="px-3 py-3 text-sm text-gray-500">No matching customer or inquiry. Use Create Customer to add the person deliberately.</div> : matches.map(match => (
             <button key={match.id} type="button" onClick={() => chooseMatch(match)} className="block w-full border-b border-gray-100 px-3 py-2.5 text-left last:border-b-0 hover:bg-blue-50">
-              <div className="flex items-center justify-between gap-2"><span className="font-medium text-gray-800">{match.name}</span><span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{match.source === 'customer' ? 'Customer Master' : `Inquiry ${match.inquiryNo ?? `#${match.inquiryId}`}`}</span></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium text-gray-800">{match.name}</span><span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{match.source === 'customer' ? 'Customer Master' : `Inquiry ${match.inquiryNo ?? `#${match.inquiryId}`}`}</span></div>
               <div className="mt-0.5 text-xs text-gray-500">{match.mobile ?? 'No mobile'}{match.email ? ` · ${match.email}` : ''}</div>
               {vehicleLabel(match.vehicle) && <div className="mt-1 text-xs text-[#1B2A6B]">Car: {vehicleLabel(match.vehicle)}</div>}
               {match.source === 'inquiry' && !match.customerId && <div className="mt-1 text-xs font-medium text-[#1B2A6B]">Select to explicitly create this inquiry person as a customer.</div>}
@@ -159,7 +159,7 @@ export function LoanCustomerLookup({
           <Input label="Email" type="email" maxLength={254} value={newEmail} onChange={event => setNewEmail(event.target.value)} />
           {createVehicle && <p className="rounded bg-blue-50 px-3 py-2 text-xs text-[#1B2A6B]">The selected inquiry car will be copied into this loan: {vehicleLabel(createVehicle)}</p>}
           {createError && <p className="text-sm text-red-600">{createError}</p>}
-          <div className="flex justify-end gap-2"><Btn type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Btn><Btn type="button" onClick={createCustomer} disabled={creating || !newName.trim() || (!newMobile.trim() && !newEmail.trim())}>{creating ? 'Creating…' : 'Create and Select'}</Btn></div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end [&>button]:min-h-11 [&>button]:justify-center"><Btn type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Btn><Btn type="button" onClick={createCustomer} disabled={creating || !newName.trim() || (!newMobile.trim() && !newEmail.trim())}>{creating ? 'Creating…' : 'Create and Select'}</Btn></div>
         </div>
       </Modal>
     </div>

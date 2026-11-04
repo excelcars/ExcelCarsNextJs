@@ -138,16 +138,16 @@ export function FollowupFilters({
   )
 
   return (
-    <>
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="min-w-[260px] flex-1">
+    <div className="min-w-0 [&_input]:min-w-0 [&_input]:w-full [&_input]:min-h-11 [&_button]:min-h-11">
+      <div className="mb-3 grid min-w-0 items-center gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_160px_200px_auto] [&>div]:min-w-0">
+        <div className="min-w-0">
           <SearchBar value={search} onChange={onSearchChange} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
         </div>
-        <FormDropdown value={status === 'All' ? '' : status} options={statuses.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up Only' : value }))} placeholder="All Status" allowClear disabled={isRoutePending} className="min-w-[160px]" onChange={value => onStatusChange(value || 'All')} />
-        <FormDropdown value={restricted ? currentUserId : userId} options={users.map(item => ({ value: String(item.userId), label: userLabel(item) }))} placeholder={restricted ? 'My Inquiries Only' : 'All Users'} allowClear disabled={isRoutePending || restricted} className="min-w-[200px]" onChange={onUserIdChange} />
-        <div className="flex flex-wrap gap-1.5">
+        <FormDropdown value={status === 'All' ? '' : status} options={statuses.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up Only' : value }))} placeholder="All Status" allowClear disabled={isRoutePending} className="min-w-0" onChange={value => onStatusChange(value || 'All')} />
+        <FormDropdown value={restricted ? currentUserId : userId} options={users.map(item => ({ value: String(item.userId), label: userLabel(item) }))} placeholder={restricted ? 'My Inquiries Only' : 'All Users'} allowClear disabled={isRoutePending || restricted} className="min-w-0" onChange={onUserIdChange} />
+        <div className="grid grid-cols-4 gap-1.5">
           {['All', ...classifications].map(value => (
-            <button key={value} onClick={() => onClassificationChange(value)} disabled={isRoutePending}
+            <button key={value} type="button" aria-pressed={classification === value} onClick={() => onClassificationChange(value)} disabled={isRoutePending}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${classification === value ? 'text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
               style={classification === value ? { backgroundColor: '#C8102E' } : {}}>
               {value}
@@ -157,10 +157,10 @@ export function FollowupFilters({
       </div>
 
       <details className="mb-4" open={hasAdvancedFilters}>
-        <summary className="inline-flex cursor-pointer select-none rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <summary className="inline-flex min-h-11 cursor-pointer select-none items-center rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
           Advanced filters
         </summary>
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3 [&>div]:min-w-0">
           <FormDropdown value={contactOutcome} options={contactOutcomes.map(option => ({ value: option.value, label: option.title }))} placeholder="All reached outcomes" allowClear disabled={isRoutePending} onChange={onContactOutcomeChange} />
           <Input value={customerName} onChange={e => onCustomerNameChange(e.target.value)} placeholder="Customer name..." disabled={isRoutePending} />
           <Input value={subStatus} onChange={e => onSubStatusChange(e.target.value)} placeholder="Filter sub-status..." disabled={isRoutePending} />
@@ -168,7 +168,7 @@ export function FollowupFilters({
           <Input value={customerMobile} onChange={e => onCustomerMobileChange(e.target.value)} placeholder="Customer mobile..." disabled={isRoutePending} />
           <VehicleFilterSelects makeId={makeId} modelId={modelId} variantId={variantId} makes={makes} models={models} variants={variants} disabled={isRoutePending} onMakeChange={onMakeChange} onModelChange={onModelChange} onVariantChange={onVariantChange} />
         </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2 [&>div]:min-w-0">
           <DateFilterInput label="Inquiry Date From" value={inquiryDateFrom} onChange={onInquiryDateFromChange} disabled={isRoutePending} />
           <DateFilterInput label="Inquiry Date To" value={inquiryDateTo} onChange={onInquiryDateToChange} disabled={isRoutePending} />
           <DateFilterInput label="Follow-up Date From" value={followUpDateFrom} onChange={onFollowUpDateFromChange} disabled={isRoutePending} />
@@ -179,6 +179,6 @@ export function FollowupFilters({
           <Input inputMode="numeric" label="Budget To" value={formatIndianNumberInput(budgetTo)} onChange={event => onBudgetToChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
         </div>
       </details>
-    </>
+    </div>
   )
 }

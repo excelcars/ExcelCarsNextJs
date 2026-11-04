@@ -85,8 +85,8 @@ export function InventoryViewModal({ open, loading, error, row, onClose }: Inven
       ) : error ? (
         <div className="space-y-4"><div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div><div className="flex justify-end"><Btn variant="outline" onClick={onClose}>Close</Btn></div></div>
       ) : row ? (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-          <div className="flex flex-col gap-5 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] rounded-xl border border-gray-200 bg-white">
+          <div className="flex flex-col gap-5 px-3 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">{row.inventoryNumber ?? `Inventory/${row.inventoryId}`}</span>
@@ -112,7 +112,7 @@ export function InventoryViewModal({ open, loading, error, row, onClose }: Inven
             </div>)}
           </div>
 
-          <div className="grid gap-5 border-t border-gray-100 px-6 py-5 lg:grid-cols-2">
+          <div className="grid min-w-0 gap-5 border-t border-gray-100 px-3 py-5 sm:px-6 lg:grid-cols-2 [&>section]:min-w-0 [&>section]:px-3 sm:[&>section]:px-5">
             <section className="rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm"><div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50"><CarFront aria-hidden="true" className="h-4 w-4" /></span>Vehicle specification</div><DetailList rows={[
               ['Variant', clean(row.carVariantMaster?.variant ?? row.variantLegacy)], ['Year / Month', [row.year, row.month].filter(Boolean).join(' / ')], ['Colour', row.colour], ['Fuel type', row.fuelType], ['Registration', row.isCarRegistered === null ? '—' : row.isCarRegistered ? 'Registered' : 'Not registered'], ['Tax', row.tax], ['Insurance', row.insuranceType], ['Legacy vehicle', [row.makeLegacy, row.modelLegacy, row.variantLegacy].filter(Boolean).join(' ')],
             ]} /></section>

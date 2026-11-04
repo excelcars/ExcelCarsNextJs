@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, CalendarDays, Eye, Mail, Phone } from 'lucide-react'
-import { ActionAlert, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Eye, Mail, Phone } from 'lucide-react'
+import { ActionAlert, Btn, Input, Select, Modal, Table, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createCustomer, updateCustomer, deleteCustomer, type CustomerFormInput } from './adminActions'
 import { CUSTOMER_TYPES } from './adminQueries'
+import { CustomerDateInput } from './CustomerDateInput'
+import { CustomerMobileCard } from './CustomerMobileCard'
 import { CUSTOMER_FIELD_LIMITS, LEGACY_CUSTOMER_TYPES, validateCustomerInput } from './validation'
 
 interface CustomerRow {
@@ -41,7 +43,7 @@ function ViewField({ label, value }: { label: string; value: string | null | und
   return (
     <div>
       <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div className="mt-1 break-words text-sm text-gray-800">{value?.trim() || '—'}</div>
+      <div className="mt-1 [overflow-wrap:anywhere] text-sm text-gray-800">{value?.trim() || '—'}</div>
     </div>
   )
 }
@@ -52,98 +54,6 @@ function parseDisplayDate(value: string) {
   const [, day, month, year] = match
   const date = new Date(Number(year), Number(month) - 1, Number(day))
   return date.getFullYear() === Number(year) && date.getMonth() === Number(month) - 1 && date.getDate() === Number(day) ? date : null
-}
-
-function formatDisplayDate(date: Date) {
-  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
-}
-
-function CustomerDateInput({
-  label, value, onChange, error, minDate, maxDate,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  error?: string
-  minDate?: Date
-  maxDate?: Date
-}) {
-  const selectedDate = parseDisplayDate(value)
-  const [open, setOpen] = useState(false)
-  const [month, setMonth] = useState(() => new Date(selectedDate ?? new Date()))
-  const year = month.getFullYear()
-  const monthIndex = month.getMonth()
-  const firstDay = new Date(year, monthIndex, 1).getDay()
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const isOutsideRange = (date: Date) => {
-    const candidate = new Date(date)
-    candidate.setHours(0, 0, 0, 0)
-    return (minDate && candidate < minDate) || (maxDate && candidate > maxDate)
-  }
-  const openCalendar = () => {
-    setMonth(new Date(selectedDate ?? maxDate ?? today))
-    setOpen(current => !current)
-  }
-
-  return (
-    <div className="relative flex flex-col gap-1">
-      <label className="text-xs font-medium text-gray-600">{label}</label>
-      <div className="relative">
-        <input
-          value={value}
-          placeholder="DD/MM/YYYY"
-          inputMode="numeric"
-          maxLength={10}
-          onChange={event => onChange(event.target.value)}
-          className={`w-full border ${error ? 'border-red-500 focus:ring-red-500' : 'border-gray-200'} rounded-md px-3 py-2 pr-10 text-sm text-gray-800 bg-white focus:outline-none focus:ring-1 placeholder:text-gray-400`}
-          style={{ '--tw-ring-color': error ? '#C8102E' : '#1B2A6B' } as Record<string, string>}
-        />
-        <button type="button" aria-label={`Choose ${label.toLowerCase()}`} onClick={openCalendar} className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-[#1B2A6B]">
-          <CalendarDays className="h-4 w-4" />
-        </button>
-      </div>
-      <FieldError message={error} />
-
-      {open && (
-        <div className="absolute z-30 top-[calc(100%+4px)] w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
-          <div className="mb-3 flex items-center justify-between">
-            <button type="button" aria-label="Previous month" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))} className="rounded p-1 text-gray-500 hover:bg-gray-100"><ChevronLeft className="h-4 w-4" /></button>
-            <div className="text-sm font-semibold text-gray-800">{month.toLocaleString('en-GB', { month: 'long', year: 'numeric' })}</div>
-            <button type="button" aria-label="Next month" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))} className="rounded p-1 text-gray-500 hover:bg-gray-100"><ChevronRight className="h-4 w-4" /></button>
-          </div>
-          <div className="grid grid-cols-7 text-center text-xs font-medium text-gray-400">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => <div key={day} className="py-1">{day}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-y-1 text-center">
-            {Array.from({ length: firstDay }, (_, index) => <div key={`blank-${index}`} />)}
-            {Array.from({ length: daysInMonth }, (_, index) => {
-              const day = index + 1
-              const date = new Date(year, monthIndex, day)
-              const disabled = isOutsideRange(date)
-              const selected = selectedDate?.getTime() === date.getTime()
-              return (
-                <button
-                  key={day}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => { onChange(formatDisplayDate(date)); setOpen(false) }}
-                  className={`mx-auto h-8 w-8 rounded-full text-xs transition ${selected ? 'bg-[#1B2A6B] text-white' : 'hover:bg-blue-50 text-gray-700'} ${disabled ? 'cursor-not-allowed text-gray-300 hover:bg-transparent' : ''}`}
-                >
-                  {day}
-                </button>
-              )
-            })}
-          </div>
-          <div className="mt-3 flex justify-between border-t border-gray-100 pt-2 text-xs">
-            <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-gray-500 hover:text-gray-700">Clear</button>
-            <button type="button" onClick={() => { const date = maxDate ?? today; onChange(formatDisplayDate(date)); setOpen(false) }} className="text-[#1B2A6B] hover:underline">Use latest allowed</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
 }
 
 function emptyForm(): CustomerFormInput {
@@ -288,15 +198,14 @@ export function CustomersClient({
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Customers"
-        subtitle={`${total.toLocaleString('en-IN')} customers`}
-        action={canWrite ? <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Customer</Btn> : undefined}
-      />
+    <div className="min-w-0">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><h1 className="text-xl font-bold text-gray-900">Customers</h1><p className="mt-0.5 text-sm text-gray-500">{total.toLocaleString('en-IN')} customers</p></div>
+        {canWrite && <Btn className="min-h-11 justify-center" size="sm" onClick={openAdd}><Plus className="h-4 w-4" />Add Customer</Btn>}
+      </header>
 
-      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
-        <div className="grid items-end gap-3 md:grid-cols-[minmax(18rem,1fr)_auto]">
+      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 [&_input]:text-base sm:[&_input]:text-sm">
+        <div className="grid min-w-0 items-end gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gray-600">Search customers</label>
             <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Name, mobile, email, company..." />
@@ -305,8 +214,8 @@ export function CustomersClient({
             <span className="text-xs font-medium text-gray-600">Customer type</span>
             <div className="flex flex-wrap gap-1.5">
               {['All', ...CUSTOMER_TYPES].map(t => (
-                <button key={t} onClick={() => pushQuery({ type: t })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${type === t || (type === 'All' && t === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                <button key={t} type="button" aria-pressed={type === t} onClick={() => pushQuery({ type: t })}
+                  className={`min-h-11 px-3 py-2 rounded-lg text-sm font-medium transition ${type === t || (type === 'All' && t === 'All') ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                   style={type === t || (type === 'All' && t === 'All') ? { backgroundColor: '#1B2A6B' } : {}}>
                   {t}
                 </button>
@@ -317,6 +226,12 @@ export function CustomersClient({
         <p className="mt-3 text-xs text-gray-500">Search by name, mobile number, email address, or company.</p>
       </div>
 
+      <div className="space-y-3 lg:hidden">
+        {initialData.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No records found</div> : initialData.map(row => (
+          <CustomerMobileCard key={row.custId} row={row} canWrite={canWrite} onView={setViewRow} onEdit={openEdit} onDelete={id => { setDeleteError(''); setDeleteId(id) }} />
+        ))}
+      </div>
+      <div className="hidden lg:block">
       <Table headers={['Customer', 'Contact', 'Important dates', 'Actions']} minWidthClass="min-w-[760px]" empty={initialData.length === 0}>
         {initialData.map(r => (
           <tr key={r.custId} className="hover:bg-gray-50 transition">
@@ -348,11 +263,12 @@ export function CustomersClient({
           </tr>
         ))}
       </Table>
+      </div>
 
       {pageCount > 1 && (
-        <div className="flex items-center justify-between mt-4">
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-gray-500">Page {page} of {pageCount}</div>
-          <div className="flex gap-1.5">
+          <div className="grid grid-cols-2 gap-2 sm:flex [&>button]:min-h-11 [&>button]:justify-center">
             <Btn variant="outline" size="sm" disabled={page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}>
               <ChevronLeft className="w-3.5 h-3.5" />Prev
             </Btn>
@@ -364,8 +280,8 @@ export function CustomersClient({
       )}
 
       <Modal title={editId ? 'Edit Customer' : 'Add Customer'} open={!!modal} onClose={closeForm}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input]:text-base sm:[&_input]:text-sm [&_select]:text-base sm:[&_select]:text-sm">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div><Select label="Type *" value={form.type} onChange={e => f('type', e.target.value)} error={!!fieldErrors.type} required>{[...CUSTOMER_TYPES, ...(editId !== null && LEGACY_CUSTOMER_TYPES.includes(form.type as (typeof LEGACY_CUSTOMER_TYPES)[number]) ? LEGACY_CUSTOMER_TYPES : [])].map(t => <option key={t}>{t}</option>)}</Select><FieldError message={fieldErrors.type} /></div>
             <div><Input label="Name *" value={form.custName} maxLength={CUSTOMER_FIELD_LIMITS.name} onChange={e => f('custName', e.target.value)} error={!!fieldErrors.custName} required /><FieldError message={fieldErrors.custName} /></div>
             <div><Input label="Mobile" value={form.custMobile} inputMode="numeric" maxLength={10} onChange={e => mobileField('custMobile', e.target.value)} error={!!fieldErrors.custMobile} /><FieldError message={fieldErrors.custMobile} /></div>
@@ -380,7 +296,7 @@ export function CustomersClient({
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end [&>button]:min-h-11 [&>button]:justify-center">
             <Btn variant="outline" onClick={closeForm} disabled={isPending}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending || isEditUnchanged}>{isPending ? 'Saving...' : 'Save Customer'}</Btn>
           </div>
@@ -389,7 +305,7 @@ export function CustomersClient({
 
       <Modal title={`View Customer${viewRow ? ` — ${viewRow.custName}` : ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-3xl">
         {viewRow && (
-          <div className="space-y-5">
+          <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]">
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer Summary</div>
               <div className="mt-3 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
@@ -415,7 +331,7 @@ export function CustomersClient({
                 <ViewField label="Comments" value={viewRow.comments} />
               </div>
             </div>
-            <div className="flex justify-end"><Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn></div>
+            <div className="flex justify-end"><Btn className="min-h-11 w-full justify-center sm:w-auto" variant="outline" onClick={() => setViewRow(null)}>Close</Btn></div>
           </div>
         )}
       </Modal>

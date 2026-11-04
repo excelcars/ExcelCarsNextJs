@@ -1,5 +1,5 @@
 import { getMakes, getModelsByMake, getVariantsByModel } from '@/features/inventory/queries'
-import { getInquirySources } from '@/features/inquiry/queries'
+import { getInquirySources, getInquiryLocations, getInquirySubStatusSuggestions } from '@/features/inquiry/queries'
 import { getUsersForFollowupFilter, listFollowupQueue } from '@/features/followup/queries'
 import { FollowupClient } from '@/features/followup/FollowupClient'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
@@ -65,7 +65,7 @@ export default async function FollowupPage({
   const parsedMakeId = Number(makeId)
   const parsedModelId = Number(modelId)
 
-  const [rows, makes, models, variants, users, sourceOptions] = await Promise.all([
+  const [rows, makes, models, variants, users, sourceOptions, locationOptions, subStatusSuggestions] = await Promise.all([
     listFollowupQueue({
       search,
       classification,
@@ -98,6 +98,8 @@ export default async function FollowupPage({
     Number.isFinite(parsedModelId) && parsedModelId > 0 ? getVariantsByModel(parsedModelId) : Promise.resolve([]),
     getUsersForFollowupFilter(),
     getInquirySources(),
+    getInquiryLocations(),
+    getInquirySubStatusSuggestions(),
   ])
 
   const data = rows.rows.map((r) => ({
@@ -116,6 +118,8 @@ export default async function FollowupPage({
       subStatus={subStatus}
       website={website}
       sourceOptions={sourceOptions}
+      locationOptions={locationOptions}
+      subStatusSuggestions={subStatusSuggestions}
       customerMobile={customerMobile}
       users={users}
       userId={userId}

@@ -5,14 +5,14 @@ import { Mail, MapPin, Phone } from 'lucide-react'
 import { cleanListValue, formatListDate, formatListMoney } from '@/lib/listFormatters'
 import { Badge } from '@/components/ui'
 
-type Row = {
+export type InquiryListRow = {
   inquiryId: number; inquiryNo?: string | null; dateOfInquiry: Date | string | null; website: string | null; sourceDetail: string | null; location: string | null; customerNameLegacy: string | null; mobileno: string | null; email: string | null; budgetOfCustomer: string | number | null; classification: string | null; visitedDateOfCustomer: Date | string | null; status: string | null; subStatus: string | null; followUpDate: Date | string | null; remark: string | null
   customer: { custName: string; custMobile: string | null; custEmail: string | null } | null
   assignedToUser?: { userName: string | null; displayName: string | null } | null
   inquiryCarDetails: Array<{ makeLegacy?: string | null; modelLegacy?: string | null; variantLegacy?: string | null; year: number | null; carVariantMaster: { variant: string | null; carMakeMaster: { make: string | null } | null; carModelMaster: { model: string | null } | null } | null }>
 }
 
-export function InquiryTableDataCells({ row, number, assignedToLabel, actions }: { row: Row; number: number; assignedToLabel: string; actions: ReactNode }) {
+export function InquiryTableDataCells({ row, number, assignedToLabel, actions }: { row: InquiryListRow; number: number; assignedToLabel: string; actions: ReactNode }) {
   const cars = row.inquiryCarDetails.length ? row.inquiryCarDetails : [null]
   const detailClass = 'space-y-0.5 text-sm leading-6 text-gray-600'
   return <>

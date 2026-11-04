@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 import { summarizeVehicleEmailInteractions } from '@/features/vehicleEmailLinks/service'
 
-export const INVENTORY_STATUSES = ['In Stock', 'Booked', 'Loan Process', 'Not Available', 'Sold', 'RTO Process'] as const
+export { INVENTORY_STATUSES } from './inventoryConstants'
 
 export interface InventoryListParams {
   inventoryIds?: number[]

@@ -32,6 +32,15 @@ test('inquiry validation requires a car, source, and a valid mobile number', () 
   assert.deepEqual(result.fieldErrors, { mobileno: true, website: true, inquiryCars: true })
 })
 
+test('inquiry validation allows an omitted vehicle year but rejects an invalid supplied year', () => {
+  const withoutYear = validateInquiryFormInput({ ...validInquiry, inquiryCars: [{ carYear: null }] })
+  assert.equal(withoutYear.error, null)
+  assert.deepEqual(withoutYear.fieldErrors, {})
+
+  const invalidYear = validateInquiryFormInput({ ...validInquiry, inquiryCars: [{ carYear: 1800 }] })
+  assert.equal(invalidYear.fieldErrors['carYear-0'], true)
+})
+
 test('inquiry validation requires a scheduled date for follow-up and visited date for Visited', () => {
   const open = validateInquiryFormInput({ ...validInquiry, followUpDate: '' })
   assert.equal(open.error, 'Follow-up date is required when status is Open or Follow Up.')

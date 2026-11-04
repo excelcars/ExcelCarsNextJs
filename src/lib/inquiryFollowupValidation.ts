@@ -113,7 +113,7 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
     fieldErrors.inquiryCars = true
   }
 
-  const invalidCarIndex = input.inquiryCars.findIndex(car => car.carYear === null || !isValidYear(car.carYear))
+  const invalidCarIndex = input.inquiryCars.findIndex(car => car.carYear !== null && !isValidYear(car.carYear))
   if (invalidCarIndex >= 0) {
     fieldErrors[`carYear-${invalidCarIndex}`] = true
   }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShieldCheck, RefreshCcw, Save, Plus, Pencil, Trash2, History } from 'lucide-react'
-import { ActionAlert, Btn, ConfirmDialog, Input, LoadingOverlay, Modal, PageHeader, SearchBar } from '@/components/ui'
+import { ActionAlert, Btn, ConfirmDialog, Input, LoadingOverlay, Modal, SearchBar, Select } from '@/components/ui'
 import { APP_ACCESS_CATALOG, ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION } from '@/lib/access/accessCatalog'
 import { createRole, deleteRole, saveRoleAccess, updateRole } from './actions'
 import type { RoleAccessActor, RoleAccessFunctionRow, RoleAccessMappingRow, RoleAccessRoleRow } from './queries'
@@ -282,12 +282,10 @@ export function RoleAccessClient({
   const currentRoleHasCriticalAccess = (functionName: string) => savedFunctionNames.includes(functionName)
 
   return (
-    <div>
-      <PageHeader
-        title="Role Access"
-        subtitle={`Manage page and module access by role${actor.grantedFunctionName === USER_ACCESS_FUNCTION ? ' · bootstrap access granted via User Access permission' : ''}`}
-        action={
-          <div className="flex flex-wrap gap-2">
+    <div className="min-w-0 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input:not([type=checkbox])]:text-base sm:[&_input:not([type=checkbox])]:text-sm [&_select]:text-base sm:[&_select]:text-sm">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0"><h1 className="text-xl font-bold text-gray-900">Role Access</h1><p className="mt-0.5 text-sm text-gray-500">Manage page and module access by role{actor.grantedFunctionName === USER_ACCESS_FUNCTION ? ' · bootstrap access granted via User Access permission' : ''}</p></div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:flex-wrap [&>button]:min-h-11 [&>button]:justify-center">
             <Btn variant="outline" onClick={openAddRole} disabled={isPending}>
               <Plus className="h-3.5 w-3.5" />Add Role
             </Btn>
@@ -298,17 +296,23 @@ export function RoleAccessClient({
             >
               <History className="h-3.5 w-3.5" />{isRoutePending ? 'Opening...' : 'History'}
             </Btn>
-            <Btn onClick={save} disabled={isPending || !selectedRoleId || !isDirty}>
+            <Btn className="hidden sm:inline-flex" onClick={save} disabled={isPending || !selectedRoleId || !isDirty}>
               <Save className="h-3.5 w-3.5" />{isPending ? 'Saving...' : 'Save Access'}
             </Btn>
           </div>
-        }
-      />
+      </header>
 
       <div className="relative grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <LoadingOverlay show={isPending || isRoutePending} label={isRoutePending ? 'Opening history...' : 'Saving changes...'} />
 
-        <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 xl:hidden">
+          <Select label="Select role" aria-label="Select role" value={selectedRoleId ?? ''} disabled={isPending || roles.length === 0} onChange={event => requestRoleChange(Number(event.target.value))}>
+            {!selectedRole && <option value="">Select a role</option>}
+            {roles.map(role => <option key={role.roleId} value={role.roleId}>{role.roleName ?? `Role #${role.roleId}`}</option>)}
+          </Select>
+          <p className="mt-2 text-xs text-gray-500">{roles.length} roles · {savedFunctionNames.length} saved permissions for the selected role</p>
+        </div>
+        <div className="hidden min-w-0 rounded-xl border border-gray-200 bg-white xl:block">
           <div className="border-b border-gray-100 px-4 py-4">
             <div className="text-sm font-semibold text-gray-900">Roles</div>
             <div className="mt-3">
@@ -326,6 +330,8 @@ export function RoleAccessClient({
                 <button
                   key={role.roleId}
                   type="button"
+                  aria-pressed={active}
+                  disabled={isPending}
                   onClick={() => requestRoleChange(role.roleId)}
                   className={`mb-1 w-full rounded-lg border px-3 py-3 text-left transition ${active ? 'border-[#1B2A6B] bg-blue-50' : 'border-transparent hover:border-gray-200 hover:bg-gray-50'}`}
                 >
@@ -344,7 +350,7 @@ export function RoleAccessClient({
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-100 px-5 py-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -356,7 +362,7 @@ export function RoleAccessClient({
                   Choose which app modules and pages this role can access.
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap [&>button]:min-h-11 [&>button]:justify-center">
                 <Btn variant="outline" onClick={() => selectedRole && openEditRole(selectedRole)} disabled={isPending || !selectedRole}>
                   <Pencil className="h-3.5 w-3.5" />Edit Role
                 </Btn>
@@ -375,7 +381,7 @@ export function RoleAccessClient({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-3">
-              <SearchBar value={permissionSearch} onChange={setPermissionSearch} placeholder="Search permission, function, route..." />
+              <div className="w-full min-w-0 sm:w-auto sm:flex-1"><SearchBar value={permissionSearch} onChange={setPermissionSearch} placeholder="Search permission, function, route..." /></div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
                 {draftFunctionNames.length} selected
               </div>
@@ -385,7 +391,7 @@ export function RoleAccessClient({
             </div>
           </div>
 
-          <div className="space-y-5 px-5 py-5">
+          <div className="space-y-5 px-3 py-4 sm:px-5 sm:py-5">
             {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
             {success && <div role="status" aria-live="polite" className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
 
@@ -404,12 +410,14 @@ export function RoleAccessClient({
                         <div className="text-sm font-semibold text-gray-900">{groupName}</div>
                         <div className="mt-0.5 text-xs text-gray-500">{checkedCount} of {items.length} permissions selected</div>
                       </div>
-                      <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
+                      <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-gray-600">
                         <input
                           type="checkbox"
                           checked={allChecked}
+                          disabled={isPending}
+                          aria-label={`Select all in ${groupName}`}
                           onChange={e => toggleGroup(groupName, e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
+                          className="h-5 w-5 shrink-0 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
                         />
                         Select all in section
                       </label>
@@ -424,8 +432,9 @@ export function RoleAccessClient({
                             <input
                               type="checkbox"
                               checked={checked}
+                              disabled={isPending}
                               onChange={() => toggleFunction(item.functionName)}
-                              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
+                              className="mt-0.5 h-5 w-5 shrink-0 rounded border-gray-300 text-[#1B2A6B] focus:ring-[#1B2A6B]"
                             />
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -455,6 +464,11 @@ export function RoleAccessClient({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="sticky bottom-0 z-20 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg sm:hidden">
+        <div className="min-w-0 flex-1 text-xs text-gray-600"><p className="font-semibold text-gray-900">{selectedRole?.roleName ?? 'Select a role'}</p><p role="status">{isDirty ? 'Unsaved changes' : 'Saved state'} · {draftFunctionNames.length} selected</p></div>
+        <Btn className="min-h-11 justify-center" onClick={save} disabled={isPending || !selectedRoleId || !isDirty}><Save className="h-4 w-4 shrink-0" />{isPending ? 'Saving...' : 'Save Access'}</Btn>
       </div>
 
       <ConfirmDialog
@@ -496,7 +510,7 @@ export function RoleAccessClient({
             errorMessage={roleFormError}
           />
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end [&>button]:min-h-11 [&>button]:justify-center">
             <Btn variant="outline" onClick={() => { setRoleModal(null); setRoleFormError('') }} disabled={isPending}>Cancel</Btn>
             <Btn onClick={saveRoleName} disabled={isPending}>{isPending ? 'Saving...' : roleModal === 'edit' ? 'Save Role' : 'Create Role'}</Btn>
           </div>

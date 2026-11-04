@@ -27,6 +27,41 @@ function nodes(element) {
 const recharts = Object.fromEntries(['BarChart', 'Bar', 'Cell', 'XAxis', 'YAxis', 'CartesianGrid', 'Tooltip', 'ResponsiveContainer'].map(name => [name, name]))
 const imports = { 'react/jsx-runtime': jsxRuntime, recharts, '@/components/ui': { N: '#1B2A6B' } }
 
+function loadWorkTable() {
+  return load('src/features/dashboard/DashboardCommandCenterClient.tsx', {
+    'react/jsx-runtime': jsxRuntime, react, 'lucide-react': {},
+    '@/components/ui': { Badge: 'Badge', Modal: 'Modal' },
+    './LeadSourceChart': { LeadSourceChart: 'LeadSourceChart' },
+    './LeadLocationChart': { LeadLocationChart: 'LeadLocationChart' },
+  }).WorkTable
+}
+
+test('mobile record cards preserve every field and action from desktop rows', () => {
+  const WorkTable = loadWorkTable()
+  let clicks = 0
+  const action = react.createElement('button', { onClick: () => clicks++ }, 'Details')
+  const row = react.createElement('tr', { key: 'customer-1' },
+    react.createElement('td', null, 'Sample customer'),
+    react.createElement('td', null, '75000'),
+    react.createElement('td', null, react.createElement('a', { href: '/loan?search=MH00AB1234' }, 'Open'), action),
+  )
+  const tree = WorkTable({ headers: ['Customer', 'Balance', 'Action'], children: [row] })
+  const card = nodes(tree).find(node => node.type === 'dl')
+  assert.deepEqual(nodes(card).filter(node => node.type === 'dt').map(node => node.props.children), ['Customer', 'Balance', 'Action'])
+  assert.ok(nodes(card).some(node => node.type === 'dd' && node.props.children === 'Sample customer'))
+  assert.ok(nodes(card).some(node => node.type === 'dd' && node.props.children === '75000'))
+  assert.equal(nodes(card).find(node => node.type === 'a').props.href, '/loan?search=MH00AB1234')
+  nodes(card).find(node => node.type === 'button').props.onClick()
+  assert.equal(clicks, 1)
+  assert.ok(nodes(tree).some(node => node.type === 'tbody' && node.props.children[0] === row))
+})
+
+test('empty mobile workspaces show the same specific message as desktop', () => {
+  const tree = loadWorkTable()({ headers: ['Name'], children: [], empty: 'No birthdays today' })
+  assert.equal(nodes(tree).filter(node => ['p', 'td'].includes(node.type) && node.props.children === 'No birthdays today').length, 2)
+  assert.equal(nodes(tree).filter(node => node.type === 'dl').length, 0)
+})
+
 test('source chart has explicit row-aware height, independent of its parent', () => {
   const { LeadSourceChart } = load('src/features/dashboard/LeadSourceChart.tsx', imports)
   for (const count of [1, 6, 12]) {

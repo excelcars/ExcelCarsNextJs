@@ -4,15 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Car,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Eye,
   Loader2,
-  Pencil,
-  Plus,
-  Send,
-  Trash2,
   X,
 } from "lucide-react";
 import {
@@ -22,9 +14,6 @@ import {
   Input,
   LoadingOverlay,
   Modal,
-  PageHeader,
-  SearchBar,
-  Table,
   Textarea,
 } from "@/components/ui";
 import { CustomerPicker } from "@/components/CustomerPicker";
@@ -37,32 +26,10 @@ import {
   updateFeedback,
   type FeedbackFormInput,
 } from "./actions";
-import { QUESTIONS } from "./queries";
+import type { ListRow, Detail } from "./types";
+import { FeedbackHeader, FeedbackFilters, FeedbackList, FeedbackPagination, FeedbackDetails } from "./FeedbackUI";
+import { FeedbackContactFields, FeedbackVehicleFields, FeedbackQuestions } from "./FeedbackFormFields";
 
-type ListRow = {
-  feedbackId: number;
-  customerName: string | null;
-  customerMob: string | null;
-  customerEmail: string | null;
-  carMakeLegacy: string | null;
-  carModelLegacy: string | null;
-  carVariantLegacy: string | null;
-  carRegistrationNo: string | null;
-  answer_1: string | null;
-  answer_2: string | null;
-  answer_4: string | null;
-  submittedAt: Date | string | null;
-};
-type Detail = ListRow & {
-  customerId: number | null;
-  customerDob: Date | string | null;
-  customerAnniversaryDt: Date | string | null;
-  carYear: number | null;
-  fkVariantId: number | null;
-  answer_3: string | null;
-  answer_5: string | null;
-  comments: string | null;
-};
 type Customer = {
   custId: number;
   custName: string;
@@ -96,17 +63,6 @@ const displayDate = (value: Date | string | null) =>
         month: "short",
         year: "numeric",
         timeZone: "UTC",
-      }).format(new Date(value))
-    : "—";
-const displayDateTime = (value: Date | string | null) =>
-  value
-    ? new Intl.DateTimeFormat("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Kolkata",
       }).format(new Date(value))
     : "—";
 const vehicleLabel = (vehicle: Vehicle) =>
@@ -533,206 +489,24 @@ export function FeedbackClient({
     });
   };
   return (
-    <div className="relative">
+    <div className="relative min-w-0 [&_button]:min-h-11 [&_button]:min-w-11">
       <LoadingOverlay show={isNavigating} label="Loading feedback..." subtle />
-      <PageHeader
-        title="Customer Feedback"
-        subtitle={`${total} response${total === 1 ? "" : "s"}`}
-        action={
-          <div className="flex gap-2">
-            <Btn
-              size="sm"
-              variant="outline"
-              onClick={exportRows}
-              disabled={isExporting || isNavigating}
-            >
-              <Download className="w-3.5 h-3.5" />
-              {isExporting ? "Exporting..." : "Export"}
-            </Btn>
-            <Btn
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setSendError("");
-                setSelectedCustomer(null);
-                resetVehicle();
-                setSendOpen(true);
-              }}
-            >
-              <Send className="w-3.5 h-3.5" />
-              Send Feedback
-            </Btn>
-            <Btn size="sm" onClick={openAdd} disabled={isNavigating}>
-              <Plus className="w-3.5 h-3.5" />
-              Add Feedback
-            </Btn>
-          </div>
-        }
-      />
-      <form
-        className="mb-3 flex flex-wrap gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          navigate({ search: searchInput.trim(), page: 1 });
-        }}
-      >
-        <SearchBar
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder="Name, mobile, email, registration..."
-          disabled={isNavigating}
-        />
-        <Btn type="submit" variant="outline" disabled={isNavigating}>
-          {isNavigating ? "Searching..." : "Search"}
-        </Btn>
-        {search && (
-          <Btn
-            variant="ghost"
-            onClick={() => navigate({ search: "", page: 1 })}
-            disabled={isNavigating}
-          >
-            Clear
-          </Btn>
-        )}
-        <select
-          disabled={isNavigating}
-          aria-label="Sort feedback"
-          className="rounded-lg border border-gray-300 px-3 text-sm"
-          value={`${sort}:${dir}`}
-          onChange={(event) => {
-            const [nextSort, nextDir] = event.target.value.split(":");
-            navigate({ sort: nextSort, dir: nextDir, page: 1 });
-          }}
-        >
-          <option value="feedbackId:desc">Newest first</option>
-          <option value="feedbackId:asc">Oldest first</option>
-          <option value="customerName:asc">Customer A–Z</option>
-          <option value="customerName:desc">Customer Z–A</option>
-          <option value="carRegistrationNo:asc">Registration A–Z</option>
-          <option value="carRegistrationNo:desc">Registration Z–A</option>
-        </select>
-        <select
-          disabled={isNavigating}
-          aria-label="Page size"
-          className="rounded-lg border border-gray-300 px-3 text-sm"
-          value={pageSize}
-          onChange={(event) =>
-            navigate({ pageSize: event.target.value, page: 1 })
-          }
-        >
-          {[10, 25, 50, 100].map((size) => (
-            <option key={size} value={size}>
-              {size} / page
-            </option>
-          ))}
-        </select>
-      </form>
+      <FeedbackHeader total={total} exporting={isExporting} pending={isNavigating} onExport={exportRows} onAdd={openAdd} onSend={() => { setSendError(""); setSelectedCustomer(null); resetVehicle(); setSendOpen(true); }} />
+      <FeedbackFilters search={searchInput} hasSearch={!!search} pageSize={pageSize} sort={sort} dir={dir} pending={isNavigating} onSearch={setSearchInput} onSubmit={() => navigate({ search: searchInput.trim(), page: 1 })} onClear={() => navigate({ search: "", page: 1 })} onSort={(nextSort, nextDir) => navigate({ sort: nextSort, dir: nextDir, page: 1 })} onPageSize={value => navigate({ pageSize: value, page: 1 })} />
       {actionError && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {actionError}
         </div>
       )}
-      <Table
-        headers={[
-          "Customer",
-          "Contact",
-          "Vehicle",
-          "Satisfaction",
-          "Experience",
-          "Recommend",
-          "Actions",
-        ]}
-        empty={data.length === 0}
-        compact
-        minWidthClass="min-w-full"
-        columnWidths={["15%", "19%", "20%", "12%", "12%", "13%", "9%"]}
-      >
-        {data.map((row) => (
-          <tr key={row.feedbackId} className="hover:bg-gray-50">
-            <td className="font-medium">{row.customerName ?? "—"}</td>
-            <td>
-              {row.customerMob ?? "—"}
-              <br />
-              <span className="text-gray-500">{row.customerEmail ?? ""}</span>
-            </td>
-            <td>
-              {[
-                clean(row.carMakeLegacy),
-                clean(row.carModelLegacy),
-                clean(row.carVariantLegacy),
-              ]
-                .filter(Boolean)
-                .join(" ") || "—"}
-              <br />
-              <span className="text-gray-500">
-                {row.carRegistrationNo ?? ""}
-              </span>
-            </td>
-            <td>{row.answer_1 ?? "—"}</td>
-            <td>{row.answer_2 ?? "—"}</td>
-            <td>{row.answer_4 ?? "—"}</td>
-            <td>
-              <div className="flex gap-0.5">
-                <button
-                  aria-label="View feedback"
-                  onClick={() => loadDetail(row.feedbackId, "view")}
-                  className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-                {!row.submittedAt && (
-                  <button
-                    aria-label="Edit feedback"
-                    onClick={() => loadDetail(row.feedbackId, "edit")}
-                    className="p-1 text-gray-500 hover:text-[#1B2A6B]"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                )}
-                <button
-                  aria-label="Delete feedback"
-                  onClick={() => setDeleteId(row.feedbackId)}
-                  className="p-1 text-gray-500 hover:text-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
-        <span>
-          {total} total · Page {page} of {pageCount}
-        </span>
-        <div className="flex gap-2">
-          <Btn
-            size="sm"
-            variant="outline"
-            disabled={page <= 1}
-            onClick={() => navigate({ page: page - 1 })}
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            Previous
-          </Btn>
-          <Btn
-            size="sm"
-            variant="outline"
-            disabled={page >= pageCount}
-            onClick={() => navigate({ page: page + 1 })}
-          >
-            Next
-            <ChevronRight className="w-3.5 h-3.5" />
-          </Btn>
-        </div>
-      </div>
+      <FeedbackList rows={data} onView={id => loadDetail(id, "view")} onEdit={id => loadDetail(id, "edit")} onDelete={setDeleteId} />
+      <FeedbackPagination total={total} page={page} pageCount={pageCount} pending={isNavigating} onPage={value => navigate({ page: value })} />
       <Modal
         title={modal === "edit" ? "Edit Feedback" : "Add Feedback"}
         open={!!modal}
         onClose={closeForm}
         width="max-w-3xl"
       >
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input:not([type=radio])]:min-h-11 [&_input:not([type=radio])]:min-w-0 [&_input:not([type=radio])]:max-w-full [&_input:not([type=radio])]:text-base sm:[&_input:not([type=radio])]:text-sm [&_textarea]:min-w-0 [&_textarea]:text-base sm:[&_textarea]:text-sm">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
               Customer (optional link)
@@ -743,67 +517,18 @@ export function FeedbackClient({
               allowCreate={false}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Customer Name *"
-              maxLength={150}
-              value={form.customerName}
-              onChange={(event) => setField("customerName", event.target.value)}
-              error={!!fieldErrors.customerName}
-              errorMessage={fieldErrors.customerName}
-            />
-            <Input
-              label="Customer Mobile *"
-              inputMode="numeric"
-              maxLength={10}
-              value={form.customerMob}
-              onChange={(event) =>
-                setField("customerMob", event.target.value.replace(/\D/g, ""))
-              }
-              error={!!fieldErrors.customerMob}
-              errorMessage={fieldErrors.customerMob}
-            />
-            <Input
-              label="Customer Email *"
-              type="email"
-              maxLength={254}
-              value={form.customerEmail}
-              onChange={(event) =>
-                setField("customerEmail", event.target.value)
-              }
-              error={!!fieldErrors.customerEmail}
-              errorMessage={fieldErrors.customerEmail}
-            />
-            <Input
-              label="Date of Birth"
-              type="date"
-              value={form.customerDob}
-              onChange={(event) => setField("customerDob", event.target.value)}
-              error={!!fieldErrors.customerDob}
-              errorMessage={fieldErrors.customerDob}
-            />
-            <Input
-              label="Anniversary Date"
-              type="date"
-              value={form.customerAnniversaryDt}
-              onChange={(event) =>
-                setField("customerAnniversaryDt", event.target.value)
-              }
-              error={!!fieldErrors.customerAnniversaryDt}
-              errorMessage={fieldErrors.customerAnniversaryDt}
-            />
-          </div>
+          <FeedbackContactFields form={form} fieldErrors={fieldErrors} setField={setField} />
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
               Vehicle (optional)
             </label>
             {selectedVehicle ? (
-              <div className="flex justify-between rounded-md border p-2 text-sm">
+              <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border p-2 text-sm">
                 <span>
                   <Car className="mr-2 inline w-4" />
                   {vehicleLabel(selectedVehicle)}
                 </span>
-                <button onClick={removeVehicle}>
+                <button type="button" aria-label="Unlink vehicle" className="flex shrink-0 items-center justify-center" onClick={removeVehicle}>
                   <X className="w-4" />
                 </button>
               </div>
@@ -824,7 +549,7 @@ export function FeedbackClient({
                       <button
                         key={vehicle.inventoryId}
                         onClick={() => selectVehicle(vehicle)}
-                        className="block w-full border-b px-3 py-2 text-left text-sm hover:bg-gray-50"
+                        className="block min-h-11 w-full whitespace-normal [overflow-wrap:anywhere] border-b px-3 py-2 text-left text-sm hover:bg-gray-50"
                       >
                         {vehicleLabel(vehicle)}
                       </button>
@@ -839,74 +564,8 @@ export function FeedbackClient({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Car Make"
-              value={form.carMakeLegacy}
-              onChange={(event) =>
-                setField("carMakeLegacy", event.target.value)
-              }
-            />
-            <Input
-              label="Car Model"
-              value={form.carModelLegacy}
-              onChange={(event) =>
-                setField("carModelLegacy", event.target.value)
-              }
-            />
-            <Input
-              label="Car Variant"
-              value={form.carVariantLegacy}
-              onChange={(event) =>
-                setField("carVariantLegacy", event.target.value)
-              }
-            />
-            <Input
-              label="Car Year"
-              type="number"
-              min="1886"
-              max={new Date().getFullYear() + 1}
-              value={form.carYear ?? ""}
-              onChange={(event) =>
-                setField(
-                  "carYear",
-                  event.target.value ? Number(event.target.value) : null,
-                )
-              }
-              error={!!fieldErrors.carYear}
-              errorMessage={fieldErrors.carYear}
-            />
-            <Input
-              label="Registration Number"
-              value={form.carRegistrationNo}
-              onChange={(event) =>
-                setField("carRegistrationNo", event.target.value)
-              }
-            />
-          </div>
-          {QUESTIONS.map((question, index) => {
-            const key = question.key as keyof FeedbackFormInput;
-            return (
-              <div key={question.key} className="rounded-lg border p-3">
-                <div className="mb-2 text-sm">
-                  {index + 1}. {question.text}
-                </div>
-                {question.options.map((option) => (
-                  <label key={option} className="mr-4 text-sm">
-                    <input
-                      type="radio"
-                      name={question.key}
-                      checked={form[key] === option}
-                      onChange={() =>
-                        setField(key, option as FeedbackFormInput[typeof key])
-                      }
-                    />{" "}
-                    {option}
-                  </label>
-                ))}
-              </div>
-            );
-          })}
+          <FeedbackVehicleFields form={form} fieldErrors={fieldErrors} setField={setField} />
+          <FeedbackQuestions form={form} setField={setField} />
           <Textarea
             label="Comments"
             maxLength={1000}
@@ -918,7 +577,7 @@ export function FeedbackClient({
               {error}
             </div>
           )}
-          <div className="flex justify-end gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:flex sm:justify-end [&_button]:justify-center">
             <Btn variant="outline" onClick={closeForm}>
               Cancel
             </Btn>
@@ -942,48 +601,7 @@ export function FeedbackClient({
           </div>
         ) : (
           view && (
-            <div className="space-y-3 text-sm">
-              <div>
-                <b>Customer:</b> {view.customerName ?? "—"} ·{" "}
-                {view.customerMob ?? "—"} · {view.customerEmail ?? "—"}
-              </div>
-              {view.submittedAt && (
-                <div>
-                  <b>Submitted at:</b> {displayDateTime(view.submittedAt)}{" "}
-                  (customer response)
-                </div>
-              )}
-              <div>
-                <b>DOB / Anniversary:</b> {displayDate(view.customerDob)} /{" "}
-                {displayDate(view.customerAnniversaryDt)}
-              </div>
-              <div>
-                <b>Vehicle:</b>{" "}
-                {[
-                  clean(view.carMakeLegacy),
-                  clean(view.carModelLegacy),
-                  clean(view.carVariantLegacy),
-                ]
-                  .filter(Boolean)
-                  .join(" ") || "—"}{" "}
-                · {view.carYear ?? "—"} · {view.carRegistrationNo ?? "—"}
-              </div>
-              {QUESTIONS.map((question, index) => (
-                <div key={question.key}>
-                  <b>
-                    {index + 1}. {question.text}
-                  </b>
-                  <br />
-                  {(view[question.key as keyof Detail] as string) ?? "—"}
-                </div>
-              ))}
-              <div>
-                <b>Comments:</b>
-                <div className="whitespace-pre-wrap">
-                  {view.comments || "—"}
-                </div>
-              </div>
-            </div>
+            <FeedbackDetails view={view} />
           )
         )}
       </Modal>
@@ -992,7 +610,7 @@ export function FeedbackClient({
         open={sendOpen}
         onClose={() => setSendOpen(false)}
       >
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input:not([type=radio])]:min-h-11 [&_input:not([type=radio])]:min-w-0 [&_input:not([type=radio])]:max-w-full [&_input:not([type=radio])]:text-base sm:[&_input:not([type=radio])]:text-sm [&_textarea]:min-w-0 [&_textarea]:text-base sm:[&_textarea]:text-sm">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
               Customer
@@ -1022,7 +640,7 @@ export function FeedbackClient({
                   <button
                     key={vehicle.inventoryId}
                     onClick={() => selectVehicle(vehicle)}
-                    className="block w-full border-b p-2 text-left text-sm"
+                    className="block min-h-11 w-full whitespace-normal [overflow-wrap:anywhere] border-b p-2 text-left text-sm"
                   >
                     {vehicleLabel(vehicle)}
                   </button>
@@ -1052,7 +670,7 @@ export function FeedbackClient({
               {sendError}
             </div>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:flex sm:justify-end [&_button]:justify-center">
             <Btn variant="outline" onClick={() => setSendOpen(false)}>
               Close
             </Btn>

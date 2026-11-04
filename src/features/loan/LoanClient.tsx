@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Car, IndianRupee, Download, Eye, Loader2, Mail, Phone, Banknote, Building2, CalendarClock, CircleDollarSign, Landmark, ReceiptText, UserRound, WalletCards } from 'lucide-react'
-import { ActionAlert, Badge, Btn, IconButton, Input, Select, Textarea, Modal, Table, PageHeader, ConfirmDialog } from '@/components/ui'
+import { ActionAlert, Badge, Btn, IconButton, Input, Select, Textarea, Modal, Table, ConfirmDialog } from '@/components/ui'
 import { LoanFiltersPanel } from './LoanFiltersPanel'
 import { LoanPagination } from './LoanPagination'
 import { LoanCustomerLookup, type LoanCustomerOption } from './LoanCustomerLookup'
@@ -655,18 +655,15 @@ export function LoanClient({
 
   return (
     <div>
-      <PageHeader
-        title="Loan Management"
-        subtitle={`${filtered.length} referral loans`}
-        action={
-          <div className="flex items-center gap-2">
-            <Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting || filtered.length === 0}>
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><h1 className="text-xl font-bold text-gray-900">Loan Management</h1><p className="mt-0.5 text-sm text-gray-500">{filtered.length} referral loans</p></div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <Btn className="min-h-11 justify-center sm:min-h-0" variant="outline" size="sm" onClick={exportRows} disabled={isExporting || filtered.length === 0}>
               <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${Object.values(filters).some(v => v && v !== 'All') ? 'Export Filtered' : 'Export All'} (${filtered.length})`}
             </Btn>
-            <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Loan</Btn>
+            <Btn className="min-h-11 justify-center sm:min-h-0" size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Loan</Btn>
           </div>
-        }
-      />
+      </header>
 
       <LoanFiltersPanel filters={filters} onChange={setFilter} onReset={() => {
         setFilters(emptyFilters())
@@ -674,7 +671,35 @@ export function LoanClient({
       }} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
-      <Table minWidthClass="min-w-full" columnWidths={['8%', '18%', '13%', '13%', '14%', '10%', '11%', '13%']} headers={['Registration / Entry', 'Customer', 'Bank / Partner', 'Loan / Payout', 'Received / Pending', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
+      <div className="space-y-3 lg:hidden">
+        {filtered.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No records found</div> : filtered.map(r => (
+          <article key={r.loanManagementId} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm [overflow-wrap:anywhere]">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0"><h2 className="font-mono font-semibold text-[#1B2A6B]">{r.registrationNo ?? '—'}</h2><p className="mt-1 text-xs text-gray-500">Entry: {fmtShortDate(r.entryDate)}</p></div>
+              {r.paymentStatus && <Badge label={r.paymentStatus} />}
+            </div>
+            <p className="mt-3 font-semibold text-gray-900">{r.customer?.custName ?? r.customerNameLegacy ?? '—'}</p>
+            <p className="mt-1 text-sm text-gray-600">{r.customer?.custMobile ?? r.customerMobileLegacy ?? '—'}</p>
+            <p className="text-sm text-gray-500">{r.customer?.custEmail ?? r.customerEmailLegacy ?? '—'}</p>
+            <p className="mt-2 text-sm text-gray-700">{r.bankName ?? '—'}{r.partnerMaster?.name ? ` · ${r.partnerMaster.name}` : ''}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-3 text-sm">
+              <div className="min-w-0"><dt className="text-xs text-gray-500">Loan amount</dt><dd className="mt-1 font-semibold">{fmtMoney(r.loanAmount)}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-gray-500">Payout</dt><dd className="mt-1 font-semibold">{fmtMoney(r.payoutAmount)}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-gray-500">Received</dt><dd className="mt-1 font-semibold text-green-700">{fmtMoney(r.totalAmountReceived)}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-gray-500">Pending</dt><dd className="mt-1 font-semibold text-orange-700">{fmtMoney(Math.max(0, Number(r.payoutAmount ?? 0) - Number(r.totalAmountReceived ?? 0)))}</dd></div>
+            </dl>
+            <p className="mt-3 text-sm text-gray-600">Follow-up: <span className="font-medium text-gray-800">{fmtShortDate(r.followupDate)}</span></p>
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3">
+              <Btn className="min-h-11 justify-center" variant="outline" onClick={() => openView(r)}><Eye className="h-4 w-4" />View</Btn>
+              <Btn className="min-h-11 justify-center" onClick={() => void openPay(r)}><IndianRupee className="h-4 w-4" />Log payment</Btn>
+              <Btn className="min-h-11 justify-center" variant="outline" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" />Edit</Btn>
+              <Btn className="min-h-11 justify-center text-red-600" variant="outline" onClick={() => setDeleteId(r.loanManagementId)}><Trash2 className="h-4 w-4" />Delete</Btn>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="hidden lg:block">
+      <Table minWidthClass="min-w-[1100px]" columnWidths={['8%', '18%', '13%', '13%', '14%', '10%', '11%', '13%']} headers={['Registration / Entry', 'Customer', 'Bank / Partner', 'Loan / Payout', 'Received / Pending', 'Status', 'Follow-up', 'Actions']} empty={filtered.length === 0}>
         {filtered.map(r => (
           <tr key={r.loanManagementId} className="hover:bg-gray-50 transition">
             <td className="px-2 py-3"><div className="font-mono text-sm font-semibold text-[#1B2A6B]">{r.registrationNo ?? '—'}</div><div className="mt-1 text-sm text-gray-500">{fmtShortDate(r.entryDate)}</div></td>
@@ -702,23 +727,24 @@ export function LoanClient({
           </tr>
         ))}
       </Table>
+      </div>
       <LoanPagination total={total} page={page} pageSize={pageSize} pageCount={pageCount} pending={isPending} onNavigate={navigatePage} />
 
       <Modal title={editId ? 'Edit Loan' : 'Add Loan'} open={!!modal} onClose={requestCloseForm} width="max-w-3xl">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input]:text-base sm:[&_input]:text-sm [&_select]:text-base sm:[&_select]:text-sm [&_textarea]:text-base sm:[&_textarea]:text-sm">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Bank Name *" value={form.bankName} onChange={e => f('bankName', e.target.value)} placeholder="HDFC Bank, SBI..." error={!!errors.bankName} errorMessage={errors.bankName} />
             <Input label="Bank Person Name" value={form.bankPersonName} onChange={e => f('bankPersonName', e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input label="Bank Person Mobile No" value={form.bankPersonMobileNo} onChange={e => f('bankPersonMobileNo', e.target.value)} error={!!errors.bankPersonMobileNo} errorMessage={errors.bankPersonMobileNo} />
             <Input label="Bank Person Email ID" type="email" value={form.bankPersonEmailId} onChange={e => f('bankPersonEmailId', e.target.value)} error={!!errors.bankPersonEmailId} errorMessage={errors.bankPersonEmailId} />
           </div>
 
           <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer Source *</label>
-            <div className="inline-flex rounded-lg bg-slate-100 p-1">
+            <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1 sm:inline-flex">
               <button type="button" onClick={() => selectLoanMode('existing')} className={`rounded-md px-3 py-2 text-sm font-medium transition ${loanMode === 'existing' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Existing customer</button>
               <button type="button" onClick={() => selectLoanMode('manual')} className={`rounded-md px-3 py-2 text-sm font-medium transition ${loanMode === 'manual' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>Manual entry</button>
             </div>
@@ -728,7 +754,7 @@ export function LoanClient({
           {loanMode === 'existing' ? <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Customer *</label>
             <LoanCustomerLookup value={selectedCustomer} onChange={onCustomerChange} error={!!errors.customer} errorMessage={errors.customer} />
-          </div> : <div className="grid grid-cols-3 gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+          </div> : <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
             <Input label="Customer Name *" value={form.customerNameLegacy} onChange={event => f('customerNameLegacy', event.target.value)} error={!!errors.customerNameLegacy} errorMessage={errors.customerNameLegacy} />
             <Input label="Customer Mobile" inputMode="numeric" maxLength={10} value={form.customerMobileLegacy} onChange={event => f('customerMobileLegacy', event.target.value.replace(/\D/g, ''))} error={!!errors.customerMobileLegacy} errorMessage={errors.customerMobileLegacy} />
             <Input label="Customer Email" type="email" value={form.customerEmailLegacy} onChange={event => f('customerEmailLegacy', event.target.value)} error={!!errors.customerEmailLegacy} errorMessage={errors.customerEmailLegacy} />
@@ -739,10 +765,10 @@ export function LoanClient({
             {selectedVehicle ? (
               <div className="space-y-1">
                 <div className={`flex items-center justify-between border ${errors.inventoryId ? 'border-red-500' : 'border-gray-200'} rounded-md px-3 py-2 bg-gray-50`}>
-                  <div className="flex items-center gap-2 text-sm text-gray-800">
+                  <div className="flex min-w-0 items-center gap-2 text-sm text-gray-800">
                     <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                   </div>
-                  <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} className="text-gray-400 hover:text-red-600">
+                  <button type="button" onClick={() => { setSelectedVehicle(null); setForm(fm => ({ ...fm, inventoryId: null, fkVariantId: null })) }} aria-label="Remove selected vehicle" className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-gray-400 hover:text-red-600">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -776,14 +802,14 @@ export function LoanClient({
                 )}
               </div>
             )}
-            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+            <div className="mt-3 grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto] [&_button]:min-h-11 [&_button]:justify-center">
               <Input label="Registration No * (manual or stock)" value={form.registrationNo} onChange={e => { f('registrationNo', e.target.value); setVehicleLookupMessage('') }} error={!!errors.registrationNo} errorMessage={errors.registrationNo} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
               <Btn type="button" variant="outline" size="sm" onClick={findVehicleByRegistration} disabled={!!selectedVehicle}>Find Stock</Btn>
             </div>
             {selectedVehicle ? <p className="mt-1 text-xs text-gray-500">Vehicle fields are locked from stock. Remove the selected vehicle above to enter them manually.</p> : vehicleLookupMessage && <p className="mt-1 text-xs text-gray-500">{vehicleLookupMessage}</p>}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             <Select label="Car Type *" value={form.carType} onChange={e => f('carType', e.target.value)}>
               {CAR_TYPES.map(c => <option key={c}>{c}</option>)}
             </Select>
@@ -793,7 +819,7 @@ export function LoanClient({
             <Input label="Year *" type="number" value={form.carYear ?? ''} onChange={e => f('carYear', e.target.value ? +e.target.value : null)} error={!!errors.carYear} errorMessage={errors.carYear} disabled={!!selectedVehicle} className={selectedVehicle ? 'bg-gray-100 text-gray-500' : ''} />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             <Input label="Entry Date" type="date" value={form.entryDate} onChange={e => f('entryDate', e.target.value)} />
             <Input label="Loan Amount (₹) *" type="number" value={form.loanAmount ?? ''} onChange={e => f('loanAmount', e.target.value ? +e.target.value : null)} error={!!errors.loanAmount} errorMessage={errors.loanAmount} />
             <Input label="Payout % of Loan *" type="number" value={form.percentagePayoutAmount ?? ''} onChange={e => f('percentagePayoutAmount', e.target.value ? +e.target.value : null)} error={!!errors.percentagePayoutAmount} errorMessage={errors.percentagePayoutAmount} />
@@ -816,7 +842,7 @@ export function LoanClient({
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end [&>button]:min-h-11 [&>button]:justify-center">
             <Btn variant="outline" onClick={requestCloseForm} disabled={isPending}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Loan'}</Btn>
           </div>
@@ -825,18 +851,18 @@ export function LoanClient({
 
       <Modal title={`View Loan${viewRow ? ` — ${viewRow.registrationNo ?? ''}` : ''}`} open={!!viewRow} onClose={() => setViewRow(null)} width="max-w-4xl">
         {viewRow && (
-          <div className="space-y-5">
+          <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]">
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex min-w-0 items-start gap-3">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-50 text-[#1B2A6B]"><Banknote aria-hidden="true" className="h-5 w-5" /></span>
-                  <div>
+                  <div className="min-w-0">
                   <div className="flex flex-wrap gap-2"><span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Loan #{viewRow.loanManagementId}</span><span className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-[#1B2A6B]">{viewRow.customerId ? 'Customer Master' : 'Manual customer'}</span></div>
                   <div className="mt-2 text-2xl font-bold text-gray-900">{viewRow.customer?.custName ?? viewRow.customerNameLegacy ?? 'Customer not added'}</div>
                   <div className="mt-1 text-sm text-gray-600">Registration {viewRow.registrationNo ?? 'not added'} · Raised {displayDate(viewRow.entryDate)} · { [clean(viewRow.carMake), clean(viewRow.carModel), clean(viewRow.carVariant)].filter(Boolean).join(' ') || 'Vehicle not added' }</div>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-3">
+                <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:items-end [&_button]:min-h-11">
                   <Badge label={viewRow.paymentStatus ?? 'Pending'} />
                   <div className="flex flex-wrap gap-2">
                     <Btn size="sm" variant="outline" onClick={() => { setViewRow(null); openEdit(viewRow) }}><Pencil className="h-3.5 w-3.5" />Edit</Btn>
@@ -1003,7 +1029,7 @@ export function LoanClient({
 
       <Modal title={`Log Payment${payRow ? ` — ${payRow.registrationNo ?? ''}` : ''}`} open={!!payRow} onClose={() => setPayRow(null)}>
         {payRow && (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input]:text-base sm:[&_input]:text-sm [&_select]:text-base sm:[&_select]:text-sm [&_textarea]:text-base sm:[&_textarea]:text-sm">
             {(() => {
               const payout = Number(payRow.payoutAmount ?? 0)
               const received = payments.length > 0 ? payments.reduce((sum, payment) => sum + Number(payment.amountPaid ?? 0), 0) : Number(payRow.totalAmountReceived ?? 0)
@@ -1011,14 +1037,14 @@ export function LoanClient({
               const settled = pending === 0 && payout > 0
               const displayStatus = settled ? 'Paid' : received > 0 ? 'Partial' : 'Pending'
               return <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Payout Amount</div><div className="mt-1 text-sm font-bold text-gray-900">{fmtMoney(payout)}</div></div>
                   <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-2"><div className="text-xs font-semibold uppercase tracking-wide text-green-700">Amount Paid</div><div className="mt-1 flex items-center gap-2 text-sm font-bold text-green-800">{fmtMoney(received)}<Badge label={displayStatus} /></div></div>
                   <div className="rounded-lg border border-orange-100 bg-orange-50 px-3 py-2"><div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Pending Balance</div><div className="mt-1 text-sm font-bold text-orange-800">{fmtMoney(pending)}</div></div>
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                   <div className="mb-2 flex items-center justify-between"><div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Payment Workflow</div><div className={`text-xs font-medium ${settled ? 'text-green-700' : 'text-orange-700'}`}>{settled ? 'Completed' : 'Action needed'}</div></div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2"><div className="text-xs text-gray-500">Payment status</div><div className="mt-1"><Badge label={displayStatus} /></div></div>
                     <div className="rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2"><div className="text-xs text-gray-500">Next follow-up</div><div className="mt-1 text-sm font-medium text-gray-800">{settled ? 'No follow-up needed' : fmtDate(payRow.followupDate) || 'Set follow-up date'}</div></div>
                   </div>
@@ -1054,7 +1080,7 @@ export function LoanClient({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input label="Amount Paid (₹) *" type="number" value={payForm.amountPaid ?? ''} onChange={e => pf('amountPaid', e.target.value ? +e.target.value : null)} error={!!errors.amountPaid} errorMessage={errors.amountPaid} />
               <Select label="Payment Status *" value={payForm.paymentStatus} onChange={e => pf('paymentStatus', e.target.value)} error={!!errors.paymentStatus} errorMessage={errors.paymentStatus}>
                 {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -1065,7 +1091,7 @@ export function LoanClient({
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end [&>button]:min-h-11 [&>button]:justify-center">
               <Btn variant="outline" onClick={() => setPayRow(null)}>Cancel</Btn>
               <Btn onClick={savePayment} disabled={isPending}>{isPending ? 'Saving...' : 'Save Payment'}</Btn>
             </div>

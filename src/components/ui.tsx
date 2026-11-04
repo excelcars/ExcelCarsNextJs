@@ -132,9 +132,9 @@ export function Modal({ title, open, onClose, children, width = 'max-w-2xl' }: {
       }}
     >
       <div className={`bg-white rounded-xl shadow-2xl w-full ${width} max-h-[90vh] flex flex-col`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+        <div className="flex min-w-0 items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
+          <h3 className="min-w-0 break-words [overflow-wrap:anywhere] text-base font-semibold text-gray-900">{title}</h3>
+          <button type="button" aria-label="Close dialog" onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>

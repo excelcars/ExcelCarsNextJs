@@ -1,5 +1,13 @@
 # WhatsApp received-message dashboard
 
+## Meta message logs
+
+Operations → **Meta Message Logs** (`/messages/logs`) reports outgoing WhatsApp template sends and CRM text replies using the same configured Prisma database. It shows customer name and phone in separate columns, message count per phone within the selected filters, full available message text, attempt time in IST, and delivery status. Template codes and provider IDs are hidden from the table. Search supports phone, customer, template, and provider ID; date filters use inclusive IST calendar days. Results are paginated (50 attempts per page) and refresh every 15 seconds while visible. Summary cards count attempts, distinct phones, sends accepted by Meta, delivered/read sends, and failures. Acceptance does not confirm delivery.
+
+Older no-inventory sends resolve the customer name through their linked inquiry/customer. Their message text is reconstructed from the business-supplied approved `enquiry_noinventory` wording in `src/lib/whatsapp/messageText.mjs` and that linked name; it is not a historical text snapshot. Future no-inventory sends save the rendered wording in the existing journal body. Existing full text snapshots are preserved. Other historical templates without approved wording show an unavailable-text label instead of displaying template codes or parameters as the message.
+
+Existing **WhatsApp Inbox** grants allow this page. The separate **Meta Message Logs** (`WhatsApp_Message_Logs`) permission can grant read-only reporting without inbox/reply access. Available older vehicle, no-inventory, and insurance logs are deduplicated against the newer sent journal by Meta message ID. If the newer sent/reply/status tables have not been migrated, the page displays the available legacy template logs with a coverage notice; it requires no schema change to view those records. Apply the existing WhatsApp migrations to enable the newer sources. Historical sends never recorded by this CRM cannot be recovered here.
+
 ## Chat interface
 
 The `/messages` screen uses a WhatsApp-style layout: one chat per customer and business number, contact initials, latest incoming or outgoing preview, unread badges, All/Unread filters, and search across the contact's saved messages. Opening a chat shows incoming messages, CRM replies, and Meta template sends in one chronological timeline, marks the loaded chat as read, and keeps the reply composer at the bottom. Enter sends; Shift+Enter inserts a newline. On phones the contact list and active conversation are separate views with a back button. Media retains its type/caption and shows a preview-unavailable label. Template delivery diagnostics are available from the list icon in the chat header, rather than a dashboard table.
@@ -25,6 +33,8 @@ Text replies (up to 4096 characters) are permitted within 24 hours of the latest
 A client request UUID is reserved in the database before contacting Meta to prevent duplicate sends on request retries. Network errors and provider server errors have an uncertain outcome and are never automatically resent. A worker crash can leave a reply in Processing; check WhatsApp before sending a new reply. If the browser loses the response, retrying the same pending request uses its original UUID. No actual messages are sent by automated tests.
 
 ## Deployment
+
+For this repository's staging deployment, use `npm run db:migrate:staging`. It explicitly loads `.env.staging.local` and uses `DATABASE_URL_UNPOOLED`, `DIRECT_URL`, or `DIRECT_DATABASE_URL` when present. For Neon it selects the same endpoint's direct host (without `-pooler`) for migrations; the application keeps its pooled connection. `npm run db:migrate:staging -- --check` prints only the selected host without modifying the database. `node scripts/check-staging-migration-lock.mjs` inspects Prisma's advisory lock and recent migrations without changing data. The migration command never terminates sessions or disables advisory locking automatically.
 
 1. Apply the checked-in migration using the normal deployment process (`npx prisma migrate deploy`) and regenerate Prisma (`npx prisma generate`). The new table is `whatsapp_received_messages`.
 2. In Role Access, grant **WhatsApp Inbox** (`WhatsApp_Inbox`) to the roles allowed to see all incoming customer messages. This is a team-wide inbox, without inquiry ownership filtering.

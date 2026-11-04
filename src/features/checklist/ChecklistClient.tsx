@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, ClipboardList, FileText, History, Plus, Trash2, X, Car, Download, Loader2, Pencil } from 'lucide-react'
-import { ActionAlert, Btn, Input, Modal, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { CheckCircle2, ClipboardList, FileText, History, Plus, X, Car, Loader2, Pencil } from 'lucide-react'
+import { ActionAlert, Btn, Input, Modal, ConfirmDialog } from '@/components/ui'
 import { ListPagination } from '@/components/ListPagination'
 import { ChecklistTable } from './ChecklistTable'
-import { ChecklistYesNoToggle } from './ChecklistYesNoToggle'
-import { ChecklistDocumentTypeToggle } from './ChecklistDocumentTypeToggle'
+import { ChecklistDocumentsEditor } from './ChecklistDocumentsEditor'
+import { ChecklistDocumentsList } from './ChecklistDocumentsList'
+import { ChecklistHeader, ChecklistFilters } from './ChecklistHeader'
 import { CustomerPicker } from '@/components/CustomerPicker'
 import { createChecklist, updateChecklist, deleteChecklist, type ChecklistFormInput, type DocRow } from './actions'
 import { isValidEmail, isValidPhone, isValidYear } from '@/lib/validation'
@@ -649,36 +650,14 @@ export function ChecklistClient({
   }, [initialRegistration, initialSearch, registration, search])
 
   return (
-    <div>
-      <PageHeader
-        title="Checklist / Documents"
-        subtitle={`${total} vehicle checklists`}
-        action={
-          <div className="flex items-center gap-2">
-            <Btn variant="outline" size="sm" onClick={() => exportRows('summary')} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : `${search.trim() ? 'Export Filtered' : 'Export Summary'} (${total})`}
-            </Btn>
-            <Btn variant="outline" size="sm" onClick={() => exportRows('details')} disabled={isExporting || total === 0}>
-              <Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : 'Export Detail Rows'}
-            </Btn>
-            <Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Checklist</Btn>
-          </div>
-        }
-      />
-
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchBar value={search} onChange={setSearch} placeholder="Search reg no, customer..." disabled={isRoutePending} />
-          <div className="w-56">
-            <Input value={registration} onChange={e => setRegistration(e.target.value)} placeholder="Exact registration no..." disabled={isRoutePending} />
-          </div>
-        </div>
-        <div className="text-xs text-gray-500">{total} checklist records</div>
-      </div>
+    <div className="min-w-0">
+      <ChecklistHeader total={total} filtered={Boolean(search.trim() || registration.trim())} exporting={isExporting} onExport={exportRows} onAdd={openAdd} />
+      <ChecklistFilters total={total} search={search} registration={registration} pending={isRoutePending} onSearch={setSearch} onRegistration={setRegistration} />
       {exportError && <div className="mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{exportError}</div>}
 
       <ChecklistTable data={data} pending={isRoutePending} onView={openView} onEdit={openEdit} onDelete={setDeleteId} />
       <ListPagination
+        className="mt-4 flex-col gap-3 sm:flex-row [&_button]:min-h-11"
         page={page}
         pageCount={pageCount}
         total={total}
@@ -701,8 +680,8 @@ export function ChecklistClient({
             </div>
           </div>
         ) : (
-        <div className="space-y-4">
-          <div className="inline-flex rounded-lg bg-slate-100 p-1">
+        <div className="min-w-0 space-y-4 break-words [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:min-h-11 [&_button]:min-h-11 [&_svg]:shrink-0">
+          <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
             <button type="button" onClick={() => setEntryMode('existing')} className={`rounded-md px-3 py-2 text-sm font-medium ${entryMode === 'existing' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600'}`}>Existing vehicle</button>
             <button type="button" onClick={() => { setEntryMode('manual'); setSelectedVehicle(null); setSelectedCustomer(null); setForm(f => ({ ...f, inventoryId: null, customerId: null })) }} className={`rounded-md px-3 py-2 text-sm font-medium ${entryMode === 'manual' ? 'bg-white text-[#1B2A6B] shadow-sm' : 'text-slate-600'}`}>Manual entry</button>
           </div>
@@ -742,8 +721,8 @@ export function ChecklistClient({
           {entryMode === 'existing' && <div>
             <label className="text-xs font-medium text-gray-600 mb-1 block">Vehicle *</label>
             {selectedVehicle ? (
-              <div className="flex items-center justify-between border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
-                <div className="flex items-center gap-2 text-sm text-gray-800">
+              <div className="flex min-w-0 items-center justify-between gap-2 border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+                <div className="flex min-w-0 items-center gap-2 text-sm text-gray-800">
                   <Car className="w-4 h-4 text-gray-400" />{vehicleLabel(selectedVehicle)}
                 </div>
                 <button type="button" onClick={() => { setSelectedVehicle(null); setSelectedCustomer(null); setForm(f => ({ ...f, inventoryId: null, customerId: null, customerNameLegacy: '', customerMobileLegacy: '', customerEmailLegacy: '' })) }} className="text-gray-400 hover:text-red-600">
@@ -776,7 +755,7 @@ export function ChecklistClient({
 
           <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="mb-3"><h3 className="text-sm font-semibold text-slate-900">Car details</h3><p className="text-xs text-slate-500">Confirm or enter the vehicle information for this checklist.</p></div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 [&>div]:min-w-0">
               <Input label="Make *" value={form.make} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, make: e.target.value }))} error={errors.make} errorMessage="Vehicle make is required." />
               <Input label="Model *" value={form.model} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} error={errors.model} errorMessage="Vehicle model is required." />
               <Input label="Variant *" value={form.variant} disabled={entryMode === 'existing'} onChange={e => setForm(f => ({ ...f, variant: e.target.value }))} error={errors.variant} errorMessage="Vehicle variant is required." />
@@ -788,28 +767,15 @@ export function ChecklistClient({
           </section>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <label className="text-xs font-medium text-gray-600">Document Checklist</label>
               <Btn variant="outline" size="sm" onClick={addDoc}><Plus className="w-3.5 h-3.5" />Add Document</Btn>
             </div>
-            <div className="space-y-2">
-              {form.docs.map((d, i) => (
-                <div key={i} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-end border border-gray-100 rounded-lg p-2.5">
-                      <Input label={i === 0 ? 'Document' : undefined} list="doc-name-suggestions" value={d.documentName} onChange={e => updateDoc(i, { documentName: e.target.value })} />
-                      <ChecklistYesNoToggle label={i === 0 ? 'Applicable' : undefined} value={d.applicable} onChange={value => updateDoc(i, { applicable: value })} />
-                      <ChecklistYesNoToggle label={i === 0 ? 'Received' : undefined} value={d.received} onChange={value => updateDoc(i, { received: value })} />
-                      <ChecklistDocumentTypeToggle label={i === 0 ? 'Document type' : undefined} value={d.originalCopy} onChange={value => updateDoc(i, { originalCopy: value })} />
-                  <button type="button" onClick={() => setDeleteDocIndex(i)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Remove document"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              ))}
-              <datalist id="doc-name-suggestions">
-                {LEGACY_DOCS.map(d => <option key={d} value={d} />)}
-              </datalist>
-            </div>
+            <ChecklistDocumentsEditor docs={form.docs} suggestions={LEGACY_DOCS} onChange={updateDoc} onRemove={setDeleteDocIndex} />
             {errors.docs ? <p className="mt-2 text-sm text-red-600">Add at least one document.</p> : null}
           </div>
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="grid grid-cols-1 gap-3 pt-2 sm:flex sm:justify-end [&_button]:justify-center">
             <Btn variant="outline" onClick={requestCloseForm} disabled={isPending}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Checklist'}</Btn>
           </div>
@@ -831,7 +797,7 @@ export function ChecklistClient({
             </div>
           </div>
         ) : viewRow ? (
-          <div className="space-y-5">
+          <div className="min-w-0 space-y-5 break-words [overflow-wrap:anywhere] [&_button]:min-h-11 [&_section]:min-w-0 [&_section]:p-3 sm:[&_section]:p-4 [&_svg]:shrink-0">
             {(() => {
               const documents = viewRow.checklistDocDetails
               const applicable = documents.filter(document => document.applicable === 'Yes').length
@@ -909,34 +875,7 @@ export function ChecklistClient({
 
             <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold text-[#1B2A6B]"><span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100"><ClipboardList className="h-4 w-4" /></span>Document Checklist</div><div className="text-xs font-medium text-gray-500">Received documents are marked in green.</div></div>
-              <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Document</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Applicable</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Received</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Original / Copy</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 bg-white">
-                    {viewRow.checklistDocDetails.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-400">No documents found.</td>
-                      </tr>
-                    ) : (
-                      viewRow.checklistDocDetails.map(d => (
-                        <tr key={d.checklistDetailsId}>
-                          <td className="px-4 py-3 text-sm text-gray-800">{d.documentName ?? '—'}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600"><span className={`rounded px-2 py-0.5 text-xs font-medium ${d.applicable === 'Yes' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{d.applicable ?? '—'}</span></td>
-                          <td className="px-4 py-3 text-sm text-gray-600"><span className={`rounded px-2 py-0.5 text-xs font-medium ${d.received === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{d.received ?? '—'}</span></td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{d.originalCopy ?? '—'}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <ChecklistDocumentsList documents={viewRow.checklistDocDetails} />
             </section>
 
             <div className="flex flex-wrap justify-end gap-2">

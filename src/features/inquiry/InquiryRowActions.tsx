@@ -3,6 +3,7 @@
 import { Eye, Mail, Pencil, Trash2, UserPlus } from 'lucide-react'
 
 type InquiryRowActionsProps = {
+  mobile?: boolean
   isEmailPending: boolean
   onSendEmail: () => void
   onView: () => void
@@ -11,7 +12,18 @@ type InquiryRowActionsProps = {
   onDelete: () => void
 }
 
-export function InquiryRowActions({ isEmailPending, onSendEmail, onView, onEdit, onAssign, onDelete }: InquiryRowActionsProps) {
+export function InquiryRowActions({ mobile = false, isEmailPending, onSendEmail, onView, onEdit, onAssign, onDelete }: InquiryRowActionsProps) {
+  if (mobile) return (
+    <div className="grid grid-cols-3 gap-2">
+      {[
+        { label: 'View', Icon: Eye, onClick: onView },
+        { label: 'Edit', Icon: Pencil, onClick: onEdit },
+        { label: 'Assign', Icon: UserPlus, onClick: onAssign },
+        { label: 'Email', Icon: Mail, onClick: onSendEmail, disabled: isEmailPending },
+        { label: 'Delete', Icon: Trash2, onClick: onDelete },
+      ].map(({ label, Icon, onClick, disabled }) => <button key={label} type="button" onClick={onClick} disabled={disabled} className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-2 text-xs font-medium transition disabled:opacity-40 ${label === 'Delete' ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-blue-50'}`}><Icon aria-hidden="true" className="h-4 w-4" />{label}</button>)}
+    </div>
+  )
   return (
     <div className="flex items-center gap-1">
       <button onClick={onSendEmail} disabled={isEmailPending} className="rounded p-1.5 text-gray-400 transition hover:bg-green-50 hover:text-green-600 disabled:opacity-40" title="Send car details by email">

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { Btn, FilterChip, FilterPanel, Input, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
-import { INVENTORY_STATUSES } from './queries'
+import { INVENTORY_STATUSES } from './inventoryConstants'
 import type { InventoryFilters as InventoryFilterValues } from './inventoryTypes'
 import { formatIndianNumberInput, normalizeIntegerInput } from '@/lib/listFormatters'
 
@@ -35,6 +35,7 @@ export function InventoryFilters({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [draftPriceMin, setDraftPriceMin] = useState(filters.priceMin)
   const [draftPriceMax, setDraftPriceMax] = useState(filters.priceMax)
+  const [showMoreFilters, setShowMoreFilters] = useState(false)
 
   useEffect(() => { setDraftPriceMin(filters.priceMin) }, [filters.priceMin])
   useEffect(() => { setDraftPriceMax(filters.priceMax) }, [filters.priceMax])
@@ -53,32 +54,35 @@ export function InventoryFilters({
   }
 
   return (
-    <FilterPanel>
+    <FilterPanel className="min-w-0 [&_input]:min-h-11 [&_input]:min-w-0 [&_button]:min-h-11">
       <div className="mb-3">
         <div className="text-sm font-semibold text-gray-900">Filters</div>
         <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
       </div>
-      <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick inventory filters">
+      <div className="mb-4 flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1 sm:flex-wrap" aria-label="Quick inventory filters">
         {([
           ['All', 'All Vehicles'], ['In Stock', 'In Stock'], ['Booked', 'Booked'], ['Loan Process', 'Loan Process'], ['Sold', 'Sold'], ['Not Available', 'Not Available'],
         ] as const).map(([value, label]) => (
-          <FilterChip key={value} onClick={() => onFilterChange('status', value)} disabled={isLoading} active={filters.status === value}>
+          <FilterChip key={value} className="shrink-0" onClick={() => onFilterChange('status', value)} disabled={isLoading} active={filters.status === value}>
             {label}
           </FilterChip>
         ))}
       </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4 [&>div]:min-w-0">
         <SearchBar inputRef={searchInputRef} value={searchInput} onChange={onSearchChange} placeholder="Search make, model, variant, colour, owner, mobile or registration..." disabled={isLoading} />
+        <button type="button" aria-expanded={showMoreFilters} aria-controls="inventory-more-filters" onClick={() => setShowMoreFilters(value => !value)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-[#1B2A6B] hover:bg-blue-50 md:hidden">{showMoreFilters ? 'Hide filters' : 'More filters'}</button>
+        <div id="inventory-more-filters" className={`${showMoreFilters ? 'grid' : 'hidden'} min-w-0 gap-3 md:contents [&>div]:min-w-0`}>
         <FormDropdown disabled={isLoading} value={filters.status === 'All' ? '' : filters.status} options={INVENTORY_STATUSES.map(value => ({ value, label: value }))} placeholder="All Statuses" allowClear onChange={value => onFilterChange('status', value || 'All')} />
         <FormDropdown disabled={isLoading} value={filters.fuelType} options={fuelTypes.map(value => ({ value, label: value }))} placeholder="All Fuels" allowClear onChange={value => onFilterChange('fuelType', value)} />
         <FormDropdown disabled={isLoading} value={filters.ownedType} options={['Excel Cars', 'Dealer', 'Individual'].map(value => ({ value, label: value }))} placeholder="All Owner Types" allowClear onChange={value => onFilterChange('ownedType', value)} />
         <Input label="Budget From" inputMode="numeric" value={formatIndianNumberInput(draftPriceMin)} onChange={event => setDraftPriceMin(normalizeIntegerInput(event.target.value))} placeholder="Minimum price" disabled={isLoading} />
         <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-48 flex-1"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftPriceMax)} onChange={event => setDraftPriceMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum price" disabled={isLoading} /></div>
-          <Btn className="shrink-0 whitespace-nowrap" variant="outline" size="sm" onClick={() => onBudgetApply(draftPriceMin, draftPriceMax)} disabled={isLoading || (draftPriceMin === filters.priceMin && draftPriceMax === filters.priceMax)}>Apply Budget</Btn>
+          <div className="min-w-0 basis-48 flex-1"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftPriceMax)} onChange={event => setDraftPriceMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum price" disabled={isLoading} /></div>
+          <Btn className="min-h-11 shrink-0 whitespace-nowrap" variant="outline" size="sm" onClick={() => onBudgetApply(draftPriceMin, draftPriceMax)} disabled={isLoading || (draftPriceMin === filters.priceMin && draftPriceMax === filters.priceMax)}>Apply Budget</Btn>
+        </div>
         </div>
       </div>
-      <div className="mt-3 text-sm text-gray-500">
+      <div className={`mt-3 text-sm text-gray-500 ${showMoreFilters ? '' : 'hidden md:block'}`}>
         Searchable fields: Registration No, Make, Model, Variant, Colour, Owner Name, and Owner Mobile.
       </div>
       {activeFilterChips.length > 0 ? (

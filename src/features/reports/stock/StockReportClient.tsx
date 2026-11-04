@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useId, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Btn, Input, Select, Table, PageHeader, SearchBar, Modal } from '@/components/ui'
+import { Btn, Input, Select, Table, SearchBar, Modal } from '@/components/ui'
 import { INVENTORY_STATUSES } from '@/features/inventory/queries'
 
 interface StockRow {
@@ -63,7 +63,7 @@ function StockStatusBadge({ label }: { label: string }) {
           ? 'border-red-100 bg-red-50 text-red-700 before:bg-red-500'
           : 'border-blue-100 bg-blue-50 text-blue-700 before:bg-blue-500'
 
-  return <span title={label} className={`inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-[11px] font-semibold leading-none ${tone} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}>{label}</span>
+  return <span title={label} className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold leading-none ${tone} before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full`}>{label}</span>
 }
 const stockColourSwatches: Array<[string, string]> = [['a.royale', '#102f77'], ['royale', '#102f77'], ['blue', '#2563eb'], ['white', '#e5e7eb'], ['black', '#111827'], ['silver', '#cbd5e1'], ['grey', '#94a3b8'], ['gray', '#94a3b8'], ['red', '#dc2626'], ['pink', '#ec4899'], ['green', '#16a34a'], ['brown', '#92400e'], ['gold', '#ca8a04'], ['orange', '#ea580c']]
 const stockColourSwatch = (colour: string | null) => stockColourSwatches.find(([name]) => clean(colour).toLowerCase().includes(name))?.[1] ?? '#94a3b8'
@@ -89,6 +89,9 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
   const [search, setSearch] = useState(initialFilters.search)
   const [filterStatus, setFilterStatus] = useState(initialFilters.status)
   const [filters, setFilters] = useState(initialFilters)
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
+  const filterPanelId = useId()
+  const activeFilterCount = STRUCTURED_FILTERS.filter(([key]) => filters[key].trim()).length
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const [photoRow, setPhotoRow] = useState<StockRow | null>(null)
@@ -215,12 +218,11 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
   ]
 
   return (
-    <div>
-      <PageHeader
-        title="Stock Report"
-        subtitle={`${total.toLocaleString('en-IN')} vehicles · Page ${page} of ${pageCount}`}
-        action={<Btn variant="outline" size="sm" onClick={exportRows} disabled={isExporting}><Download className="w-3.5 h-3.5" />{isExporting ? 'Exporting...' : 'Export'}</Btn>}
-      />
+    <div className="min-w-0 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input:not([type=checkbox])]:text-base sm:[&_input:not([type=checkbox])]:text-sm [&_select]:text-base sm:[&_select]:text-sm [&_button]:min-h-11 [&_select]:min-h-11">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div><h1 className="text-xl font-bold text-gray-900">Stock Report</h1><p className="mt-0.5 text-sm text-gray-500">{total.toLocaleString('en-IN')} vehicles · Page {page} of {pageCount}</p></div>
+        <Btn className="justify-center" variant="outline" size="sm" onClick={exportRows} disabled={isExporting}><Download className="h-4 w-4" />{isExporting ? 'Exporting...' : 'Export'}</Btn>
+      </header>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white px-4 py-3 shadow-sm">
@@ -244,6 +246,8 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
           <label className="text-xs font-semibold text-slate-600">Quick search</label>
           <SearchBar value={search} onChange={setSearch} placeholder="Reg no, make, model, owner..." />
         </div>
+        <button type="button" aria-expanded={filtersExpanded} aria-controls={filterPanelId} onClick={() => setFiltersExpanded(current => !current)} className="rounded-lg border border-gray-200 bg-white px-3 text-left text-sm font-medium text-gray-700 md:hidden">{filtersExpanded ? 'Hide filters' : 'Show filters'}{activeFilterCount ? ` (${activeFilterCount} active)` : ''}</button>
+        <div id={filterPanelId} className={`${filtersExpanded ? 'grid' : 'hidden'} gap-3 md:contents`}>
         {STRUCTURED_FILTERS.map(([key, label]) => (
           <div key={key}>
             <Input label={label} list={`${key}-suggestions`} value={filters[key]}
@@ -259,20 +263,21 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
             </datalist>
           </div>
         ))}
+        </div>
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-gray-600">Actions</span>
           <Btn onClick={applyFilters} disabled={isPending} className="justify-center">{isPending ? 'Applying...' : 'Apply filters'}</Btn>
           <Btn variant="outline" onClick={resetView} disabled={isPending} className="justify-center">Reset filters</Btn>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex flex-wrap gap-1.5">
           {['All', ...INVENTORY_STATUSES].map(s => (
-            <button key={s} onClick={() => {
+            <button key={s} type="button" aria-pressed={filterStatus === s} onClick={() => {
               setFilterStatus(s)
               pushFilters({ ...filters, search, status: s })
             }} disabled={isPending}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${filterStatus === s ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition ${filterStatus === s ? 'text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               style={filterStatus === s ? { backgroundColor: '#1B2A6B' } : {}}>
               {s}
             </button>
@@ -282,12 +287,12 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
           onChange={event => pushFilters(initialFilters, 1, Number(event.target.value))}>
           {STOCK_REPORT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
         </Select>
-        <details className="relative">
-          <summary className="cursor-pointer rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">Columns</summary>
-          <div className="absolute right-0 z-20 mt-1 grid w-56 gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-lg sm:grid-cols-2">
+        <details className="relative w-full sm:w-auto">
+          <summary className="flex min-h-11 cursor-pointer items-center rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">Columns</summary>
+          <div className="absolute left-0 z-20 mt-1 grid w-full max-w-[calc(100vw-4rem)] gap-2 sm:left-auto sm:right-0 sm:w-80 rounded-lg border border-gray-200 bg-white p-3 shadow-lg sm:grid-cols-2">
             {OPTIONAL_COLUMNS.map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-xs text-gray-700">
-                <input type="checkbox" checked={visibleColumns.has(key)} onChange={() => setVisibleColumns(current => {
+              <label key={key} className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-gray-700">
+                <input className="h-5 w-5 shrink-0" type="checkbox" checked={visibleColumns.has(key)} onChange={() => setVisibleColumns(current => {
                   const next = new Set(current)
                   if (next.has(key)) next.delete(key); else next.add(key)
                   return next
@@ -301,6 +306,33 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
 
       {exportError ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{exportError}</div> : null}
 
+      <div className="space-y-3 lg:hidden">
+        {initialData.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No records found</div> : initialData.map(r => (
+          <article key={r.inventoryId} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2"><h2 className="min-w-0 flex-1 font-semibold text-gray-900">{[clean(r.carVariantMaster?.carMakeMaster?.make), clean(r.carVariantMaster?.carModelMaster?.model)].filter(Boolean).join(' ') || 'Vehicle'}</h2>{r.status && <StockStatusBadge label={r.status} />}</div>
+            {clean(r.carVariantMaster?.variant) && <p className="mt-1 text-sm text-gray-500">{clean(r.carVariantMaster?.variant)}</p>}
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-sm text-gray-600">{visibleColumns.has('registrationNo') && <span>{r.registrationNo ?? '—'}</span>}{visibleColumns.has('sku') && <span>SKU: {r.sku ?? '—'}</span>}</div>
+            <p className="mt-3 text-lg font-bold text-gray-900">{fmtMoney(r.price)}</p>
+            <dl className="mt-3 grid grid-cols-1 gap-3 rounded-lg bg-gray-50 p-3 text-sm min-[360px]:grid-cols-2">
+              <div className="min-w-0"><dt className="text-xs text-gray-500">Year / Month</dt><dd className="mt-1 text-gray-800">{r.year ?? '—'} / {r.month ?? '—'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-gray-500">KM driven</dt><dd className="mt-1 text-gray-800">{r.kmsDriven ? Number(r.kmsDriven).toLocaleString('en-IN') : '—'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-gray-500">Colour</dt><dd className="mt-1 flex items-start gap-2 text-gray-800"><span aria-hidden="true" className="mt-1 h-3 w-3 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: stockColourSwatch(r.colour) }} />{r.colour ?? '—'}</dd></div>
+              {visibleColumns.has('fuelType') && <div className="min-w-0"><dt className="text-xs text-gray-500">Fuel</dt><dd className="mt-1 text-gray-800">{r.fuelType ?? '—'}</dd></div>}
+              {visibleColumns.has('ownerCount') && <div className="min-w-0"><dt className="text-xs text-gray-500">Owner count</dt><dd className="mt-1 text-gray-800">{r.noOfOwners ?? '—'}</dd></div>}
+              {visibleColumns.has('owner') && <div className="min-w-0"><dt className="text-xs text-gray-500">Owner name</dt><dd className="mt-1 text-gray-800">{r.ownedBy ?? '—'}</dd></div>}
+              {visibleColumns.has('tax') && <div className="min-w-0"><dt className="text-xs text-gray-500">Tax</dt><dd className="mt-1 text-gray-800">{r.tax ?? '—'}</dd></div>}
+              {visibleColumns.has('insurance') && <div className="min-w-0"><dt className="text-xs text-gray-500">Insurance</dt><dd className="mt-1 text-gray-800">{r.insuranceType ?? '—'}</dd></div>}
+            </dl>
+            {visibleColumns.has('remarks') && <div className="mt-3 text-sm"><p className="text-xs text-gray-500">Remarks</p><p className="mt-1 whitespace-pre-wrap text-gray-700">{r.otherRemarks ?? '—'}</p></div>}
+            {visibleColumns.has('comments') && <div className="mt-3 text-sm"><p className="text-xs text-gray-500">Internal Comments</p><p className="mt-1 whitespace-pre-wrap text-gray-700">{r.internalComments ?? '—'}</p></div>}
+            {(visibleColumns.has('photos') || canAccessInventory) && <div className="mt-3 grid gap-2 border-t border-gray-100 pt-3">
+              {visibleColumns.has('photos') && <Btn className="justify-center" variant="outline" disabled={r._count.inventoryPhotos === 0} onClick={() => void openPhotos(r)}><ImageIcon className="h-4 w-4" />Photos ({r._count.inventoryPhotos})</Btn>}
+              {canAccessInventory && <Link className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-gray-300 text-sm font-medium text-[#1B2A6B] hover:bg-gray-50" href={`/inventory?registrationNo=${encodeURIComponent(r.registrationNo ?? '')}`}><Eye className="h-4 w-4" />Open Inventory</Link>}
+            </div>}
+          </article>
+        ))}
+      </div>
+      <div className="hidden lg:block">
       <Table headers={tableHeaders} columnWidths={tableWidths} empty={initialData.length === 0} stickyLastColumn={canAccessInventory} minWidthClass="min-w-[1680px]" compact>
         {initialData.map(r => (
           <tr key={r.inventoryId} className="hover:bg-gray-50 transition">
@@ -333,20 +365,21 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
           </tr>
         ))}
       </Table>
+      </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="text-sm text-gray-500">
           {total === 0 ? 'No matching rows found.' : `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total.toLocaleString('en-IN')} rows.`}
         </div>
-        <div className="flex items-center gap-2">
+        <nav aria-label="Stock report pagination" className="grid grid-cols-2 items-center gap-2 sm:flex [&>button]:justify-center">
           <Btn variant="outline" disabled={isPending || page <= 1} onClick={() => pushFilters(initialFilters, page - 1)}><ChevronLeft className="h-4 w-4" />Prev</Btn>
-          <span className="text-sm text-gray-600">Page {page} of {pageCount}</span>
+          <span className="col-span-2 row-start-1 text-center text-sm text-gray-600 sm:order-none">Page {page} of {pageCount}</span>
           <Btn variant="outline" disabled={isPending || page >= pageCount} onClick={() => pushFilters(initialFilters, page + 1)}><ChevronRight className="h-4 w-4" />Next</Btn>
-        </div>
+        </nav>
       </div>
 
       <Modal title={`Photos — ${photoRow?.registrationNo ?? ''}`} open={!!photoRow} onClose={() => setPhotoRow(null)}>
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
           <p className="text-xs text-gray-500">Open any available image in full size or download it. Files unavailable in the current environment remain listed for reference.</p>
           {photosLoading ? (
             <div className="text-sm text-gray-400">Loading...</div>
@@ -369,11 +402,11 @@ export function StockReportClient({ initialData, initialFilters, total, page, pa
                     <div className="flex h-40 items-center justify-center px-3 text-center text-xs text-gray-400">Preview unavailable</div>
                   )}
                   <div className="space-y-2 px-3 py-2">
-                    <div className="truncate text-xs font-mono text-gray-600" title={p.fileName}>{p.fileName}</div>
+                    <div className="[overflow-wrap:anywhere] text-xs font-mono text-gray-600" title={p.fileName}>{p.fileName}</div>
                     {p.previewUrl && !unavailablePhotoIds.has(p.documentId) ? (
-                      <div className="flex items-center gap-3">
-                        <a href={p.previewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#1B2A6B] hover:underline"><Eye className="h-3.5 w-3.5" />View</a>
-                        <button type="button" onClick={() => downloadPhoto(p)} className="inline-flex items-center gap-1 text-xs font-semibold text-[#1B2A6B] hover:underline"><Download className="h-3.5 w-3.5" />Download</button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <a href={p.previewUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#1B2A6B] hover:underline"><Eye className="h-3.5 w-3.5" />View</a>
+                        <button type="button" onClick={() => downloadPhoto(p)} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#1B2A6B] hover:underline"><Download className="h-3.5 w-3.5" />Download</button>
                       </div>
                     ) : null}
                   </div>

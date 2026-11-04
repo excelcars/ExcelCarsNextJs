@@ -36,15 +36,15 @@ export function LeadLocationChart({ breakdowns, selectedSourceName, selectedSour
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-0.5 text-sm">
         <span className="font-semibold text-gray-700">{title}</span>
         <div className="flex flex-wrap items-center gap-1" aria-label="Location report period">
-          {PERIODS.map(item => <button key={item.key} type="button" onClick={() => setPeriod(item.key)} aria-pressed={period === item.key} className={`rounded px-2 py-1 text-xs font-semibold transition ${period === item.key ? 'bg-[#1B2A6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>{item.label}</button>)}
-          {selectedSourceName ? <button type="button" onClick={onClearSource} className="ml-1 rounded px-2 py-1 text-[10px] font-semibold text-[#1B2A6B] hover:bg-blue-50" title="Show every lead source">{selectedSourceName} ×</button> : null}
+          {PERIODS.map(item => <button key={item.key} type="button" onClick={() => setPeriod(item.key)} aria-pressed={period === item.key} className={`min-h-11 rounded px-3 py-1 text-xs font-semibold transition ${period === item.key ? 'bg-[#1B2A6B] text-white' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-[#1B2A6B]'}`}>{item.label}</button>)}
+          {selectedSourceName ? <button type="button" onClick={onClearSource} className="min-h-11 max-w-full break-words rounded px-3 py-1 text-xs font-semibold text-[#1B2A6B] hover:bg-blue-50" title="Show every lead source">{selectedSourceName} ×</button> : null}
         </div>
         <span className="text-gray-500">Total leads: <strong className="text-gray-800">{totalLeads.toLocaleString('en-IN')}</strong></span>
       </div>
       {data.length === 0 ? <p className="min-h-[180px] py-8 text-center text-sm text-gray-400">{emptyMessage}</p> : <div className="w-full min-w-0" style={{ height: Math.max(180, data.length * 28 + 36) }}>
         <div className="h-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ left: 24 }}>
+            <BarChart data={data} layout="vertical" margin={{ left: 0, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="name" width={118} interval={0} tick={{ fontSize: 13, fill: '#6B7280' }} axisLine={false} tickLine={false} />

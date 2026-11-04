@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
-import { ActionAlert, Btn, ConfirmDialog, Input, Modal, PageHeader, SearchBar, Table } from '@/components/ui'
+import { ActionAlert, Btn, ConfirmDialog, Input, LoadingOverlay, Modal, SearchBar, Table } from '@/components/ui'
+import { InquirySourceMobileCard } from './InquirySourceMobileCard'
 import { createInquirySource, deleteInquirySource, updateInquirySource } from './actions'
 import type { InquirySourceFormInput, InquirySourceMasterRow } from './types'
 
@@ -26,13 +27,13 @@ function SourceForm({ form, errors, onChange }: { form: InquirySourceFormInput; 
   const set = <K extends keyof InquirySourceFormInput>(key: K, value: InquirySourceFormInput[K]) => onChange({ ...form, [key]: value })
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&_input:not([type=checkbox])]:min-h-11 [&_input]:min-w-0 [&_input]:max-w-full [&_input:not([type=checkbox])]:text-base sm:[&_input:not([type=checkbox])]:text-sm">
       <Input label="Source Name *" value={form.displayName} onChange={event => set('displayName', event.target.value)} placeholder="e.g. CarWale" error={!!errors.displayName} errorMessage={errors.displayName} />
       <Input label="Code *" value={form.code} onChange={event => set('code', event.target.value)} placeholder="e.g. CARWALE" error={!!errors.code} errorMessage={errors.code} />
       <Input label="Category *" value={form.category} onChange={event => set('category', event.target.value)} placeholder="e.g. Portal" error={!!errors.category} errorMessage={errors.category} />
       <Input label="Reporting Order *" type="number" min={1} value={form.reportingSort} onChange={event => set('reportingSort', Number(event.target.value))} error={!!errors.reportingSort} errorMessage={errors.reportingSort} />
-      <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.requiresDetail} onChange={event => set('requiresDetail', event.target.checked)} /> Require detail</label>
-      <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.isActive} onChange={event => set('isActive', event.target.checked)} /> Active</label>
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-gray-700"><input className="h-5 w-5 shrink-0" type="checkbox" checked={form.requiresDetail} onChange={event => set('requiresDetail', event.target.checked)} /> Require detail</label>
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-gray-700"><input className="h-5 w-5 shrink-0" type="checkbox" checked={form.isActive} onChange={event => set('isActive', event.target.checked)} /> Active</label>
     </div>
   )
 }
@@ -61,13 +62,18 @@ export function InquirySourceMasterClient({
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isPending, startTransition] = useTransition()
+  const [isRoutePending, startRouteTransition] = useTransition()
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const navigate = (params: Record<string, string>) => {
     const query = new URLSearchParams({ search, page: '1', ...params })
     for (const [key, value] of [...query.entries()]) if (!value) query.delete(key)
-    window.location.assign(`/config/inquiry-sources${query.toString() ? `?${query}` : ''}`)
+    startRouteTransition(() => {
+      router.push(`/config/inquiry-sources${query.toString() ? `?${query}` : ''}`)
+    })
   }
+
+  useEffect(() => { setSearchInput(search) }, [search])
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -114,14 +120,13 @@ export function InquirySourceMasterClient({
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Inquiry Source Master"
-        subtitle={`${total.toLocaleString('en-IN')} controlled Reference Website / Source values.`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="h-3.5 w-3.5" /> Add Source</Btn>}
-      />
+    <div className="min-w-0">
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0"><h1 className="text-xl font-bold text-gray-900">Inquiry Source Master</h1><p className="mt-0.5 text-sm text-gray-500">{total.toLocaleString('en-IN')} controlled Reference Website / Source values.</p></div>
+        <Btn className="min-h-11 shrink-0 justify-center" size="sm" onClick={openAdd}><Plus className="h-4 w-4" />Add Source</Btn>
+      </header>
 
-      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3">
+      <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 [&_input]:text-base sm:[&_input]:text-sm">
         <div className="flex max-w-md flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">Search sources</label>
           <SearchBar value={searchInput} onChange={setSearchInput} placeholder="Source name, code, category..." />
@@ -130,6 +135,14 @@ export function InquirySourceMasterClient({
       </div>
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
+      <div className="relative min-w-0" aria-busy={isRoutePending}>
+      <LoadingOverlay show={isRoutePending} label="Updating sources..." />
+      <div className="space-y-3 lg:hidden">
+        {initialData.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No sources match this search.</div> : initialData.map(row => (
+          <InquirySourceMobileCard key={row.sourceId} row={row} onEdit={openEdit} onDelete={setDeleteRow} pending={isPending || isRoutePending} />
+        ))}
+      </div>
+      <div className="hidden lg:block">
       <Table headers={['Source', 'Configuration', 'Usage', 'Actions']} minWidthClass="min-w-[820px]" empty={initialData.length === 0} emptyMessage="No sources match this search.">
         {initialData.map(row => (
           <tr key={row.sourceId} className="hover:bg-gray-50">
@@ -152,16 +165,18 @@ export function InquirySourceMasterClient({
           </tr>
         ))}
       </Table>
+      </div>
+      </div>
 
-      {pageCount > 1 && <div className="mt-4 flex items-center justify-between"><div className="text-xs text-gray-500">Page {page} of {pageCount}</div><div className="flex gap-1.5">
-        <Btn size="sm" variant="outline" disabled={page <= 1} onClick={() => navigate({ page: String(page - 1) })}><ChevronLeft className="h-3.5 w-3.5" /> Prev</Btn>
-        <Btn size="sm" variant="outline" disabled={page >= pageCount} onClick={() => navigate({ page: String(page + 1) })}>Next <ChevronRight className="h-3.5 w-3.5" /></Btn>
-      </div></div>}
+      {pageCount > 1 && <nav aria-label="Inquiry source pagination" className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="text-xs text-gray-500">Page {page} of {pageCount}</div><div className="grid grid-cols-2 gap-2 sm:flex [&>button]:min-h-11 [&>button]:justify-center">
+        <Btn size="sm" variant="outline" disabled={isRoutePending || page <= 1} onClick={() => navigate({ page: String(page - 1) })}><ChevronLeft className="h-3.5 w-3.5" /> Prev</Btn>
+        <Btn size="sm" variant="outline" disabled={isRoutePending || page >= pageCount} onClick={() => navigate({ page: String(page + 1) })}>Next <ChevronRight className="h-3.5 w-3.5" /></Btn>
+      </div></nav>}
 
       <Modal title={modal === 'edit' ? 'Edit Inquiry Source' : 'Add Inquiry Source'} open={modal !== null} onClose={() => setModal(null)}>
-        <div className="space-y-5"><SourceForm form={form} errors={fieldErrors} onChange={next => { setForm(next); setFieldErrors({}) }} />
+        <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]"><SourceForm form={form} errors={fieldErrors} onChange={next => { setForm(next); setFieldErrors({}) }} />
           {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          <div className="flex justify-end gap-3"><Btn variant="outline" onClick={() => setModal(null)} disabled={isPending}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Source'}</Btn></div>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end [&>button]:min-h-11 [&>button]:justify-center"><Btn variant="outline" onClick={() => setModal(null)} disabled={isPending}>Cancel</Btn><Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Source'}</Btn></div>
         </div>
       </Modal>
 
