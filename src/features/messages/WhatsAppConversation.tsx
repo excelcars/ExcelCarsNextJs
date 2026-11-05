@@ -1,5 +1,7 @@
 'use client'
 
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '@/lib/whatsapp/sendingPolicy.mjs'
+
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowDown, Check, CheckCheck, Clock3, RefreshCw, Send, File, Image as ImageIcon, Video, Mic, AlertCircle } from 'lucide-react'
 
@@ -140,7 +142,7 @@ export function WhatsAppConversation({ chat, onBack, onRead }: { chat: Chat; onB
     finally { submitting.current = false; if (alive.current) setSending(false) }
   }
 
-  const replyOpen = canReply && (!windowCloses || Date.now() < new Date(windowCloses).getTime())
+  const replyOpen = WHATSAPP_SENDING_ENABLED && canReply && (!windowCloses || Date.now() < new Date(windowCloses).getTime())
   return <>
     <header className="flex h-[68px] shrink-0 items-center gap-3 border-b border-[#d9dfdb] bg-[#f0f2f5] px-3 md:px-5">
       <button onClick={onBack} aria-label="Back to chats" className="rounded-full p-2 text-[#54656f] hover:bg-[#e2e5e7] md:hidden"><ArrowLeft className="h-5 w-5" /></button>
@@ -171,7 +173,7 @@ export function WhatsAppConversation({ chat, onBack, onRead }: { chat: Chat; onB
     </div>
     {error && <p role="alert" className="shrink-0 bg-red-50 px-4 py-2 text-xs text-red-700">{error}</p>}
     {pendingReply && !sending && <p className="shrink-0 bg-[#fff4ce] px-4 py-2 text-xs text-[#6b592d]">Reply status is unconfirmed. Use the send button to check the same reply before composing another.</p>}
-    {!loading && !replyOpen && <p className="shrink-0 bg-[#fff4ce] px-4 py-2 text-xs text-[#6b592d]">{latestId ? 'The reply window has closed.' : 'No incoming customer message yet.'} Use an approved template or wait for a new customer message.</p>}
+    {!loading && !replyOpen && <p className="shrink-0 bg-[#fff4ce] px-4 py-2 text-xs text-[#6b592d]">{!WHATSAPP_SENDING_ENABLED ? WHATSAPP_PAUSED_MESSAGE : `${latestId ? 'The reply window has closed.' : 'No incoming customer message yet.'} Use an approved template or wait for a new customer message.`}</p>}
     <form onSubmit={event => { event.preventDefault(); void send() }} className="flex shrink-0 items-end gap-3 bg-[#f0f2f5] px-4 py-3">
       <textarea aria-label="Type a message" placeholder="Type a message" value={body} maxLength={4096} rows={1} disabled={sending || !!pendingReply || loading || !replyOpen} onChange={event => { setBody(event.target.value); event.target.style.height = 'auto'; event.target.style.height = `${Math.min(event.target.scrollHeight, 120)}px` }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} className="max-h-[120px] min-h-11 min-w-0 flex-1 resize-none rounded-lg border-0 bg-white px-4 py-3 text-sm leading-5 text-[#111b21] outline-none placeholder:text-[#667781] disabled:opacity-60" />
       <button type="submit" disabled={sending || loading || !replyOpen || !body.trim()} aria-label={pendingReply ? 'Retry pending reply' : 'Send message'} title={pendingReply ? 'Check or retry the same reply' : 'Send message'} className="mb-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white transition hover:bg-[#008f72] disabled:bg-[#c6d1cc]">{sending ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}</button>

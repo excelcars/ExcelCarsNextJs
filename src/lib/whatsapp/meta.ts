@@ -1,3 +1,4 @@
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from './sendingPolicy.mjs'
 import { sendLoggedWhatsAppTemplate } from './templateSender.mjs'
 import { renderNoInventoryMessage } from './messageText.mjs'
 
@@ -13,6 +14,7 @@ export function normalizeWhatsAppRecipient(value: string | null | undefined) {
 }
 
 async function send(input: Parameters<typeof sendLoggedWhatsAppTemplate>[1]): Promise<WhatsAppTemplateResult> {
+  if (!WHATSAPP_SENDING_ENABLED) return { success: false, error: WHATSAPP_PAUSED_MESSAGE }
   // Lazy import keeps configuration helpers usable in standalone scripts/tests.
   const { prisma } = await import('@/lib/db/prisma')
   return sendLoggedWhatsAppTemplate(prisma, input)

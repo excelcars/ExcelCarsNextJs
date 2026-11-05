@@ -1,3 +1,4 @@
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '@/lib/whatsapp/sendingPolicy.mjs'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedActorForFunctions } from '@/lib/access/accessControl'
@@ -16,7 +17,7 @@ export async function GET(_request: Request, context: Context) {
     if (!message) return NextResponse.json({ error: 'Message not found.' }, { status: 404 })
     const latest = await prisma.whatsAppReceivedMessage.findFirst({ where: { phoneNumberId: message.phoneNumberId, senderMobile: message.senderMobile }, orderBy: { sentAt: 'desc' } })
     const replies = await prisma.whatsAppInboxReply.findMany({ where: { receivedMessageId: id }, orderBy: { createdAt: 'desc' }, take: 50 })
-    return NextResponse.json({ replies: replies.reverse(), canReply: !!latest && canReplyToWhatsApp(latest.sentAt),
+    return NextResponse.json({ replies: replies.reverse(), canReply: WHATSAPP_SENDING_ENABLED && !!latest && canReplyToWhatsApp(latest.sentAt),
       replyWindowClosesAt: latest ? new Date(latest.sentAt.getTime() + REPLY_WINDOW_MS).toISOString() : null }, { headers: { 'Cache-Control': 'no-store' } })
   } catch {
     return NextResponse.json({ error: 'Unable to load reply history.' }, { status: 500 })
@@ -26,6 +27,7 @@ export async function GET(_request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   const actor = await getAuthorizedActorForFunctions([WHATSAPP_INBOX_FUNCTION])
   if (!actor) return NextResponse.json({ error: 'Access denied.' }, { status: 403 })
+  if (!WHATSAPP_SENDING_ENABLED) return NextResponse.json({ error: WHATSAPP_PAUSED_MESSAGE }, { status: 503 })
   const id = Number((await context.params).id)
   const input = await request.json().catch(() => null)
   const body = typeof input?.body === 'string' ? input.body.trim() : ''

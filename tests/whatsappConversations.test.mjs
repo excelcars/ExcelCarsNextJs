@@ -19,6 +19,7 @@ function harness({ authorized = true, entries = [], missing = false, noInbound =
   const readUpdates = []
   const anchor = { id: 7, phoneNumberId: 'business1', senderMobile: '16315551181', sentAt: new Date() }
   const imports = {
+    '@/lib/whatsapp/sendingPolicy.mjs': { WHATSAPP_SENDING_ENABLED: true },
     'next/server': { NextResponse: Response }, '@prisma/client': { Prisma },
     '@/lib/access/accessControl': { getAuthorizedActorForFunctions: async () => authorized ? { userId: 1 } : null },
     '@/lib/access/accessCatalog': { WHATSAPP_INBOX_FUNCTION: 'WhatsApp_Inbox' },

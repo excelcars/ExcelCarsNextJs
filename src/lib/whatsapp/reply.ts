@@ -1,3 +1,4 @@
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from './sendingPolicy.mjs'
 export const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000
 
 export function canReplyToWhatsApp(lastInboundAt: Date, now = Date.now()) {
@@ -14,6 +15,7 @@ export type TextReplyResult = {
 export async function sendWhatsAppTextReply(input: {
   phoneNumberId: string; to: string; body: string; contextMessageId: string
 }): Promise<TextReplyResult> {
+  if (!WHATSAPP_SENDING_ENABLED) return { status: 'failed', error: WHATSAPP_PAUSED_MESSAGE }
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim()
   const configuredPhone = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim()
   const version = process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || 'v23.0'

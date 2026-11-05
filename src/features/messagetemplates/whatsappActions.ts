@@ -1,5 +1,7 @@
 'use server'
 
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '@/lib/whatsapp/sendingPolicy.mjs'
+
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { normalizeWhatsAppRecipient, sendGlobalTemplate } from '@/lib/whatsapp/meta'
 import { prisma } from '@/lib/db/prisma'
@@ -25,6 +27,7 @@ export async function deleteWhatsAppDraft(id: number) {
 }
 
 export async function sendGlobalWhatsApp(input: { customerName: string; mobile: string; message: string }) {
+  if (!WHATSAPP_SENDING_ENABLED) return { success: false, error: WHATSAPP_PAUSED_MESSAGE }
   if (!(await authorized())) return { success: false, error: 'Not authorized.' }
   const to = normalizeWhatsAppRecipient(input.mobile)
   if (!to) return { success: false, error: 'Enter a valid 10-digit mobile number.' }

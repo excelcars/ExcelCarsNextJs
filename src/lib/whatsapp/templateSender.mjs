@@ -1,5 +1,7 @@
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from './sendingPolicy.mjs'
 /** Shared by the Next.js app and reminder worker. Never sends without reserving a history row. */
 export async function sendLoggedWhatsAppTemplate(prisma, input) {
+  if (!WHATSAPP_SENDING_ENABLED) return { success: false, error: WHATSAPP_PAUSED_MESSAGE }
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim()
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim()
   const version = process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || 'v23.0'
