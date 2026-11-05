@@ -1,3 +1,4 @@
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '../lib/whatsapp/sendingPolicy.mjs'
 import nodemailer from 'nodemailer'
 
 const REMINDER_DAYS = new Set([30, 15, 7, 1])
@@ -71,6 +72,7 @@ function configuredMailer() {
 }
 
 async function sendWhatsApp(to, customerName, message) {
+  if (!WHATSAPP_SENDING_ENABLED) throw new Error(WHATSAPP_PAUSED_MESSAGE)
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim()
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim()
   const apiVersion = process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || 'v23.0'
@@ -96,6 +98,7 @@ async function recordAttempt(prisma, delivery, result) {
 }
 
 async function dispatchDelivery(prisma, delivery, mailer) {
+  if (delivery.channel === 'WhatsApp' && !WHATSAPP_SENDING_ENABLED) return
   const policy = await prisma.insuranceMain.findUnique({ where: { insuranceMainId: delivery.insuranceMainId }, select: { insuranceMainId: true } })
   if (!policy) {
     await prisma.$transaction([
@@ -132,7 +135,7 @@ export async function retryInsuranceReminders(prisma) {
   if (process.env.INSURANCE_REMINDER_ENABLED !== 'true') return
   const mailer = configuredMailer()
   const due = await prisma.insuranceReminderDelivery.findMany({
-    where: { status: 'Retrying', nextRetryAt: { lte: new Date() } },
+    where: { status: 'Retrying', nextRetryAt: { lte: new Date() }, ...(!WHATSAPP_SENDING_ENABLED ? { channel: 'Email' } : {}) },
     take: 50,
   })
   for (const delivery of due) {
@@ -180,7 +183,7 @@ export async function queueDailyInsuranceReminders(prisma) {
       const email = normalizeEmail(recipient.email)
       if (email) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, scheduledExpiryDate: policy.expiryDate, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `email:${email}`, recipientAddress: email, channel: 'Email', daysBeforeExpiry, status: 'Queued', emailSubject: template.messageSubject || TEMPLATE_SUBJECT, emailHtml, whatsAppMessage: null }, mailer)
       const whatsApp = normalizeWhatsAppRecipient(recipient.mobile)
-      if (whatsApp) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, scheduledExpiryDate: policy.expiryDate, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `whatsapp:${whatsApp}`, recipientAddress: whatsApp, channel: 'WhatsApp', daysBeforeExpiry, status: 'Queued', emailSubject: null, emailHtml: null, whatsAppMessage }, mailer)
+      if (WHATSAPP_SENDING_ENABLED && whatsApp) await queueDelivery(prisma, { insuranceMainId: policy.insuranceMainId, scheduledExpiryDate: policy.expiryDate, recipientType: recipient.type, recipientName: recipient.name, recipientKey: `whatsapp:${whatsApp}`, recipientAddress: whatsApp, channel: 'WhatsApp', daysBeforeExpiry, status: 'Queued', emailSubject: null, emailHtml: null, whatsAppMessage }, mailer)
     }
   }
 }
