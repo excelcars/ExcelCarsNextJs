@@ -1,5 +1,7 @@
 'use server'
 
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '@/lib/whatsapp/sendingPolicy.mjs'
+
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
@@ -45,7 +47,7 @@ export async function sendFeedbackInvitation(customerId: number, inventoryId: nu
   const purchase = await prisma.inventoryManagement.findFirst({ where: { inventoryId, customerId }, include: { customer: true, carVariantMaster: { include: { carMakeMaster: true, carModelMaster: true } } } })
   if (!purchase?.customer?.custEmail) return { success: false, error: 'Select a customer purchase with an email address.' }
   const whatsappRecipient = normalizeWhatsAppRecipient(purchase.customer.custMobile)
-  if (!whatsappRecipient) return { success: false, error: 'The selected customer needs a valid 10-digit mobile number for WhatsApp.' }
+  if (WHATSAPP_SENDING_ENABLED && !whatsappRecipient) return { success: false, error: 'The selected customer needs a valid 10-digit mobile number for WhatsApp.' }
   const customer = purchase.customer
   const token = randomBytes(32).toString('hex'); const tokenHash = createHash('sha256').update(token).digest('hex'); const expiresAt = new Date(Date.now() + 7 * 86400000)
   const invitation = await prisma.$transaction(async tx => {
@@ -61,7 +63,7 @@ export async function sendFeedbackInvitation(customerId: number, inventoryId: nu
   const feedbackUrl = `${base}/feedback/${token}`
   const [emailResult, whatsAppResult] = await Promise.all([
     sendEmail({ to: invitation.recipientEmail, subject: 'Tell us about your Excel Cars purchase', html: `<p>Dear ${customer.custName},</p><p>Thank you for choosing Excel Cars.</p><p><b>Purchase summary:</b> ${vehicle}</p><p><a href="${feedbackUrl}">Give Feedback</a></p><p>This one-time link expires in 7 days.</p>` }),
-    sendGlobalTemplate({ to: whatsappRecipient, customerName: customer.custName?.trim() || 'Customer', message: `Thank you for choosing Excel Cars. Please share your feedback within 7 days: ${feedbackUrl}` }),
+    WHATSAPP_SENDING_ENABLED && whatsappRecipient ? sendGlobalTemplate({ to: whatsappRecipient, customerName: customer.custName?.trim() || 'Customer', message: `Thank you for choosing Excel Cars. Please share your feedback within 7 days: ${feedbackUrl}` }) : Promise.resolve({ success: false, error: WHATSAPP_PAUSED_MESSAGE }),
   ])
 
   if (!emailResult.success && !whatsAppResult.success) {
@@ -70,7 +72,7 @@ export async function sendFeedbackInvitation(customerId: number, inventoryId: nu
   }
 
   const delivered = [emailResult.success && 'email', whatsAppResult.success && 'WhatsApp'].filter(Boolean).join(' and ')
-  const failed = [!emailResult.success && `Email failed: ${emailResult.error || 'unknown error'}`, !whatsAppResult.success && `WhatsApp failed: ${whatsAppResult.error || 'unknown error'}`].filter(Boolean).join(' ')
+  const failed = [!emailResult.success && `Email failed: ${emailResult.error || 'unknown error'}`, WHATSAPP_SENDING_ENABLED && !whatsAppResult.success && `WhatsApp failed: ${whatsAppResult.error || 'unknown error'}`].filter(Boolean).join(' ')
   return { success: true, message: `Feedback invitation sent by ${delivered}.${failed ? ` ${failed}` : ''}` }
 }
 

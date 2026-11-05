@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 
 function load(path, imports = {}, globals = {}) {
+  imports = { './sendingPolicy.mjs': { WHATSAPP_SENDING_ENABLED: true }, '@/lib/whatsapp/sendingPolicy.mjs': { WHATSAPP_SENDING_ENABLED: true }, ...imports }
   const source = ts.transpileModule(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   const module = { exports: {} }
   runInNewContext(source, { module, exports: module.exports, Date, URL, Response, AbortController, setTimeout, clearTimeout,
@@ -115,4 +116,19 @@ test('concurrent duplicate reservations and reused request IDs with different bo
   const reused = harness({ existing: { id: requestId, receivedMessageId: 7, createdBy: 10, body: 'Different', status: 'accepted' } })
   assert.equal((await reused.POST(request(), context)).status, 409)
   assert.equal(reused.calls.send.length, 0)
+})
+
+test('paused replies return before network requests or database reservations', async () => {
+  const paused = { WHATSAPP_SENDING_ENABLED: false, WHATSAPP_PAUSED_MESSAGE: 'WhatsApp sending is temporarily disabled.' }
+  const service = load('src/lib/whatsapp/reply.ts', { './sendingPolicy.mjs': paused }, { fetch: () => assert.fail('Must not send') })
+  assert.equal((await service.sendWhatsAppTextReply({ phoneNumberId: '123', to: '16315551181', body: 'Hi', contextMessageId: 'in' })).status, 'failed')
+  const handlers = load('app/api/messages/[id]/replies/route.ts', {
+    'next/server': { NextResponse: Response },
+    '@/lib/db/prisma': { prisma: {} },
+    '@/lib/access/accessControl': { getAuthorizedActorForFunctions: async () => ({ userId: 1 }) },
+    '@/lib/access/accessCatalog': { WHATSAPP_INBOX_FUNCTION: 'WhatsApp_Inbox' },
+    '@/lib/whatsapp/reply': service,
+    '@/lib/whatsapp/sendingPolicy.mjs': paused,
+  })
+  assert.equal((await handlers.POST(request(), context)).status, 503)
 })

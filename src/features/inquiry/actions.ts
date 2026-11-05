@@ -1,5 +1,7 @@
 'use server'
 
+import { WHATSAPP_SENDING_ENABLED } from '@/lib/whatsapp/sendingPolicy.mjs'
+
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
@@ -991,6 +993,7 @@ async function createTrackedVehicleWhatsAppLink({
 }
 
 async function sendInquiryInventoryWhatsApp(inquiryId: number, inventoryId: number) {
+  if (!WHATSAPP_SENDING_ENABLED) return { status: 'skipped' } satisfies NotificationAttemptResult
   const [inquiry, inventory] = await Promise.all([
     prisma.inquiry.findUnique({ where: { inquiryId }, include: { customer: true } }),
     prisma.inventoryManagement.findUnique({
@@ -1145,6 +1148,7 @@ async function createNoInventoryNotificationLog({ inquiryId, channel, recipient,
 }
 
 async function sendNoInventoryWhatsApp(inquiryId: number): Promise<NotificationAttemptResult> {
+  if (!WHATSAPP_SENDING_ENABLED) return { status: 'skipped' } satisfies NotificationAttemptResult
   const inquiry = await prisma.inquiry.findUnique({ where: { inquiryId }, include: { customer: true } })
   if (!inquiry) return { status: 'failed', error: 'Inquiry not found.' }
   const customerName = inquiry.customer?.custName?.trim() || inquiry.customerNameLegacy?.trim() || 'Customer'

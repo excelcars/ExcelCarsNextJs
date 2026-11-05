@@ -1,6 +1,6 @@
 import { auth } from '../../../auth'
 import { prisma } from '@/lib/db/prisma'
-import { APP_ACCESS_CATALOG, getAllowedFunctionNamesForRoute } from './accessCatalog'
+import { APP_ACCESS_CATALOG, DISABLED_ACCESS_FUNCTION_NAMES, DISABLED_ACCESS_ROUTES, getAllowedFunctionNamesForRoute } from './accessCatalog'
 
 export interface AuthorizedActor {
   userId: number
@@ -38,7 +38,7 @@ export async function getCurrentUserAccessProfile(): Promise<CurrentUserAccessPr
 
   const grantedFunctionNames = permissions
     .map(permission => permission.accessFunction.accessFunctionName?.trim())
-    .filter((value): value is string => !!value)
+    .filter((value): value is string => !!value && !DISABLED_ACCESS_FUNCTION_NAMES.has(value))
 
   return {
     userId: user.userId,
@@ -51,7 +51,7 @@ export async function getCurrentUserAccessProfile(): Promise<CurrentUserAccessPr
 }
 
 export async function getAuthorizedActorForFunctions(functionNames: string[]): Promise<AuthorizedActor | null> {
-  const normalized = [...new Set(functionNames.map(name => name.trim()).filter(Boolean))]
+  const normalized = [...new Set(functionNames.map(name => name.trim()).filter(name => !!name && !DISABLED_ACCESS_FUNCTION_NAMES.has(name)))]
   if (normalized.length === 0) return null
 
   const profile = await getCurrentUserAccessProfile()
@@ -69,11 +69,12 @@ export async function getAuthorizedActorForFunctions(functionNames: string[]): P
 
 export function getAccessibleRoutesFromFunctionNames(grantedFunctionNames: string[]) {
   return APP_ACCESS_CATALOG
-    .filter(item => getAllowedFunctionNamesForRoute(item.route).some(name => grantedFunctionNames.includes(name)))
+    .filter(item => getAllowedFunctionNamesForRoute(item.route).some(name => !DISABLED_ACCESS_FUNCTION_NAMES.has(name) && grantedFunctionNames.includes(name)))
     .map(item => item.route)
 }
 
 export async function canCurrentUserAccessRoute(route: string): Promise<boolean> {
+  if (DISABLED_ACCESS_ROUTES.has(route)) return false
   const requiredFunctionNames = getAllowedFunctionNamesForRoute(route)
   if (requiredFunctionNames.length === 0) return true
 
@@ -84,11 +85,13 @@ export async function canCurrentUserAccessRoute(route: string): Promise<boolean>
 }
 
 export async function canCurrentUserAccessFunction(functionName: string): Promise<boolean> {
+  if (DISABLED_ACCESS_FUNCTION_NAMES.has(functionName)) return false
   const profile = await getCurrentUserAccessProfile()
   return profile?.grantedFunctionNames.includes(functionName) ?? false
 }
 
 export async function getAuthorizedUserIdForRoute(route: string): Promise<number | null> {
+  if (DISABLED_ACCESS_ROUTES.has(route)) return null
   const requiredFunctionNames = getAllowedFunctionNamesForRoute(route)
   if (requiredFunctionNames.length === 0) {
     const profile = await getCurrentUserAccessProfile()

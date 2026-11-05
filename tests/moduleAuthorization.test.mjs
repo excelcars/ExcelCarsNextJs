@@ -28,6 +28,62 @@ const catalog = loadSource('src/lib/access/accessCatalog.ts')
 const validation = loadSource('src/lib/validation.ts')
 const catalogNames = loadSource('src/lib/catalogNames.ts')
 
+test('Role Access does not render the disabled inbox even when its database permission and mapping exist', () => {
+  const { RoleAccessClient } = loadSource('src/features/roleaccess/RoleAccessClient.tsx', {
+    'react/jsx-runtime': jsxRuntime,
+    react: {
+      useEffect() {}, useMemo: fn => fn(),
+      useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+      useTransition: () => [false, fn => fn()],
+    },
+    'next/navigation': { useRouter: () => ({}) },
+    'lucide-react': Object.fromEntries(['ShieldCheck', 'RefreshCcw', 'Save', 'Plus', 'Pencil', 'Trash2', 'History'].map(name => [name, name])),
+    '@/components/ui': Object.fromEntries(['ActionAlert', 'Btn', 'ConfirmDialog', 'Input', 'LoadingOverlay', 'Modal', 'SearchBar', 'Select'].map(name => [name, name])),
+    '@/lib/access/accessCatalog': catalog,
+    './actions': {},
+  })
+  const tree = RoleAccessClient({
+    roles: [{ roleId: 1, roleName: 'Admin' }],
+    accessFunctions: [{ accessFunctionId: 99, accessFunctionName: catalog.WHATSAPP_INBOX_FUNCTION }],
+    mappings: [{ roleId: 1, accessFunctionId: 99, accessFunctionName: catalog.WHATSAPP_INBOX_FUNCTION }],
+    actor: { userId: 1, roleId: 1, grantedFunctionName: catalog.ROLE_ACCESS_FUNCTION },
+  })
+  const rendered = JSON.stringify(tree)
+  assert.doesNotMatch(rendered, /WhatsApp Inbox|WhatsApp_Inbox/)
+  assert.match(rendered, /Meta Message Logs/)
+})
+
+test('disabled inbox stays unavailable even when an active user has the saved grant', async () => {
+  const { imports } = harness({ grants: [catalog.WHATSAPP_INBOX_FUNCTION] })
+  const access = imports['@/lib/access/accessControl']
+  assert.equal(catalog.APP_ACCESS_FUNCTION_NAMES.has(catalog.WHATSAPP_INBOX_FUNCTION), false)
+  assert.equal(catalog.APP_ACCESS_CATALOG.some(item => item.route === '/messages'), false)
+  assert.equal(await access.getAuthorizedActorForFunctions([catalog.WHATSAPP_INBOX_FUNCTION]), null)
+  assert.equal(await access.canCurrentUserAccessFunction(catalog.WHATSAPP_INBOX_FUNCTION), false)
+  assert.equal(await access.canCurrentUserAccessRoute('/messages'), false)
+  assert.equal(await access.getAuthorizedUserIdForRoute('/messages'), null)
+  assert.equal((await access.getCurrentUserAccessProfile()).grantedFunctionNames.includes(catalog.WHATSAPP_INBOX_FUNCTION), false)
+  assert.equal(access.getAccessibleRoutesFromFunctionNames([catalog.WHATSAPP_INBOX_FUNCTION]).includes('/messages'), false)
+  assert.equal(await access.canCurrentUserAccessRoute('/messages/logs'), false)
+
+  const page = loadSource('app/(dashboard)/messages/page.tsx', {
+    ...imports,
+    '@/lib/access/accessCatalog': catalog,
+    '@/features/messages/WhatsAppInboxClient': { WhatsAppInboxClient: () => null },
+  })
+  await assert.rejects(page.default(), /REDIRECT:\/dashboard/)
+})
+
+test('independent message logs permission still works while inbox is disabled', async () => {
+  const { imports } = harness({ grants: [catalog.WHATSAPP_INBOX_FUNCTION, catalog.WHATSAPP_LOGS_FUNCTION] })
+  const access = imports['@/lib/access/accessControl']
+  assert.equal(await access.canCurrentUserAccessRoute('/messages/logs'), true)
+  assert.equal(await access.canCurrentUserAccessRoute('/messages'), false)
+  const routes = access.getAccessibleRoutesFromFunctionNames([catalog.WHATSAPP_INBOX_FUNCTION, catalog.WHATSAPP_LOGS_FUNCTION])
+  assert.equal(routes.includes('/messages/logs'), true)
+  assert.equal(routes.includes('/messages'), false)
+})
+
 for (const [route, parameter, query] of [
   ['models', 'makeId', 'getModelsByMake'], ['variants', 'modelId', 'getVariantsByModel'],
 ]) {

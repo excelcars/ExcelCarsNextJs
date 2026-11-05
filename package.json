@@ -32,7 +32,7 @@
     "db:migrate:dev": "npx prisma migrate dev",
     "db:migrate:status": "npx prisma migrate status",
     "db:migrate:staging": "node scripts/prisma-staging-migrate.mjs",
-    "db:migrate:production": "npx prisma migrate deploy",
+    "db:migrate:production": "node scripts/prisma-production-migrate.mjs",
     "db:push:staging": "node scripts/prisma-staging-push.mjs",
     "db:copy-data:staging": "node scripts/db-copy-local-data-to-staging.mjs",
     "db:push:production": "node scripts/prisma-production-push.mjs",

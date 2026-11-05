@@ -1,5 +1,7 @@
 'use server'
 
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '@/lib/whatsapp/sendingPolicy.mjs'
+
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import { unlink } from 'fs/promises'
@@ -575,6 +577,7 @@ export async function sendInventoryEmail(inventoryId: number, input: SendInvento
 }
 
 export async function sendInventoryWhatsApp(inventoryId: number, input: SendInventoryWhatsAppInput): Promise<ActionResult> {
+  if (!WHATSAPP_SENDING_ENABLED) return { success: false, error: WHATSAPP_PAUSED_MESSAGE }
   if (!(await currentUserId())) return { success: false, error: 'Not authorized.' }
   const recipients = [...new Set(input.mobiles.map(normalizeWhatsAppRecipient).filter((mobile): mobile is string => Boolean(mobile)))].slice(0, 20)
   if (recipients.length === 0) return { success: false, error: 'Enter at least one valid 10-digit WhatsApp number.' }

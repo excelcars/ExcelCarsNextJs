@@ -169,7 +169,6 @@ const navItems: NavItem[] = [
       { label: 'Inventory', href: '/inventory' },
       { label: 'Checklist / Docs', href: '/checklist' },
       { label: 'Inquiries', href: '/inquiry' },
-      { label: 'WhatsApp Inbox', href: '/messages' },
       { label: 'Meta Message Logs', href: '/messages/logs' },
       { label: 'Loan Management', href: '/loan' },
       { label: 'Insurance', href: '/insurance' },

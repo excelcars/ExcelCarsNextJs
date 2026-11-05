@@ -1,3 +1,4 @@
+import { WHATSAPP_SENDING_ENABLED, WHATSAPP_PAUSED_MESSAGE } from '@/lib/whatsapp/sendingPolicy.mjs'
 import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
@@ -51,7 +52,7 @@ export async function GET(request: Request, context: Context) {
       return delivery ? { ...entry, status: delivery.status, errorMessage: delivery.errorMessage } : entry
     })
     return NextResponse.json({ entries: history, latestMessageId: latest?.id ?? null,
-      canReply: !!latest && canReplyToWhatsApp(latest.sentAt), replyWindowClosesAt: latest ? new Date(latest.sentAt.getTime() + REPLY_WINDOW_MS).toISOString() : null,
+      canReply: WHATSAPP_SENDING_ENABLED && !!latest && canReplyToWhatsApp(latest.sentAt), replyWindowClosesAt: latest ? new Date(latest.sentAt.getTime() + REPLY_WINDOW_MS).toISOString() : null,
       nextCursor: entries.length > 50 && oldest ? { before: oldest.sentAt.toISOString(), beforeKey: oldest.key } : null,
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch { return NextResponse.json({ error: 'Unable to load conversation.' }, { status: 500 }) }
