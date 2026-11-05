@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import { getAuthorizedActorForFunctions } from '@/lib/access/accessControl'
-import { APP_ACCESS_CATALOG, ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION, getAccessDefinition } from '@/lib/access/accessCatalog'
+import { APP_ACCESS_CATALOG, DISABLED_ACCESS_FUNCTION_NAMES, ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION, getAccessDefinition } from '@/lib/access/accessCatalog'
 
 export const ROLE_ACCESS_ALLOWED_FUNCTIONS = [ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION] as const
 export const ROLE_ACCESS_AUDIT_PAGE_SIZE = 20
@@ -61,6 +61,7 @@ export async function listRolesForAccess() {
 export async function listAccessFunctionsForAccess() {
   return prisma.accessFunction.findMany({
     where: {
+      accessFunctionName: { notIn: [...DISABLED_ACCESS_FUNCTION_NAMES] },
       OR: [
         { accessFunctionName: { in: APP_ACCESS_CATALOG.map(item => item.functionName) } },
         { accessFunctionName: { not: null } },
@@ -73,6 +74,7 @@ export async function listAccessFunctionsForAccess() {
 
 export async function listRoleAccessMappings() {
   return prisma.accessFunctionRole.findMany({
+    where: { accessFunction: { accessFunctionName: { notIn: [...DISABLED_ACCESS_FUNCTION_NAMES] } } },
     select: {
       roleId: true,
       accessFunctionId: true,

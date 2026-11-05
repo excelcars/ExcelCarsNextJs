@@ -27,7 +27,7 @@ function harness({ authorized = true, fail = false, legacy = false, rows = [] } 
     'next/server': { NextResponse: Response }, '@prisma/client': { Prisma },
     '@/lib/access/accessCatalog': catalog,
     '@/lib/access/accessControl': { getAuthorizedActorForFunctions: async functions => {
-      assert.ok(functions.includes(catalog.WHATSAPP_INBOX_FUNCTION))
+      assert.deepEqual([...functions], [catalog.WHATSAPP_LOGS_FUNCTION])
       return authorized ? { userId: 1 } : null
     } },
     '@/lib/whatsapp/outboundHistory': outbound,
@@ -129,9 +129,9 @@ test('older databases use available legacy logs without querying missing WhatsAp
   }
 })
 
-test('logs allow existing inbox grants and an independent view-only log grant', () => {
+test('logs require their independent view-only log grant while inbox is disabled', () => {
   const functions = catalog.getAllowedFunctionNamesForRoute('/messages/logs')
-  assert.ok(functions.includes('WhatsApp_Inbox'))
+  assert.equal(functions.includes('WhatsApp_Inbox'), false)
   assert.ok(functions.includes('WhatsApp_Message_Logs'))
   assert.equal(catalog.getAllowedFunctionNamesForRoute('/messages').includes('WhatsApp_Message_Logs'), false)
 })

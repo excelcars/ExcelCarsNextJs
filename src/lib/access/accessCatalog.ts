@@ -20,6 +20,10 @@ export const INVENTORY_FUNCTION = 'Inventory_Management'
 export const WHATSAPP_INBOX_FUNCTION = 'WhatsApp_Inbox'
 export const WHATSAPP_LOGS_FUNCTION = 'WhatsApp_Message_Logs'
 
+// Keep existing grants stored while the inbox is temporarily unavailable.
+export const DISABLED_ACCESS_FUNCTION_NAMES = new Set([WHATSAPP_INBOX_FUNCTION])
+export const DISABLED_ACCESS_ROUTES = new Set(['/messages'])
+
 export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Role Access', functionName: ROLE_ACCESS_FUNCTION, route: '/config/role-access', description: 'Manage which roles can access each module.' },
   { group: 'Configuration', label: 'User Access', functionName: USER_ACCESS_FUNCTION, route: '/config/user-access', description: 'Manage user accounts and assign roles.' },
@@ -36,7 +40,6 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Operations', label: 'Inventory', functionName: INVENTORY_FUNCTION, route: '/inventory', description: 'Manage inventory records.' },
   { group: 'Operations', label: 'Checklist / Docs', functionName: 'Checklist_Management', route: '/checklist', description: 'Manage vehicle checklist and document records.' },
   { group: 'Operations', label: 'Inquiries', functionName: 'Inquiry_Management', route: '/inquiry', description: 'Manage customer inquiries.' },
-  { group: 'Operations', label: 'WhatsApp Inbox', functionName: WHATSAPP_INBOX_FUNCTION, route: '/messages', description: 'View all incoming WhatsApp Business messages, mark them as read, and send text replies.' },
   { group: 'Operations', label: 'Meta Message Logs', functionName: WHATSAPP_LOGS_FUNCTION, route: '/messages/logs', description: 'View outgoing Meta WhatsApp messages, recipient counts, timestamps, and delivery status.' },
   { group: 'Operations', label: 'Loan Management', functionName: 'Loan_Management', route: '/loan', description: 'Manage loan referrals and payments.' },
   { group: 'Operations', label: 'Insurance', functionName: 'Insurance_Management', route: '/insurance', description: 'Manage insurance referrals and payouts.' },
@@ -60,7 +63,7 @@ export function getAccessDefinitionByRoute(route: string) {
 }
 
 export function getAllowedFunctionNamesForRoute(route: string) {
-  if (route === '/messages/logs') return [WHATSAPP_LOGS_FUNCTION, WHATSAPP_INBOX_FUNCTION]
+  if (route === '/messages/logs') return [WHATSAPP_LOGS_FUNCTION]
   if (route === '/config/feedback') return [FEEDBACK_FUNCTION, LEGACY_FEEDBACK_FUNCTION]
   if (route === '/reports/today') return [TODAY_ACTIVITY_FUNCTION, LEGACY_TODAY_INQUIRY_FOLLOWUP_FUNCTION]
   if (route === '/config/role-access') return [ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION]
