@@ -97,10 +97,18 @@ Run a production-style build:
 npm run vercel:build
 ```
 
+Verify the production target without connecting to the database:
+
+```bash
+npm run db:migrate:production -- --check
+```
+
+The production migration script explicitly loads `.env.production.local`, overrides inherited local connection settings, rejects localhost targets, and uses a direct Neon endpoint. Use `--status` to inspect migration history without applying changes.
+
 Apply committed Prisma migrations to production database:
 
 ```bash
-npm run db:migrate:production
+npm run db:migrate:production -- --confirm-production
 ```
 
 Deploy to production:
@@ -188,7 +196,7 @@ npm run db:migrate:staging
 Apply production migrations:
 
 ```bash
-npm run db:migrate:production
+npm run db:migrate:production -- --confirm-production
 ```
 
 Deploy preview:
@@ -225,7 +233,7 @@ npm run db:migrate:staging
 8. Apply migrations to production:
 
 ```bash
-npm run db:migrate:production
+npm run db:migrate:production -- --confirm-production
 ```
 
 9. Promote only tested builds to production

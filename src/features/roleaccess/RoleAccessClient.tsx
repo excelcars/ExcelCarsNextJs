@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShieldCheck, RefreshCcw, Save, Plus, Pencil, Trash2, History } from 'lucide-react'
 import { ActionAlert, Btn, ConfirmDialog, Input, LoadingOverlay, Modal, SearchBar, Select } from '@/components/ui'
-import { APP_ACCESS_CATALOG, ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION } from '@/lib/access/accessCatalog'
+import { APP_ACCESS_CATALOG, DISABLED_ACCESS_FUNCTION_NAMES, ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION } from '@/lib/access/accessCatalog'
 import { createRole, deleteRole, saveRoleAccess, updateRole } from './actions'
 import type { RoleAccessActor, RoleAccessFunctionRow, RoleAccessMappingRow, RoleAccessRoleRow } from './queries'
 
@@ -70,7 +70,7 @@ export function RoleAccessClient({
 
     const knownNames = new Set(known.map(item => item.functionName))
     const extras = accessFunctions
-      .filter(item => item.accessFunctionName && !knownNames.has(item.accessFunctionName))
+      .filter(item => item.accessFunctionName && !DISABLED_ACCESS_FUNCTION_NAMES.has(item.accessFunctionName) && !knownNames.has(item.accessFunctionName))
       .map(item => ({
         group: 'Configuration',
         label: item.accessFunctionName as string,
@@ -93,7 +93,7 @@ export function RoleAccessClient({
   const selectedRoleMappings = useMemo(() => {
     if (!selectedRoleId) return []
     return mappings
-      .filter(mapping => mapping.roleId === selectedRoleId && mapping.accessFunctionName)
+      .filter(mapping => mapping.roleId === selectedRoleId && mapping.accessFunctionName && !DISABLED_ACCESS_FUNCTION_NAMES.has(mapping.accessFunctionName))
       .map(mapping => mapping.accessFunctionName as string)
       .sort()
   }, [mappings, selectedRoleId])

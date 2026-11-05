@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Btn, PageHeader } from '@/components/ui'
@@ -105,6 +104,6 @@ export function MetaMessageLogsClient() {
         <div className="flex gap-2"><Btn size="sm" variant="outline" disabled={loading || page <= 1} onClick={() => setPage(value => value - 1)}>Previous</Btn><Btn size="sm" variant="outline" disabled={loading || !result || page >= pages} onClick={() => setPage(value => value + 1)}>Next</Btn></div>
       </div>
     </section>
-    <p className="mt-4 text-xs leading-5 text-gray-500">Shows sends saved by this CRM, including available older template logs. Messages sent outside this CRM are only available if recorded here. <Link href="/messages" className="font-medium text-[#1B2A6B] underline">Open WhatsApp Inbox</Link></p>
+    <p className="mt-4 text-xs leading-5 text-gray-500">Shows sends saved by this CRM, including available older template logs. Messages sent outside this CRM are only available if recorded here.</p>
   </div>
 }

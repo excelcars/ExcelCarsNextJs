@@ -40,13 +40,13 @@ function harness(pathname = '/dashboard', search = '', accessibleRoutes = ['/inv
   return { tree, updates, pushes, click: event => dashboard.props.onClick(event) }
 }
 
-test('Meta Message Logs highlights its own navigation entry without highlighting the inbox', () => {
+test('Meta Message Logs remains visible while the inbox is hidden even with an existing grant', () => {
   const check = harness('/messages/logs', '', ['/messages', '/messages/logs'])
   const links = nodes(check.tree).filter(node => node.type === 'Link')
   const logs = links.filter(node => node.props.href === '/messages/logs')
   const inbox = links.filter(node => node.props.href === '/messages')
   assert.ok(logs.length)
-  assert.ok(inbox.length)
+  assert.equal(inbox.length, 0)
   assert.ok(logs.every(node => node.props.className.includes('text-white font-medium')))
   assert.ok(inbox.every(node => !node.props.className.includes('text-white font-medium')))
 })
