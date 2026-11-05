@@ -1,4 +1,2 @@
-@import "tailwindcss";
+@import "../../../../app/globals.css";
 @source "../../../../src";
-
-body { margin: 0; font-family: Arial, sans-serif; }

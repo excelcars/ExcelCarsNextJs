@@ -2,41 +2,20 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Send, X, Paperclip, History } from 'lucide-react'
-import { ActionAlert, Badge, Btn, Input, Select, Modal, Table, PageHeader, SearchBar, ConfirmDialog } from '@/components/ui'
+import { Plus } from 'lucide-react'
+import { ActionAlert, Btn, Input, Modal, SearchBar, ConfirmDialog } from '@/components/ui'
 import { createTemplate, updateTemplate, deleteTemplate, findMessageRecipients, getTemplateDeliveryHistory, sendTemplateEmail, type TemplateFormInput } from './actions'
 import { MESSAGE_TYPES } from './queries'
 import { RECIPIENT_GROUPS, type RecipientGroup, type RecipientOption } from './recipients'
-import { RichTextEditor } from './RichTextEditor'
+import { EmailTemplatesList } from './EmailTemplatesList'
+import { EmailTemplateFields } from './EmailTemplateFields'
+import { EmailPreview } from './EmailPreview'
+import { TemplateAttachmentFiles } from './TemplateAttachmentFiles'
+import { TemplateRecipients } from './TemplateRecipients'
+import { EmailDeliveryHistory, type DeliveryRow } from './EmailDeliveryHistory'
+import type { TemplateRow } from './templatePresentation'
 
-interface TemplateRow {
-  typeId: number
-  messageType: string | null
-  messageSubject: string | null
-  messageBody: string | null
-}
 interface AttachmentRow { uploadId: string; originalName: string; byteSize: number; scope: string }
-interface DeliveryRow { deliveryLogId: number; recipientEmail: string; status: string; errorMessage: string | null; attachmentCount: number; attemptedAt: Date | string }
-
-// Templates are stored as HTML so they can be sent and previewed as formatted emails.
-// The list should be a compact, readable summary rather than exposing that markup.
-function emailBodyToText(html: string | null) {
-  if (!html) return '—'
-
-  return html
-    .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, '\n')
-    .replace(/<li\b[^>]*>/gi, '• ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/\s*\n\s*/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim() || '—'
-}
 
 function emptyForm(): TemplateFormInput {
   return { messageType: 'Email', messageSubject: '', messageBody: '' }
@@ -227,56 +206,25 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Email Templates"
-        subtitle={`${filtered.length} templates`}
-        action={<Btn size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Template</Btn>}
-      />
+    <div className="min-w-0">
+      <header className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0"><h1 className="text-xl font-bold text-gray-900">Email Templates</h1><p className="mt-0.5 text-sm text-gray-500">{filtered.length} templates</p></div>
+        <Btn size="sm" className="min-h-11 shrink-0 justify-center" onClick={openAdd}><Plus className="w-3.5 h-3.5" />Add Template</Btn>
+      </header>
 
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="mb-4 min-w-0 [&_input]:min-w-0 [&_input]:min-h-11 sm:max-w-sm">
         <SearchBar value={search} onChange={setSearch} placeholder="Subject, body..." />
       </div>
 
-      <Table
-        headers={['Type', 'Subject', 'Body', 'Actions']}
-        empty={filtered.length === 0}
-        minWidthClass="min-w-0"
-        columnWidths={['11%', '29%', '48%', '12%']}
-      >
-        {filtered.map(r => (
-          <tr key={r.typeId} className="hover:bg-gray-50 transition">
-            <td className="px-4 py-3">{r.messageType ? <Badge label={r.messageType} /> : '—'}</td>
-            <td className="px-4 py-3 font-medium text-gray-900 break-words">{r.messageSubject ?? '—'}</td>
-            <td className="px-4 py-3 text-sm text-gray-600"><p className="max-h-12 overflow-hidden leading-5" title={emailBodyToText(r.messageBody)}>{emailBodyToText(r.messageBody)}</p></td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1">
-                {r.messageType === 'Email' && (
-                  <button onClick={() => openSend(r)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition" title="Send"><Send className="w-3.5 h-3.5" /></button>
-                )}
-                <button onClick={() => openEdit(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openAttachments(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Attachments"><Paperclip className="w-3.5 h-3.5" /></button>
-                <button onClick={() => openHistory(r)} className="p-1.5 text-gray-400 hover:text-[#1B2A6B] hover:bg-blue-50 rounded transition" title="Delivery history"><History className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteId(r.typeId)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            </td>
-          </tr>
-        ))}
-      </Table>
+      <EmailTemplatesList rows={filtered} onSend={openSend} onEdit={openEdit} onAttachments={openAttachments} onHistory={openHistory} onDelete={setDeleteId} />
 
       <Modal title={editId ? 'Edit Template' : 'Add Template'} open={!!modal} onClose={() => setModal(null)}>
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Select label="Type" value={form.messageType} onChange={e => f('messageType', e.target.value)}>
-              {MESSAGE_TYPES.map(t => <option key={t}>{t}</option>)}
-            </Select>
-            <Input label="Subject *" value={form.messageSubject} onChange={e => f('messageSubject', e.target.value)} error={!!fieldErrors.messageSubject} errorMessage={fieldErrors.messageSubject} />
-          </div>
-          <RichTextEditor value={form.messageBody} onChange={value => f('messageBody', value)} errorMessage={fieldErrors.messageBody} />
+        <div className="min-w-0 space-y-4 break-words [overflow-wrap:anywhere] [&_button]:min-h-11 [&_input]:min-w-0 [&_select]:min-h-11">
+          <EmailTemplateFields form={form} messageTypes={MESSAGE_TYPES} errors={fieldErrors} onChange={f} />
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="grid gap-3 pt-2 sm:flex sm:justify-end [&_button]:min-h-11 [&_button]:justify-center">
             <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
             <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Template'}</Btn>
           </div>
@@ -290,7 +238,7 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
 
       <Modal title={`Send — ${sendRow?.messageSubject ?? ''}`} open={!!sendRow} onClose={() => setSendRow(null)}>
         {sendResult ? (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 break-words [overflow-wrap:anywhere] [&_button]:min-h-11 [&_input]:min-w-0 [&_select]:min-h-11">
             <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-700">
               {sendResult.sentCount} email{sendResult.sentCount === 1 ? '' : 's'} sent successfully.
             </div>
@@ -300,42 +248,16 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
             <div className="flex justify-end"><Btn onClick={() => setSendRow(null)}>Close</Btn></div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 p-3 space-y-3">
-              <div>
-                <div className="text-sm font-medium text-gray-800">Choose recipients</div>
-                <p className="text-xs text-gray-500 mt-0.5">Search a group, then select one or more people with email addresses.</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)] gap-2 items-end">
-                <Select label="Group" value={recipientGroup} onChange={e => { setRecipientGroup(e.target.value as RecipientGroup); setRecipientRows([]); setRecipientError('') }}>
-                  {RECIPIENT_GROUPS.map(group => <option key={group} value={group}>{group}</option>)}
-                </Select>
-                <Input label="Search" value={recipientSearch} onChange={e => { const value = e.target.value; setRecipientSearch(value); if (value.trim().length >= 2) searchRecipients(value); else { setRecipientRows([]); setRecipientError('') } }} placeholder={isSearchingRecipients ? 'Searching...' : 'Name, mobile, or email'} />
-              </div>
-              {recipientError && <div className="text-xs text-amber-700">{recipientError}</div>}
-              {recipientRows.length > 0 && <div className="max-h-40 overflow-y-auto rounded border border-gray-100 divide-y divide-gray-100">
-                {recipientRows.map(recipient => {
-                  const checked = selectedRecipients.some(item => item.group === recipient.group && item.id === recipient.id)
-                  return <label key={`${recipient.group}:${recipient.id}`} className="flex gap-2 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
-                    <input type="checkbox" checked={checked} onChange={() => toggleRecipient(recipient)} className="mt-0.5" />
-                    <span><span className="font-medium text-gray-800">{recipient.name}</span><span className="block text-xs text-gray-500">{recipient.email}{recipient.mobile ? ` · ${recipient.mobile}` : ''}</span></span>
-                  </label>
-                })}
-              </div>}
-              {selectedRecipients.length > 0 && <div className="flex flex-wrap gap-1.5">
-                {selectedRecipients.map(recipient => <span key={`${recipient.group}:${recipient.id}`} className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs text-[#1B2A6B]">
-                  {recipient.name} <button type="button" aria-label={`Remove ${recipient.name}`} onClick={() => toggleRecipient(recipient)}><X className="h-3 w-3" /></button>
-                </span>)}
-              </div>}
-            </div>
+          <div className="min-w-0 space-y-4 break-words [overflow-wrap:anywhere] [&_button]:min-h-11 [&_input]:min-w-0 [&_select]:min-h-11">
+            <TemplateRecipients groups={RECIPIENT_GROUPS} group={recipientGroup} query={recipientSearch} rows={recipientRows} selected={selectedRecipients} searching={isSearchingRecipients} error={recipientError} onGroupChange={group => { setRecipientGroup(group); setRecipientRows([]); setRecipientError('') }} onQueryChange={value => { setRecipientSearch(value); if (value.trim().length >= 2) searchRecipients(value); else { setRecipientRows([]); setRecipientError('') } }} onToggle={toggleRecipient} />
             <Input label="Other recipient email (optional)" type="email" value={toEmail} onChange={e => setToEmail(e.target.value)} placeholder="name@example.com" />
             <p className="text-xs text-gray-500">Choose at least one listed recipient or enter another email address. A maximum of 50 selected recipients can be sent to at once.</p>
-            <div className="rounded-lg border border-gray-200 p-3 space-y-2"><label className="text-sm font-medium text-gray-800">Extra files for this send</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e => { void uploadAttachments(e.target.files, 'send'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, or PNG — up to 10 MB per file.</p>{sendAttachments.map(file => <div key={file.uploadId} className="flex justify-between text-xs"><span>{file.originalName}</span><button type="button" onClick={() => { void removeAttachment(file.uploadId, 'send') }}><X className="w-3 h-3" /></button></div>)}</div>
+            <div className="rounded-lg border border-gray-200 p-3 space-y-2"><label className="text-sm font-medium text-gray-800">Extra files for this send</label><input type="file" className="block min-h-11 w-full min-w-0 text-sm" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e => { void uploadAttachments(e.target.files, 'send'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, or PNG — up to 10 MB per file.</p><TemplateAttachmentFiles files={sendAttachments} onRemove={id => { void removeAttachment(id, 'send') }} /></div>
             {attachmentError && <div className="text-xs text-red-600">{attachmentError}</div>}
 
             {sendError && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{sendError}</div>}
 
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="grid gap-3 pt-2 sm:flex sm:justify-end [&_button]:min-h-11 [&_button]:justify-center">
               <Btn variant="outline" onClick={() => setSendRow(null)}>Cancel</Btn>
               <Btn variant="outline" onClick={() => setPreviewOpen(true)}>Preview Email</Btn>
               <Btn onClick={send} disabled={isPending}>{isPending ? 'Sending...' : 'Send'}</Btn>
@@ -345,15 +267,16 @@ export function TemplatesClient({ initialData }: { initialData: TemplateRow[] })
       </Modal>
 
       <Modal title={`Preview — ${sendRow?.messageSubject ?? ''}`} open={previewOpen} onClose={() => setPreviewOpen(false)} width="max-w-3xl">
-        <div className="space-y-4"><div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm"><div><b>Subject:</b> {sendRow?.messageSubject || '(no subject)'}</div><div className="mt-1"><b>Recipients:</b> {selectedRecipients.length + (toEmail.trim() ? 1 : 0)} selected {selectedRecipients.length + (toEmail.trim() ? 1 : 0) === 1 ? 'address' : 'addresses'}{selectedRecipients.length ? ' (duplicate email addresses will be sent only once)' : ''}</div><div className="mt-1"><b>Attachments:</b> {[...templateAttachments, ...sendAttachments].length ? [...templateAttachments, ...sendAttachments].map(file => file.originalName).join(', ') : 'None'}</div></div><iframe title="Email preview" sandbox="" srcDoc={sendRow?.messageBody ?? ''} className="min-h-80 w-full rounded-lg border border-gray-200 bg-white" /><div className="flex justify-end"><Btn onClick={() => setPreviewOpen(false)}>Close Preview</Btn></div></div>
+        <EmailPreview subject={sendRow?.messageSubject} body={sendRow?.messageBody} recipientCount={selectedRecipients.length + (toEmail.trim() ? 1 : 0)} hasSelectedRecipients={selectedRecipients.length > 0} attachmentNames={[...templateAttachments, ...sendAttachments].map(file => file.originalName)} />
+        <div className="mt-4 flex justify-end"><Btn className="min-h-11" onClick={() => setPreviewOpen(false)}>Close Preview</Btn></div>
       </Modal>
 
       <Modal title={`Attachments — ${attachmentTemplate?.messageSubject ?? ''}`} open={!!attachmentTemplate} onClose={() => setAttachmentTemplate(null)}>
-        <div className="space-y-3"><p className="text-sm text-gray-600">These files will be included every time this template is sent.</p><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e => { void uploadAttachments(e.target.files, 'template'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, or PNG — up to 10 MB per file.</p>{attachmentError && <div className="text-xs text-red-600">{attachmentError}</div>}{templateAttachments.length === 0 ? <div className="text-sm text-gray-400">No saved attachments.</div> : templateAttachments.map(file => <div key={file.uploadId} className="flex items-center justify-between rounded border px-3 py-2 text-sm"><span>{file.originalName} <span className="text-gray-400">({Math.ceil(file.byteSize / 1024)} KB)</span></span><button type="button" onClick={() => { void removeAttachment(file.uploadId, 'template') }} className="text-red-600">Remove</button></div>)}</div>
+        <div className="min-w-0 space-y-3 break-words [overflow-wrap:anywhere]"><p className="text-sm text-gray-600">These files will be included every time this template is sent.</p><input type="file" className="block min-h-11 w-full min-w-0 text-sm" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={e => { void uploadAttachments(e.target.files, 'template'); e.currentTarget.value = '' }} /><p className="text-xs text-gray-500">PDF, JPG, or PNG — up to 10 MB per file.</p>{attachmentError && <div className="text-xs text-red-600">{attachmentError}</div>}{templateAttachments.length === 0 ? <div className="text-sm text-gray-400">No saved attachments.</div> : <TemplateAttachmentFiles files={templateAttachments} onRemove={id => { void removeAttachment(id, 'template') }} />}</div>
       </Modal>
 
       <Modal title={`Delivery history — ${historyTemplate?.messageSubject ?? ''}`} open={!!historyTemplate} onClose={() => setHistoryTemplate(null)}>
-        {historyError ? <div className="text-sm text-red-600">{historyError}</div> : deliveryHistory.length === 0 ? <div className="text-sm text-gray-400">No email attempts for this template yet.</div> : <div className="space-y-2">{deliveryHistory.map(item => <div key={item.deliveryLogId} className="rounded border border-gray-200 px-3 py-2 text-sm"><div className="flex justify-between gap-3"><span className="font-medium">{item.recipientEmail}</span><span className={item.status === 'Sent' ? 'text-green-700' : 'text-red-700'}>{item.status}</span></div><div className="mt-1 text-xs text-gray-500">{new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(item.attemptedAt))} · {item.attachmentCount} attachment{item.attachmentCount === 1 ? '' : 's'}</div>{item.errorMessage && <div className="mt-1 text-xs text-red-600">{item.errorMessage}</div>}</div>)}</div>}
+        <EmailDeliveryHistory rows={deliveryHistory} error={historyError} />
       </Modal>
     </div>
   )

@@ -24,7 +24,7 @@ export function LeadSourceChart({ data, totalLeads, selectedSourceCode, onSelect
       </div>
       <div className="w-full min-w-0" style={{ height: Math.max(180, data.length * 28 + 36) }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 6, right: 8, bottom: 6, left: 20 }} barCategoryGap="14%">
+          <BarChart data={data} layout="vertical" margin={{ top: 6, right: 8, bottom: 6, left: 0 }} barCategoryGap="14%">
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 12, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
             <YAxis type="category" dataKey="name" width={118} interval={0} minTickGap={0} tick={{ fontSize: 13, fill: '#6B7280' }} axisLine={false} tickLine={false} />

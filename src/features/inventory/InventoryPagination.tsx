@@ -28,11 +28,11 @@ export function InventoryPagination({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-500">Rows</span>
-          <Select value={String(pageSize)} onChange={event => onPageSizeChange(Number(event.target.value))} className="min-w-24" disabled={isLoading}>
+          <Select aria-label="Vehicles per page" value={String(pageSize)} onChange={event => onPageSizeChange(Number(event.target.value))} className="min-h-11 min-w-24" disabled={isLoading}>
             {pageSizeOptions.map(option => <option key={option} value={option}>{option} / page</option>)}
           </Select>
         </div>
-        <div className="flex gap-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:flex [&_button]:min-h-11 [&_button]:justify-center">
           <Btn variant="outline" size="sm" disabled={page <= 1 || isPending || isLoading} onClick={() => onPageChange(page - 1)}><ChevronLeft className="w-3.5 h-3.5" />Prev</Btn>
           <Btn variant="outline" size="sm" disabled={page >= pageCount || isPending || isLoading} onClick={() => onPageChange(page + 1)}>Next<ChevronRight className="w-3.5 h-3.5" /></Btn>
         </div>

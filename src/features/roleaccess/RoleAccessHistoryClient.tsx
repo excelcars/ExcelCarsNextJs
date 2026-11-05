@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Eye, ShieldCheck } from 'lucide-react'
-import { Btn, Input, LoadingOverlay, Modal, PageHeader, Select, Table } from '@/components/ui'
+import { Btn, Input, LoadingOverlay, Modal, Select, Table } from '@/components/ui'
 import { describeFunctionName, ROLE_ACCESS_AUDIT_PAGE_SIZE, summarizeRoleAccessAudit, type RoleAccessActor, type RoleAccessAuditRow, type RoleAccessRoleRow } from './queries'
 
 interface AuditUserOption {
@@ -92,18 +92,15 @@ export function RoleAccessHistoryClient({
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Role Access History"
-        subtitle={`${total.toLocaleString('en-IN')} permission change event${total === 1 ? '' : 's'}${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}${actor.grantedFunctionName === 'User_Access_Management' ? ' · bootstrap access via User Access permission' : ''}`}
-        action={
-          <div className="flex flex-wrap gap-2">
+    <div className="min-w-0 [overflow-wrap:anywhere] [&_input]:min-w-0 [&_input]:max-w-full [&_input]:text-base sm:[&_input]:text-sm [&_select]:text-base sm:[&_select]:text-sm [&_button]:min-h-11">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0"><h1 className="text-xl font-bold text-gray-900">Role Access History</h1><p className="mt-0.5 text-sm text-gray-500">{`${total.toLocaleString('en-IN')} permission change event${total === 1 ? '' : 's'}${pageCount > 1 ? ` · Page ${page} of ${pageCount}` : ''}${actor.grantedFunctionName === 'User_Access_Management' ? ' · bootstrap access via User Access permission' : ''}`}</p></div>
+          <div className="flex flex-wrap gap-2 sm:shrink-0 [&>button]:w-full [&>button]:justify-center sm:[&>button]:w-auto">
             <Btn variant="outline" onClick={() => router.push('/config/role-access')} disabled={isRoutePending}>
               Back to Role Access
             </Btn>
           </div>
-        }
-      />
+      </header>
 
       <div className="relative">
         <LoadingOverlay show={isRoutePending} label="Loading history..." />
@@ -142,7 +139,23 @@ export function RoleAccessHistoryClient({
           </div>
         </div>
 
+        <div className="space-y-3 lg:hidden">
+          {rows.length === 0 ? <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">No role-permission history matches these filters.</div> : rows.map(row => (
+            <article key={row.roleAccessAuditId} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <h2 className="font-semibold text-gray-900">{row.roleNameSnapshot?.trim() || `Role #${row.roleId}`}</h2>
+              <p className="mt-1 text-xs text-gray-500">Role ID: {row.roleId}</p>
+              <dl className="mt-3 space-y-2 text-sm">
+                <div><dt className="text-xs text-gray-500">Date / Time</dt><dd className="mt-0.5 text-gray-700">{formatDateTime(row.changedAt)}</dd></div>
+                <div><dt className="text-xs text-gray-500">Changed By</dt><dd className="mt-0.5 text-gray-700">{row.changedByUserName?.trim() || `User #${row.changedByUserId}`}</dd></div>
+              </dl>
+              <p className="mt-3 flex items-start gap-2 rounded-lg bg-blue-50 p-3 text-sm text-[#1B2A6B]"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />{summarizeRoleAccessAudit(row)}</p>
+              <Btn className="mt-3 w-full justify-center" variant="outline" onClick={() => setViewRow(row)}><Eye className="h-4 w-4" />View details</Btn>
+            </article>
+          ))}
+        </div>
+        <div className="hidden lg:block">
         <Table
+          minWidthClass="min-w-[900px]"
           headers={['Date / Time', 'Role', 'Changed By', 'Summary', 'Actions']}
           empty={rows.length === 0}
           emptyMessage="No role-permission history matches these filters."
@@ -162,20 +175,21 @@ export function RoleAccessHistoryClient({
                 </div>
               </td>
               <td className="px-4 py-3">
-                <button onClick={() => setViewRow(row)} className="inline-flex rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View details">
+                <button aria-label="View details" onClick={() => setViewRow(row)} className="inline-flex min-w-11 items-center justify-center rounded-md p-2 text-gray-700 transition hover:bg-gray-50" title="View details">
                   <Eye className="h-4 w-4" />
                 </button>
               </td>
             </tr>
           ))}
         </Table>
+        </div>
 
         {pageCount > 1 && (
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-gray-500">
               Showing {((page - 1) * ROLE_ACCESS_AUDIT_PAGE_SIZE) + (rows.length ? 1 : 0)}-{((page - 1) * ROLE_ACCESS_AUDIT_PAGE_SIZE) + rows.length} of {total.toLocaleString('en-IN')} · Page {page} of {pageCount}
             </div>
-            <div className="flex gap-1.5">
+            <div className="grid grid-cols-2 gap-2 sm:flex [&>button]:justify-center">
               <Btn variant="outline" size="sm" disabled={isRoutePending || page <= 1} onClick={() => pushQuery({ page: String(page - 1) })}>
                 <ChevronLeft className="w-3.5 h-3.5" />Prev
               </Btn>
@@ -194,7 +208,7 @@ export function RoleAccessHistoryClient({
         width="max-w-5xl"
       >
         {viewRow ? (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 [overflow-wrap:anywhere]">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Changed At</div>
@@ -222,7 +236,7 @@ export function RoleAccessHistoryClient({
             </div>
 
             <div className="flex justify-end">
-              <Btn variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
+              <Btn className="min-h-11 w-full justify-center sm:w-auto" variant="outline" onClick={() => setViewRow(null)}>Close</Btn>
             </div>
           </div>
         ) : null}

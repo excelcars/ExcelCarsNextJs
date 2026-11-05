@@ -101,6 +101,7 @@ export function InquiryFilters({
   onQuickFilterChange,
   onReset,
 }: InquiryFiltersProps) {
+  const [expanded, setExpanded] = useState(false)
   const [draftBudgetMin, setDraftBudgetMin] = useState(budgetMin)
   const [draftBudgetMax, setDraftBudgetMax] = useState(budgetMax)
 
@@ -114,23 +115,24 @@ export function InquiryFilters({
           <div className="text-sm font-semibold text-gray-900">Filters</div>
           <div className="text-xs text-gray-500">Use any combination below. Export will follow the same filters.</div>
         </div>
+        <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls="inquiry-filter-fields" className="min-h-11 shrink-0 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-700 lg:hidden">{expanded ? 'Hide filters' : 'More filters'}</button>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick inquiry filters">
         {([
           ['active', 'Active'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
         ] as const).map(([value, label]) => (
-          <FilterChip key={value} onClick={() => onQuickFilterChange(value)} disabled={isRoutePending} active={quickFilter === value}>
+          <FilterChip key={value} onClick={() => onQuickFilterChange(value)} className="min-h-11 sm:min-h-0" disabled={isRoutePending} active={quickFilter === value}>
             {label}
           </FilterChip>
         ))}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="flex flex-col gap-1">
+        <div className="mb-3 flex min-w-0 flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">Search</label>
           <SearchBar value={search} onChange={onSearchChange} placeholder="Name, mobile, email, source, vehicle..." disabled={isRoutePending} />
         </div>
+      <div id="inquiry-filter-fields" className={`${expanded ? 'grid' : 'hidden lg:grid'} min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0`}>
         <FormDropdown label="Source" value={source === 'All' ? '' : source} options={sourceOptions.map(item => ({ value: item.code, label: item.displayName }))} placeholder="All Sources" allowClear disabled={isRoutePending} onChange={value => onSourceChange(value || 'All')} />
         <FormDropdown label="City / Reporting Location" value={locationId} options={locationOptions.map(item => ({ value: String(item.locationId), label: item.displayName }))} placeholder="All locations" allowClear disabled={isRoutePending} onChange={onLocationIdChange} />
         <Input label="Area / Locality" value={location} onChange={event => onLocationChange(event.target.value)} placeholder="Andheri, Kothrud, JLT..." disabled={isRoutePending} />
@@ -140,7 +142,7 @@ export function InquiryFilters({
         <DateFilterInput label="Visited Date" value={visitedDate} onChange={onVisitedDateChange} disabled={isRoutePending} />
         <Input label="Budget From" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMin)} onChange={event => setDraftBudgetMin(normalizeIntegerInput(event.target.value))} placeholder="Minimum budget" disabled={isRoutePending} />
         <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-48 flex-1"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMax)} onChange={event => setDraftBudgetMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum budget" disabled={isRoutePending} /></div>
+          <div className="min-w-0 basis-full sm:basis-32 flex-1"><Input label="Budget To" inputMode="numeric" value={formatIndianNumberInput(draftBudgetMax)} onChange={event => setDraftBudgetMax(normalizeIntegerInput(event.target.value))} placeholder="Maximum budget" disabled={isRoutePending} /></div>
           <Btn className="shrink-0 whitespace-nowrap" variant="outline" size="sm" onClick={() => onBudgetApply(draftBudgetMin, draftBudgetMax)} disabled={isRoutePending || (draftBudgetMin === budgetMin && draftBudgetMax === budgetMax)}>Apply Budget</Btn>
         </div>
         <div className="flex flex-col gap-1 md:col-span-2">
@@ -148,7 +150,7 @@ export function InquiryFilters({
           <div className="flex flex-wrap gap-1.5">
             {['All', ...classifications].map(value => (
               <button key={value} onClick={() => onClassificationChange(value)} disabled={isRoutePending}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${classification === value ? 'text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                className={`min-h-11 rounded-lg px-3 py-1.5 text-xs sm:min-h-0 font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${classification === value ? 'text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
                 style={classification === value ? { backgroundColor: '#C8102E' } : {}}>
                 {value}
               </button>
@@ -160,7 +162,7 @@ export function InquiryFilters({
           <div className="flex flex-wrap gap-1.5">
             {['All', ...statuses].map(value => (
               <button key={value} onClick={() => onStatusChange(value)} disabled={isRoutePending}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${status === value ? 'text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+                className={`min-h-11 rounded-lg px-3 py-1.5 text-xs sm:min-h-0 font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${status === value ? 'text-white shadow-sm' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
                 style={status === value ? { backgroundColor: '#1B2A6B' } : {}}>
                 {inquiryStatusLabel(value)}
               </button>

@@ -1247,7 +1247,7 @@ export function InventoryClient({
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       <InventoryHeader total={total} status={filters.status} selectedCount={selectedInventoryIds.length} selectionMode={selectionMode} exportSelected={selectedInventoryIds.length > 0} hasActiveFilters={hasActiveFilters} isExporting={isExporting} onBulkEmail={openBulkEmail} onToggleSelectionMode={() => { if (selectionMode) setSelectedInventoryIds([]); setSelectionMode(current => !current) }} onExport={exportRows} onAdd={openAdd} />
 
       {exportError ? (

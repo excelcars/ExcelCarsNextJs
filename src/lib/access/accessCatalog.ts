@@ -17,6 +17,8 @@ export const LEGACY_TODAY_INQUIRY_FOLLOWUP_FUNCTION = 'Todays_Inquiry_Followup_R
 export const INQUIRY_SOURCE_MASTER_FUNCTION = 'Inquiry_Source_Master_Management'
 export const PORTAL_ASSIGNMENT_MANAGEMENT_FUNCTION = 'Portal_Assignment_Management'
 export const INVENTORY_FUNCTION = 'Inventory_Management'
+export const WHATSAPP_INBOX_FUNCTION = 'WhatsApp_Inbox'
+export const WHATSAPP_LOGS_FUNCTION = 'WhatsApp_Message_Logs'
 
 export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Configuration', label: 'Role Access', functionName: ROLE_ACCESS_FUNCTION, route: '/config/role-access', description: 'Manage which roles can access each module.' },
@@ -34,6 +36,8 @@ export const APP_ACCESS_CATALOG: AppAccessDefinition[] = [
   { group: 'Operations', label: 'Inventory', functionName: INVENTORY_FUNCTION, route: '/inventory', description: 'Manage inventory records.' },
   { group: 'Operations', label: 'Checklist / Docs', functionName: 'Checklist_Management', route: '/checklist', description: 'Manage vehicle checklist and document records.' },
   { group: 'Operations', label: 'Inquiries', functionName: 'Inquiry_Management', route: '/inquiry', description: 'Manage customer inquiries.' },
+  { group: 'Operations', label: 'WhatsApp Inbox', functionName: WHATSAPP_INBOX_FUNCTION, route: '/messages', description: 'View all incoming WhatsApp Business messages, mark them as read, and send text replies.' },
+  { group: 'Operations', label: 'Meta Message Logs', functionName: WHATSAPP_LOGS_FUNCTION, route: '/messages/logs', description: 'View outgoing Meta WhatsApp messages, recipient counts, timestamps, and delivery status.' },
   { group: 'Operations', label: 'Loan Management', functionName: 'Loan_Management', route: '/loan', description: 'Manage loan referrals and payments.' },
   { group: 'Operations', label: 'Insurance', functionName: 'Insurance_Management', route: '/insurance', description: 'Manage insurance referrals and payouts.' },
   { group: 'Operations', label: 'RTO Management', functionName: 'RTO_Management', route: '/rto', description: 'Manage RTO transfer and payment records.' },
@@ -56,6 +60,7 @@ export function getAccessDefinitionByRoute(route: string) {
 }
 
 export function getAllowedFunctionNamesForRoute(route: string) {
+  if (route === '/messages/logs') return [WHATSAPP_LOGS_FUNCTION, WHATSAPP_INBOX_FUNCTION]
   if (route === '/config/feedback') return [FEEDBACK_FUNCTION, LEGACY_FEEDBACK_FUNCTION]
   if (route === '/reports/today') return [TODAY_ACTIVITY_FUNCTION, LEGACY_TODAY_INQUIRY_FOLLOWUP_FUNCTION]
   if (route === '/config/role-access') return [ROLE_ACCESS_FUNCTION, USER_ACCESS_FUNCTION]

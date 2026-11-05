@@ -1,6 +1,6 @@
 'use client'
 
-import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Children, isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AlertTriangle,
   Car,
@@ -282,7 +282,7 @@ function CompactKpi({
   return <button type="button" onClick={onClick} className={className}>{content}</button>
 }
 
-function WorkTable({
+export function WorkTable({
   headers,
   children,
   empty,
@@ -299,7 +299,22 @@ function WorkTable({
 }) {
   const hasRows = Children.count(children) > 0
   return (
-    <div className={`${maxHeight} overflow-auto rounded-lg border border-gray-200 bg-white`}>
+    <>
+    <div className="grid min-w-0 gap-3 sm:hidden">
+      {hasRows ? Children.toArray(children).map((row, rowIndex) => {
+        if (!isValidElement<{ children?: ReactNode }>(row)) return null
+        return <dl key={row.key ?? rowIndex} className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-3 rounded-xl border border-slate-200 bg-white p-3">
+          {Children.toArray(row.props.children).map((cell, index) => {
+            if (!isValidElement<{ children?: ReactNode }>(cell)) return null
+            return <div key={headers[index]} className={`min-w-0 ${index === 0 || headers[index] === 'Action' || headers[index] === 'Own Share' ? 'col-span-2' : ''}`}>
+              <dt className="mb-1 text-xs font-medium text-slate-500">{headers[index]}</dt>
+              <dd className="m-0 break-words text-sm font-medium text-slate-900 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center [&_button]:min-h-11">{cell.props.children}</dd>
+            </div>
+          })}
+        </dl>
+      }) : <p className="rounded-lg border border-gray-200 px-3 py-8 text-center text-sm text-gray-400">{empty ?? 'No records found'}</p>}
+    </div>
+    <div className={`hidden sm:block ${maxHeight} overflow-auto rounded-lg border border-gray-200 bg-white`}>
       <div className={tableMinWidth}>
         <table className={`${tableClass} text-[13px]`}>
           <thead className="sticky top-0 z-10">
@@ -321,6 +336,7 @@ function WorkTable({
         </table>
       </div>
     </div>
+    </>
   )
 }
 
@@ -374,7 +390,7 @@ function PendingFilesVisual({
 }
 
 function PendingFilesKpi({ value, rto, payments, insurance, canRto, canInsurance, onOpen }: { value: number; rto: number; payments: number; insurance: number; canRto: boolean; canInsurance: boolean; onOpen: (workspace: Workspace) => void }) {
-  return <div className="grid h-[78px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)]"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><FileText className="h-4 w-4" /></span><div className="min-w-0"><span className="block truncate text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending Files</span><div className="mt-1 flex items-baseline gap-2"><span className="text-xl font-bold leading-none text-[#11275B]">{value}</span><span className="text-xs font-medium text-slate-500">pending</span></div></div></div><PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} /></div>
+  return <div className="flex min-h-[78px] min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)]"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><FileText className="h-4 w-4" /></span><div className="min-w-0"><span className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending Files</span><div className="mt-1 flex items-baseline gap-2"><span className="text-xl font-bold leading-none text-[#11275B]">{value}</span><span className="text-xs font-medium text-slate-500">pending</span></div></div></div><PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} /></div>
 }
 
 function TodoWorkloadSnapshot({ items }: { items: AttentionItem[] }) {
@@ -416,7 +432,7 @@ function TodoWorkloadSnapshot({ items }: { items: AttentionItem[] }) {
         {overdue > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600"><AlertTriangle className="h-3 w-3" /> {overdue} overdue</span>}
       </div>
       <div className="grid min-h-0 flex-1 content-center">
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex flex-wrap items-center justify-center gap-4">
           <div className="relative grid h-32 w-32 shrink-0 place-items-center rounded-full" style={{ background: gradient }} aria-label={`${total} open tasks`}>
             <div className="grid h-[84px] w-[84px] place-items-center rounded-full bg-white text-center shadow-sm"><strong className="text-2xl leading-none text-[#172d62]">{total}</strong><span className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">open</span></div>
           </div>
@@ -637,7 +653,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
 
   const kpiCount = [
     permissions.canInventory,
-    permissions.canInquiry && permissions.canFollowup,
+    permissions.canInquiry,
     permissions.canFollowup,
     permissions.canRto || permissions.canInsurance,
   ].filter(Boolean).length
@@ -652,28 +668,25 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
     <div className="min-h-full min-w-0">
       <Modal title="Insurance renewal alerts" open={salespersonRenewalAlertOpen} onClose={() => setSalespersonRenewalAlertOpen(false)} width="max-w-2xl">
         <p className="text-sm text-gray-600">The following customers assigned to you have insurance policies expiring within the next 30 days.</p>
-        <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-[620px] w-full text-sm">
-            <thead><tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><th className="px-3 py-2">Customer</th><th className="px-3 py-2">Registration</th><th className="px-3 py-2">Expiry date</th><th className="px-3 py-2">Renewal date</th></tr></thead>
-            <tbody className="divide-y divide-gray-100">
+        <div className="mt-4 min-w-0">
+          <WorkTable headers={['Customer', 'Registration', 'Expiry date', 'Renewal date']} tableMinWidth="min-w-[620px]" maxHeight="max-h-none">
               {data.assignedExpiryRenewalPolicies.map(row => <tr key={row.insuranceMainId}><td className="px-3 py-2 font-medium text-gray-900"><div>{customerName(row)}</div><div className="font-mono text-xs font-normal text-gray-500">{customerMobile(row)}</div></td><td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.expiryDate)}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.renewalDate)}</td></tr>)}
-            </tbody>
-          </table>
+          </WorkTable>
         </div>
       </Modal>
       <div className="min-h-full min-w-0 bg-[#f5f8fc] p-3">
         <div className="grid min-w-0 gap-3">
-          <div className="relative min-h-[118px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-5 py-3 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
+          <div className="relative min-h-[118px] overflow-hidden rounded-2xl bg-[linear-gradient(105deg,#0d1f50_0%,#102966_46%,#8c143d_100%)] px-3 py-4 sm:px-5 shadow-[0_12px_26px_rgba(20,38,91,0.2)]">
             <div className="absolute inset-y-0 left-[27%] right-[24%] bg-[url('/login-hero-car.png')] bg-[length:500px_auto] bg-[position:72%_48%] bg-no-repeat opacity-70 mix-blend-screen" aria-hidden="true" />
             <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,24,66,0.25),transparent_48%,rgba(130,16,57,0.12))]" aria-hidden="true" />
             <div className="dashboard-hero-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3" aria-hidden="true" />
             <div className="relative flex h-full flex-wrap items-center justify-between gap-4">
-              <div className="text-white">
-                <div className="flex items-center gap-3">
-                  <span className="dashboard-greeting-sun grid h-10 w-10 place-items-center rounded-full bg-white/10 text-amber-300 ring-1 ring-white/10"><Sun className="h-5 w-5" /></span>
-                  <div>
+              <div className="min-w-0 text-white">
+                <div className="flex items-start gap-3 sm:items-center">
+                  <span className="dashboard-greeting-sun grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-amber-300 ring-1 ring-white/10"><Sun className="h-5 w-5" /></span>
+                  <div className="min-w-0 break-words">
                     <p className="text-xs font-medium text-white/65">Hey, {props.firstName} 👋</p>
-                    <h1 className="mt-1 text-2xl font-bold leading-none tracking-tight sm:text-3xl">Drive Your Dealership Forward.</h1>
+                    <h1 className="mt-1 text-xl font-bold leading-tight tracking-tight sm:text-3xl">Drive Your Dealership Forward.</h1>
                     <p className="mt-1 text-xs text-white/75">Your business at a glance. Your next move starts here.</p>
                   </div>
                 </div>
@@ -688,7 +701,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </div>
           </div>
 
-          <div className={`relative z-10 -mt-4 grid gap-3 ${kpiGridClass}`}>
+          <div className={`relative z-10 grid gap-3 ${kpiGridClass}`}>
             {permissions.canInventory && (
               <CompactKpi label="Available Stock" value={stats.availableStock} sub="available" tone="success" icon={<Car className="h-4 w-4" />} visual={<SparkLine />} href="/inventory?status=In%20Stock" />
             )}
@@ -701,22 +714,22 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             {(permissions.canRto || permissions.canInsurance) && <PendingFilesKpi value={stats.pendingRTO + data.pendingPayments.length + data.pendingPolicies.length} rto={stats.pendingRTO} payments={data.pendingPayments.length} insurance={data.pendingPolicies.length} canRto={permissions.canRto} canInsurance={permissions.canInsurance} onOpen={workspace => openWorkspace(workspace)} />}
           </div>
 
-      <section ref={detailWorkspaceRef} className="-mt-4 flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white/90 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+      <section ref={detailWorkspaceRef} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white/90 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
         <div className="mb-3 grid shrink-0 min-w-0 gap-3 border-b border-slate-100 pb-3">
-          <div role="tablist" aria-label="Dashboard workspaces" className="flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div role="tablist" aria-label="Dashboard workspaces" className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1 sm:flex-wrap">
             {tabs.map(tab => (
-              <button key={tab.key} role="tab" aria-selected={workspace === tab.key} type="button" onClick={() => openWorkspace(tab.key)} className={`cursor-pointer whitespace-nowrap rounded-lg border px-3 py-2 text-[13px] font-semibold leading-none transition-all focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${workspace === tab.key ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-transparent bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-slate-200 hover:bg-slate-100 hover:text-[#1B2A6B]'}`}>
+              <button key={tab.key} role="tab" aria-selected={workspace === tab.key} type="button" onClick={() => openWorkspace(tab.key)} className={`min-h-11 shrink-0 cursor-pointer whitespace-nowrap rounded-lg border px-3 py-2 text-[13px] font-semibold leading-none transition-all focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${workspace === tab.key ? 'border-[#1B2A6B] bg-[#1B2A6B] text-white shadow-sm' : 'border-transparent bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-slate-200 hover:bg-slate-100 hover:text-[#1B2A6B]'}`}>
                 {tab.warning && <AlertTriangle aria-label="Overdue items need attention" className={`mr-1 inline-block h-3.5 w-3.5 align-[-2px] ${workspace === tab.key ? 'text-amber-200' : 'text-amber-600'}`} />}
                 {tab.label} <span className={`ml-1.5 rounded px-1.5 py-0.5 text-[11px] ${workspace === tab.key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>{tab.count}</span>
               </button>
             ))}
           </div>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <div className="relative min-w-0 flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-2 h-3.5 w-3.5 text-slate-400" />
-              <input aria-label="Search workspace" value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="Search workspace..." className="h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-sm outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input aria-label="Search workspace" value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="Search workspace..." className="h-11 w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-base outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10" />
             </div>
-            <select value={sort} onChange={event => { setSort(event.target.value as SortMode); setPage(1) }} className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10">
+            <select aria-label="Sort workspace" value={sort} onChange={event => { setSort(event.target.value as SortMode); setPage(1) }} className="h-11 min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 text-base font-medium outline-none focus:border-[#1B2A6B] focus:bg-white focus:ring-2 focus:ring-[#1B2A6B]/10">
               <option value="priority">Priority</option>
               <option value="dateAsc">Date Asc</option>
               <option value="dateDesc">Date Desc</option>
@@ -724,7 +737,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           </div>
         </div>
 
-        <div className="min-h-[520px] min-w-0 flex-1">
+        <div className="min-w-0 flex-1 sm:min-h-[520px]">
         {workspace === 'leads' ? (
           <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
             <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
@@ -776,7 +789,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'insurance' ? (
-          <div className="grid max-h-[215px] gap-3 overflow-auto md:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:max-h-[215px] sm:overflow-auto md:grid-cols-2">
             <section className="min-w-0">
               <h3 className="mb-1 text-xs font-semibold text-[#008ab8]">Pending Insurance Policy Details</h3>
               <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Status', 'Action']} maxHeight="max-h-[186px]" tableMinWidth="min-w-[760px]">
@@ -900,8 +913,8 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <div className="mt-2 flex shrink-0 items-center justify-between text-xs text-gray-500">
                 <span>Page {page} of {pageCount}</span>
                 <div className="flex gap-2">
-                  <button type="button" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Prev</button>
-                  <button type="button" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="rounded border border-gray-200 px-2 py-1 disabled:opacity-40">Next</button>
+                  <button type="button" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} className="min-h-11 rounded border border-gray-200 px-3 py-1 disabled:opacity-40">Prev</button>
+                  <button type="button" disabled={page >= pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))} className="min-h-11 rounded border border-gray-200 px-3 py-1 disabled:opacity-40">Next</button>
                 </div>
               </div>
             </section>

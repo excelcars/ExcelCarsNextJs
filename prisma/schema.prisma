@@ -784,6 +784,73 @@ model VehicleEmailLink {
   @@map("vehicle_email_links")
 }
 
+model WhatsAppReceivedMessage {
+  id                Int       @id @default(autoincrement())
+  providerMessageId String    @unique @map("provider_message_id")
+  phoneNumberId     String    @map("phone_number_id")
+  senderMobile      String    @map("sender_mobile")
+  senderName        String?   @map("sender_name")
+  messageType       String    @map("message_type")
+  body              String
+  mediaId           String?   @map("media_id")
+  sentAt            DateTime  @map("sent_at") @db.Timestamptz(6)
+  receivedAt        DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  readAt            DateTime? @map("read_at") @db.Timestamptz(6)
+  replies           WhatsAppInboxReply[]
+
+  @@index([receivedAt, id])
+  @@index([readAt, receivedAt])
+  @@index([phoneNumberId, senderMobile, sentAt], map: "ix_whatsapp_inbox_sender_sent")
+  @@map("whatsapp_received_messages")
+}
+
+model WhatsAppSentMessage {
+  id                Int      @id @default(autoincrement())
+  phoneNumberId     String   @map("phone_number_id")
+  recipientMobile   String   @map("recipient_mobile")
+  recipientName     String?  @map("recipient_name")
+  templateName      String   @map("template_name")
+  templateLanguage  String   @map("template_language")
+  body              String
+  parameters        Json
+  buttonUrlSuffix   String?  @map("button_url_suffix")
+  providerMessageId String?  @map("provider_message_id")
+  status            String
+  errorMessage      String?  @map("error_message")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([phoneNumberId, recipientMobile, createdAt], map: "ix_whatsapp_sent_contact_time")
+  @@index([providerMessageId], map: "ix_whatsapp_sent_provider")
+  @@map("whatsapp_sent_messages")
+}
+
+model WhatsAppMessageStatus {
+  id                Int      @id @default(autoincrement())
+  providerMessageId String   @map("provider_message_id")
+  status            String
+  occurredAt        DateTime @map("occurred_at") @db.Timestamptz(6)
+  errorMessage      String?  @map("error_message")
+
+  @@unique([providerMessageId, status, occurredAt], map: "uq_whatsapp_message_status_event")
+  @@index([providerMessageId, occurredAt], map: "ix_whatsapp_message_status_provider_time")
+  @@map("whatsapp_message_statuses")
+}
+
+model WhatsAppInboxReply {
+  id                String   @id
+  receivedMessageId Int      @map("received_message_id")
+  createdBy         Int      @map("created_by")
+  body              String
+  status            String
+  providerMessageId String?  @map("provider_message_id")
+  errorMessage      String?  @map("error_message")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  receivedMessage   WhatsAppReceivedMessage @relation(fields: [receivedMessageId], references: [id], onDelete: Cascade)
+
+  @@index([receivedMessageId, createdAt])
+  @@map("whatsapp_inbox_replies")
+}
+
 model WhatsAppDeliveryLog {
   whatsAppDeliveryLogId Int               @id @default(autoincrement()) @map("whatsapp_delivery_log_id")
   inquiryId             Int               @map("inquiry_id")

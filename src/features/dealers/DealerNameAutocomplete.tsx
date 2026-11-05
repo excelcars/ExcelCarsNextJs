@@ -104,7 +104,7 @@ export function DealerNameAutocomplete({
               role="option"
               aria-selected={value === name}
               onClick={() => selectName(name)}
-              className="w-full border-b border-gray-50 px-3 py-2 text-left text-sm text-gray-800 last:border-0 hover:bg-gray-50"
+              className="min-h-11 w-full border-b border-gray-50 px-3 py-2 text-left text-sm [overflow-wrap:anywhere] text-gray-800 last:border-0 hover:bg-gray-50"
             >
               {name}
             </button>

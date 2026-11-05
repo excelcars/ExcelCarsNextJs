@@ -19,6 +19,7 @@ import type { InquiryLocationOption } from './locationMaster'
 import { InquiryFilters } from './InquiryFilters'
 import { InquiryRowActions } from './InquiryRowActions'
 import { InquiryTable } from './InquiryTable'
+import { InquiryMobileCard } from './InquiryMobileCard'
 import { InquiryTableRows } from './InquiryTableRows'
 import { AssignInquiryModal } from './AssignInquiryModal'
 import { InquiryViewModal } from './InquiryViewModal'
@@ -917,7 +918,7 @@ export function InquiryClient({
   const isMissingFollowUpDate = followUpDateRequired && !form.followUpDate.trim()
   const isMissingVisitedDate = visitedSelected && !form.visitedDateOfCustomer.trim()
   const carEditorCatalogError = Boolean(carEditorError) && (!carEditor.selectedMakeId || !carEditor.selectedModelId || !carEditor.fkVariantId)
-  const carEditorYearError = Boolean(carEditorError) && (carEditor.carYear === null || !isValidYear(carEditor.carYear))
+  const carEditorYearError = Boolean(carEditorError) && carEditor.carYear !== null && !isValidYear(carEditor.carYear)
   const hasInventoryRequirements = Boolean(
     carEditor.selectedMakeId || carEditor.selectedModelId || carEditor.fkVariantId ||
     form.inquiryCars.some(car => car.selectedMakeId || car.selectedModelId || car.fkVariantId),
@@ -1068,11 +1069,7 @@ export function InquiryClient({
       setCarEditorError('Select make, model, and variant before adding the vehicle row.')
       return
     }
-    if (carEditor.carYear === null) {
-      setCarEditorError('Select the vehicle year before adding the vehicle row.')
-      return
-    }
-    if (!isValidYear(carEditor.carYear)) {
+    if (carEditor.carYear !== null && !isValidYear(carEditor.carYear)) {
       setCarEditorError('Select a valid year for the vehicle row.')
       return
     }
@@ -1605,7 +1602,7 @@ export function InquiryClient({
   ) : null
 
   return (
-    <div>
+    <div className="min-w-0 [&>div:first-child]:flex-col [&>div:first-child]:sm:flex-row">
       <PageHeader
         title="Inquiry Management"
         subtitle={`${total.toLocaleString('en-IN')} inquiries`}
@@ -1711,10 +1708,6 @@ export function InquiryClient({
         )}
       </div>
 
-      <div className="mb-2 text-xs text-gray-500 sm:hidden">
-        Scroll sideways to view all inquiry columns.
-      </div>
-
       <div className="relative min-h-[280px]">
         <div
           aria-busy={isRoutePending}
@@ -1722,6 +1715,12 @@ export function InquiryClient({
             ? 'pointer-events-none select-none opacity-45 transition-opacity'
             : 'transition-opacity'}
         >
+          <div className="space-y-3 lg:hidden">
+            {initialData.length === 0 ? <div className="rounded-lg border border-gray-200 bg-white px-4 py-12 text-center text-sm text-gray-500">{emptyInquiryMessage}</div> : initialData.map((r, index) => (
+              <InquiryMobileCard key={r.inquiryId} row={r} number={rowNumberStart + index + 1} assignedToLabel={userOptionLabel(r.assignedToUser)} actions={<InquiryRowActions mobile isEmailPending={isEmailPending && emailingId === r.inquiryId} onSendEmail={() => handleSendEmail(r)} onView={() => openView(r)} onEdit={() => openEdit(r)} onAssign={() => openAssign(r)} onDelete={() => setDeleteId(r.inquiryId)} />} />
+            ))}
+          </div>
+          <div className="hidden lg:block">
           <InquiryTable empty={initialData.length === 0} emptyMessage={emptyInquiryMessage}>
             <InquiryTableRows rows={initialData}>{(r, index) => (
                 <tr key={r.inquiryId} className="hover:bg-gray-50 transition">
@@ -1729,6 +1728,7 @@ export function InquiryClient({
                 </tr>
             )}</InquiryTableRows>
           </InquiryTable>
+          </div>
         </div>
         {isRoutePending ? <ListLoadingOverlay message="Updating inquiry list..." /> : null}
       </div>
@@ -1739,7 +1739,7 @@ export function InquiryClient({
         total={total}
         showingText={`Showing ${pageStart.toLocaleString('en-IN')}-${pageEnd.toLocaleString('en-IN')}`}
         pending={isRoutePending}
-        className="mt-4"
+        className="mt-4 flex-col items-start gap-3 sm:flex-row sm:items-center"
         onPageChange={nextPage => pushQuery({ page: String(nextPage) })}
       />
 
@@ -1770,7 +1770,7 @@ export function InquiryClient({
           </div>
         ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Input label={fieldLabel('Inquiry No', true)} value={form.inquiryNo} readOnly disabled placeholder="Generating..." />
             <Input label={fieldLabel('Date of Inquiry', true)} type="date" value={form.dateOfInquiry} onChange={e => f('dateOfInquiry', e.target.value)} error={errors.dateOfInquiry} errorMessage="Inquiry date cannot be after the follow-up or visited date." />
             <FormDropdown
@@ -1813,13 +1813,13 @@ export function InquiryClient({
             </div>
           ) : null}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Input label={fieldLabel('Customer Name', true)} value={form.customerNameLegacy} onChange={e => f('customerNameLegacy', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.customer} errorMessage="Customer name is required." />
             <Input label={fieldLabel('Customer Mobile No', true)} value={form.mobileno} onChange={e => f('mobileno', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.mobileno} errorMessage="Enter a valid customer mobile number." />
             <Input label={fieldLabel('Customer Email')} type="email" value={form.email} onChange={e => f('email', e.target.value)} readOnly={customerDetailsLocked} disabled={customerDetailsLocked} className={customerDetailsLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} error={errors.email} errorMessage="Enter a valid customer email address." />
           </div>
           {previousInquiryAlert}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormDropdown label="City / Reporting Location (Optional)" value={String(form.locationId ?? '')} options={locationOptions.map(item => ({ value: String(item.locationId), label: `${item.displayName} · ${item.region}` }))} placeholder="Select reporting location" allowClear error={errors.locationId} onChange={value => f('locationId', Number(value) || null)} />
             <Input label="Area / Locality" value={form.location} onChange={e => f('location', e.target.value)} placeholder="e.g. Andheri West, Kothrud, JLT" />
           </div>
@@ -1842,7 +1842,7 @@ export function InquiryClient({
                 setCarEditor(prev => ({ ...prev, fkVariantId: Number(value) || null }))
                 setCarEditorError('')
               }} />
-              <FormDropdown label={fieldLabel('Year', true)} value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear error={carEditorYearError} errorMessage={carEditor.carYear === null ? 'Select the vehicle year.' : 'Select a valid vehicle year.'} onChange={value => {
+              <FormDropdown label="Year (Optional)" value={carEditor.carYear ? String(carEditor.carYear) : ''} options={VEHICLE_YEAR_OPTIONS} placeholder="Select year" allowClear error={carEditorYearError} errorMessage="Select a valid vehicle year." onChange={value => {
                 setCarEditor(prev => ({ ...prev, carYear: value ? Number(value) : null }))
                 setCarEditorError('')
               }} />
@@ -1881,7 +1881,7 @@ export function InquiryClient({
             matches={inventoryMatches}
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               label="Budget of customer (optional)"
               inputMode="numeric"
@@ -1898,7 +1898,7 @@ export function InquiryClient({
             <Input label="Visited Date of customer" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} errorMessage={visitedSelected && !form.visitedDateOfCustomer ? 'Visited date is required when sub-status is Visited.' : 'Visited date cannot be before the inquiry date.'} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormDropdown label={fieldLabel('Status', true)} value={form.status} options={INQUIRY_STATUSES.map(value => ({ value, label: inquiryStatusLabel(value) }))} placeholder="Select status" onChange={nextStatus => {
               f('status', nextStatus)
               if (!requiresInquiryFollowupDate(nextStatus)) {
