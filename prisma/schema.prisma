@@ -90,6 +90,7 @@ model CarModelMaster {
 }
 
 model CarVariantMaster {
+  partnerVehicleMappings PartnerVehicleMapping[]
   pkVariantId         Int                   @id(map: "idx_16422_pk_car_variant_master") @default(autoincrement()) @map("pk_variant_id")
   fkMakeId            Int?                  @map("fk_make_id")
   fkModelId           Int?                  @map("fk_model_id")
@@ -509,6 +510,22 @@ model PartnerWebhookPayload {
   @@index([inquiryId], map: "idx_partner_webhook_payload_inquiry")
   @@index([receivedAt], map: "idx_partner_webhook_payload_received_at")
   @@map("partner_webhook_payloads")
+}
+
+model PartnerVehicleMapping {
+  id             Int              @id @default(autoincrement())
+  partner        String
+  descriptionKey String           @map("description_key")
+  description    String
+  variantId      Int              @map("variant_id")
+  confirmedBy    Int              @map("confirmed_by")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  variant        CarVariantMaster @relation(fields: [variantId], references: [pkVariantId], onDelete: Restrict)
+
+  @@unique([partner, descriptionKey])
+  @@index([variantId])
+  @@map("partner_vehicle_mappings")
 }
 
 model LegacyInquirySourceMapping {
