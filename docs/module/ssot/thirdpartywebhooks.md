@@ -222,23 +222,18 @@ Rules:
 3. The endpoint checks the partner-specific duplicate key when one is available.
 4. The endpoint looks up the active portal assignment for the fixed source.
 5. The endpoint looks up an existing customer by normalized mobile number.
-6. Inside the inquiry transaction, the endpoint locks partner lead ingestion and checks existing inquiries using the shared normalized-mobile/linked-customer lookup. It links a new partner lead ID to the most recent active match (or most recent Closed/Converted match if no active inquiry exists). Only a contact without any matching inquiry creates a new inquiry.
+6. The endpoint creates the inquiry, optional vehicle-interest rows, assigned owner, and partner metadata in one transaction.
 7. The endpoint writes an `inquiry_activity_log` event identifying the partner source and lead ID when available.
 8. The transaction commits.
 9. The endpoint returns the partner acknowledgement.
 
 The webhook must not send matching inventory emails or customer notifications during the synchronous partner request. Those integrations remain separate from inbound lead acceptance.
 
-### Repeat contact handling (staging, 2026-11-13)
+### Repeat contact change reverted
 
-- Both CarDekho and Justdial apply the same contact lookup as `/api/inquiry/previous`: last ten mobile digits on the inquiry or linked customer, or the linked customer ID. The lookup is global for inbound leads, so a different portal or assignee does not create a second customer inquiry.
-- A repeated partner/external lead ID remains an idempotent retry. A different external lead ID for the same contact links to the selected existing inquiry and still returns `SUCCESS`.
-- Preserve the existing source, inquiry date, owner, status, classification, customer fields, and follow-up date. Append partner metadata to existing remarks; add new vehicle/year interests without repeating the same mapped variant/year or normalized vehicle text/year. Original payloads are always retained.
-- Log `partner_inquiry_linked` and notify the existing assigned owner (or creator if unassigned). Do not reassign to the portal's default owner. Closed/Converted inquiries are not silently reopened.
-- Multiple external lead IDs may point to one inquiry. Migration `20261113140000_allow_multiple_partner_leads_per_inquiry` removes only the unique inquiry-ID index from partner lead claims; uniqueness of `(partner, external_lead_id)` is retained. Apply before deploying the new webhook.
-- Partner details are available even when the existing inquiry has a non-portal source. The popup shows the latest 50 distinct partner submissions, grouping delivery retries, and confirmed vehicle mappings can be saved for any linked CarDekho description.
-- This change prevents new integration duplicates; it does not delete or consolidate previously created inquiry records.
-- Staging concurrency verification: `node --experimental-strip-types scripts/verify-inquiry-linking-staging.mjs` against the local staging preview, or add `--base-url=https://excelcaruat.vercel.app` after the hosted code is deployed. It seeds synthetic contacts and checks normalized mobile matching, preservation of inquiry state, distinct external IDs sharing an inquiry, vehicle deduplication, and concurrent first deliveries/retries. Report: ignored `storage/inquiry-linking-staging-verification.json`.
+New external lead IDs create separate inquiries again, even for the same mobile or linked customer. Retries of the same partner/external lead ID remain idempotent. Vehicle catalog mapping and readable partner details remain enabled.
+
+The already-applied staging migration `20261113140000_allow_multiple_partner_leads_per_inquiry` and its matching Prisma schema are retained for compatibility with previously linked QA records. Do not recreate the unique inquiry-ID index or unlink historical lead receipts as part of this application rollback. No database data was changed or deleted by the rollback. Redeploy the application to roll back hosted behavior.
 
 ## 7. Data Ownership
 

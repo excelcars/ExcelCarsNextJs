@@ -44,9 +44,9 @@ export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { r
           car.year,
         ].filter(Boolean).join(' · ') || '—'}</div>
           {car.subVariant ? <p><span className="font-medium">Vehicle requested: </span>{car.subVariant}</p> : null}
-          {(row.hasCardekhoPayload || row.website?.toLowerCase() === 'cardekho') && car.subVariant && !car.carVariantMaster ? <span title="Automatic matching found no unique catalog variant. Confirm the correct variant once and remember it for future inquiries." className="inline-block rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Needs vehicle mapping</span> : null}
+          {row.website?.toLowerCase() === 'cardekho' && car.subVariant && !car.carVariantMaster ? <span title="Automatic matching found no unique catalog variant. Confirm the correct variant once and remember it for future inquiries." className="inline-block rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Needs vehicle mapping</span> : null}
         </div>) : <div>—</div>}
-        {row.hasPartnerPayload || row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}
+        {row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}
       </div>
       {row.remark?.trim() ? <p className="mt-3 whitespace-pre-wrap text-sm text-gray-600"><span className="font-semibold">Remark: </span>{row.remark}</p> : null}
       <div className="mt-4 border-t border-gray-100 pt-3">{actions}</div>

@@ -1327,16 +1327,13 @@ export async function getInquiryDetail(inquiryId: number, options: { route?: str
 
   if (!detail) return null
 
-  const [vehicleEmailLinks, inquiryActivityEvents, partnerPayloads] = await Promise.all([
+  const [vehicleEmailLinks, inquiryActivityEvents] = await Promise.all([
     getInquiryTrackedVehicleEmailHistory(inquiryId),
     getInquiryActivityEvents(inquiryId),
-    prisma.partnerWebhookPayload.findMany({ where: { inquiryId }, distinct: ['partner'], select: { partner: true } }),
   ])
 
   return toPlainActionPayload({
     ...detail,
-    hasPartnerPayload: partnerPayloads.length > 0,
-    hasCardekhoPayload: partnerPayloads.some(payload => payload.partner === 'CARDEKHO'),
     budgetOfCustomer: detail.budgetOfCustomer ? detail.budgetOfCustomer.toString() : null,
     inquiryEmailHistories: detail.inquiryEmailHistories.map(history => ({
       ...history,
@@ -1728,8 +1725,8 @@ export async function updateInquiry(id: number, input: InquiryFormInput, options
       }))
 
       if (input.rememberPartnerVehicleMappings) {
-        const mappings = await rememberPartnerVehicleMapping(tx, { inquiryId: id, userId, existingCars: existing.inquiryCarDetails, cars: input.inquiryCars })
-        for (const mapping of mappings) await logInquiryEvent(tx, { inquiryId: id, eventType: 'partner_vehicle_mapping_confirmed', eventLabel: 'CarDekho vehicle mapping confirmed', eventDetail: `${mapping.description} → catalog variant #${mapping.variantId}${mapping.previousVariantId ? ` (previous #${mapping.previousVariantId})` : ''}`, actorUserId: userId, createdAt: now })
+        const mapping = await rememberPartnerVehicleMapping(tx, { inquiryId: id, userId, existingCars: existing.inquiryCarDetails, cars: input.inquiryCars })
+        await logInquiryEvent(tx, { inquiryId: id, eventType: 'partner_vehicle_mapping_confirmed', eventLabel: 'CarDekho vehicle mapping confirmed', eventDetail: `${mapping.description} → catalog variant #${mapping.variantId}${mapping.previousVariantId ? ` (previous #${mapping.previousVariantId})` : ''}`, actorUserId: userId, createdAt: now })
       }
 
       await tx.inquiry.update({
