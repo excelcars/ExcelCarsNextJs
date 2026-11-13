@@ -1879,6 +1879,10 @@ export function InquiryClient({
               onEdit={editInquiryCar}
               onDelete={removeInquiryCar}
             />
+            {editId && form.sourceCode === 'CARDEKHO' ? <label className="mt-4 flex items-start gap-2 text-sm text-gray-700">
+              <input type="checkbox" className="mt-1" checked={form.rememberPartnerVehicleMappings ?? false} onChange={e => f('rememberPartnerVehicleMappings', e.target.checked)} />
+              <span>Remember the selected vehicle mapping for future CarDekho inquiries.<span className="block text-xs text-gray-500">Keep the original vehicle text in Sub Variant when confirming a mapping.</span></span>
+            </label> : null}
           </div>
 
           <InventoryMatchPanel
