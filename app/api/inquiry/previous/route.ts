@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
-import { Prisma } from '@prisma/client'
+import { findContactInquiries, normalizeInquiryMobile as normalizeMobile } from '@/features/inquiry/existingInquiry.server'
 import { auth } from '../../../../auth'
 import { buildInquiryOwnershipWhere, getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
-
-function normalizeMobile(value: string | null | undefined) {
-  const digits = (value ?? '').replace(/\D/g, '')
-  if (!digits) return ''
-  return digits.length > 10 ? digits.slice(-10) : digits
-}
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -25,24 +19,7 @@ export async function GET(req: NextRequest) {
 
   if (!normalizedMobile && !customerId) return NextResponse.json([])
 
-  const whereClauses: Prisma.Sql[] = []
-  if (normalizedMobile) {
-    whereClauses.push(
-      Prisma.sql`RIGHT(regexp_replace(COALESCE(mobileno, ''), '\D', '', 'g'), 10) = ${normalizedMobile}`,
-    )
-  }
-  if (customerId) {
-    whereClauses.push(Prisma.sql`customer_id = ${customerId}`)
-  }
-
-  const rawMatches = await prisma.$queryRaw<Array<{ inquiry_id: number }>>(Prisma.sql`
-    SELECT inquiry_id
-    FROM inquiry
-    WHERE (${Prisma.join(whereClauses, ' OR ')})
-      ${excludeInquiryId ? Prisma.sql`AND inquiry_id <> ${excludeInquiryId}` : Prisma.empty}
-    ORDER BY inquiry_id DESC
-    LIMIT 20
-  `)
+  const rawMatches = await findContactInquiries(prisma, { mobile: normalizedMobile, customerId, excludeInquiryId })
 
   if (rawMatches.length === 0) return NextResponse.json([])
 

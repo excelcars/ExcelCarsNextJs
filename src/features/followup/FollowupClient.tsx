@@ -643,6 +643,14 @@ export function FollowupClient({
   )
 
   useEffect(() => {
+    if (!successMessage) return
+
+    const dismissSuccessMessage = () => setSuccessMessage('')
+    document.addEventListener('click', dismissSuccessMessage, true)
+    return () => document.removeEventListener('click', dismissSuccessMessage, true)
+  }, [successMessage])
+
+  useEffect(() => {
     setSearch(initialSearch)
     setStatus(initialStatus)
     setSort(initialSort)

@@ -222,12 +222,23 @@ Rules:
 3. The endpoint checks the partner-specific duplicate key when one is available.
 4. The endpoint looks up the active portal assignment for the fixed source.
 5. The endpoint looks up an existing customer by normalized mobile number.
-6. The endpoint creates the inquiry, optional vehicle-interest rows, assigned owner, and partner metadata in one transaction.
+6. Inside the inquiry transaction, the endpoint locks partner lead ingestion and checks existing inquiries using the shared normalized-mobile/linked-customer lookup. It links a new partner lead ID to the most recent active match (or most recent Closed/Converted match if no active inquiry exists). Only a contact without any matching inquiry creates a new inquiry.
 7. The endpoint writes an `inquiry_activity_log` event identifying the partner source and lead ID when available.
 8. The transaction commits.
 9. The endpoint returns the partner acknowledgement.
 
 The webhook must not send matching inventory emails or customer notifications during the synchronous partner request. Those integrations remain separate from inbound lead acceptance.
+
+### Repeat contact handling (staging, 2026-11-13)
+
+- Both CarDekho and Justdial apply the same contact lookup as `/api/inquiry/previous`: last ten mobile digits on the inquiry or linked customer, or the linked customer ID. The lookup is global for inbound leads, so a different portal or assignee does not create a second customer inquiry.
+- A repeated partner/external lead ID remains an idempotent retry. A different external lead ID for the same contact links to the selected existing inquiry and still returns `SUCCESS`.
+- Preserve the existing source, inquiry date, owner, status, classification, customer fields, and follow-up date. Append partner metadata to existing remarks; add new vehicle/year interests without repeating the same mapped variant/year or normalized vehicle text/year. Original payloads are always retained.
+- Log `partner_inquiry_linked` and notify the existing assigned owner (or creator if unassigned). Do not reassign to the portal's default owner. Closed/Converted inquiries are not silently reopened.
+- Multiple external lead IDs may point to one inquiry. Migration `20261113140000_allow_multiple_partner_leads_per_inquiry` removes only the unique inquiry-ID index from partner lead claims; uniqueness of `(partner, external_lead_id)` is retained. Apply before deploying the new webhook.
+- Partner details are available even when the existing inquiry has a non-portal source. The popup shows the latest 50 distinct partner submissions, grouping delivery retries, and confirmed vehicle mappings can be saved for any linked CarDekho description.
+- This change prevents new integration duplicates; it does not delete or consolidate previously created inquiry records.
+- Staging concurrency verification: `node --experimental-strip-types scripts/verify-inquiry-linking-staging.mjs` against the local staging preview, or add `--base-url=https://excelcaruat.vercel.app` after the hosted code is deployed. It seeds synthetic contacts and checks normalized mobile matching, preservation of inquiry state, distinct external IDs sharing an inquiry, vehicle deduplication, and concurrent first deliveries/retries. Report: ignored `storage/inquiry-linking-staging-verification.json`.
 
 ## 7. Data Ownership
 
@@ -263,6 +274,7 @@ The module must not create a `followupInquiry` row for the default `Open` state.
 - Migration: `20261113100000_add_partner_vehicle_mappings`. Apply this before serving the updated webhook. Production requires a separate rollout; no production migration or backfill was performed during staging validation.
 - Regression checks: `npm run test:partner-inquiries`, `npm run typecheck`, and targeted ESLint checks.
 - Live staging verification: start `npm run dev:staging -- --port 3005`, then run `node --experimental-strip-types scripts/verify-cardekho-staging.mjs`. This creates clearly labelled synthetic leads and a synthetic confirmed mapping in staging; it does not send customer messages. It checks unsigned requests, matching, duplicate retries, unmapped text retention, and reuse of a persisted confirmed mapping. The JSON report is saved under ignored `storage/cardekho-staging-verification.json`.
+- Hosted staging verification uses the same script with `--base-url=https://excelcaruat.vercel.app`. Only this approved staging host and the local preview are allowed. The deployment's `CARDEKHO_WEBHOOK_SECRET` must match `.env.staging.local`; a preflight stops before creating QA inquiries if authentication fails.
 - The local staging runner sets `AUTH_URL` and `NEXTAUTH_URL` from its requested local port and uses an isolated `.next-staging-dev` build folder. This prevents hosted-UAT redirects and route-manifest collisions when the regular local server is running at the same time. Hosted UAT authentication settings are unchanged. A staging account is required for the logged-in visual review.
 - Existing staging inquiries: `npm run db:backfill-cardekho:staging` previews repairs. To apply: `npm run db:backfill-cardekho:staging -- --apply --backup=storage/cardekho-vehicles-before.json`. The script refuses a staging connection matching production, only touches unedited/unlinked webhook-created vehicle rows, writes a backup first, and rolls back on concurrent changes. It preserves the received text and unrelated fields.
 

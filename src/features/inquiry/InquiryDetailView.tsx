@@ -154,6 +154,7 @@ interface InquiryDetailActivityEvent {
 }
 
 type InquiryDetailData = {
+  hasPartnerPayload?: boolean
   inquiryId: number
   inquiryNo: string | null
   dateOfInquiry: Date | string | null
@@ -645,7 +646,7 @@ export function InquiryDetailView({
       </div>
 
       <div className="px-6 py-5">
-        {currentInquiry.sourceDetail?.startsWith('Partner lead ID:') ? <div className="mb-4"><PartnerInquiryDetails key={currentInquiry.inquiryId} inquiryId={currentInquiry.inquiryId} route={detailRoute} /></div> : null}
+        {currentInquiry.hasPartnerPayload || currentInquiry.sourceDetail?.startsWith('Partner lead ID:') ? <div className="mb-4"><PartnerInquiryDetails key={currentInquiry.inquiryId} inquiryId={currentInquiry.inquiryId} route={detailRoute} /></div> : null}
         {tab === 'overview' ? (
           <div className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-2">
