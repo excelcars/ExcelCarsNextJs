@@ -60,6 +60,8 @@ interface UserOption {
 }
 
 interface InquiryRow {
+  hasPartnerPayload?: boolean
+  hasCardekhoPayload?: boolean
   inquiryId: number
   inquiryNo: string | null
   dateOfInquiry: Date | string | null
@@ -895,6 +897,7 @@ export function InquiryClient({
   const [filterModels, setFilterModels] = useState<CarModelMaster[]>([])
   const [filterVariants, setFilterVariants] = useState<CarVariantMaster[]>([])
   const [carEditor, setCarEditor] = useState<InquiryCarInput>(emptyInquiryCar())
+  const [editHasCardekhoPayload, setEditHasCardekhoPayload] = useState(false)
   const [carEditorModels, setCarEditorModels] = useState<CarModelMaster[]>([])
   const [carEditorVariants, setCarEditorVariants] = useState<CarVariantMaster[]>([])
   const [editingCarIndex, setEditingCarIndex] = useState<number | null>(null)
@@ -1395,6 +1398,7 @@ export function InquiryClient({
         return
       }
 
+      setEditHasCardekhoPayload(detail.hasCardekhoPayload)
       const inquiryCars = detail.inquiryCarDetails.length > 0 ? detail.inquiryCarDetails.map(car => ({
         inquiryCarDetailsId: car.inquiryCarDetailsId ?? null,
         selectedMakeId: car.carVariantMaster?.carMakeMaster?.pkMakeId ?? null,
@@ -1879,7 +1883,7 @@ export function InquiryClient({
               onEdit={editInquiryCar}
               onDelete={removeInquiryCar}
             />
-            {editId && form.sourceCode === 'CARDEKHO' ? <label className="mt-4 flex items-start gap-2 text-sm text-gray-700">
+            {editId && (form.sourceCode === 'CARDEKHO' || editHasCardekhoPayload) ? <label className="mt-4 flex items-start gap-2 text-sm text-gray-700">
               <input type="checkbox" className="mt-1" checked={form.rememberPartnerVehicleMappings ?? false} onChange={e => f('rememberPartnerVehicleMappings', e.target.checked)} />
               <span>Remember the selected vehicle mapping for future CarDekho inquiries.<span className="block text-xs text-gray-500">Keep the original vehicle text in Sub Variant when confirming a mapping.</span></span>
             </label> : null}

@@ -40,9 +40,13 @@ export function PartnerInquiryDetails({ inquiryId, route = '/inquiry' }: { inqui
       </div>
       <div className="px-5 py-4">
       {loading ? <p role="status">Loading partner details…</p> : error ? <p role="status">{error}</p> : details ? <>
-        <p className="mb-3 font-semibold text-[#1B2A6B]">{details.partner === 'CARDEKHO' ? 'CarDekho' : 'Justdial'} inquiry</p>
-        <dl className="divide-y divide-gray-100">{details.fields.map(field => <div key={field.label} className="grid gap-1 py-2 sm:grid-cols-[150px_1fr] sm:gap-3"><dt className="font-medium text-gray-700">{field.label}</dt><dd className="break-words whitespace-pre-wrap text-gray-600">{field.value}</dd></div>)}</dl>
-        {details.partner === 'CARDEKHO' ? <p className="mt-4 rounded-lg bg-blue-50 p-3 leading-6 text-blue-900">Make, model, and variant are matched automatically when the catalog has a clear match. If a description is missing or ambiguous, select the correct variant once and remember the mapping for future inquiries.</p> : null}
+        {details.submissions.length > 1 ? <p className="mb-4 text-gray-600">{details.submissions.length === 50 ? 'Latest 50' : details.submissions.length} partner submissions linked to this inquiry. Retry deliveries are grouped.</p> : null}
+        {details.submissions.map(submission => <section key={submission.id} className="mb-5 last:mb-0">
+          <p className="font-semibold text-[#1B2A6B]">{submission.partner === 'CARDEKHO' ? 'CarDekho' : 'Justdial'} inquiry</p>
+          <p className="mb-2 mt-1 text-xs text-gray-500">Received {new Date(submission.receivedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</p>
+          <dl className="divide-y divide-gray-100">{submission.fields.map(field => <div key={field.label} className="grid gap-1 py-2 sm:grid-cols-[150px_1fr] sm:gap-3"><dt className="font-medium text-gray-700">{field.label}</dt><dd className="break-words whitespace-pre-wrap text-gray-600">{field.value}</dd></div>)}</dl>
+        </section>)}
+        {details.submissions.some(submission => submission.partner === 'CARDEKHO') ? <p className="mt-4 rounded-lg bg-blue-50 p-3 leading-6 text-blue-900">Make, model, and variant are matched automatically when the catalog has a clear match. If a description is missing or ambiguous, select the correct variant once and remember the mapping for future inquiries.</p> : null}
       </> : null}
       </div>
     </dialog>

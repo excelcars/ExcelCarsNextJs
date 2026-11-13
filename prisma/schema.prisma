@@ -490,11 +490,12 @@ model PartnerWebhookLead {
   partner              String
   externalLeadId       String   @map("external_lead_id")
   sourceId             Int      @map("source_id")
-  inquiryId            Int?     @unique(map: "uq_partner_webhook_lead_inquiry") @map("inquiry_id")
+  inquiryId            Int?     @map("inquiry_id")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@unique([partner, externalLeadId], map: "uq_partner_webhook_lead_partner_external")
   @@index([sourceId], map: "idx_partner_webhook_lead_source")
+  @@index([inquiryId], map: "idx_partner_webhook_lead_inquiry")
   @@map("partner_webhook_leads")
 }
 
