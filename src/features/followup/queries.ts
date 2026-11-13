@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import type { Prisma } from '@prisma/client'
 import { buildInquiryOwnershipWhere, type InquiryOwnershipMode } from '@/lib/access/inquiryOwnership'
+import { APPOINTMENT_FIXED_SUB_STATUSES, isAppointmentFixedSubStatus } from '@/lib/inquiryAppointments'
 
 export const FOLLOWUP_PAGE_SIZE = 25
 
@@ -219,7 +220,9 @@ function buildFollowupWhere({
           ],
         }
       : {}),
-    ...(subStatus ? { subStatus: { contains: subStatus, mode: 'insensitive' } } : {}),
+    ...(subStatus ? { subStatus: isAppointmentFixedSubStatus(subStatus)
+      ? { in: APPOINTMENT_FIXED_SUB_STATUSES, mode: 'insensitive' }
+      : { contains: subStatus, mode: 'insensitive' } } : {}),
     ...(website ? { source: { code: website } } : {}),
     ...(customerMobile ? { mobileno: { contains: customerMobile, mode: 'insensitive' } } : {}),
     ...((inquiryDateFrom || inquiryDateTo)

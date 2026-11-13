@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
+import { APPOINTMENT_FIXED_SUB_STATUSES } from '@/lib/inquiryAppointments'
 
 const OTHER_LEAD_SOURCES_CODE = '__OTHER__'
 // Partner portals should remain visible even while their lead volume is still low,
@@ -141,8 +142,8 @@ export async function getLegacyLeadDetails({ userId, roleId }: { userId: number;
     {
       key: 'appointment',
       label: "Today's Appointment Fixed",
-      href: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&subStatus=${encodeURIComponent('Appt. Fixed')}`,
-      ownHref: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&subStatus=${encodeURIComponent('Appt. Fixed')}&userId=${userId}`,
+      href: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&subStatus=${encodeURIComponent('Appointment Fixed')}`,
+      ownHref: `/followup?status=FollowUp&followUpDateFrom=${dateParam(today)}&followUpDateTo=${dateParam(today)}&subStatus=${encodeURIComponent('Appointment Fixed')}&userId=${userId}`,
     },
     {
       key: 'todayFollowup',
@@ -176,14 +177,14 @@ export async function getLegacyLeadDetails({ userId, roleId }: { userId: number;
     SELECT
       COUNT(*)::integer AS "all",
       COUNT(*) FILTER (WHERE date_of_inquiry >= ${today} AND date_of_inquiry < ${tomorrow})::integer AS fresh,
-      COUNT(*) FILTER (WHERE status = 'FollowUp' AND sub_status = 'Appt. Fixed' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS appointment,
+      COUNT(*) FILTER (WHERE status = 'FollowUp' AND LOWER(sub_status) IN (${Prisma.join(APPOINTMENT_FIXED_SUB_STATUSES.map(value => value.toLowerCase()))}) AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS appointment,
       COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS "todayFollowup",
       COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date < ${today})::integer AS pending,
       COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS upcoming,
       COUNT(*) FILTER (WHERE status = 'Closed')::integer AS closed,
       COUNT(*) FILTER (WHERE created_by = ${userId})::integer AS "own_all",
       COUNT(*) FILTER (WHERE created_by = ${userId} AND date_of_inquiry >= ${today} AND date_of_inquiry < ${tomorrow})::integer AS own_fresh,
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND sub_status = 'Appt. Fixed' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS own_appointment,
+      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND LOWER(sub_status) IN (${Prisma.join(APPOINTMENT_FIXED_SUB_STATUSES.map(value => value.toLowerCase()))}) AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS own_appointment,
       COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS "own_todayFollowup",
       COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date < ${today})::integer AS own_pending,
       COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS own_upcoming,

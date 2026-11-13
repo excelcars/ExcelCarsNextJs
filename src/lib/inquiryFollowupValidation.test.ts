@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 const {
+  normalizeInquiryCarYear,
   resolveFollowupSubStatusInput,
   validateFollowupLogInput,
   validateInquiryFormInput,
@@ -32,6 +33,36 @@ test('inquiry validation requires a car, source, and a valid mobile number', () 
   assert.deepEqual(result.fieldErrors, { mobileno: true, website: true, inquiryCars: true })
 })
 
+test('inquiry validation allows an omitted or zero budget and a positive budget', () => {
+  for (const budgetOfCustomer of [null, 0, 1200000]) {
+    const result = validateInquiryFormInput({ ...validInquiry, budgetOfCustomer })
+    assert.equal(result.error, null)
+    assert.deepEqual(result.fieldErrors, {})
+  }
+})
+
+test('inquiry validation explains invalid fields even when they are outside the visible form section', () => {
+  const result = validateInquiryFormInput({
+    ...validInquiry,
+    mobileno: '123',
+    email: 'invalid',
+    sourceCode: '',
+    inquiryCars: [{ carYear: 1800, noOfOwners: -1 }],
+  })
+  assert.match(result.error!, /10-digit customer mobile number/)
+  assert.match(result.error!, /valid customer email address/)
+  assert.match(result.error!, /Select a source/)
+  assert.match(result.error!, /Car 1: enter a valid vehicle year/)
+  assert.match(result.error!, /Car 1: number of owners/)
+})
+
+test('inquiry validation rejects negative and non-finite budgets', () => {
+  for (const budgetOfCustomer of [-1, NaN, Infinity]) {
+    const result = validateInquiryFormInput({ ...validInquiry, budgetOfCustomer })
+    assert.equal(result.fieldErrors.budgetOfCustomer, true)
+  }
+})
+
 test('inquiry validation allows an omitted vehicle year but rejects an invalid supplied year', () => {
   const withoutYear = validateInquiryFormInput({ ...validInquiry, inquiryCars: [{ carYear: null }] })
   assert.equal(withoutYear.error, null)
@@ -39,6 +70,17 @@ test('inquiry validation allows an omitted vehicle year but rejects an invalid s
 
   const invalidYear = validateInquiryFormInput({ ...validInquiry, inquiryCars: [{ carYear: 1800 }] })
   assert.equal(invalidYear.fieldErrors['carYear-0'], true)
+})
+
+test('inquiry validation treats a legacy zero year as omitted and stores it as null', () => {
+  for (const carYear of [null, 0, undefined]) {
+    assert.equal(normalizeInquiryCarYear(carYear), null)
+    const result = validateInquiryFormInput({ ...validInquiry, inquiryCars: [{ carYear }] })
+    assert.equal(result.error, null)
+    assert.deepEqual(result.fieldErrors, {})
+  }
+  assert.equal(normalizeInquiryCarYear(2020), 2020)
+  assert.equal(normalizeInquiryCarYear(1800), 1800)
 })
 
 test('inquiry validation requires a scheduled date for follow-up and visited date for Visited', () => {
