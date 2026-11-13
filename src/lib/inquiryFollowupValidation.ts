@@ -91,6 +91,11 @@ export function resolveFollowupSubStatusInput(input: Pick<FollowupLogLike, 'subS
   return (input.useOtherSubStatus ? input.otherSubStatus : input.subStatus)?.trim() ?? ''
 }
 
+export function normalizeInquiryCarYear(year: number | null | undefined): number | null {
+  // Older inquiries can store an unspecified year as zero.
+  return year == null || year === 0 ? null : year
+}
+
 export function validateInquiryFormInput(input: InquiryFormLike): ValidationResult {
   const fieldErrors: Record<string, boolean> = {}
 
@@ -106,14 +111,14 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
   if (!input.sourceCode?.trim()) {
     fieldErrors.website = true
   }
-  if (input.budgetOfCustomer !== null && input.budgetOfCustomer <= 0) {
+  if (input.budgetOfCustomer !== null && (!Number.isFinite(input.budgetOfCustomer) || input.budgetOfCustomer < 0)) {
     fieldErrors.budgetOfCustomer = true
   }
   if (input.inquiryCars.length === 0) {
     fieldErrors.inquiryCars = true
   }
 
-  const invalidCarIndex = input.inquiryCars.findIndex(car => car.carYear !== null && !isValidYear(car.carYear))
+  const invalidCarIndex = input.inquiryCars.findIndex(car => !isValidYear(normalizeInquiryCarYear(car.carYear)))
   if (invalidCarIndex >= 0) {
     fieldErrors[`carYear-${invalidCarIndex}`] = true
   }
@@ -163,7 +168,19 @@ export function validateInquiryFormInput(input: InquiryFormLike): ValidationResu
     return buildValidationResult(fieldErrors, 'Visited date cannot be before inquiry date.')
   }
 
-  return buildValidationResult(fieldErrors, 'Please fix the highlighted inquiry fields before saving.')
+  const messages = Object.keys(fieldErrors).map(field => {
+    if (field.startsWith('carYear-')) return `Car ${Number(field.slice('carYear-'.length)) + 1}: enter a valid vehicle year.`
+    if (field.startsWith('noOfOwners-')) return `Car ${Number(field.slice('noOfOwners-'.length)) + 1}: number of owners must be a whole number of zero or more.`
+    switch (field) {
+      case 'customer': return 'Select a customer or enter the customer name.'
+      case 'mobileno': return 'Enter a valid 10-digit customer mobile number.'
+      case 'email': return 'Enter a valid customer email address.'
+      case 'website': return 'Select a source before saving the inquiry.'
+      case 'budgetOfCustomer': return 'Enter a valid budget of zero or more, or leave it blank.'
+      default: return 'Please fix the highlighted inquiry fields before saving.'
+    }
+  })
+  return buildValidationResult(fieldErrors, messages.join(' '))
 }
 
 export function validateFollowupLogInput(input: FollowupLogLike, today = new Date().toISOString().slice(0, 10)): ValidationResult {

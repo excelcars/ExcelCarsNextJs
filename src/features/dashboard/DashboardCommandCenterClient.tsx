@@ -265,7 +265,7 @@ function CompactKpi({
     <div className="flex h-full items-center gap-3">
       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${colors[tone].icon}`}>{icon}</span>
       <div className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-bold uppercase tracking-wide text-slate-500">{label}</span>
+        <span className="block text-xs font-bold uppercase leading-snug tracking-wide text-slate-500">{label}</span>
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-xl font-bold leading-none text-[#11275B]">{value}</span>
           {sub && <span className="truncate text-xs font-medium text-slate-500">{sub}</span>}
@@ -275,7 +275,7 @@ function CompactKpi({
       <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
     </div>
   )
-  const className = `block h-[78px] min-w-0 cursor-pointer overflow-hidden rounded-xl border border-slate-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${colors[tone].ring}`
+  const className = `block h-full min-h-[112px] min-w-0 cursor-pointer rounded-xl border border-slate-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#1B2A6B]/20 ${colors[tone].ring}`
   if (href) {
     return <a href={href} onClick={onClick} className={className}>{content}</a>
   }
@@ -286,21 +286,21 @@ export function WorkTable({
   headers,
   children,
   empty,
-  maxHeight = 'max-h-[210px]',
   tableMinWidth = 'min-w-full',
   tableClass = 'w-full',
+  fitToWidth = false,
 }: {
   headers: string[]
   children: ReactNode
   empty?: string
-  maxHeight?: string
   tableMinWidth?: string
   tableClass?: string
+  fitToWidth?: boolean
 }) {
   const hasRows = Children.count(children) > 0
   return (
     <>
-    <div className="grid min-w-0 gap-3 sm:hidden">
+    <div className={`grid min-w-0 gap-3 ${fitToWidth ? 'lg:hidden' : 'sm:hidden'}`}>
       {hasRows ? Children.toArray(children).map((row, rowIndex) => {
         if (!isValidElement<{ children?: ReactNode }>(row)) return null
         return <dl key={row.key ?? rowIndex} className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -314,13 +314,13 @@ export function WorkTable({
         </dl>
       }) : <p className="rounded-lg border border-gray-200 px-3 py-8 text-center text-sm text-gray-400">{empty ?? 'No records found'}</p>}
     </div>
-    <div className={`hidden sm:block ${maxHeight} overflow-auto rounded-lg border border-gray-200 bg-white`}>
+    <div className={`${fitToWidth ? 'hidden lg:block' : 'hidden sm:block overflow-x-auto'} rounded-lg border border-gray-200 bg-white`}>
       <div className={tableMinWidth}>
-        <table className={`${tableClass} text-[13px]`}>
+        <table className={`${tableClass} ${fitToWidth ? 'table-fixed [&_td]:[overflow-wrap:anywhere]' : ''} text-[13px]`}>
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-gray-100 bg-gray-50">
               {headers.map(header => (
-                <th key={header} className="whitespace-nowrap px-3 py-2 text-left text-[13px] font-bold uppercase text-gray-500">
+                <th key={header} className={`${fitToWidth ? 'whitespace-normal [overflow-wrap:anywhere]' : 'whitespace-nowrap'} px-3 py-2 text-left text-[13px] font-bold uppercase text-gray-500`}>
                   {header}
                 </th>
               ))}
@@ -386,11 +386,11 @@ function PendingFilesVisual({
     { label: 'Payments', value: payments, workspace: 'payments' as const, show: canRto, icon: <FileText className="h-4 w-4 text-amber-500" /> },
     { label: 'Insurance', value: insurance, workspace: 'insurance' as const, show: canInsurance, icon: <Shield className="h-4 w-4 text-yellow-600" /> },
   ].filter(item => item.show)
-  return <div className="grid shrink-0 grid-cols-3 gap-1">{items.map(item => <button key={item.label} type="button" title={item.label} onClick={event => { event.stopPropagation(); onOpen(item.workspace) }} className="grid h-12 w-14 cursor-pointer grid-rows-[17px_14px_12px] place-items-center rounded-lg px-0.5 text-center leading-none text-slate-600 transition hover:bg-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-300"><div>{item.icon}</div><strong className="text-base leading-none text-[#11275B]">{item.value}</strong><span className="max-w-full whitespace-nowrap text-[11px] font-medium">{item.label}</span></button>)}</div>
+  return <div className="grid w-full grid-cols-3 gap-2 border-t border-amber-100 pt-2">{items.map(item => <button key={item.label} type="button" title={item.label} onClick={event => { event.stopPropagation(); onOpen(item.workspace) }} className="flex min-h-11 min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-1 text-center text-slate-600 transition hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-300"><span className="flex items-center gap-1.5">{item.icon}<strong className="text-base leading-none text-[#11275B]">{item.value}</strong></span><span className="text-[11px] font-medium leading-tight">{item.label}</span></button>)}</div>
 }
 
 function PendingFilesKpi({ value, rto, payments, insurance, canRto, canInsurance, onOpen }: { value: number; rto: number; payments: number; insurance: number; canRto: boolean; canInsurance: boolean; onOpen: (workspace: Workspace) => void }) {
-  return <div className="flex min-h-[78px] min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)]"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><FileText className="h-4 w-4" /></span><div className="min-w-0"><span className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Pending Files</span><div className="mt-1 flex items-baseline gap-2"><span className="text-xl font-bold leading-none text-[#11275B]">{value}</span><span className="text-xs font-medium text-slate-500">pending</span></div></div></div><PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} /></div>
+  return <div className="flex h-full min-h-[112px] min-w-0 flex-col justify-between gap-2 rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(15,23,42,0.08)]"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600"><FileText className="h-4 w-4" /></span><div className="min-w-0"><span className="block text-xs font-bold uppercase tracking-wide text-slate-500">Pending Files</span><div className="mt-1 flex items-baseline gap-2"><span className="text-xl font-bold leading-none text-[#11275B]">{value}</span><span className="text-xs font-medium text-slate-500">pending</span></div></div></div><PendingFilesVisual rto={rto} payments={payments} insurance={insurance} canRto={canRto} canInsurance={canInsurance} onOpen={onOpen} /></div>
 }
 
 function TodoWorkloadSnapshot({ items }: { items: AttentionItem[] }) {
@@ -669,7 +669,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
       <Modal title="Insurance renewal alerts" open={salespersonRenewalAlertOpen} onClose={() => setSalespersonRenewalAlertOpen(false)} width="max-w-2xl">
         <p className="text-sm text-gray-600">The following customers assigned to you have insurance policies expiring within the next 30 days.</p>
         <div className="mt-4 min-w-0">
-          <WorkTable headers={['Customer', 'Registration', 'Expiry date', 'Renewal date']} tableMinWidth="min-w-[620px]" maxHeight="max-h-none">
+          <WorkTable headers={['Customer', 'Registration', 'Expiry date', 'Renewal date']} tableMinWidth="min-w-[620px]">
               {data.assignedExpiryRenewalPolicies.map(row => <tr key={row.insuranceMainId}><td className="px-3 py-2 font-medium text-gray-900"><div>{customerName(row)}</div><div className="font-mono text-xs font-normal text-gray-500">{customerMobile(row)}</div></td><td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.expiryDate)}</td><td className="px-3 py-2 text-gray-700">{formatDate(row.renewalDate)}</td></tr>)}
           </WorkTable>
         </div>
@@ -739,10 +739,10 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
 
         <div className="min-w-0 flex-1 sm:min-h-[520px]">
         {workspace === 'leads' ? (
-          <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
+          <div className="grid min-w-0 items-start gap-3">
             <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
               <div className="mb-3 flex items-center gap-2"><h2 className="text-base font-bold text-[#172d62]">Lead Details</h2><span className="rounded-full bg-blue-500 px-2 py-0.5 text-[11px] font-bold text-white">{stats.totalInquiries.toLocaleString('en-IN')}</span></div>
-              <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count", 'Own Share']} maxHeight="max-h-[215px] flex-1 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-full" tableClass="w-full [&_th]:py-1 [&_td]:py-1">
+              <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count", 'Own Share']} tableMinWidth="min-w-full" tableClass="w-full [&_th]:py-1 [&_td]:py-1">
                 {filteredLeadDetails.map(row => (
                   <tr key={row.label} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-800">{row.label}</td>
@@ -754,7 +754,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 ))}
               </WorkTable>
             </section>
-              <div className="grid min-w-0 gap-3">
+              <div className="grid min-w-0 items-start gap-3 xl:grid-cols-2">
                 <section className="min-w-0 rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <LeadSourceChart
                     data={data.leadSources}
@@ -770,13 +770,13 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                     selectedSourceCode={selectedLeadSource?.sourceCode}
                     onClearSource={() => setSelectedLeadSource(null)}
                     title="Leads by Region"
-                    emptyMessage={selectedLeadSource ? `No controlled location data for ${selectedLeadSource.name} in this period.` : 'No controlled location data for this period.'}
+                    emptyMessage={selectedLeadSource ? `No leads with a recorded region for ${selectedLeadSource.name} in this period.` : 'No leads with a recorded region for this period.'}
                   />
                 </section>
               </div>
           </div>
         ) : workspace === 'followups' ? (
-          <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[760px]">
+          <WorkTable headers={['Customer', 'Mobile', 'Follow-up Date', 'Classification', 'Status', 'Action']} tableMinWidth="min-w-[760px]">
             {filteredFollowups.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.customerName}</td>
@@ -789,10 +789,10 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'insurance' ? (
-          <div className="grid min-w-0 gap-3 sm:max-h-[215px] sm:overflow-auto md:grid-cols-2">
+          <div className="grid min-w-0 gap-5">
             <section className="min-w-0">
               <h3 className="mb-1 text-xs font-semibold text-[#008ab8]">Pending Insurance Policy Details</h3>
-              <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Status', 'Action']} maxHeight="max-h-[186px]" tableMinWidth="min-w-[760px]">
+              <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Status', 'Action']} fitToWidth>
                 {filteredPendingInsuranceRows.map(row => (
                   <tr key={row.id} className="hover:bg-gray-50">
                     <td className="px-3 py-2 font-mono text-xs font-semibold">{row.reg ?? '-'}</td>
@@ -808,7 +808,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </section>
             <section className="min-w-0">
               <h3 className="mb-1 text-xs font-semibold text-[#4f8a10]">Expiry Date/Renewal Date of Policy</h3>
-              <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Expiry Date', 'Renewal Date', 'Action']} maxHeight="max-h-[186px]" tableMinWidth="min-w-[860px]">
+              <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Expiry Date', 'Renewal Date', 'Action']} fitToWidth>
                 {filteredExpiryInsuranceRows.map(row => (
                   <tr key={row.id} className="hover:bg-gray-50">
                     <td className="px-3 py-2 font-mono text-xs font-semibold">{row.reg ?? '-'}</td>
@@ -825,7 +825,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             </section>
           </div>
         ) : workspace === 'rto' ? (
-          <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Transfer', 'RC', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[860px]">
+          <WorkTable headers={['Registration', 'Customer', 'Mobile', 'Agent', 'Agent Mobile', 'Transfer', 'RC', 'Action']} tableMinWidth="min-w-[860px]">
             {filteredRtoRows.map(row => (
               <tr key={row.rtoAgentMainId} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-mono text-xs font-semibold">{row.carRegistrationNo ?? '-'}</td>
@@ -840,7 +840,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'payments' ? (
-          <WorkTable headers={['Type', 'Registration', 'Customer', 'Customer Mobile', 'Agent', 'Agent Mobile', 'Due', 'Total', 'Received', 'Balance', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[1080px]">
+          <WorkTable headers={['Type', 'Registration', 'Customer', 'Customer Mobile', 'Agent', 'Agent Mobile', 'Due', 'Total', 'Received', 'Balance', 'Action']} tableMinWidth="min-w-[1080px]">
             {filteredPaymentRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2"><Badge label={row.type} /></td>
@@ -858,7 +858,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'loans' ? (
-          <WorkTable headers={['Registration', 'Customer', 'Customer Mobile', 'Bank Contact', 'Bank Mobile', 'Follow-up', 'Payout', 'Received', 'Balance', 'Action']} maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[980px]">
+          <WorkTable headers={['Registration', 'Customer', 'Customer Mobile', 'Bank Contact', 'Bank Mobile', 'Follow-up', 'Payout', 'Received', 'Balance', 'Action']} tableMinWidth="min-w-[980px]">
             {filteredLoanRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-mono text-xs font-semibold">{row.registrationNo ?? '-'}</td>
@@ -875,7 +875,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'birthdays' ? (
-          <WorkTable headers={['Name', 'Mobile', 'Email']} empty="No birthdays today" maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
+          <WorkTable headers={['Name', 'Mobile', 'Email']} empty="No birthdays today" tableMinWidth="min-w-[620px]">
             {filteredBirthdayRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.name}</td>
@@ -885,7 +885,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
             ))}
           </WorkTable>
         ) : workspace === 'anniversaries' ? (
-          <WorkTable headers={['Name', 'Mobile', 'Email']} empty="No anniversaries today" maxHeight="max-h-[215px] 2xl:h-full 2xl:max-h-none" tableMinWidth="min-w-[620px]">
+          <WorkTable headers={['Name', 'Mobile', 'Email']} empty="No anniversaries today" tableMinWidth="min-w-[620px]">
             {filteredAnniversaryRows.map(row => (
               <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium text-gray-900">{row.name}</td>
@@ -898,7 +898,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
           <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.96fr)]">
             <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
               <div className="mb-3 flex items-center justify-between gap-2"><div><h2 className="text-base font-bold text-[#172d62]">To-do</h2><p className="mt-0.5 text-xs text-slate-500">Priority work awaiting action</p></div><span className="rounded-full bg-[#1B2A6B] px-2 py-0.5 text-[11px] font-bold text-white">{attentionItems.length}</span></div>
-              <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No records found" maxHeight="max-h-[192px] flex-1 2xl:max-h-none" tableMinWidth="min-w-[760px]">
+              <WorkTable headers={['Priority', 'Customer', 'Type', 'Due / Date', 'Status', 'Action']} empty="No records found" tableMinWidth="min-w-[760px]">
                 {pagedAttention.map(item => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-3 py-2"><Badge label={item.priority === 'High' ? 'Overdue' : item.priority} /></td>

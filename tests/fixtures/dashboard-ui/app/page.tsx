@@ -13,9 +13,12 @@ const props: DashboardCommandCenterProps = {
   permissions: { canInventory: true, canInquiry: true, canFollowup: true, canInsurance: true, canLoan: true, canRto: true },
   stats: { totalInventory: 20, availableStock: 12, soldThisMonth: 2, totalInquiries: 53501, todayInquiries: 3, hotLeads: 4, pendingFollowups: 1, overdueFollowups: 0, activeLoans: 0, activeInsurance: 0, pendingRTO: 0 },
   todayStats: { deliveriesToday: 0, followupsToday: 1, paymentsReceivedToday: 0 },
-  leadSources: ['Quikr', 'Justdial', 'OLX', 'CarTrade', 'Gaadi', 'Other'].map((name, index) => ({ name, sourceCode: name, value: 11887 - index * 1400 })),
+  leadSources: ['Quikr', 'Justdial', 'OLX', 'CarTrade', 'Gaadi', 'CarDekho', 'Other'].map((name, index) => ({ name, sourceCode: name, value: 11887 - index * 1400 })),
   leadRegionBreakdowns: { all: breakdowns, bySource: { Quikr: breakdowns } },
-  leadDetails: [{ label: 'All Leads', total: 53501, own: 11, other: 53490, href: '#all', ownHref: '#own' }],
+  leadDetails: [
+    { label: 'All Leads', total: 53501, own: 11, other: 53490, href: '#all', ownHref: '#own' },
+    ...['Fresh Leads', "Today's Appointment Fixed", 'Follow up Today', 'Pending Follow up', 'Follow up (Upcoming)', 'Closed'].map((label, index) => ({ label, total: index * 30, own: index, other: index * 29, href: '#all', ownHref: '#own' })),
+  ],
   followups: [{ id: 1, customerName: 'Sample customer', mobile: '0000000000', followupDate: '2026-10-22', classification: 'Warm', status: 'FollowUp' }],
   reminders: [
     { id: '1', name: 'Sample reminder', mobile: null, email: 'sample-long-email-address@example.test', type: 'Anniversary' },

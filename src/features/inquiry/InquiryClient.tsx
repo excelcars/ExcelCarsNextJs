@@ -10,7 +10,7 @@ import { InquiryDetailView } from './InquiryDetailView'
 import { INQUIRY_STATUSES, INQUIRY_CLASSIFICATIONS, inquiryStatusLabel } from './queries'
 import { assignInquiry, createInquiry, updateInquiry, deleteInquiry, sendInquiryInventoryEmails, getInquiryDetail, getNextInquiryNumber, type InquiryCarInput, type InquiryFormInput } from './actions'
 import { isValidYear } from '@/lib/validation'
-import { isVisitedSubStatus, requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { isVisitedSubStatus, normalizeInquiryCarYear, requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { formatInquiryInventoryWorkflowLabel } from './workflow'
@@ -1046,7 +1046,7 @@ export function InquiryClient({
       selectedModelId: row.selectedModelId ?? null,
       fkVariantId: row.fkVariantId ?? null,
       subVariant: row.subVariant ?? '',
-      carYear: row.carYear ?? null,
+      carYear: normalizeInquiryCarYear(row.carYear),
       noOfOwners: row.noOfOwners ?? null,
     })
     setCarEditorError('')
@@ -1401,7 +1401,7 @@ export function InquiryClient({
         selectedModelId: car.carVariantMaster?.carModelMaster?.pkModelId ?? null,
         fkVariantId: car.fkVariantId ?? null,
         subVariant: car.subVariant ?? '',
-        carYear: car.year ?? null,
+        carYear: normalizeInquiryCarYear(car.year),
         noOfOwners: car.noOfOwners ?? null,
       })) : []
       const nextForm = {
@@ -1465,28 +1465,35 @@ export function InquiryClient({
     setError('')
     const validation = validateInquiryFormInput(form)
     if (validation.error) {
-      setError('')
+      setError(validation.error)
       setErrors(validation.fieldErrors)
       return
     }
     setErrors({})
     startTransition(async () => {
-      const result = editId
-        ? await updateInquiry(editId, form)
-        : await createInquiry(form)
-      if (!result.success) {
-        const message = result.error ?? 'Could not save this inquiry.'
+      try {
+        const result = editId
+          ? await updateInquiry(editId, form)
+          : await createInquiry(form)
+        if (!result.success) {
+          const message = result.error ?? 'Could not save this inquiry.'
+          setError(message)
+          setSaveAlert({ type: 'error', message })
+          setSaveFeedback(null)
+          return
+        }
+        setSaveAlert({ type: 'success', message: result.message ?? `Inquiry ${editId ? 'updated' : 'created'} successfully.` })
+        setSaveFeedback(result.message ? { ok: true, message: result.message } : null)
+        setSavedFormSnapshot(JSON.stringify(form))
+        setSavedCustomerSnapshot(customerSnapshot(selectedCustomer))
+        forceCloseInquiryModal()
+        router.refresh()
+      } catch {
+        const message = 'Could not save this inquiry. Check your connection and try again. If the problem continues, contact support.'
         setError(message)
         setSaveAlert({ type: 'error', message })
         setSaveFeedback(null)
-        return
       }
-      setSaveAlert({ type: 'success', message: result.message ?? `Inquiry ${editId ? 'updated' : 'created'} successfully.` })
-      setSaveFeedback(result.message ? { ok: true, message: result.message } : null)
-      setSavedFormSnapshot(JSON.stringify(form))
-      setSavedCustomerSnapshot(customerSnapshot(selectedCustomer))
-      forceCloseInquiryModal()
-      router.refresh()
     })
   }
 
@@ -1892,7 +1899,7 @@ export function InquiryClient({
                 f('budgetOfCustomer', digits ? Number(digits) : null)
               }}
               error={errors.budgetOfCustomer}
-              errorMessage="Budget must be greater than zero."
+              errorMessage="Enter a valid budget of zero or more, or leave it blank."
             />
             <FormDropdown label={fieldLabel('Classification', true)} value={form.classification} options={INQUIRY_CLASSIFICATIONS.map(value => ({ value, label: value }))} placeholder="Select classification" onChange={value => f('classification', value)} />
             <Input label="Visited Date of customer" type="date" value={form.visitedDateOfCustomer} onChange={e => f('visitedDateOfCustomer', e.target.value)} error={errors.visitedDateOfCustomer} errorMessage={visitedSelected && !form.visitedDateOfCustomer ? 'Visited date is required when sub-status is Visited.' : 'Visited date cannot be before the inquiry date.'} />
@@ -1925,7 +1932,7 @@ export function InquiryClient({
             </div>
           ) : null}
 
-          {error && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{error}</div>}
+          {error && <div role="alert" className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700"><strong>Inquiry not saved.</strong> {error}</div>}
 
           <div className="flex gap-3 justify-end pt-2">
             <Btn variant="outline" onClick={requestCloseInquiryModal}>Cancel</Btn>

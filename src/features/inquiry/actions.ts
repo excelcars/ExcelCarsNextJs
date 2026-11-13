@@ -8,7 +8,7 @@ import { prisma } from '@/lib/db/prisma'
 import { auth } from '../../../auth'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import { canAccessInquiryByOwnership } from '@/lib/access/inquiryOwnership'
-import { requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { normalizeInquiryCarYear, requiresInquiryFollowupDate, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { sendEmail } from '@/lib/email/sendMail'
 import { noInventoryEnquiryEmail, vehicleDetailsEmail } from '@/lib/email/templates'
 import { buildTrackedVehicleUrl, buildVehicleSlug, generateVehicleEmailToken } from '@/lib/vehicleEmailLinks'
@@ -281,7 +281,7 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
       modelLegacy: null,
       variantLegacy: null,
       subVariant: input.subVariant.trim() || null,
-      year: input.carYear,
+      year: normalizeInquiryCarYear(input.carYear),
       noOfOwners: input.noOfOwners,
     }
   }
@@ -301,7 +301,7 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
       modelLegacy: null,
       variantLegacy: null,
       subVariant: input.subVariant.trim() || null,
-      year: input.carYear,
+      year: normalizeInquiryCarYear(input.carYear),
       noOfOwners: input.noOfOwners,
     }
   }
@@ -312,7 +312,7 @@ async function resolveInquiryCarDetail(input: InquiryCarInput) {
     modelLegacy: variant.carModelMaster?.model?.trim() || null,
     variantLegacy: variant.variant?.trim() || null,
     subVariant: input.subVariant.trim() || null,
-    year: input.carYear,
+    year: normalizeInquiryCarYear(input.carYear),
     noOfOwners: input.noOfOwners,
   }
 }
@@ -364,7 +364,7 @@ function buildInquiryData(
     customerNameLegacy: resolvedContact.customerNameLegacy,
     mobileno: resolvedContact.mobileno,
     email: resolvedContact.email,
-    budgetOfCustomer: input.budgetOfCustomer,
+    budgetOfCustomer: input.budgetOfCustomer === 0 ? null : input.budgetOfCustomer,
     visitedDateOfCustomer: toDate(input.visitedDateOfCustomer),
     classification: input.classification || null,
     status: normalizedStatus,
