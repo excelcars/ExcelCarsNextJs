@@ -176,8 +176,6 @@ function buildInquiryWhere({ search, status, classification, source, locationId,
       { mobileno: { contains: q, mode: 'insensitive' } },
       { email: { contains: q, mode: 'insensitive' } },
       { website: { contains: q, mode: 'insensitive' } },
-      { sourceDetail: { contains: q, mode: 'insensitive' } },
-      { remark: { contains: q, mode: 'insensitive' } },
       { location: { contains: q, mode: 'insensitive' } },
       { reportingLocation: { displayName: { contains: q, mode: 'insensitive' } } },
       { source: { displayName: { contains: q, mode: 'insensitive' } } },
@@ -329,13 +327,7 @@ export async function listInquiries({ search, status, classification, source, lo
     prisma.inquiry.count({ where }),
   ])
 
-  const partnerPayloads = rows.length ? await prisma.partnerWebhookPayload.findMany({
-    where: { inquiryId: { in: rows.map(row => row.inquiryId) } },
-    distinct: ['inquiryId', 'partner'], select: { inquiryId: true, partner: true },
-  }) : []
-  const partnerInquiryIds = new Set(partnerPayloads.map(row => row.inquiryId))
-  const cardekhoInquiryIds = new Set(partnerPayloads.filter(row => row.partner === 'CARDEKHO').map(row => row.inquiryId))
-  return { rows: rows.map(row => ({ ...row, hasPartnerPayload: partnerInquiryIds.has(row.inquiryId), hasCardekhoPayload: cardekhoInquiryIds.has(row.inquiryId) })), total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) }
+  return { rows, total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) }
 }
 
 export async function getInquiryById(id: number) {

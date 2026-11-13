@@ -5,8 +5,6 @@ import { ensureInquiryActivityLogTable, logInquiryEvent } from './eventLog'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
 import { createUserNotification } from '@/features/notifications/service'
 import { resolvePartnerVehicle } from './partnerVehicleCatalog.server'
-import { findContactInquiries } from './existingInquiry.server'
-import { partnerVehicleKey } from './partnerVehicleCatalog'
 
 type Partner = 'CARDEKHO' | 'JUSTDIAL'
 type Payload = Record<string, unknown>
@@ -143,36 +141,6 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
         select: { partnerWebhookLeadId: true },
       })
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(42815501)`
-      const [contactMatch] = await findContactInquiries(tx, { mobile: lead.mobile, customerId, preferActive: true, limit: 1 })
-      const existing = contactMatch ? await tx.inquiry.findUnique({
-        where: { inquiryId: contactMatch.inquiry_id },
-        select: { inquiryId: true, inquiryNo: true, remark: true, assignedTo: true, createdBy: true, inquiryCarDetails: true },
-      }) : null
-      if (existing) {
-        await tx.inquiry.update({ where: { inquiryId: existing.inquiryId }, data: {
-          remark: [existing.remark, lead.remark].filter(Boolean).join('\n\n'), updatedDt: now,
-        } })
-        if (lead.vehicle) {
-          const vehicle = lead.vehicle
-          const sameCar = existing.inquiryCarDetails.find(car => car.year === vehicle.year && (
-            (vehicleSelection && car.fkVariantId === vehicleSelection.fkVariantId) ||
-            partnerVehicleKey(car.subVariant ?? '') === partnerVehicleKey(vehicle.description)
-          ))
-          if (!sameCar) await tx.inquiryCarDetails.create({ data: {
-            fkInquiryId: existing.inquiryId, ...vehicleSelection, subVariant: vehicle.description,
-            year: vehicle.year, noOfOwners: vehicle.owners, createdDt: now, updatedDt: now,
-          } })
-          else if (!sameCar.fkVariantId && vehicleSelection) await tx.inquiryCarDetails.update({
-            where: { inquiryCarDetailsId: sameCar.inquiryCarDetailsId }, data: { ...vehicleSelection, updatedDt: now },
-          })
-        }
-        await tx.partnerWebhookLead.update({ where: { partnerWebhookLeadId: claim.partnerWebhookLeadId }, data: { inquiryId: existing.inquiryId } })
-        await tx.partnerWebhookPayload.update({ where: { partnerWebhookPayloadId: rawPayload.partnerWebhookPayloadId }, data: { inquiryId: existing.inquiryId } })
-        await logInquiryEvent(tx, { inquiryId: existing.inquiryId, eventType: 'partner_inquiry_linked', eventLabel: `${source.displayName} lead linked to existing inquiry`, eventDetail: `${sourceDetail}${lead.vehicle ? `; vehicle: ${lead.vehicle.description} (${lead.vehicle.year})` : ''}`, createdAt: now })
-        const recipient = existing.assignedTo ?? existing.createdBy
-        if (recipient) await createUserNotification(tx, { recipientUserId: recipient, type: 'portal_lead', title: `Repeat ${source.displayName} lead`, body: `A new partner lead was linked to ${existing.inquiryNo ?? 'your existing inquiry'}.`, href: `/inquiry?search=${encodeURIComponent(existing.inquiryNo ?? lead.mobile)}`, entityType: 'inquiry', entityId: existing.inquiryId, dedupeKey: `portal_lead:${partner}:${lead.leadId}:${recipient}` })
-        return { success: true as const, duplicate: false, linked: true, inquiryId: existing.inquiryId }
-      }
       const inquiry = await tx.inquiry.create({
         data: {
           inquiryNo: await nextInquiryNumber(tx), dateOfInquiry: now, website: source.displayName, sourceId: source.sourceId, sourceDetail,
@@ -188,7 +156,7 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
       if (assignment?.assignedToUserId) {
         await createUserNotification(tx, { recipientUserId: assignment.assignedToUserId, type: 'portal_lead', title: `New ${source.displayName} lead`, body: `${lead.customerName || 'A new customer'} has been assigned to you.`, href: `/inquiry?search=${encodeURIComponent(lead.leadId)}`, entityType: 'inquiry', entityId: inquiry.inquiryId, dedupeKey: `portal_lead:${partner}:${lead.leadId}:${assignment.assignedToUserId}` })
       }
-      return { success: true as const, duplicate: false, linked: false, inquiryId: inquiry.inquiryId }
+      return { success: true as const, duplicate: false, inquiryId: inquiry.inquiryId }
     }, { maxWait: 10_000, timeout: 30_000 })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
