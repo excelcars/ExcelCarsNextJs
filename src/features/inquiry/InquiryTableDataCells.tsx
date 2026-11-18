@@ -5,6 +5,7 @@ import { Mail, MapPin, Phone } from 'lucide-react'
 import { cleanListValue, formatListDate, formatListMoney } from '@/lib/listFormatters'
 import { Badge } from '@/components/ui'
 import { PartnerInquiryDetails } from './PartnerInquiryDetails'
+import { QuickVehicleMapping } from './QuickVehicleMapping'
 
 export type InquiryListRow = {
   inquiryId: number; inquiryNo?: string | null; dateOfInquiry: Date | string | null; website: string | null; sourceDetail: string | null; location: string | null; customerNameLegacy: string | null; mobileno: string | null; email: string | null; budgetOfCustomer: string | number | null; classification: string | null; visitedDateOfCustomer: Date | string | null; status: string | null; subStatus: string | null; followUpDate: Date | string | null; remark: string | null
@@ -26,7 +27,7 @@ export function InquiryTableDataCells({ row, number, assignedToLabel, actions }:
       <div><span className="font-semibold text-gray-700">Model:</span> {cleanListValue(car?.carVariantMaster?.carModelMaster?.model) || cleanListValue(car?.modelLegacy) || '—'}</div>
       <div><span className="font-semibold text-gray-700">Variant:</span> {cleanListValue(car?.carVariantMaster?.variant) || cleanListValue(car?.variantLegacy) || '—'}</div>
       <div><span className="font-semibold text-gray-700">Year:</span> {car?.year ?? '—'}</div>
-      {row.website?.toLowerCase() === 'cardekho' && car?.subVariant && !car.carVariantMaster ? <span title="Automatic matching found no unique catalog variant. Confirm the correct variant once and remember it for future inquiries." className="inline-block rounded bg-amber-50 px-2 text-xs font-medium text-amber-800">Needs vehicle mapping</span> : null}
+      {row.website?.toLowerCase() === 'cardekho' && car?.subVariant && !car.carVariantMaster ? <QuickVehicleMapping inquiryId={row.inquiryId} vehicleDescription={car.subVariant} /> : null}
     </div>)}</div>{row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}</td>
     <td className="px-2 py-3"><div className={detailClass}><div><span className="font-semibold text-gray-700">Budget:</span> {formatListMoney(row.budgetOfCustomer)}</div><div><span className="font-semibold text-gray-700">Assigned To:</span> {assignedToLabel}</div></div></td>
     <td className="px-2 py-3"><div className={detailClass}><div className="mb-1.5 flex flex-wrap gap-1.5">{row.classification ? <Badge label={row.classification} /> : null}{row.status ? <Badge label={row.status} /> : null}</div><div><span className="font-semibold text-gray-700">Sub-status:</span> {row.subStatus ?? '—'}</div><div><span className="font-semibold text-gray-700">Follow-up:</span> {formatListDate(row.followUpDate) || '—'}</div><div><span className="font-semibold text-gray-700">Visited:</span> {formatListDate(row.visitedDateOfCustomer) || '—'}</div></div></td>

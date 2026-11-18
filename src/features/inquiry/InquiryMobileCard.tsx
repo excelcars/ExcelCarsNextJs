@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui'
 import { cleanListValue, formatListDate, formatListMoney } from '@/lib/listFormatters'
 import type { InquiryListRow } from './InquiryTableDataCells'
 import { PartnerInquiryDetails } from './PartnerInquiryDetails'
+import { QuickVehicleMapping } from './QuickVehicleMapping'
 
 export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { row: InquiryListRow; number: number; assignedToLabel: string; actions: ReactNode }) {
   const mobile = row.customer?.custMobile ?? row.mobileno
@@ -44,7 +45,7 @@ export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { r
           car.year,
         ].filter(Boolean).join(' · ') || '—'}</div>
           {car.subVariant ? <p><span className="font-medium">Vehicle requested: </span>{car.subVariant}</p> : null}
-          {row.website?.toLowerCase() === 'cardekho' && car.subVariant && !car.carVariantMaster ? <span title="Automatic matching found no unique catalog variant. Confirm the correct variant once and remember it for future inquiries." className="inline-block rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Needs vehicle mapping</span> : null}
+          {row.website?.toLowerCase() === 'cardekho' && car.subVariant && !car.carVariantMaster ? <QuickVehicleMapping inquiryId={row.inquiryId} vehicleDescription={car.subVariant} /> : null}
         </div>) : <div>—</div>}
         {row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}
       </div>
