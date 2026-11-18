@@ -1,4 +1,4 @@
-import { CalendarDays, CarFront, FileText, Fuel, Gauge, Palette, ReceiptText, ShieldCheck, Wrench, type LucideIcon, UsersRound } from 'lucide-react'
+import { CalendarDays, CarFront, FileText, Fuel, Gauge, Palette, ReceiptText, ShieldCheck, type LucideIcon, UsersRound } from 'lucide-react'
 
 type Specification = [label: string, value: string]
 
@@ -12,7 +12,6 @@ const iconByLabel: Record<string, LucideIcon> = {
   'Insurance Type': ShieldCheck,
   'Road Tax': ReceiptText,
   'Month of Manufacture': CalendarDays,
-  'Service History': Wrench,
   'Fuel Type': Fuel,
   'KM Driven': Gauge,
   'Year of Manufacture': CalendarDays,
