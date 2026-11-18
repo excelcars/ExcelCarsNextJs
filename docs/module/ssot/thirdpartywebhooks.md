@@ -1,5 +1,5 @@
 # SSOT - Third Party Inquiry Webhook Integration
-## Status: Next.js implementation added on 2026-10-08. Database migration and partner sandbox verification are pending deployment.
+## Status: Staging vehicle catalog mapping and readable partner details added and verified on 2026-11-13. Production rollout of these changes is pending.
 
 **Module:** `third-party-inquiry-webhooks`  
 **Project:** `ExcelCarsNextJs`  
@@ -77,7 +77,7 @@ Field mapping:
 | `lead_id` | partner lead ID and duplicate key | Required stable unique value for each Cardekho lead |
 | `buyer_name` | `inquiry.customerNameLegacy` | Required non-empty text |
 | `buyer_mobile` | `inquiry.mobileno` | Required valid Indian 10-digit mobile after normalization |
-| `mmv` | `inquiryCarDetails.subVariant` | Stored as received when an exact catalog variant is not resolved |
+| `mmv` | `inquiryCarDetails.fkVariantId`, legacy make/model/variant labels, and `subVariant` | Use a confirmed partner mapping first, then match the complete description against the catalog. Always preserve the original description in `subVariant`. Uncertain matches remain unlinked and visible for review. |
 | `mfg_year` | `inquiryCarDetails.year` | Must be between 1900 and current year plus one |
 | `no_of_owners` | `inquiryCarDetails.noOfOwners` | Whole number, zero or greater |
 | `reg_no` | `inquiry.remark` and activity detail | Preserved as partner vehicle metadata |
@@ -229,6 +229,12 @@ Rules:
 
 The webhook must not send matching inventory emails or customer notifications during the synchronous partner request. Those integrations remain separate from inbound lead acceptance.
 
+### Repeat contact change reverted
+
+New external lead IDs create separate inquiries again, even for the same mobile or linked customer. Retries of the same partner/external lead ID remain idempotent. Vehicle catalog mapping and readable partner details remain enabled.
+
+The already-applied staging migration `20261113140000_allow_multiple_partner_leads_per_inquiry` and its matching Prisma schema are retained for compatibility with previously linked QA records. Do not recreate the unique inquiry-ID index or unlink historical lead receipts as part of this application rollback. No database data was changed or deleted by the rollback. Redeploy the application to roll back hosted behavior.
+
 ## 7. Data Ownership
 
 Tables read:
@@ -251,6 +257,21 @@ Tables written:
 The module must not create a `followupInquiry` row for the default `Open` state.
 
 ## 8. Validation Rules
+
+### Vehicle mapping and readable partner details (staging, 2026-11-13)
+
+- Complete MMV matching tolerates case, punctuation, spacing, Maruti/Suzuki names, and Mercedes/Benz names. It never selects a shorter trim or creates catalog entries.
+- Equivalent duplicate variant spellings use the lowest variant ID only within the same make/model IDs. Conflicting catalog relationships remain unresolved.
+- Both the inquiry table and compact cards show the original vehicle description, linked catalog details, Partner details popup, and a `Needs vehicle mapping` label for unlinked CarDekho vehicles. Overview and Requirement titles fall back to the received description.
+- `Partner details` opens the original linked webhook payload in a modal popup as approved, labelled business fields. The popup supports Escape, a Close button, and backdrop dismissal. It explains automatic catalog matching and the one-time confirmation required for missing/ambiguous descriptions. Arbitrary JSON keys are not exposed. Server access requires both route permission and inquiry ownership.
+- An authorized inquiry editor can select an existing make/model/variant and explicitly check `Remember the selected vehicle mapping for future CarDekho inquiries`. The original vehicle text must remain in Sub Variant.
+- Confirmation is bound to that inquiry's stored CarDekho payload, validates the selected catalog relationships, and saves the inquiry and mapping in one transaction. The activity log records the actor and previous/new catalog target. Later matching inquiries reuse the mapping.
+- Migration: `20261113100000_add_partner_vehicle_mappings`. Apply this before serving the updated webhook. Production requires a separate rollout; no production migration or backfill was performed during staging validation.
+- Regression checks: `npm run test:partner-inquiries`, `npm run typecheck`, and targeted ESLint checks.
+- Live staging verification: start `npm run dev:staging -- --port 3005`, then run `node --experimental-strip-types scripts/verify-cardekho-staging.mjs`. This creates clearly labelled synthetic leads and a synthetic confirmed mapping in staging; it does not send customer messages. It checks unsigned requests, matching, duplicate retries, unmapped text retention, and reuse of a persisted confirmed mapping. The JSON report is saved under ignored `storage/cardekho-staging-verification.json`.
+- Hosted staging verification uses the same script with `--base-url=https://excelcaruat.vercel.app`. Only this approved staging host and the local preview are allowed. The deployment's `CARDEKHO_WEBHOOK_SECRET` must match `.env.staging.local`; a preflight stops before creating QA inquiries if authentication fails.
+- The local staging runner sets `AUTH_URL` and `NEXTAUTH_URL` from its requested local port and uses an isolated `.next-staging-dev` build folder. This prevents hosted-UAT redirects and route-manifest collisions when the regular local server is running at the same time. Hosted UAT authentication settings are unchanged. A staging account is required for the logged-in visual review.
+- Existing staging inquiries: `npm run db:backfill-cardekho:staging` previews repairs. To apply: `npm run db:backfill-cardekho:staging -- --apply --backup=storage/cardekho-vehicles-before.json`. The script refuses a staging connection matching production, only touches unedited/unlinked webhook-created vehicle rows, writes a backup first, and rolls back on concurrent changes. It preserves the received text and unrelated fields.
 
 Common validation:
 

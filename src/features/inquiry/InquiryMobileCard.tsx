@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { Badge } from '@/components/ui'
 import { cleanListValue, formatListDate, formatListMoney } from '@/lib/listFormatters'
 import type { InquiryListRow } from './InquiryTableDataCells'
+import { PartnerInquiryDetails } from './PartnerInquiryDetails'
 
 export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { row: InquiryListRow; number: number; assignedToLabel: string; actions: ReactNode }) {
   const mobile = row.customer?.custMobile ?? row.mobileno
@@ -36,12 +37,16 @@ export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { r
       </dl>
       <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
         <h3 className="mb-1 text-xs font-semibold text-gray-500">Interested vehicles</h3>
-        {row.inquiryCarDetails.length ? row.inquiryCarDetails.map((car, index) => <div key={index} className="py-1">{[
+        {row.inquiryCarDetails.length ? row.inquiryCarDetails.map((car, index) => <div key={index} className="space-y-1 py-1"><div>{[
           cleanListValue(car.carVariantMaster?.carMakeMaster?.make) || cleanListValue(car.makeLegacy),
           cleanListValue(car.carVariantMaster?.carModelMaster?.model) || cleanListValue(car.modelLegacy),
           cleanListValue(car.carVariantMaster?.variant) || cleanListValue(car.variantLegacy),
           car.year,
-        ].filter(Boolean).join(' · ') || '—'}</div>) : <div>—</div>}
+        ].filter(Boolean).join(' · ') || '—'}</div>
+          {car.subVariant ? <p><span className="font-medium">Vehicle requested: </span>{car.subVariant}</p> : null}
+          {row.website?.toLowerCase() === 'cardekho' && car.subVariant && !car.carVariantMaster ? <span title="Automatic matching found no unique catalog variant. Confirm the correct variant once and remember it for future inquiries." className="inline-block rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Needs vehicle mapping</span> : null}
+        </div>) : <div>—</div>}
+        {row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}
       </div>
       {row.remark?.trim() ? <p className="mt-3 whitespace-pre-wrap text-sm text-gray-600"><span className="font-semibold">Remark: </span>{row.remark}</p> : null}
       <div className="mt-4 border-t border-gray-100 pt-3">{actions}</div>

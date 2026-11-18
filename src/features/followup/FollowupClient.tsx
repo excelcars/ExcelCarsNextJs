@@ -12,7 +12,7 @@ import { InquiryDetailView } from '@/features/inquiry/InquiryDetailView'
 import { INQUIRY_CLASSIFICATIONS, INQUIRY_STATUSES, inquiryStatusLabel } from '@/features/inquiry/queries'
 import { getInquiryDetail, updateInquiry, type InquiryCarInput, type InquiryFormInput } from '@/features/inquiry/actions'
 import { isValidYear } from '@/lib/validation'
-import { FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, resolveFollowupSubStatusInput, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
+import { FOLLOWUP_LEGACY_SUB_STATUS_OPTIONS, isFollowupStatus, normalizeInquiryCarYear, resolveFollowupSubStatusInput, validateFollowupLogInput, validateInquiryFormInput } from '@/lib/inquiryFollowupValidation'
 import { LIST_FILTER_DEBOUNCE_MS } from '@/lib/listFilterTiming'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import type { InquirySourceOption } from '@/features/inquiry/sourceMaster'
@@ -643,6 +643,14 @@ export function FollowupClient({
   )
 
   useEffect(() => {
+    if (!successMessage) return
+
+    const dismissSuccessMessage = () => setSuccessMessage('')
+    document.addEventListener('click', dismissSuccessMessage, true)
+    return () => document.removeEventListener('click', dismissSuccessMessage, true)
+  }, [successMessage])
+
+  useEffect(() => {
     setSearch(initialSearch)
     setStatus(initialStatus)
     setSort(initialSort)
@@ -832,7 +840,7 @@ export function FollowupClient({
       selectedModelId: row.selectedModelId ?? null,
       fkVariantId: row.fkVariantId ?? null,
       subVariant: row.subVariant ?? '',
-      carYear: row.carYear ?? null,
+      carYear: normalizeInquiryCarYear(row.carYear),
       noOfOwners: row.noOfOwners ?? null,
     })
     setCarEditorError('')
@@ -1053,7 +1061,7 @@ export function FollowupClient({
           selectedModelId: car.carVariantMaster?.carModelMaster?.pkModelId ?? null,
           fkVariantId: car.fkVariantId ?? null,
           subVariant: car.subVariant ?? '',
-          carYear: car.year ?? null,
+          carYear: normalizeInquiryCarYear(car.year),
           noOfOwners: car.noOfOwners ?? null,
         })) : []
 

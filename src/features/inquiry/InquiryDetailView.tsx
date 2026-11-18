@@ -6,6 +6,7 @@ import { Badge, Btn } from '@/components/ui'
 import { getInquiryDetail, setInquiryInventoryWorkflowState } from './actions'
 import { formatInquiryInventoryWorkflowLabel, INQUIRY_INVENTORY_WORKFLOW_OPTIONS } from './workflow'
 import { isFollowupStatus } from '@/lib/inquiryFollowupValidation'
+import { PartnerInquiryDetails } from './PartnerInquiryDetails'
 
 interface InquiryDetailUser {
   userId: number
@@ -644,6 +645,7 @@ export function InquiryDetailView({
       </div>
 
       <div className="px-6 py-5">
+        {currentInquiry.sourceDetail?.startsWith('Partner lead ID:') ? <div className="mb-4"><PartnerInquiryDetails key={currentInquiry.inquiryId} inquiryId={currentInquiry.inquiryId} route={detailRoute} /></div> : null}
         {tab === 'overview' ? (
           <div className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-2">
@@ -676,7 +678,7 @@ export function InquiryDetailView({
                             <div className="text-lg font-semibold text-gray-900">{[
                               clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy),
                               clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy),
-                            ].filter(Boolean).join(' ') || 'Vehicle not set'}</div>
+                            ].filter(Boolean).join(' ') || clean(car.subVariant) || 'Vehicle not set'}</div>
                             <div className="mt-1 text-sm text-gray-500">
                               {clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || 'variant not set'}
                               {' · '}
@@ -720,7 +722,7 @@ export function InquiryDetailView({
                           <div className="text-2xl font-semibold text-gray-900">{[
                             clean(car.carVariantMaster?.carMakeMaster?.make) || clean(car.makeLegacy),
                             clean(car.carVariantMaster?.carModelMaster?.model) || clean(car.modelLegacy),
-                          ].filter(Boolean).join(' ') || 'Vehicle not set'}</div>
+                          ].filter(Boolean).join(' ') || clean(car.subVariant) || 'Vehicle not set'}</div>
                           <div className="mt-1 text-sm text-gray-500">
                             Variant {clean(car.carVariantMaster?.variant) || clean(car.variantLegacy) || 'not set'}
                             {' · '}

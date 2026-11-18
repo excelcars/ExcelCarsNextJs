@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { ensureInquiryActivityLogTable, logInquiryEvent } from './eventLog'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
 import { createUserNotification } from '@/features/notifications/service'
+import { resolvePartnerVehicle } from './partnerVehicleCatalog.server'
 
 type Partner = 'CARDEKHO' | 'JUSTDIAL'
 type Payload = Record<string, unknown>
@@ -120,6 +121,7 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
   })
   if (!parsed.lead) return { success: false as const, status: 422, error: parsed.error ?? 'Invalid payload.' }
   const lead = parsed.lead
+  const vehicleSelection = lead.vehicle ? await resolvePartnerVehicle(partner, lead.vehicle.description) : null
   await ensureInquirySourceMasterSeed()
   const source = await prisma.inquirySourceMaster.findFirst({ where: { code: partner, isActive: true }, select: { sourceId: true, displayName: true } })
   if (!source) return { success: false as const, status: 409, error: `${partner} is not an active inquiry source.` }
@@ -144,7 +146,7 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
           inquiryNo: await nextInquiryNumber(tx), dateOfInquiry: now, website: source.displayName, sourceId: source.sourceId, sourceDetail,
           customerId, customerNameLegacy: lead.customerName, mobileno: lead.mobile, email: lead.email || null,
           classification: 'Warm', status: 'Open', remark: lead.remark, assignedTo: assignment?.assignedToUserId ?? null, createdDt: now, updatedDt: now,
-          ...(lead.vehicle ? { inquiryCarDetails: { create: { subVariant: lead.vehicle.description, year: lead.vehicle.year, noOfOwners: lead.vehicle.owners, createdDt: now, updatedDt: now } } } : {}),
+          ...(lead.vehicle ? { inquiryCarDetails: { create: { ...vehicleSelection, subVariant: lead.vehicle.description, year: lead.vehicle.year, noOfOwners: lead.vehicle.owners, createdDt: now, updatedDt: now } } } : {}),
         },
         select: { inquiryId: true },
       })

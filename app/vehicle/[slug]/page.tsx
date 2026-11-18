@@ -65,9 +65,11 @@ export default async function PublicVehiclePage({
       </header>
 
       <main className="mx-auto max-w-[1240px] px-3 py-3 sm:px-6 sm:py-8">
-        <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,0.85fr)]">
-          <section className="space-y-6">
+        <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(340px,1fr)]">
+          <section className="min-w-0 space-y-3" aria-label="Vehicle photos and videos">
             <VehicleGallery photos={vehicle.gallery} videos={vehicle.videos} />
+          </section>
+          <div className="order-last min-w-0 lg:col-span-2">
             <VehicleSpecifications
               highlights={[
                 ['Registration', vehicle.maskedRegistrationNo],
@@ -88,10 +90,10 @@ export default async function PublicVehiclePage({
                 ['Model / Variant', [vehicle.model, vehicle.variant].filter(Boolean).join(' / ') || '—'],
               ]}
             />
-          </section>
+          </div>
 
-          <aside className="order-first space-y-5 rounded-2xl border border-[#e4e9f2] bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6 lg:order-none lg:sticky lg:top-5">
-            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <aside className="min-w-0 space-y-5 rounded-2xl border border-[#e4e9f2] bg-white p-4 shadow-sm sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-[#101b38] sm:text-3xl">{vehicle.heading}</h1>
                 <p className="mt-1 text-base text-gray-600 sm:text-lg">{vehicle.subheading}</p>
@@ -100,7 +102,7 @@ export default async function PublicVehiclePage({
             </div>
 
             <div>
-              <div className="text-3xl font-bold text-[#d7194a] sm:text-4xl">{vehicle.price ? `₹${vehicle.price}` : 'On Request'}</div>
+              <div className="break-words text-3xl font-bold tracking-tight text-[#d7194a] sm:text-4xl lg:text-3xl xl:text-4xl">{vehicle.price ? `₹${vehicle.price}` : 'On Request'}</div>
               <div className="mt-1 text-sm text-gray-500">Inclusive of all taxes</div>
             </div>
 
