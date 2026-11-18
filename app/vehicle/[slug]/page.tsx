@@ -81,7 +81,6 @@ export default async function PublicVehiclePage({
                 ['Insurance Type', vehicle.insuranceType],
                 ['Road Tax', vehicle.tax],
                 ['Month of Manufacture', vehicle.month],
-                ['Service History', 'Not recorded'],
               ]}
               performance={[
                 ['Fuel Type', vehicle.fuelType],
