@@ -9,6 +9,7 @@ import { isFollowupStatus } from '@/lib/inquiryFollowupValidation'
 import { PartnerInquiryDetails } from './PartnerInquiryDetails'
 
 interface InquiryDetailUser {
+  employee?: { empFirstName: string | null; empLastName: string | null } | null
   userId: number
   userName: string | null
   displayName: string | null
@@ -229,7 +230,7 @@ function InquirySummaryCard({ label, value, detail, Icon, tone }: { label: strin
 
 function userOptionLabel(user?: InquiryDetailData['assignedToUser'] | InquiryDetailData['createdByUser'] | InquiryDetailInventoryLink['createdByUser'] | null) {
   if (!user) return '-'
-  return user.displayName?.trim() || user.userName?.trim() || `User #${user.userId}`
+  return user.displayName?.trim() || `${user.employee?.empFirstName ?? ''} ${user.employee?.empLastName ?? ''}`.trim() || user.userName?.trim() || `User #${user.userId}`
 }
 
 function summarizeInquiryVehicles(cars: InquiryDetailData['inquiryCarDetails'] | undefined | null) {
@@ -618,7 +619,7 @@ export function InquiryDetailView({
       ) : null}
 
       <div className="grid gap-3 border-t border-gray-100 bg-slate-50/60 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
-        <InquirySummaryCard label="Assigned to" value={userOptionLabel(currentInquiry.assignedToUser)} detail="—" Icon={UserRound} tone="from-blue-50 to-white text-blue-600" />
+        <InquirySummaryCard label="Assigned to" value={currentInquiry.assignedToUser ? userOptionLabel(currentInquiry.assignedToUser) : 'Unassigned'} detail="—" Icon={UserRound} tone="from-blue-50 to-white text-blue-600" />
         <InquirySummaryCard label="Budget" value={fmtMoney(currentInquiry.budgetOfCustomer)} detail="—" Icon={CircleDollarSign} tone="from-emerald-50 to-white text-emerald-600" />
         <InquirySummaryCard label="Vehicles wanted" value={String(currentInquiry.inquiryCarDetails.length)} detail={vehicleSummary} Icon={CarFront} tone="from-violet-50 to-white text-violet-600" />
         <InquirySummaryCard label="Showroom visit" value={fmtDate(currentInquiry.visitedDateOfCustomer) || 'Not visited'} detail="—" Icon={ClipboardList} tone="from-orange-50 to-white text-orange-600" />

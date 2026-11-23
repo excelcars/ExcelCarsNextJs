@@ -75,7 +75,7 @@ export async function syncFollowupNotificationsForUser(userId: number, db: Notif
     where: {
       status: 'FollowUp',
       followUpDate: { lt: tomorrow },
-      OR: [{ assignedTo: userId }, { createdBy: userId }],
+      assignedTo: userId,
     },
     select: {
       inquiryId: true,
@@ -84,6 +84,18 @@ export async function syncFollowupNotificationsForUser(userId: number, db: Notif
       followUpDate: true,
       customer: { select: { custName: true } },
     },
+  })
+
+  // Remove due-task notifications left behind by reassignment or a cleared assignment.
+  await db.userNotification.updateMany({
+    where: {
+      recipientUserId: userId,
+      entityType: 'inquiry',
+      type: { in: ['followup_due', 'followup_overdue'] },
+      archivedAt: null,
+      entityId: { notIn: dueInquiries.map(row => row.inquiryId) },
+    },
+    data: { archivedAt: new Date() },
   })
 
   await mapWithConcurrency(dueInquiries.filter(row => row.followUpDate), NOTIFICATION_WRITE_CONCURRENCY, async row => {

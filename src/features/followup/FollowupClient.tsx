@@ -487,6 +487,7 @@ function emptyInquiryForm(): InquiryFormInput {
 }
 
 export function FollowupClient({
+  excludeUserId = '',
   initialData,
   search: initialSearch,
   classification,
@@ -522,6 +523,7 @@ export function FollowupClient({
   restricted,
   currentUserId,
 }: {
+  excludeUserId?: string
   initialData: FollowupRow[]
   search: string
   classification: string
@@ -684,6 +686,7 @@ export function FollowupClient({
       website: initialWebsite,
       customerMobile: initialCustomerMobile,
       userId: initialUserId,
+      excludeUserId,
       makeId,
       modelId,
       variantId,
@@ -1205,6 +1208,7 @@ export function FollowupClient({
         if (website.trim()) params.set('website', website)
         if (customerMobile.trim()) params.set('customerMobile', customerMobile)
         if (userId) params.set('userId', userId)
+        if (excludeUserId) params.set('excludeUserId', excludeUserId)
         if (makeId) params.set('makeId', makeId)
         if (modelId) params.set('modelId', modelId)
         if (variantId) params.set('variantId', variantId)

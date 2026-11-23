@@ -19,6 +19,7 @@ export default async function FollowupPage({
     website?: string
     customerMobile?: string
     inquiryId?: string
+    excludeUserId?: string
     userId?: string
     makeId?: string
     modelId?: string
@@ -77,6 +78,7 @@ export default async function FollowupPage({
       customerMobile,
       inquiryId,
       userId,
+      excludeUserId: sp.excludeUserId,
       makeId,
       modelId,
       variantId,
@@ -110,6 +112,7 @@ export default async function FollowupPage({
   return (
     <FollowupClient
       initialData={data}
+      excludeUserId={sp.excludeUserId ?? ''}
       search={search}
       classification={classification}
       status={status}

@@ -53,15 +53,19 @@ export interface ListInquiriesParams {
   variantId: string
   quickFilter: InquiryQuickFilter
   page: number
+  userId?: string
+  excludeUserId?: string
   restrictToUserId?: number | null
 }
 
-function buildInquiryWhere({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, inquiryDateFrom = '', inquiryDateTo = '', visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'inquiryDateFrom' | 'inquiryDateTo' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
+function buildInquiryWhere({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, inquiryDateFrom = '', inquiryDateTo = '', visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, userId = '', excludeUserId = '', restrictToUserId }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'inquiryDateFrom' | 'inquiryDateTo' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'userId' | 'excludeUserId' | 'restrictToUserId'>) {
   const where: Prisma.InquiryWhereInput = {}
   const andConditions: Prisma.InquiryWhereInput[] = []
 
-  if (restrictToUserId) {
-    andConditions.push(buildInquiryOwnershipWhere(restrictToUserId))
+  const effectiveUserId = restrictToUserId ?? (Number(userId) > 0 ? Number(userId) : null)
+  if (effectiveUserId) andConditions.push(buildInquiryOwnershipWhere(effectiveUserId))
+  if (!restrictToUserId && Number(excludeUserId) > 0) {
+    andConditions.push({ OR: [{ assignedTo: null }, { assignedTo: { not: Number(excludeUserId) } }] })
   }
 
   const today = new Date()
@@ -215,6 +219,7 @@ function inquiryDetailInclude() {
         userId: true,
         userName: true,
         displayName: true,
+        employee: { select: { empId: true, empFirstName: true, empLastName: true, empMobileNo: true, empEmailId: true } },
       },
     },
     inquiryCarDetails: {
@@ -259,6 +264,7 @@ function inquiryListSelect() {
         userId: true,
         userName: true,
         displayName: true,
+        employee: { select: { empId: true, empFirstName: true, empLastName: true, empMobileNo: true, empEmailId: true } },
       },
     },
     customer: {
@@ -311,8 +317,8 @@ function inquiryOrderBy(quickFilter: InquiryQuickFilter): Prisma.InquiryOrderByW
   return [{ dateOfInquiry: { sort: 'desc', nulls: 'last' } }, { inquiryId: 'desc' }]
 }
 
-export async function listInquiries({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, restrictToUserId = null }: ListInquiriesParams) {
-  const where = buildInquiryWhere({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId })
+export async function listInquiries({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, page, userId = '', excludeUserId = '', restrictToUserId = null }: ListInquiriesParams) {
+  const where = buildInquiryWhere({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, userId, excludeUserId, restrictToUserId })
 
   const skip = Math.max(0, (page - 1) * PAGE_SIZE)
 
@@ -337,8 +343,8 @@ export async function getInquiryById(id: number) {
   })
 }
 
-export async function listInquiriesForExport({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, inquiryDateFrom = '', inquiryDateTo = '', visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'inquiryDateFrom' | 'inquiryDateTo' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'restrictToUserId'>) {
-  const where = buildInquiryWhere({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, inquiryDateFrom, inquiryDateTo, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId })
+export async function listInquiriesForExport({ search, status, classification, source, locationId, location, region = '', regionPeriod = '', subStatus, followUpDate, inquiryDate, inquiryDateFrom = '', inquiryDateTo = '', visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, userId = '', excludeUserId = '', restrictToUserId = null }: Pick<ListInquiriesParams, 'search' | 'status' | 'classification' | 'source' | 'locationId' | 'location' | 'region' | 'regionPeriod' | 'subStatus' | 'followUpDate' | 'inquiryDate' | 'inquiryDateFrom' | 'inquiryDateTo' | 'visitedDate' | 'budgetMin' | 'budgetMax' | 'makeId' | 'modelId' | 'variantId' | 'quickFilter' | 'userId' | 'excludeUserId' | 'restrictToUserId'>) {
+  const where = buildInquiryWhere({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, inquiryDateFrom, inquiryDateTo, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, userId, excludeUserId, restrictToUserId })
   return prisma.inquiry.findMany({
     where,
     include: inquiryDetailInclude(),
@@ -391,7 +397,6 @@ export async function getInquiryAssistants() {
     where: {
       status: 'Active',
       roleName: 'InquiryAssistant',
-      empId: { not: null },
     },
     select: {
       userId: true,

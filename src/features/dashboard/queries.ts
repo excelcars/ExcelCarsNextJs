@@ -46,10 +46,12 @@ export async function getDashboardStats({
   includeLoan = true,
   includeInsurance = true,
   includeRto = true,
-} = {}) {
+  restrictToUserId = null,
+}: { includeInventory?: boolean; includeInquiry?: boolean; includeFollowup?: boolean; includeLoan?: boolean; includeInsurance?: boolean; includeRto?: boolean; restrictToUserId?: number | null } = {}) {
   const today = startOfToday()
   const tomorrow = addDays(today, 1)
   const monthStart = startOfMonth()
+  const inquiryScope: Prisma.InquiryWhereInput = restrictToUserId ? { assignedTo: restrictToUserId } : {}
   const [
     totalInventory,
     availableStock,
@@ -66,11 +68,11 @@ export async function getDashboardStats({
     includeInventory ? prisma.inventoryManagement.count() : Promise.resolve(0),
     includeInventory ? prisma.inventoryManagement.count({ where: { status: 'In Stock' } }) : Promise.resolve(0),
     includeInventory ? prisma.inventoryManagement.count({ where: { status: 'Sold', updatedDate: { gte: monthStart } } }) : Promise.resolve(0),
-    includeInquiry ? prisma.inquiry.count() : Promise.resolve(0),
-    includeInquiry ? prisma.inquiry.count({ where: { dateOfInquiry: { gte: today, lt: tomorrow } } }) : Promise.resolve(0),
-    includeInquiry ? prisma.inquiry.count({ where: { classification: 'Hot', status: { not: 'Closed' } } }) : Promise.resolve(0),
-    includeFollowup ? prisma.inquiry.count({ where: { status: 'FollowUp' } }) : Promise.resolve(0),
-    includeFollowup ? prisma.inquiry.count({ where: { status: 'FollowUp', followUpDate: { lt: today } } }) : Promise.resolve(0),
+    includeInquiry ? prisma.inquiry.count({ where: inquiryScope }) : Promise.resolve(0),
+    includeInquiry ? prisma.inquiry.count({ where: { ...inquiryScope, dateOfInquiry: { gte: today, lt: tomorrow } } }) : Promise.resolve(0),
+    includeInquiry ? prisma.inquiry.count({ where: { ...inquiryScope, classification: 'Hot', status: { not: 'Closed' } } }) : Promise.resolve(0),
+    includeFollowup ? prisma.inquiry.count({ where: { ...inquiryScope, status: 'FollowUp' } }) : Promise.resolve(0),
+    includeFollowup ? prisma.inquiry.count({ where: { ...inquiryScope, status: 'FollowUp', followUpDate: { lt: today } } }) : Promise.resolve(0),
     includeLoan ? prisma.loanManagement.count({ where: { paymentStatus: { not: 'Fully Paid' } } }) : Promise.resolve(0),
     includeInsurance ? prisma.insuranceMain.count({ where: { policyStatus: 'Received' } }) : Promise.resolve(0),
     includeRto ? prisma.rtoAgent.count({ where: { OR: [{ paymentStatus: 'Pending' }, { transferStatus: 'Pending' }, { rcStatus: 'Pending' }] } }) : Promise.resolve(0),
@@ -85,6 +87,7 @@ export async function getDashboardStats({
     hotLeads,
     pendingFollowups,
     overdueFollowups,
+    overdueFollowupsHref: `/followup?status=FollowUp&followUpDateTo=${dateParam(addDays(today, -1))}`,
     activeLoans,
     activeInsurance,
     pendingRTO,
@@ -121,11 +124,11 @@ export async function getTodayActivityStats({
   }
 }
 
-export async function getLegacyLeadDetails({ userId, roleId }: { userId: number; roleId: number }) {
+export async function getLegacyLeadDetails({ userId, roleId, roleName }: { userId: number; roleId: number; roleName?: string | null }) {
   const today = startOfToday()
   const tomorrow = addDays(today, 1)
   const yesterday = addDays(today, -1)
-  const isRestricted = roleId === 4
+  const isRestricted = roleId === 4 || roleName === 'InquiryAssistant'
   const rows = [
     {
       key: 'all',
@@ -182,14 +185,15 @@ export async function getLegacyLeadDetails({ userId, roleId }: { userId: number;
       COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date < ${today})::integer AS pending,
       COUNT(*) FILTER (WHERE status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS upcoming,
       COUNT(*) FILTER (WHERE status = 'Closed')::integer AS closed,
-      COUNT(*) FILTER (WHERE created_by = ${userId})::integer AS "own_all",
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND date_of_inquiry >= ${today} AND date_of_inquiry < ${tomorrow})::integer AS own_fresh,
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND LOWER(sub_status) IN (${Prisma.join(APPOINTMENT_FIXED_SUB_STATUSES.map(value => value.toLowerCase()))}) AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS own_appointment,
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS "own_todayFollowup",
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date < ${today})::integer AS own_pending,
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS own_upcoming,
-      COUNT(*) FILTER (WHERE created_by = ${userId} AND status = 'Closed')::integer AS own_closed
+      COUNT(*) FILTER (WHERE assigned_to = ${userId})::integer AS "own_all",
+      COUNT(*) FILTER (WHERE assigned_to = ${userId} AND date_of_inquiry >= ${today} AND date_of_inquiry < ${tomorrow})::integer AS own_fresh,
+      COUNT(*) FILTER (WHERE assigned_to = ${userId} AND status = 'FollowUp' AND LOWER(sub_status) IN (${Prisma.join(APPOINTMENT_FIXED_SUB_STATUSES.map(value => value.toLowerCase()))}) AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS own_appointment,
+      COUNT(*) FILTER (WHERE assigned_to = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${today} AND follow_up_date < ${tomorrow})::integer AS "own_todayFollowup",
+      COUNT(*) FILTER (WHERE assigned_to = ${userId} AND status = 'FollowUp' AND follow_up_date < ${today})::integer AS own_pending,
+      COUNT(*) FILTER (WHERE assigned_to = ${userId} AND status = 'FollowUp' AND follow_up_date >= ${tomorrow})::integer AS own_upcoming,
+      COUNT(*) FILTER (WHERE assigned_to = ${userId} AND status = 'Closed')::integer AS own_closed
     FROM inquiry
+    ${isRestricted ? Prisma.sql`WHERE assigned_to = ${userId}` : Prisma.empty}
   `)
 
   return rows.map(row => {
@@ -203,6 +207,7 @@ export async function getLegacyLeadDetails({ userId, roleId }: { userId: number;
     other: isRestricted ? 0 : Math.max(all - own, 0),
     href: isRestricted ? row.ownHref : row.href,
     ownHref: row.ownHref,
+    otherHref: `${row.href}&excludeUserId=${userId}`,
     }
   })
 }
@@ -437,19 +442,21 @@ export async function getPendingPayments({
   ]
 }
 
-export async function getLeadSourceBreakdown() {
+export async function getLeadSourceBreakdown(restrictToUserId: number | null = null) {
+  const inquiryScope: Prisma.InquiryWhereInput = restrictToUserId ? { assignedTo: restrictToUserId } : {}
   const [totalInquiries, rows] = await Promise.all([
-    prisma.inquiry.count(),
+    prisma.inquiry.count({ where: inquiryScope }),
     prisma.inquirySourceMaster.findMany({
-      where: { inquiries: { some: {} } },
+      where: { inquiries: { some: inquiryScope } },
       select: {
         code: true,
         displayName: true,
-        _count: { select: { inquiries: true } },
+        _count: { select: { inquiries: { where: inquiryScope } } },
       },
       orderBy: { inquiries: { _count: 'desc' } },
     }),
   ])
+  rows.sort((a, b) => b._count.inquiries - a._count.inquiries || a.code.localeCompare(b.code))
   const topRows = rows.slice(0, 5)
   const visibleRows = [
     ...topRows,
@@ -470,14 +477,15 @@ function countLeadDimensions(values: Array<string | null | undefined>) {
   return [...counts.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
 }
 
-export async function getLeadRegionBreakdowns() {
+export async function getLeadRegionBreakdowns(restrictToUserId: number | null = null) {
+  const inquiryScope: Prisma.InquiryWhereInput = restrictToUserId ? { assignedTo: restrictToUserId } : {}
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
   const yearStart = new Date(now.getFullYear(), 0, 1)
   const [rows, sourceRows] = await Promise.all([
     prisma.inquiry.findMany({
-      where: { dateOfInquiry: { gte: yearStart, lt: now } },
+      where: { ...inquiryScope, dateOfInquiry: { gte: yearStart, lt: now } },
       select: {
         dateOfInquiry: true,
         source: { select: { code: true } },
@@ -485,10 +493,9 @@ export async function getLeadRegionBreakdowns() {
       },
     }),
     prisma.inquirySourceMaster.findMany({
-      where: { inquiries: { some: {} } },
-      select: { code: true, _count: { select: { inquiries: true } } },
+      where: { inquiries: { some: inquiryScope } },
+      select: { code: true, _count: { select: { inquiries: { where: inquiryScope } } } },
       orderBy: { inquiries: { _count: 'desc' } },
-      take: 5,
     }),
   ])
 
@@ -497,7 +504,8 @@ export async function getLeadRegionBreakdowns() {
   const allTotals = { month: 0, quarter: 0, year: 0 }
   const bySource: Record<string, { month: string[]; quarter: string[]; year: string[] }> = {}
   const totalsBySource: Record<string, { month: number; quarter: number; year: number }> = {}
-  const topSourceCodes = new Set(sourceRows.map(row => row.code))
+  sourceRows.sort((a, b) => b._count.inquiries - a._count.inquiries || a.code.localeCompare(b.code))
+  const topSourceCodes = new Set(sourceRows.slice(0, 5).map(row => row.code))
   bySource[OTHER_LEAD_SOURCES_CODE] = { month: [], quarter: [], year: [] }
   totalsBySource[OTHER_LEAD_SOURCES_CODE] = { month: 0, quarter: 0, year: 0 }
 
@@ -558,9 +566,9 @@ export async function getAssignedExpiryRenewalPolicies(assignedUserId: number) {
   })
 }
 
-export async function getPendingFollowups(limit: number | null = 8) {
+export async function getPendingFollowups(limit: number | null = 8, restrictToUserId: number | null = null) {
   const rows = await prisma.inquiry.findMany({
-    where: { status: 'FollowUp' },
+    where: { status: 'FollowUp', ...(restrictToUserId ? { assignedTo: restrictToUserId } : {}) },
     orderBy: [{ followUpDate: 'asc' }, { inquiryId: 'asc' }],
     ...(limit == null ? {} : { take: limit }),
     include: { customer: true },

@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db/prisma'
 import { getAuthorizedUserIdForRoute } from '@/lib/access/accessControl'
 import type { Prisma } from '@prisma/client'
 
-export type InquiryOwnershipMode = 'created-or-assigned' | 'created-only'
+export type InquiryOwnershipMode = 'assigned-only' | 'created-or-assigned' | 'created-only'
 
 export interface InquiryOwnershipScope {
   userId: number | null
@@ -11,7 +11,8 @@ export interface InquiryOwnershipScope {
   ownershipMode: InquiryOwnershipMode
 }
 
-export function buildInquiryOwnershipWhere(userId: number, ownershipMode: InquiryOwnershipMode = 'created-or-assigned'): Prisma.InquiryWhereInput {
+export function buildInquiryOwnershipWhere(userId: number, ownershipMode: InquiryOwnershipMode = 'assigned-only'): Prisma.InquiryWhereInput {
+  if (ownershipMode === 'assigned-only') return { assignedTo: userId }
   if (ownershipMode === 'created-only') {
     return { createdBy: userId }
   }
@@ -24,16 +25,10 @@ export function buildInquiryOwnershipWhere(userId: number, ownershipMode: Inquir
   }
 }
 
-function resolveOwnershipMode(route: string, restricted: boolean): InquiryOwnershipMode {
-  void route
-  void restricted
-  return 'created-or-assigned'
-}
-
 export async function getInquiryOwnershipScopeForRoute(route: string): Promise<InquiryOwnershipScope> {
   const userId = await getAuthorizedUserIdForRoute(route)
   if (!userId) {
-    return { userId: null, restrictToUserId: null, restricted: false, ownershipMode: 'created-or-assigned' }
+    return { userId: null, restrictToUserId: null, restricted: false, ownershipMode: 'assigned-only' }
   }
 
   const user = await prisma.userTable.findUnique({
@@ -46,7 +41,7 @@ export async function getInquiryOwnershipScopeForRoute(route: string): Promise<I
     userId,
     restrictToUserId: restricted ? userId : null,
     restricted,
-    ownershipMode: resolveOwnershipMode(route, restricted),
+    ownershipMode: 'assigned-only',
   }
 }
 

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db/prisma'
 export async function getPortalAssignmentSettings() {
   const [sources, users] = await Promise.all([
     prisma.inquirySourceMaster.findMany({
-      where: { isActive: true, category: { in: ['Portal', 'Marketplace', 'Directory'] } },
+      where: { isActive: true, category: { in: ['Portal', 'Marketplace', 'Directory', 'Owned Website'] } },
       orderBy: [{ reportingSort: 'asc' }, { displayName: 'asc' }],
       select: {
         sourceId: true,
@@ -20,7 +20,7 @@ export async function getPortalAssignmentSettings() {
       },
     }),
     prisma.userTable.findMany({
-      where: { status: 'Active', roleName: 'InquiryAssistant', empId: { not: null } },
+      where: { status: 'Active', roleName: 'InquiryAssistant' },
       orderBy: [{ displayName: 'asc' }, { userName: 'asc' }, { userId: 'asc' }],
       select: { userId: true, displayName: true, userName: true },
     }),
