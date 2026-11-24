@@ -24,7 +24,7 @@ import { InquiryTableRows } from './InquiryTableRows'
 import { AssignInquiryModal } from './AssignInquiryModal'
 import { InquiryViewModal } from './InquiryViewModal'
 import { InquiryFormModal } from './InquiryFormModal'
-import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime, formatListMoney as fmtMoney } from '@/lib/listFormatters'
+import { cleanListValue as clean, formatDateInput, formatListDate as fmtDate, formatListDateTime as fmtDateTime, formatListMoney as fmtMoney } from '@/lib/listFormatters'
 import { buildListQueryString } from '@/lib/listQueryParams'
 import { summarizeVehicleEmailEngagement } from '@/lib/vehicleEmailEngagement'
 import { EmailVehicleModal } from './EmailVehicleModal'
@@ -666,7 +666,7 @@ export function InquiryClient({
   makeId: string
   modelId: string
   variantId: string
-  quickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
+  quickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'newUnattended' | 'all'
   autoOpenViewId: number | null
   autoOpenEditId: number | null
 }) {
@@ -1406,7 +1406,7 @@ export function InquiryClient({
       })) : []
       const nextForm = {
         inquiryNo: detail.inquiryNo ?? '',
-        dateOfInquiry: fmtDate(detail.dateOfInquiry),
+        dateOfInquiry: formatDateInput(detail.dateOfInquiry),
         website: detail.website ?? '',
         sourceCode: detail.source?.code ?? '',
         sourceDetail: detail.sourceDetail ?? '',
@@ -1417,11 +1417,11 @@ export function InquiryClient({
         mobileno: detail.mobileno ?? '',
         email: detail.email ?? '',
         budgetOfCustomer: detail.budgetOfCustomer ? Number(detail.budgetOfCustomer) : null,
-        visitedDateOfCustomer: fmtDate(detail.visitedDateOfCustomer),
+        visitedDateOfCustomer: formatDateInput(detail.visitedDateOfCustomer),
         classification: detail.classification ?? 'Warm',
         status: detail.status ?? 'Open',
         subStatus: detail.subStatus ?? '',
-        followUpDate: fmtDate(detail.followUpDate),
+        followUpDate: formatDateInput(detail.followUpDate),
         remark: detail.remark ?? '',
         inquiryCars,
       }
@@ -1588,7 +1588,7 @@ export function InquiryClient({
     pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', locationId: '', location: '', region: '', regionPeriod: '', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: 'active', page: '1' })
   }
 
-  const applyQuickFilter = (nextQuickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all') => {
+  const applyQuickFilter = (nextQuickFilter: 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'newUnattended' | 'all') => {
     setSearchInput('')
     setLocationInput('')
     pushQuery({ search: '', status: 'All', classification: 'All', source: 'All', locationId: '', location: '', subStatus: 'All', followUpDate: '', inquiryDate: '', visitedDate: '', budgetMin: '', budgetMax: '', makeId: '', modelId: '', variantId: '', quickFilter: nextQuickFilter, page: '1' })
@@ -1942,15 +1942,12 @@ export function InquiryClient({
             </div>
           ) : null}
 
-          {error && <div role="alert" className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700"><strong>Inquiry not saved.</strong> {error}</div>}
-
-          <div className="flex gap-3 justify-end pt-2">
-            <Btn variant="outline" onClick={requestCloseInquiryModal}>Cancel</Btn>
-            {editId ? (
+          <div className="sticky -bottom-4 z-10 border-t border-gray-200 bg-white py-4">
+            {error && <div role="alert" aria-atomic="true" className="mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700"><strong>Inquiry not saved.</strong> {error}</div>}
+            <div className="flex gap-3 justify-end">
+              <Btn variant="outline" onClick={requestCloseInquiryModal}>Cancel</Btn>
               <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
-            ) : (
-              <Btn onClick={save} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
-            )}
+            </div>
           </div>
         </div>
         )}

@@ -132,10 +132,10 @@ Tabs are permission-aware and include count badges where relevant. The workspace
 Leads:
 
 - Shows the legacy Lead Details matrix.
-- Rows: All Leads, Fresh Leads, Today's Appointment Fixed, Follow up Today, Pending Follow up, Follow up (Upcoming), Closed.
+- Rows: All Leads, New / Unattended Lead, Today's Appointment Fixed, Follow up Today, Pending Follow up, Follow up (Upcoming), Closed.
 - Columns: Total Count, Own Count, Other's Count.
 - Role id `4` has own-only total counts and zero Other count.
-- Fresh Leads intentionally preserves the legacy mismatch: count is today's inquiries, drill-down link filters to today's `FollowUp` inquiries.
+- New / Unattended Lead includes today's inquiries (all statuses) plus earlier `Open` inquiries with no recorded `FollowupInquiry`. There is no age limit. Counts and Total/Own/Other links use the same definition; the inquiry list and export use `quickFilter=newUnattended` and show oldest inquiries first. Recording a follow-up or changing an older inquiry out of `Open` removes it from this bucket. Today's inquiries remain until the next day.
 
 Follow-ups:
 

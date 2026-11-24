@@ -32,7 +32,7 @@ import { InquiryCarTable } from '@/features/inquiry/InquiryCarTable'
 import { LogFollowupRecentActivity } from './LogFollowupRecentActivity'
 import { LogFollowupContactOutcome } from './LogFollowupContactOutcome'
 import { LogFollowupRemark } from './LogFollowupRemark'
-import { cleanListValue as clean, formatListDate as fmtDate, formatListDateTime as fmtDateTime } from '@/lib/listFormatters'
+import { cleanListValue as clean, formatDateInput, formatListDate as fmtDate, formatListDateTime as fmtDateTime } from '@/lib/listFormatters'
 import { buildListQueryString } from '@/lib/listQueryParams'
 import { summarizeVehicleEmailEngagement } from '@/lib/vehicleEmailEngagement'
 
@@ -628,7 +628,8 @@ export function FollowupClient({
     subStatus.trim() ||
     website.trim() ||
     customerMobile.trim() ||
-    userId ||
+    userId !== currentUserId ||
+    excludeUserId ||
     makeId ||
     modelId ||
     variantId ||
@@ -1070,7 +1071,7 @@ export function FollowupClient({
 
         setEditInquiryForm({
           inquiryNo: detail.inquiryNo ?? '',
-          dateOfInquiry: fmtDate(detail.dateOfInquiry),
+          dateOfInquiry: formatDateInput(detail.dateOfInquiry),
           website: detail.website ?? '',
           sourceCode: detail.source?.code ?? '',
           sourceDetail: detail.sourceDetail ?? '',
@@ -1081,11 +1082,11 @@ export function FollowupClient({
           mobileno: detail.mobileno ?? '',
           email: detail.email ?? '',
           budgetOfCustomer: detail.budgetOfCustomer ? Number(detail.budgetOfCustomer) : null,
-          visitedDateOfCustomer: fmtDate(detail.visitedDateOfCustomer),
+          visitedDateOfCustomer: formatDateInput(detail.visitedDateOfCustomer),
           classification: detail.classification ?? 'Warm',
           status: detail.status ?? 'Open',
           subStatus: detail.subStatus ?? '',
-          followUpDate: fmtDate(detail.followUpDate),
+          followUpDate: formatDateInput(detail.followUpDate),
           remark: detail.remark ?? '',
           inquiryCars,
         })
@@ -1178,20 +1179,24 @@ export function FollowupClient({
         visitedDateOfCustomer: 'Visited Date of customer',
       }
       const invalidFields = Object.keys(validation.fieldErrors).map(key => labels[key] ?? (key.startsWith('carYear-') ? 'Car Year' : key.startsWith('noOfOwners-') ? 'Number of Owners' : key))
-      setEditInquiryError(invalidFields.length > 0 ? `Complete or correct: ${invalidFields.join(', ')}.` : validation.error)
+      setEditInquiryError(invalidFields.length > 0 ? `${validation.error} Check: ${invalidFields.join(', ')}.` : validation.error)
       setEditInquiryErrors(validation.fieldErrors)
       return
     }
 
     setEditInquiryErrors({})
     startTransition(async () => {
-      const result = await updateInquiry(editInquiryId, editInquiryForm, { route: '/followup' })
-      if (!result.success) {
-        setEditInquiryError(result.error ?? 'Something went wrong saving this inquiry.')
-        return
+      try {
+        const result = await updateInquiry(editInquiryId, editInquiryForm, { route: '/followup' })
+        if (!result.success) {
+          setEditInquiryError(result.error ?? 'Something went wrong saving this inquiry.')
+          return
+        }
+        closeInquiryEdit()
+        router.refresh()
+      } catch {
+        setEditInquiryError('Could not save this inquiry. Check your connection and try again.')
       }
-      closeInquiryEdit()
-      router.refresh()
     })
   }
 
@@ -1241,7 +1246,7 @@ export function FollowupClient({
     setSubStatus('')
     setWebsite('')
     setCustomerMobile('')
-    setUserId('')
+    setUserId(currentUserId)
     setInquiryDateFrom('')
     setInquiryDateTo('')
     setFollowUpDateFrom('')
@@ -1257,7 +1262,8 @@ export function FollowupClient({
       subStatus: '',
       website: '',
       customerMobile: '',
-      userId: '',
+      userId: currentUserId,
+      excludeUserId: '',
       makeId: '',
       modelId: '',
       variantId: '',
@@ -1283,7 +1289,7 @@ export function FollowupClient({
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
     const common = {
-      search: '', classification: 'All', contactOutcome: '', customerName: '', subStatus: '', website: '', customerMobile: '', userId: '',
+      search: '', classification: 'All', contactOutcome: '', customerName: '', subStatus: '', website: '', customerMobile: '', userId: initialUserId,
       makeId: '', modelId: '', variantId: '', inquiryDateFrom: '', inquiryDateTo: '', visitedDateFrom: '', visitedDateTo: '', budgetFrom: '', budgetTo: '', page: '1',
     }
     const presets = {
@@ -1395,8 +1401,8 @@ export function FollowupClient({
         onSubStatusChange={setSubStatus}
         onWebsiteChange={website => pushQuery({ website, page: '1' })}
         onCustomerMobileChange={setCustomerMobile}
-        onUserIdChange={userId => pushQuery({ userId, page: '1' })}
-        onClassificationChange={classification => pushQuery({ classification })}
+        onUserIdChange={userId => pushQuery({ userId, excludeUserId: '', page: '1' })}
+        onClassificationChange={classification => pushQuery({ classification, page: '1' })}
         onMakeChange={makeId => pushQuery({ makeId, modelId: '', variantId: '', page: '1' })}
         onModelChange={modelId => pushQuery({ modelId, variantId: '', page: '1' })}
         onVariantChange={variantId => pushQuery({ variantId, page: '1' })}
@@ -1781,7 +1787,6 @@ export function FollowupClient({
           </div>
         ) : (
           <div className="space-y-4">
-            {editInquiryError ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{editInquiryError}</div> : null}
             <div className="grid gap-4 md:grid-cols-3">
               <Input label="Inquiry No*" value={editInquiryForm.inquiryNo} readOnly />
               <Input label="Date of Inquiry*" type="date" value={editInquiryForm.dateOfInquiry} onChange={e => updateInquiryField('dateOfInquiry', e.target.value)} error={editInquiryErrors.dateOfInquiry} />
@@ -1899,9 +1904,12 @@ export function FollowupClient({
 
             <Textarea label="Remark" value={editInquiryForm.remark} onChange={e => updateInquiryField('remark', e.target.value)} placeholder="Notes about this inquiry..." />
 
-            <div className="flex justify-end gap-3 pt-2">
-              <Btn variant="outline" onClick={closeInquiryEdit}>Cancel</Btn>
-              <Btn onClick={saveInquiryEdit} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
+            <div className="sticky -bottom-4 z-10 border-t border-gray-200 bg-white py-4">
+              {editInquiryError ? <div role="alert" aria-atomic="true" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><strong>Inquiry not saved.</strong> {editInquiryError}</div> : null}
+              <div className="flex justify-end gap-3">
+                <Btn variant="outline" onClick={closeInquiryEdit}>Cancel</Btn>
+                <Btn onClick={saveInquiryEdit} disabled={isPending}>{isPending ? 'Saving...' : 'Save Inquiry'}</Btn>
+              </div>
             </div>
           </div>
         )}

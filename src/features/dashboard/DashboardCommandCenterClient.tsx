@@ -472,7 +472,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         type: overdue ? 'Overdue follow-up' : 'Follow-up',
         date: row.followupDate,
         status: row.status ?? 'FollowUp',
-        actionHref: `/followup?status=FollowUp&inquiryId=${row.id}`,
+        actionHref: `/followup?status=FollowUp&inquiryId=${row.id}&userId=all`,
         workspace: 'followups',
       })
     })
@@ -712,7 +712,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/inquiry?quickFilter=all&inquiryDate=${localDateParam()}`} />
             )}
             {permissions.canFollowup && (
-              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<AlertTriangle className="h-4 w-4" />} href={stats.overdueFollowupsHref ?? `/followup?status=FollowUp&followUpDateTo=${localDateParam(new Date(Date.now() - 86400000))}`} />
+              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<AlertTriangle className="h-4 w-4" />} href={stats.overdueFollowupsHref ?? `/followup?status=FollowUp&followUpDateTo=${localDateParam(new Date(Date.now() - 86400000))}&userId=all`} />
             )}
             {(permissions.canRto || permissions.canInsurance) && <PendingFilesKpi value={stats.pendingRTO + data.pendingPayments.length + data.pendingPolicies.length} rto={stats.pendingRTO} payments={data.pendingPayments.length} insurance={data.pendingPolicies.length} canRto={permissions.canRto} canInsurance={permissions.canInsurance} onOpen={workspace => openWorkspace(workspace)} />}
           </div>
@@ -787,7 +787,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 <td className="px-3 py-2 text-gray-600">{formatDate(row.followupDate)}</td>
                 <td className="px-3 py-2">{row.classification ? <Badge label={row.classification} /> : '-'}</td>
                 <td className="px-3 py-2">{row.status ? <Badge label={row.status} /> : '-'}</td>
-                <td className="px-3 py-2"><a href={`/followup?status=FollowUp&inquiryId=${row.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+                <td className="px-3 py-2"><a href={`/followup?status=FollowUp&inquiryId=${row.id}&userId=all`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
               </tr>
             ))}
           </WorkTable>
