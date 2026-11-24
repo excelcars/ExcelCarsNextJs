@@ -56,6 +56,110 @@ const followupFilters = {
   status: 'FollowUp', subStatus: '', website: '', customerMobile: '', userId: '', makeId: '', modelId: '', variantId: '', page: 1,
 }
 
+test('follow-up defaults to my assignments, preserves explicit admin scopes, and enforces assistant restrictions', async () => {
+  const { resolveFollowupUserId } = load('src/features/followup/userScope.ts', {})
+  const admin = { userId: 7, restrictToUserId: null }
+  const assistant = { userId: 7, restrictToUserId: 7 }
+  assert.equal(resolveFollowupUserId(undefined, admin), '7')
+  assert.equal(resolveFollowupUserId('', admin), '7')
+  assert.equal(resolveFollowupUserId('all', admin), 'all')
+  assert.equal(resolveFollowupUserId('8', admin), '8')
+  assert.equal(resolveFollowupUserId(undefined, admin, '7'), 'all')
+  for (const requested of [undefined, 'all', '8']) assert.equal(resolveFollowupUserId(requested, assistant, '7'), '7')
+
+  const api = load('src/features/followup/queries.ts', {
+    '@/lib/db/prisma': { prisma: { inquiry: {
+      findMany: async args => { calls.push(args.where); return [] }, count: async () => 0,
+    } } },
+    '@/lib/access/inquiryOwnership': ownership, '@/lib/inquiryAppointments': appointments,
+  })
+  const calls = []
+  for (const userId of ['7', '8', 'all']) {
+    for (const classification of ['All', 'Hot', 'Warm', 'Cold']) {
+      const filters = { ...followupFilters, userId, classification }
+      await api.listFollowupQueue(filters)
+      await api.listFollowupsForExport(filters)
+      const [listed, exported] = calls.splice(0)
+      assert.deepEqual(plain(listed), plain(exported))
+      assert.equal(listed.classification, classification === 'All' ? undefined : classification)
+      if (userId === 'all') assert.equal(listed.AND, undefined)
+      else assert.deepEqual(plain(listed.AND), [{ assignedTo: Number(userId) }])
+    }
+  }
+})
+
+test('new/unattended queue carries old untouched leads forward and shares list, count and export scopes', async () => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const daysAgo = days => { const date = new Date(today); date.setDate(date.getDate() - days); return date }
+  const records = [
+    { inquiryId: 1, dateOfInquiry: today, status: 'Open', assignedTo: 7, followupInquiry: [] },
+    { inquiryId: 2, dateOfInquiry: daysAgo(1), status: 'Open', assignedTo: 7, followupInquiry: [] },
+    { inquiryId: 3, dateOfInquiry: daysAgo(10), status: 'Open', assignedTo: 8, followupInquiry: [] },
+    { inquiryId: 4, dateOfInquiry: daysAgo(30), status: 'Open', assignedTo: null, followupInquiry: [] },
+    { inquiryId: 5, dateOfInquiry: daysAgo(1), status: 'FollowUp', assignedTo: 7, followupInquiry: [{}] },
+    { inquiryId: 6, dateOfInquiry: daysAgo(10), status: 'Open', assignedTo: 7, followupInquiry: [{}] },
+    ...['Closed', 'Booked', 'Converted'].map((status, i) => ({ inquiryId: 7 + i, dateOfInquiry: daysAgo(10), status, assignedTo: 7, followupInquiry: [] })),
+    { inquiryId: 10, dateOfInquiry: today, status: 'Closed', assignedTo: 7, followupInquiry: [{}] },
+    { inquiryId: 11, dateOfInquiry: daysAgo(-1), status: 'Open', assignedTo: 7, followupInquiry: [] },
+  ]
+  function matches(row, where) {
+    return Object.entries(where).every(([key, value]) => {
+      if (key === 'AND') return value.every(condition => matches(row, condition))
+      if (key === 'OR') return value.some(condition => matches(row, condition))
+      if (key === 'followupInquiry') return row.followupInquiry.length === 0
+      if (key === 'dateOfInquiry') return (!value.gte || row[key] >= value.gte) && (!value.lt || row[key] < value.lt)
+      if (value && typeof value === 'object' && 'not' in value) return row[key] != null && row[key] !== value.not
+      return row[key] === value
+    })
+  }
+  let listWhere, countWhere, orderBy
+  const api = inquiryQueries({ inquiry: {
+    findMany: async args => {
+      listWhere = args.where; orderBy = args.orderBy
+      return records.filter(row => matches(row, args.where))
+    },
+    count: async args => { countWhere = args.where; return records.filter(row => matches(row, args.where)).length },
+  } })
+  for (const [scope, expected] of [
+    [{}, [1, 2, 3, 4, 10]], [{ userId: '7' }, [1, 2, 10]],
+    [{ excludeUserId: '7' }, [3, 4]], [{ restrictToUserId: 7, userId: '8', excludeUserId: '7' }, [1, 2, 10]],
+  ]) {
+    const filters = { ...inquiryFilters, quickFilter: 'newUnattended', ...scope }
+    const result = await api.listInquiries(filters)
+    assert.deepEqual(Array.from(result.rows, row => row.inquiryId), expected)
+    assert.equal(result.total, expected.length)
+    assert.deepEqual(plain(listWhere), plain(countWhere))
+    const exported = await api.listInquiriesForExport(filters)
+    assert.deepEqual(Array.from(exported, row => row.inquiryId), expected)
+    assert.deepEqual(plain(orderBy), [{ dateOfInquiry: { sort: 'asc', nulls: 'last' } }, { inquiryId: 'asc' }])
+  }
+})
+
+test('new/unattended dashboard totals and links include old Open leads without follow-up history', async () => {
+  let query
+  const api = load('src/features/dashboard/queries.ts', {
+    '@/lib/db/prisma': { prisma: { $queryRaw: async value => { query = value; return [{ fresh: 5, own_fresh: 3 }] } } },
+    '@prisma/client': { Prisma }, '@/lib/inquiryAppointments': appointments,
+  })
+  const rows = await api.getLegacyLeadDetails({ userId: 7, roleId: 1 })
+  const row = rows.find(row => row.label === 'New / Unattended Lead')
+  assert.equal(row.total, 5)
+  assert.equal(row.own, 3)
+  assert.equal(row.other, 2)
+  for (const href of [row.href, row.ownHref, row.otherHref]) {
+    const params = new URL(href, 'https://example.test').searchParams
+    assert.equal(params.get('quickFilter'), 'newUnattended')
+    assert.equal(params.has('inquiryDate'), false)
+  }
+  assert.equal(new URL(row.ownHref, 'https://example.test').searchParams.get('userId'), '7')
+  assert.equal(new URL(row.otherHref, 'https://example.test').searchParams.get('excludeUserId'), '7')
+  for (const clause of query.sql.split('\n').filter(line => /AS (?:own_)?fresh,/.test(line))) {
+    assert.match(clause, /status = 'Open' AND date_of_inquiry < \?/)
+    assert.match(clause, /NOT EXISTS \(SELECT 1 FROM followup_inquiry f WHERE f.fk_inquiry_id = inquiry.inquiry_id\)/)
+  }
+})
+
 for (const kind of ['inquiry', 'followup']) {
   test(`${kind}: list and export use identical ownership filters and cannot override assistant scope`, async () => {
     const queries = []

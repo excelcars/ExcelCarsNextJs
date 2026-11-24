@@ -29,7 +29,7 @@ export function inquiryStatusLabel(status: string) {
 }
 export const INQUIRY_CLASSIFICATIONS = ['Hot', 'Warm', 'Cold'] as const
 export const PAGE_SIZE = 25
-export const INQUIRY_QUICK_FILTERS = ['active', 'overdue', 'today', 'upcoming', 'activity', 'all'] as const
+export const INQUIRY_QUICK_FILTERS = ['active', 'overdue', 'today', 'upcoming', 'activity', 'newUnattended', 'all'] as const
 export type InquiryQuickFilter = (typeof INQUIRY_QUICK_FILTERS)[number]
 export interface ListInquiriesParams {
   search: string
@@ -72,6 +72,14 @@ function buildInquiryWhere({ search, status, classification, source, locationId,
   today.setHours(0, 0, 0, 0)
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
+
+  // Keep today's arrivals and carry untouched Open leads forward without an age limit.
+  if (quickFilter === 'newUnattended') {
+    andConditions.push({ OR: [
+      { dateOfInquiry: { gte: today, lt: tomorrow } },
+      { status: 'Open', dateOfInquiry: { lt: today }, followupInquiry: { none: {} } },
+    ] })
+  }
 
   if (quickFilter === 'active' || quickFilter === 'overdue' || quickFilter === 'today' || quickFilter === 'upcoming') {
     where.status = 'FollowUp'
@@ -309,6 +317,7 @@ function inquiryListSelect() {
 }
 
 function inquiryOrderBy(quickFilter: InquiryQuickFilter): Prisma.InquiryOrderByWithRelationInput[] {
+  if (quickFilter === 'newUnattended') return [{ dateOfInquiry: { sort: 'asc', nulls: 'last' } }, { inquiryId: 'asc' }]
   if (quickFilter === 'active' || quickFilter === 'overdue' || quickFilter === 'today' || quickFilter === 'upcoming') {
     return [{ followUpDate: { sort: 'asc', nulls: 'last' } }, { inquiryId: 'desc' }]
   }

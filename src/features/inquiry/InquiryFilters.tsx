@@ -10,7 +10,7 @@ import type { InquiryLocationOption } from './locationMaster'
 import { formatIndianNumberInput, normalizeIntegerInput } from '@/lib/listFormatters'
 import { inquiryStatusLabel } from './queries'
 
-type QuickFilter = 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'all'
+type QuickFilter = 'active' | 'overdue' | 'today' | 'upcoming' | 'activity' | 'newUnattended' | 'all'
 
 type CarMakeMaster = { pkMakeId: number; make: string | null }
 type CarModelMaster = { pkModelId: number; model: string | null }
@@ -120,13 +120,15 @@ export function InquiryFilters({
 
       <div className="mb-4 flex flex-wrap gap-2" aria-label="Quick inquiry filters">
         {([
-          ['active', 'Active'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
+          ['active', 'Active'], ['newUnattended', 'New / Unattended Lead'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['activity', 'Newest Activity'], ['all', 'All Inquiries'],
         ] as const).map(([value, label]) => (
           <FilterChip key={value} onClick={() => onQuickFilterChange(value)} className="min-h-11 sm:min-h-0" disabled={isRoutePending} active={quickFilter === value}>
             {label}
           </FilterChip>
         ))}
       </div>
+
+      {quickFilter === 'newUnattended' && <p className="mb-4 text-xs text-gray-500">Today&apos;s inquiries and earlier Open leads with no recorded follow-up, oldest first. Unattended leads stay here regardless of age.</p>}
 
         <div className="mb-3 flex min-w-0 flex-col gap-1">
           <label className="text-xs font-medium text-gray-600">Search</label>

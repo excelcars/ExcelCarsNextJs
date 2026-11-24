@@ -6,10 +6,12 @@ import { cleanListValue, formatListDate, formatListMoney } from '@/lib/listForma
 import type { InquiryListRow } from './InquiryTableDataCells'
 import { PartnerInquiryDetails } from './PartnerInquiryDetails'
 import { QuickVehicleMapping } from './QuickVehicleMapping'
+import { websiteVehicleRequest } from './websiteInquiryDisplay'
 
 export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { row: InquiryListRow; number: number; assignedToLabel: string; actions: ReactNode }) {
   const mobile = row.customer?.custMobile ?? row.mobileno
   const email = row.customer?.custEmail ?? row.email
+  const websiteVehicle = websiteVehicleRequest(row)
   return (
     <article className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm [overflow-wrap:anywhere]">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -46,7 +48,7 @@ export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { r
         ].filter(Boolean).join(' · ') || '—'}</div>
           {car.subVariant ? <p><span className="font-medium">Vehicle requested: </span>{car.subVariant}</p> : null}
           {row.website?.toLowerCase() === 'cardekho' && car.subVariant && !car.carVariantMaster ? <QuickVehicleMapping inquiryId={row.inquiryId} vehicleDescription={car.subVariant} /> : null}
-        </div>) : <div>—</div>}
+        </div>) : websiteVehicle ? <p><span className="font-medium">Vehicle requested: </span>{websiteVehicle}</p> : <div>—</div>}
         {row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}
       </div>
       {row.remark?.trim() ? <p className="mt-3 whitespace-pre-wrap text-sm text-gray-600"><span className="font-semibold">Remark: </span>{row.remark}</p> : null}

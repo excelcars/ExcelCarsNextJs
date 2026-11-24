@@ -9,6 +9,7 @@ import * as jsxRuntime from 'react/jsx-runtime'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { matchPartnerVehicle, partnerVehicleSelection, partnerVehicleKey } from '../src/features/inquiry/partnerVehicleCatalog.ts'
 import { readablePartnerPayload } from '../src/features/inquiry/partnerPayload.ts'
+import { websiteVehicleRequest } from '../src/features/inquiry/websiteInquiryDisplay.ts'
 import { cleanCatalogName } from '../src/lib/catalogNames.ts'
 
 function load(path, imports) {
@@ -75,6 +76,21 @@ test('partner details require route permission and inquiry ownership before read
   assert.equal(reads, 1)
 })
 
+test('website details load all approved submitted fields without exposing extra payload keys', async () => {
+  const payload = { lead_id: 'WEBSITE-STAGE-001', lead_type: 'CONTACT_US', name: 'Staging Test', mobile: '9876543210', email: 'test@example.com', vehicle_requested: 'Hyundai Creta', remarks: 'Testing Website webhook', secret: 'hidden' }
+  const api = load('src/features/inquiry/partnerDetails.actions.ts', {
+    '@/lib/access/accessControl': { getAuthorizedUserIdForRoute: async () => 1 },
+    '@/lib/access/inquiryOwnership': { canAccessInquiryByOwnership: async () => true },
+    './partnerPayload': { readablePartnerPayload },
+    '@/lib/db/prisma': { prisma: { partnerWebhookPayload: { findFirst: async ({ where }) => where.partner.in.includes('WEBSITE') ? { partner: 'WEBSITE', receivedAt: new Date(), rawPayload: payload } : null } } },
+  })
+  const details = await api.getInquiryPartnerDetails(57412)
+  assert.equal(details.partner, 'WEBSITE')
+  assert.deepEqual(Array.from(details.fields, field => field.value), Object.values(payload).slice(0, 7))
+  assert.equal(JSON.stringify(details).includes('hidden'), false)
+  assert.equal(readablePartnerPayload('WEBSITE', { remarks: 'x'.repeat(1000) })[0].value.length, 1000)
+})
+
 test('webhook saves resolved catalog fields, keeps original text and retains unmatched inquiries', async () => {
   let selection = partnerVehicleSelection(variant), created
   const db = {
@@ -109,6 +125,7 @@ test('webhook saves resolved catalog fields, keeps original text and retains unm
 
 test('table and compact cards show partner details and retain unmatched vehicle text', () => {
   const imports = {
+    './websiteInquiryDisplay': { websiteVehicleRequest },
     'react/jsx-runtime': jsxRuntime, 'lucide-react': { Mail: () => null, MapPin: () => null, Phone: () => null },
     '@/lib/listFormatters': { cleanListValue: value => value?.trim() ?? '', formatListDate: () => '', formatListMoney: () => '' },
     '@/components/ui': { Badge: () => null }, './PartnerInquiryDetails': { PartnerInquiryDetails: () => jsxRuntime.jsx('span', { children: 'Partner details' }) },
@@ -125,6 +142,13 @@ test('table and compact cards show partner details and retain unmatched vehicle 
   assert.match(card, /BMW &lt;X1&gt;/)
   assert.match(card, /Needs vehicle mapping/)
   assert.match(card, /Partner details/)
+  const websiteRow = { inquiryId: 57412, website: 'Excel Cars Mumbai', sourceDetail: 'Partner lead ID: WEBSITE-STAGE-001', customerNameLegacy: 'Staging Test', mobileno: '9876543210', email: 'test@example.com', remark: 'Website Lead Type: CONTACT_US\nVehicle: Hyundai Creta\nRemarks: Testing Website webhook\nLead ID: WEBSITE-STAGE-001', inquiryCarDetails: [] }
+  for (const Component of [InquiryTableDataCells, InquiryMobileCard]) {
+    const websiteMarkup = renderToStaticMarkup(jsxRuntime.jsx(Component, { row: websiteRow, number: 1, assignedToLabel: 'Unassigned' }))
+    for (const value of ['Hyundai Creta', 'Staging Test', '9876543210', 'test@example.com', 'Testing Website webhook', 'Partner details']) assert.ok(websiteMarkup.includes(value), `Missing ${value}`)
+    assert.doesNotMatch(websiteMarkup, /Needs vehicle mapping/)
+  }
+  assert.equal(websiteVehicleRequest({ ...websiteRow, website: 'Justdial' }), '')
 })
 
 test('quick mapping enforces access and updates only the original unmapped vehicle while remembering its description', async () => {

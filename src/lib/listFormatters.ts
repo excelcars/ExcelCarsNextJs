@@ -1,3 +1,10 @@
+// Date inputs require ISO calendar dates. Match the UTC date used by list displays.
+export function formatDateInput(value: Date | string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
+}
+
 export function formatListDate(value: Date | string | null | undefined) {
   if (!value) return ''
   const date = new Date(value)

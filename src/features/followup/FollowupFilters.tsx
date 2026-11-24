@@ -144,7 +144,13 @@ export function FollowupFilters({
           <SearchBar value={search} onChange={onSearchChange} placeholder="Customer, mobile, source, vehicle..." disabled={isRoutePending} />
         </div>
         <FormDropdown value={status === 'All' ? '' : status} options={statuses.map(value => ({ value, label: value === 'FollowUp' ? 'Follow-up Only' : value }))} placeholder="All Status" allowClear disabled={isRoutePending} className="min-w-0" onChange={value => onStatusChange(value || 'All')} />
-        <FormDropdown value={restricted ? currentUserId : userId} options={users.map(item => ({ value: String(item.userId), label: userLabel(item) }))} placeholder={restricted ? 'My Inquiries Only' : 'All Users'} allowClear disabled={isRoutePending || restricted} className="min-w-0" onChange={onUserIdChange} />
+        <FormDropdown value={restricted ? currentUserId : userId} options={[
+          { value: currentUserId, label: 'My Assigned Inquiries' },
+          ...(!restricted ? [
+            { value: 'all', label: 'All Users' },
+            ...users.filter(item => String(item.userId) !== currentUserId).map(item => ({ value: String(item.userId), label: userLabel(item) })),
+          ] : []),
+        ]} placeholder="My Assigned Inquiries" disabled={isRoutePending || restricted} className="min-w-0" onChange={onUserIdChange} />
         <div className="grid grid-cols-4 gap-1.5">
           {['All', ...classifications].map(value => (
             <button key={value} type="button" aria-pressed={classification === value} onClick={() => onClassificationChange(value)} disabled={isRoutePending}

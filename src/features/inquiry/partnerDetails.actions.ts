@@ -9,7 +9,7 @@ export async function getInquiryPartnerDetails(inquiryId: number, route = '/inqu
   if (!Number.isSafeInteger(inquiryId) || inquiryId <= 0 || !['/inquiry', '/followup'].includes(route)) return null
   if (!(await getAuthorizedUserIdForRoute(route)) || !(await canAccessInquiryByOwnership(inquiryId, route))) return null
   const row = await prisma.partnerWebhookPayload.findFirst({
-    where: { inquiryId, partner: { in: ['CARDEKHO', 'JUSTDIAL'] } },
+    where: { inquiryId, partner: { in: ['CARDEKHO', 'JUSTDIAL', 'WEBSITE'] } },
     orderBy: { partnerWebhookPayloadId: 'asc' },
     select: { partner: true, rawPayload: true, receivedAt: true },
   })

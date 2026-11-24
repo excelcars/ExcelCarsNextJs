@@ -502,4 +502,9 @@ Current dashboard integration is narrower than legacy:
 - Source Master deletion is blocked when an inquiry references the source
 
 ## 19. SSOT Rule
+
+Follow-up rendering: desktop and mobile dates use the shared `formatListDate`, which returns an empty value for invalid or missing dates so the UI displays `—` without throwing. The `/followup` route has an `error.tsx` boundary showing `Unable to load follow-ups`, a Retry action to reset the boundary, and a full-page Reload action for persistent loading failures. It does not display raw exception details.
+
+Follow-up user scope: opening the queue without an explicit user selection defaults to the logged-in user's assigned inquiries, shown as `My Assigned Inquiries`. Unrestricted users may explicitly select `All Users` (`userId=all`) or another assignee. Restricted assistants always retain their server-enforced assignment scope, including on exports. Hot/Warm/Cold, paging, date presets and exports preserve the selected scope; Reset Filters restores My Assigned Inquiries. Dashboard Total and Other drill-downs explicitly preserve their broader scope rather than applying the queue's personal default.
+
 Any change to follow-up filtering, follow-up history writing, dashboard entry links, creator-based access behavior, or the “single visible car per inquiry” presentation rule must update this SSOT in the same change.
