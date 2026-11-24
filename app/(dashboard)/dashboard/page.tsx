@@ -41,6 +41,7 @@ export default async function DashboardPage({
   const sp = await searchParams
   const initialWorkspace = isDashboardWorkspace(sp?.workspace) ? sp.workspace : 'leads'
   const [session, profile] = await Promise.all([auth(), getCurrentUserAccessProfile()])
+  const restrictToUserId = profile && (profile.roleId === 4 || profile.roleName === 'InquiryAssistant') ? profile.userId : null
   const granted = new Set(profile?.grantedFunctionNames ?? [])
   const permissions = {
     canInventory: granted.has('Inventory_Management'),
@@ -65,6 +66,7 @@ export default async function DashboardPage({
     pendingPayments,
   ] = await Promise.all([
     getDashboardStats({
+      restrictToUserId,
       includeInventory: permissions.canInventory,
       includeInquiry: permissions.canInquiry,
       includeFollowup: permissions.canFollowup,
@@ -72,10 +74,10 @@ export default async function DashboardPage({
       includeInsurance: permissions.canInsurance,
       includeRto: permissions.canRto,
     }),
-    permissions.canInquiry ? getLeadSourceBreakdown() : Promise.resolve([]),
-    permissions.canInquiry ? getLeadRegionBreakdowns() : Promise.resolve({ all: { month: [], quarter: [], year: [] }, bySource: {} }),
-    permissions.canFollowup ? getPendingFollowups(null) : Promise.resolve([]),
-    profile && permissions.canFollowup ? getLegacyLeadDetails({ userId: profile.userId, roleId: profile.roleId }) : Promise.resolve([]),
+    permissions.canInquiry ? getLeadSourceBreakdown(restrictToUserId) : Promise.resolve([]),
+    permissions.canInquiry ? getLeadRegionBreakdowns(restrictToUserId) : Promise.resolve({ all: { month: [], quarter: [], year: [] }, bySource: {} }),
+    permissions.canFollowup ? getPendingFollowups(null, restrictToUserId) : Promise.resolve([]),
+    profile && permissions.canFollowup ? getLegacyLeadDetails({ userId: profile.userId, roleId: profile.roleId, roleName: profile.roleName }) : Promise.resolve([]),
     getBirthdayAnniversaryReminders(),
     permissions.canInsurance ? getPendingInsurancePolicies() : Promise.resolve([]),
     permissions.canInsurance ? getExpiryRenewalPolicies() : Promise.resolve([]),
@@ -90,6 +92,7 @@ export default async function DashboardPage({
   return (
     <DashboardCommandCenterClient
       {...serializeDashboardData({
+        restrictedInquiry: restrictToUserId !== null,
         firstName,
         todayLabel,
         initialWorkspace,

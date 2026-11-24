@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
     customerMobile,
     inquiryId,
     userId,
+    excludeUserId: req.nextUrl.searchParams.get('excludeUserId') ?? '',
     makeId,
     modelId,
     variantId,

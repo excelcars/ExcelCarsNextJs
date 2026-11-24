@@ -11,7 +11,7 @@ export async function savePortalAssignment(sourceId: number, assignedToUserId: n
   if (!Number.isInteger(sourceId) || sourceId <= 0) return { success: false, error: 'Select a valid portal.' }
 
   const source = await prisma.inquirySourceMaster.findFirst({
-    where: { sourceId, isActive: true, category: { in: ['Portal', 'Marketplace', 'Directory'] } },
+    where: { sourceId, isActive: true, category: { in: ['Portal', 'Marketplace', 'Directory', 'Owned Website'] } },
     select: { sourceId: true },
   })
   if (!source) return { success: false, error: 'This portal source is no longer active.' }
@@ -20,7 +20,7 @@ export async function savePortalAssignment(sourceId: number, assignedToUserId: n
     await prisma.inquiryPortalAssignment.deleteMany({ where: { sourceId } })
   } else {
     const assignee = await prisma.userTable.findFirst({
-      where: { userId: assignedToUserId, status: 'Active', roleName: 'InquiryAssistant', empId: { not: null } },
+      where: { userId: assignedToUserId, status: 'Active', roleName: 'InquiryAssistant' },
       select: { userId: true },
     })
     if (!assignee) return { success: false, error: 'Select an active InquiryAssistant.' }

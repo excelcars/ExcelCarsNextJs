@@ -6,7 +6,8 @@ import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
 import { createUserNotification } from '@/features/notifications/service'
 import { resolvePartnerVehicle } from './partnerVehicleCatalog.server'
 
-type Partner = 'CARDEKHO' | 'JUSTDIAL'
+
+type Partner = 'CARDEKHO' | 'JUSTDIAL' | 'WEBSITE'
 type Payload = Record<string, unknown>
 
 type AcceptedLead = {
@@ -88,7 +89,63 @@ function parseJustdial(payload: Payload): { lead: AcceptedLead | null; error?: s
   ].filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`)
   return { lead: { leadId, customerName, mobile, email, vehicle: null, remark: details.join('\n') } }
 }
+function parseWebsite(payload: Payload): { lead: AcceptedLead | null; error?: string } {
+  const leadId = text(payload.lead_id, 120)
+  const leadType = text(payload.lead_type, 50).toUpperCase()
+  const customerName = text(payload.name, 120)
+  const mobile = normalizeMobile(text(payload.mobile, 50))
+  const email = text(payload.email, 255)
 
+  const allowedTypes = [
+    'SELL_CAR',
+    'EXCHANGE_CAR',
+    'POST_REQUIREMENT',
+    'CONTACT_US',
+    'REQUEST_CALLBACK',
+    'TEST_DRIVE',
+    'MAKE_OFFER',
+  ]
+
+  if (!leadId || !leadType || !customerName || !mobile) {
+    return {
+      lead: null,
+      error: 'lead_id, lead_type, name, and mobile are required.',
+    }
+  }
+
+  if (!allowedTypes.includes(leadType)) {
+    return { lead: null, error: 'Invalid lead_type.' }
+  }
+
+  if (!/^\d{10}$/.test(mobile)) {
+    return { lead: null, error: 'mobile must contain a valid 10-digit mobile number.' }
+  }
+
+  if (!validEmail(email)) {
+    return { lead: null, error: 'email is invalid.' }
+  }
+
+  const vehicle = text(payload.vehicle_requested, 200)
+  const remarks = text(payload.remarks, 1000)
+
+  const details = [
+    `Website Lead Type: ${leadType}`,
+    vehicle ? `Vehicle: ${vehicle}` : '',
+    remarks ? `Remarks: ${remarks}` : '',
+    `Lead ID: ${leadId}`,
+  ].filter(Boolean)
+
+  return {
+    lead: {
+      leadId,
+      customerName,
+      mobile,
+      email,
+      vehicle: null,
+      remark: details.join('\n'),
+    },
+  }
+}
 async function findCustomerId(mobile: string) {
   const rows = await prisma.$queryRaw<Array<{ cust_id: number }>>(Prisma.sql`
     SELECT cust_id FROM customer
@@ -109,7 +166,12 @@ async function nextInquiryNumber(client: Prisma.TransactionClient) {
 
 export async function receivePartnerInquiry(partner: Partner, payload: Payload) {
   const receivedAt = new Date()
-  const parsed = partner === 'CARDEKHO' ? parseCardekho(payload) : parseJustdial(payload)
+const parsed =
+  partner === 'CARDEKHO'
+    ? parseCardekho(payload)
+    : partner === 'JUSTDIAL'
+      ? parseJustdial(payload)
+      : parseWebsite(payload)
   const rawPayload = await prisma.partnerWebhookPayload.create({
     data: {
       partner,
@@ -123,7 +185,12 @@ export async function receivePartnerInquiry(partner: Partner, payload: Payload) 
   const lead = parsed.lead
   const vehicleSelection = lead.vehicle ? await resolvePartnerVehicle(partner, lead.vehicle.description) : null
   await ensureInquirySourceMasterSeed()
-  const source = await prisma.inquirySourceMaster.findFirst({ where: { code: partner, isActive: true }, select: { sourceId: true, displayName: true } })
+const sourceCode = partner === 'WEBSITE' ? 'EXCEL_CARS_MUMBAI' : partner
+
+const source = await prisma.inquirySourceMaster.findFirst({
+  where: { code: sourceCode, isActive: true },
+  select: { sourceId: true, displayName: true }
+})
   if (!source) return { success: false as const, status: 409, error: `${partner} is not an active inquiry source.` }
   const sourceDetail = `Partner lead ID: ${lead.leadId}`
 

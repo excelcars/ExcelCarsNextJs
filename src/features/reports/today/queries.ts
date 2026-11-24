@@ -14,11 +14,11 @@ export interface TodayFilters {
 export async function listTodayFollowups({ fromDate, toDate, userId, restrictToUserId }: TodayFilters) {
   const { from, to } = indiaDateRange(fromDate, toDate)
   const restrictedInquiryWhere = restrictToUserId
-    ? buildInquiryOwnershipWhere(restrictToUserId, 'created-only')
+    ? buildInquiryOwnershipWhere(restrictToUserId)
     : null
 
   const rows = await prisma.followupInquiry.findMany({
-    // Legacy role-4 users can only see follow-ups for inquiries they created,
+    // Restricted users see follow-ups only for their current assignments,
     // regardless of the "Updated By" filter picked in the UI.
     where: buildTodayFollowupWhere({ from, to, userId, restrictedInquiryWhere }),
     include: {

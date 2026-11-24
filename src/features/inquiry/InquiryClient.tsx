@@ -306,7 +306,7 @@ interface VehicleEmailLinkRow {
 // some legacy catalog rows carry placeholder text ("null", "na") instead of a real SQL NULL
 
 function userOptionLabel(user: UserOption | null | undefined) {
-  if (!user) return '—'
+  if (!user) return 'Unassigned'
   const employeeName = `${user.employee?.empFirstName ?? ''} ${user.employee?.empLastName ?? ''}`.trim()
   const userName = user.userName?.trim()
   const name = user.displayName?.trim() || employeeName
@@ -1487,6 +1487,8 @@ export function InquiryClient({
         setSavedFormSnapshot(JSON.stringify(form))
         setSavedCustomerSnapshot(customerSnapshot(selectedCustomer))
         forceCloseInquiryModal()
+        // Show the newly saved enquiry even when the previous queue excluded its status or date.
+        if (!editId) router.push('/inquiry?quickFilter=activity')
         router.refresh()
       } catch {
         const message = 'Could not save this inquiry. Check your connection and try again. If the problem continues, contact support.'
@@ -1537,6 +1539,10 @@ export function InquiryClient({
     startExportTransition(async () => {
       try {
         const params = new URLSearchParams()
+        for (const key of ['userId', 'excludeUserId']) {
+          const value = searchParams.get(key)
+          if (value) params.set(key, value)
+        }
         if (search.trim()) params.set('search', search)
         if (status !== 'All') params.set('status', status)
         if (classification !== 'All') params.set('classification', classification)
