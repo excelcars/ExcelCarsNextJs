@@ -207,6 +207,8 @@ Required query functions:
 - `getInquirySubStatusSuggestions()`
 - `getInquiryAssistants()`
 
+The manual Assign To dropdown includes all active user accounts across roles, including SystemAdmin and SuperAdmin, with or without a linked employee. The server accepts any active account as a new assignee. Existing inquiry ownership authorization still controls who can change an assignment; inactive accounts are excluded from new assignments. Portal webhook assignment rules are configured separately.
+
 Required API surfaces:
 - `GET /api/inquiry/previous`
 - `GET /api/inquiry/inventory-match`

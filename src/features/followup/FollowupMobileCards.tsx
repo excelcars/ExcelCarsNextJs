@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui'
 import { formatListDate, formatListMoney } from '@/lib/listFormatters'
 import type { FollowupTableProps, FollowupTableRow } from './FollowupTable'
+import { formatFollowupAssignee } from './userScope'
 
 const clean = (value: string | null | undefined) => !value || ['null', 'na', 'n/a'].includes(value.trim().toLowerCase()) ? '' : value
 
@@ -16,6 +17,7 @@ export function FollowupMobileCards<T extends FollowupTableRow>({ rows, page, pa
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500"><span>#{(page - 1) * pageSize + index + 1} · {row.inquiryNo || `Inquiry/${row.inquiryId}`}</span>{row.classification && <Badge label={row.classification} />}</div>
         <h2 id={`followup-card-${row.inquiryId}`} className="mt-3 text-lg font-bold text-gray-900">{row.customer?.custName ?? row.customerNameLegacy ?? 'Unnamed inquiry'}</h2>
         <p className="mt-1 text-sm text-gray-600">{row.customer?.custMobile ?? row.mobileno ?? '—'}</p>
+        <p className="mt-1 text-sm text-gray-600"><span className="font-semibold">Assigned To: </span>{formatFollowupAssignee(row.assignedToUser, row.assignedTo)}</p>
         <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${overdue ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-gray-700'}`}>
           <div className="font-semibold">{overdue ? 'Overdue · ' : 'Follow-up · '}{formatListDate(row.followUpDate) || '—'}</div>
           <p className="mt-1">{row.status || '—'}{row.subStatus ? ` · ${row.subStatus}` : ''}</p>

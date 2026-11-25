@@ -402,10 +402,10 @@ export async function getInquirySubStatusSuggestions() {
 }
 
 export async function getInquiryAssistants() {
+  // Manual assignments may target any active login, including administrator accounts.
   return prisma.userTable.findMany({
     where: {
       status: 'Active',
-      roleName: 'InquiryAssistant',
     },
     select: {
       userId: true,

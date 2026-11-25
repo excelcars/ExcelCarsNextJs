@@ -5,6 +5,7 @@ import { ensureInquiryActivityLogTable, logInquiryEvent } from './eventLog'
 import { ensureInquirySourceMasterSeed } from './sourceMaster.server'
 import { createUserNotification } from '@/features/notifications/service'
 import { resolvePartnerVehicle } from './partnerVehicleCatalog.server'
+import { partnerVehicleKey, partnerVehicleSelection } from './partnerVehicleCatalog'
 
 
 type Partner = 'CARDEKHO' | 'JUSTDIAL' | 'WEBSITE'
@@ -184,6 +185,12 @@ const parsed =
   if (!parsed.lead) return { success: false as const, status: 422, error: parsed.error ?? 'Invalid payload.' }
   const lead = parsed.lead
   const vehicleSelection = lead.vehicle ? await resolvePartnerVehicle(partner, lead.vehicle.description) : null
+  const websiteDescription = partner === 'WEBSITE' ? text(payload.vehicle_requested, 200) : ''
+  const websiteMapping = websiteDescription ? await prisma.partnerVehicleMapping.findUnique({
+    where: { partner_descriptionKey: { partner: 'WEBSITE', descriptionKey: partnerVehicleKey(websiteDescription) } },
+    include: { variant: { include: { carMakeMaster: true, carModelMaster: true } } },
+  }) : null
+  const websiteSelection = websiteMapping ? partnerVehicleSelection(websiteMapping.variant) : null
   await ensureInquirySourceMasterSeed()
 const sourceCode = partner === 'WEBSITE' ? 'EXCEL_CARS_MUMBAI' : partner
 
@@ -214,6 +221,7 @@ const source = await prisma.inquirySourceMaster.findFirst({
           customerId, customerNameLegacy: lead.customerName, mobileno: lead.mobile, email: lead.email || null,
           classification: 'Warm', status: 'Open', remark: lead.remark, assignedTo: assignment?.assignedToUserId ?? null, createdDt: now, updatedDt: now,
           ...(lead.vehicle ? { inquiryCarDetails: { create: { ...vehicleSelection, subVariant: lead.vehicle.description, year: lead.vehicle.year, noOfOwners: lead.vehicle.owners, createdDt: now, updatedDt: now } } } : {}),
+          ...(websiteSelection ? { inquiryCarDetails: { create: { ...websiteSelection, subVariant: websiteDescription, createdDt: now, updatedDt: now } } } : {}),
         },
         select: { inquiryId: true },
       })

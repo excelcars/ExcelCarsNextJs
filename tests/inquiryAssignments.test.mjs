@@ -183,12 +183,12 @@ for (const kind of ['inquiry', 'followup']) {
   })
 }
 
-test('dropdown includes active assistants without employee links and keeps user IDs as assignment keys', async () => {
+test('dropdown includes active users of all roles without requiring employee links', async () => {
   let args
   const rows = [{ userId: 7, empId: null, userName: 'assistant', displayName: null, employee: null }]
   const api = inquiryQueries({ userTable: { findMany: async query => { args = query; return rows } } })
   assert.equal(await api.getInquiryAssistants(), rows)
-  assert.deepEqual(plain(args.where), { status: 'Active', roleName: 'InquiryAssistant' })
+  assert.deepEqual(plain(args.where), { status: 'Active' })
   assert.ok(args.select.userId && args.select.employee.select.empFirstName)
 })
 
