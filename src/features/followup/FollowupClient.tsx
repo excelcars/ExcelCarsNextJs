@@ -734,8 +734,6 @@ export function FollowupClient({
         followUpDateTo !== initialFollowUpDateTo ||
         visitedDateFrom !== initialVisitedDateFrom ||
         visitedDateTo !== initialVisitedDateTo
-        || budgetFrom !== initialBudgetFrom
-        || budgetTo !== initialBudgetTo
       ) {
         pushQuery({
           inquiryDateFrom,
@@ -744,8 +742,6 @@ export function FollowupClient({
           followUpDateTo,
           visitedDateFrom,
           visitedDateTo,
-          budgetFrom,
-          budgetTo,
           page: '1',
         })
       }
@@ -765,10 +761,6 @@ export function FollowupClient({
     inquiryDateTo,
     visitedDateFrom,
     visitedDateTo,
-    budgetFrom,
-    budgetTo,
-    initialBudgetFrom,
-    initialBudgetTo,
   ])
 
   const resetCarEditor = () => {
@@ -1412,8 +1404,11 @@ export function FollowupClient({
         onFollowUpDateToChange={setFollowUpDateTo}
         onVisitedDateFromChange={setVisitedDateFrom}
         onVisitedDateToChange={setVisitedDateTo}
-        onBudgetFromChange={setBudgetFrom}
-        onBudgetToChange={setBudgetTo}
+        onBudgetApply={(budgetFrom, budgetTo) => {
+          setBudgetFrom(budgetFrom)
+          setBudgetTo(budgetTo)
+          pushQuery({ budgetFrom, budgetTo, page: '1' })
+        }}
       />
 
       <div className="mb-4 flex justify-end">

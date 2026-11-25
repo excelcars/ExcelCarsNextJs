@@ -1,6 +1,7 @@
 'use client'
 
-import { Input, SearchBar } from '@/components/ui'
+import { useEffect, useState } from 'react'
+import { Btn, Input, SearchBar } from '@/components/ui'
 import { FormDropdown } from '@/components/FormDropdown'
 import { VehicleFilterSelects } from '@/components/VehicleFilterSelects'
 import { DateFilterInput } from '@/components/DateFilterInput'
@@ -74,8 +75,7 @@ type FollowupFiltersProps = {
   onFollowUpDateToChange: (value: string) => void
   onVisitedDateFromChange: (value: string) => void
   onVisitedDateToChange: (value: string) => void
-  onBudgetFromChange: (value: string) => void
-  onBudgetToChange: (value: string) => void
+  onBudgetApply: (budgetFrom: string, budgetTo: string) => void
 }
 
 export function FollowupFilters({
@@ -129,12 +129,15 @@ export function FollowupFilters({
   onFollowUpDateToChange,
   onVisitedDateFromChange,
   onVisitedDateToChange,
-  onBudgetFromChange,
-  onBudgetToChange,
+  onBudgetApply,
 }: FollowupFiltersProps) {
+  const [draftBudgetFrom, setDraftBudgetFrom] = useState(budgetFrom)
+  const [draftBudgetTo, setDraftBudgetTo] = useState(budgetTo)
+  useEffect(() => { setDraftBudgetFrom(budgetFrom) }, [budgetFrom])
+  useEffect(() => { setDraftBudgetTo(budgetTo) }, [budgetTo])
   const hasAdvancedFilters = Boolean(
     contactOutcome || customerName || subStatus || website || customerMobile || makeId || modelId || variantId ||
-    inquiryDateFrom || inquiryDateTo || followUpDateFrom || followUpDateTo || visitedDateFrom || visitedDateTo || budgetFrom || budgetTo,
+    inquiryDateFrom || inquiryDateTo || followUpDateFrom || followUpDateTo || visitedDateFrom || visitedDateTo || draftBudgetFrom || draftBudgetTo,
   )
 
   return (
@@ -181,8 +184,11 @@ export function FollowupFilters({
           <DateFilterInput label="Follow-up Date To" value={followUpDateTo} onChange={onFollowUpDateToChange} disabled={isRoutePending} />
           <DateFilterInput label="Visited Date From" value={visitedDateFrom} onChange={onVisitedDateFromChange} disabled={isRoutePending} />
           <DateFilterInput label="Visited Date To" value={visitedDateTo} onChange={onVisitedDateToChange} disabled={isRoutePending} />
-          <Input inputMode="numeric" label="Budget From" value={formatIndianNumberInput(budgetFrom)} onChange={event => onBudgetFromChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
-          <Input inputMode="numeric" label="Budget To" value={formatIndianNumberInput(budgetTo)} onChange={event => onBudgetToChange(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
+          <Input inputMode="numeric" label="Budget From" value={formatIndianNumberInput(draftBudgetFrom)} onChange={event => setDraftBudgetFrom(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} />
+          <div className="flex min-w-0 flex-wrap items-end gap-2">
+            <div className="min-w-0 basis-full flex-1 sm:basis-32"><Input inputMode="numeric" label="Budget To" value={formatIndianNumberInput(draftBudgetTo)} onChange={event => setDraftBudgetTo(normalizeIntegerInput(event.target.value))} disabled={isRoutePending} /></div>
+            <Btn variant="outline" size="sm" className="shrink-0 whitespace-nowrap" onClick={() => onBudgetApply(draftBudgetFrom, draftBudgetTo)} disabled={isRoutePending || (draftBudgetFrom === budgetFrom && draftBudgetTo === budgetTo)}>Apply Budget</Btn>
+          </div>
         </div>
       </details>
     </div>

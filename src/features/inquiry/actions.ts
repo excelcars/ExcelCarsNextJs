@@ -1863,13 +1863,12 @@ export async function assignInquiry(input: AssignInquiryInput): Promise<ActionRe
           where: { userId: assignedToUserId },
           select: {
             userId: true,
-            roleName: true,
             status: true,
           },
         })
 
-        if (!assignee || assignee.status !== 'Active' || assignee.roleName !== 'InquiryAssistant') {
-          throw new Error('Select a valid active InquiryAssistant to assign this inquiry.')
+        if (!assignee || assignee.status !== 'Active') {
+          throw new Error('Select a valid active user to assign this inquiry.')
         }
       }
 
