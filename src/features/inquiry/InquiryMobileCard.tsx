@@ -47,8 +47,8 @@ export function InquiryMobileCard({ row, number, assignedToLabel, actions }: { r
           car.year,
         ].filter(Boolean).join(' · ') || '—'}</div>
           {car.subVariant ? <p><span className="font-medium">Vehicle requested: </span>{car.subVariant}</p> : null}
-          {row.website?.toLowerCase() === 'cardekho' && car.subVariant && !car.carVariantMaster ? <QuickVehicleMapping inquiryId={row.inquiryId} vehicleDescription={car.subVariant} /> : null}
-        </div>) : websiteVehicle ? <p><span className="font-medium">Vehicle requested: </span>{websiteVehicle}</p> : <div>—</div>}
+          {(row.website?.toLowerCase() === 'cardekho' || websiteVehicle) && car.subVariant && !car.carVariantMaster && (!websiteVehicle || (!car.makeLegacy && !car.modelLegacy && !car.variantLegacy)) ? <QuickVehicleMapping inquiryId={row.inquiryId} vehicleDescription={car.subVariant} /> : null}
+        </div>) : websiteVehicle ? <><p><span className="font-medium">Vehicle requested: </span>{websiteVehicle}</p><QuickVehicleMapping inquiryId={row.inquiryId} vehicleDescription={websiteVehicle} /></> : <div>—</div>}
         {row.sourceDetail?.startsWith('Partner lead ID:') ? <PartnerInquiryDetails inquiryId={row.inquiryId} /> : null}
       </div>
       {row.remark?.trim() ? <p className="mt-3 whitespace-pre-wrap text-sm text-gray-600"><span className="font-semibold">Remark: </span>{row.remark}</p> : null}

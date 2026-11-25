@@ -78,9 +78,9 @@ export function QuickVehicleMapping({ inquiryId, vehicleDescription }: { inquiry
     <span className="block text-xs font-medium text-amber-800">Needs vehicle mapping</span>
     <button type="button" onClick={load} aria-haspopup="dialog" className="mt-1 min-h-10 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100">Map vehicle</button>
     <dialog ref={dialog} aria-labelledby={`${id}-title`} onClose={() => setOpen(false)} onCancel={event => { event.preventDefault(); close() }} onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation() }} onClick={event => { if (event.target === event.currentTarget) close() }} className="m-auto max-h-[85vh] w-[92vw] max-w-lg overflow-y-auto rounded-xl border-0 bg-white p-5 text-left text-gray-900 shadow-2xl backdrop:bg-black/40">
-      <h2 id={`${id}-title`} className="text-lg font-semibold">Map CarDekho vehicle</h2>
+      <h2 id={`${id}-title`} className="text-lg font-semibold">Map vehicle</h2>
       {success ? <p role="status" className="my-4 rounded-lg bg-green-50 p-3 text-sm text-green-900">{success}</p> : loading ? <p role="status" className="py-6">Loading vehicle choices…</p> : data ? <>
-        <div className="my-4 rounded-lg bg-blue-50 p-3 text-sm"><span className="block text-xs text-gray-500">Saved CarDekho vehicle description</span><strong>{data.description}</strong></div>
+        <div className="my-4 rounded-lg bg-blue-50 p-3 text-sm"><span className="block text-xs text-gray-500">Saved vehicle description</span><strong>{data.description}</strong></div>
         <div className="space-y-3">
           <label htmlFor={`${id}-make`} className="block text-sm font-medium">Make<select id={`${id}-make`} value={makeId} disabled={saving} onChange={event => { setMakeId(event.target.value); setModelId(''); setVariantId('') }} className={selectClass}><option value="">Select make</option>{makes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}{data.canCreateCatalog ? <option value="__new__">+ Add a missing make</option> : null}</select></label>
           {makeId === '__new__' ? newEntry('make') : null}
@@ -91,7 +91,7 @@ export function QuickVehicleMapping({ inquiryId, vehicleDescription }: { inquiry
           {!data.canCreateCatalog ? <p className="text-xs text-gray-500">Missing a catalog entry? A user with Vehicle Masters access can add it here.</p> : null}
         </div>
         {selected ? <p className="mt-3 text-sm font-semibold text-blue-900">{selected.make} · {selected.model} · {selected.variant}</p> : null}
-        <p className="mt-4 text-sm leading-6 text-gray-600">Save once to update this inquiry and automatically map future CarDekho leads with the same vehicle description. The original text is preserved.</p>
+        <p className="mt-4 text-sm leading-6 text-gray-600">Save once to update this inquiry and automatically map future {data.partner === 'WEBSITE' ? 'Website' : 'CarDekho'} leads with the same vehicle description. The original text is preserved.</p>
         {data.olderInquiryCount > 0 ? <label className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm"><input type="checkbox" checked={applyToExisting} disabled={saving} onChange={event => setApplyToExisting(event.target.checked)} className="mt-1" /><span>Also update {data.olderInquiryCount} older matching {data.olderInquiryCount === 1 ? 'inquiry' : 'inquiries'}.<span className="block text-xs text-gray-600">Only unmapped vehicles you can access. Existing mappings are kept.</span></span></label> : null}
       </> : null}
       {error ? <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
