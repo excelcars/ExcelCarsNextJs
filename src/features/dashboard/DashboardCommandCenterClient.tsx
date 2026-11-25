@@ -46,6 +46,7 @@ export interface DashboardStats {
   todayInquiries: number
   hotLeads: number
   pendingFollowups: number
+  overdueFollowupsHref?: string
   overdueFollowups: number
   activeLoans: number
   activeInsurance: number
@@ -65,6 +66,7 @@ interface LeadRow {
   other: number
   href: string
   ownHref: string
+  otherHref?: string
 }
 
 interface ReminderRow {
@@ -148,6 +150,7 @@ interface FollowupRow {
 }
 
 export interface DashboardCommandCenterProps {
+  restrictedInquiry?: boolean
   firstName: string
   todayLabel: string
   initialWorkspace?: Workspace
@@ -469,7 +472,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         type: overdue ? 'Overdue follow-up' : 'Follow-up',
         date: row.followupDate,
         status: row.status ?? 'FollowUp',
-        actionHref: `/followup?status=FollowUp&inquiryId=${row.id}`,
+        actionHref: `/followup?status=FollowUp&inquiryId=${row.id}&userId=all`,
         workspace: 'followups',
       })
     })
@@ -709,7 +712,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
               <CompactKpi label="Today's Leads" value={stats.todayInquiries} icon={<Users className="h-4 w-4" />} visual={<FunnelVisual />} href={`/inquiry?quickFilter=all&inquiryDate=${localDateParam()}`} />
             )}
             {permissions.canFollowup && (
-              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<AlertTriangle className="h-4 w-4" />} href="/followup?status=FollowUp" />
+              <CompactKpi label="Critical Issues" value={stats.overdueFollowups} sub="overdue" tone={stats.overdueFollowups ? 'danger' : 'warning'} icon={<AlertTriangle className="h-4 w-4" />} href={stats.overdueFollowupsHref ?? `/followup?status=FollowUp&followUpDateTo=${localDateParam(new Date(Date.now() - 86400000))}&userId=all`} />
             )}
             {(permissions.canRto || permissions.canInsurance) && <PendingFilesKpi value={stats.pendingRTO + data.pendingPayments.length + data.pendingPolicies.length} rto={stats.pendingRTO} payments={data.pendingPayments.length} insurance={data.pendingPolicies.length} canRto={permissions.canRto} canInsurance={permissions.canInsurance} onOpen={workspace => openWorkspace(workspace)} />}
           </div>
@@ -741,14 +744,14 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
         {workspace === 'leads' ? (
           <div className="grid min-w-0 items-start gap-3">
             <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-              <div className="mb-3 flex items-center gap-2"><h2 className="text-base font-bold text-[#172d62]">Lead Details</h2><span className="rounded-full bg-blue-500 px-2 py-0.5 text-[11px] font-bold text-white">{stats.totalInquiries.toLocaleString('en-IN')}</span></div>
-              <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', "Other's Count", 'Own Share']} tableMinWidth="min-w-full" tableClass="w-full [&_th]:py-1 [&_td]:py-1">
+              <div className="mb-3 flex items-center gap-2"><h2 className="text-base font-bold text-[#172d62]">Lead Details</h2><a href="/inquiry?quickFilter=all" className="rounded-full bg-blue-500 px-2 py-0.5 text-[11px] font-bold text-white">{stats.totalInquiries.toLocaleString('en-IN')}</a></div>
+              <WorkTable headers={['Leads Heads', 'Total Count', 'Own Count', ...(!props.restrictedInquiry ? ["Other's Count"] : []), 'Own Share']} tableMinWidth="min-w-full" tableClass="w-full [&_th]:py-1 [&_td]:py-1">
                 {filteredLeadDetails.map(row => (
                   <tr key={row.label} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-800">{row.label}</td>
                     <td className="px-3 py-2"><a href={row.href} className="font-semibold text-blue-600 hover:underline">{row.total}</a></td>
                     <td className="px-3 py-2"><a href={row.ownHref} className="font-semibold text-blue-600 hover:underline">{row.own}</a></td>
-                    <td className="px-3 py-2 font-semibold text-blue-600">{row.other}</td>
+                    {!props.restrictedInquiry && <td className="px-3 py-2 font-semibold text-blue-600"><a href={row.otherHref ?? row.href} className="hover:underline">{row.other}</a></td>}
                     <td className="px-3 py-2"><OwnShareBar total={Number(row.total)} own={Number(row.own)} /></td>
                   </tr>
                 ))}
@@ -784,7 +787,7 @@ export function DashboardCommandCenterClient(props: DashboardCommandCenterProps)
                 <td className="px-3 py-2 text-gray-600">{formatDate(row.followupDate)}</td>
                 <td className="px-3 py-2">{row.classification ? <Badge label={row.classification} /> : '-'}</td>
                 <td className="px-3 py-2">{row.status ? <Badge label={row.status} /> : '-'}</td>
-                <td className="px-3 py-2"><a href={`/followup?status=FollowUp&inquiryId=${row.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
+                <td className="px-3 py-2"><a href={`/followup?status=FollowUp&inquiryId=${row.id}&userId=all`} className="inline-flex items-center gap-1 text-xs font-semibold text-[#C8102E] hover:underline">Open <ExternalLink className="h-3 w-3" /></a></td>
               </tr>
             ))}
           </WorkTable>

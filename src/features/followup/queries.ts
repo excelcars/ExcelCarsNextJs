@@ -24,6 +24,7 @@ export interface FollowupFilters {
   customerMobile: string
   inquiryId?: string
   userId: string
+  excludeUserId?: string
   makeId: string
   modelId: string
   variantId: string
@@ -70,6 +71,7 @@ function followupListSelect() {
         userId: true,
         userName: true,
         displayName: true,
+        employee: { select: { empId: true, empFirstName: true, empLastName: true, empMobileNo: true, empEmailId: true } },
       },
     },
     assignedToUser: {
@@ -77,6 +79,7 @@ function followupListSelect() {
         userId: true,
         userName: true,
         displayName: true,
+        employee: { select: { empId: true, empFirstName: true, empLastName: true, empMobileNo: true, empEmailId: true } },
       },
     },
     customer: {
@@ -160,11 +163,12 @@ function buildFollowupWhere({
   customerMobile,
   inquiryId = '',
   userId,
+  excludeUserId = '',
   makeId,
   modelId,
   variantId,
   restrictToUserId,
-  ownershipMode = 'created-or-assigned',
+  ownershipMode = 'assigned-only',
 }: Omit<FollowupFilters, 'page'>) {
   const q = search.trim()
   const andConditions: Prisma.InquiryWhereInput[] = []
@@ -175,6 +179,9 @@ function buildFollowupWhere({
   const parsedInquiryId = Number(inquiryId)
   const parsedBudgetFrom = Number(budgetFrom)
   const parsedBudgetTo = Number(budgetTo)
+  if (!restrictToUserId && Number(excludeUserId) > 0) {
+    andConditions.push({ OR: [{ assignedTo: null }, { assignedTo: { not: Number(excludeUserId) } }] })
+  }
   const effectiveOwnershipUserId = restrictToUserId ?? (Number.isFinite(parsedUserId) && parsedUserId > 0 ? parsedUserId : null)
 
   if (Number.isFinite(parsedInquiryId) && parsedInquiryId > 0) {
@@ -307,13 +314,14 @@ export async function listFollowupQueue({
   customerMobile,
   inquiryId = '',
   userId,
+  excludeUserId,
   makeId,
   modelId,
   variantId,
   sort,
   page,
   restrictToUserId = null,
-  ownershipMode = 'created-or-assigned',
+  ownershipMode = 'assigned-only',
 }: FollowupFilters) {
   const where = buildFollowupWhere({
     search,
@@ -334,6 +342,7 @@ export async function listFollowupQueue({
     customerMobile,
     inquiryId,
     userId,
+    excludeUserId,
     makeId,
     modelId,
     variantId,
@@ -379,7 +388,7 @@ export async function getRecentFollowups(
   inquiryId: number,
   limit?: number,
   restrictToUserId?: number | null,
-  ownershipMode: InquiryOwnershipMode = 'created-or-assigned',
+  ownershipMode: InquiryOwnershipMode = 'assigned-only',
 ) {
   return prisma.followupInquiry.findMany({
     where: {

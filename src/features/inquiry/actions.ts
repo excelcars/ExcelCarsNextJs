@@ -1248,6 +1248,7 @@ export async function getInquiryDetail(inquiryId: number, options: { route?: str
           userId: true,
           userName: true,
           displayName: true,
+          employee: { select: { empId: true, empFirstName: true, empLastName: true, empMobileNo: true, empEmailId: true } },
         },
       },
       createdByUser: {
@@ -1529,6 +1530,7 @@ export async function createInquiry(input: InquiryFormInput, options: CreateInqu
             ...(resolvedContact.customerId ? { customer: { connect: { custId: resolvedContact.customerId } } } : {}),
             createdDt: now,
             updatedDt: now,
+            assignedToUser: { connect: { userId } },
             ...(userId ? { createdByUser: { connect: { userId } }, updatedByUser: { connect: { userId } } } : {}),
             ...(resolvedCarDetails.length > 0
               ? {
@@ -1845,27 +1847,31 @@ export async function assignInquiry(input: AssignInquiryInput): Promise<ActionRe
 
   const assignedToUserId = input.assignedToUserId && input.assignedToUserId > 0 ? input.assignedToUserId : null
 
-  if (assignedToUserId) {
-    const assignee = await prisma.userTable.findUnique({
-      where: { userId: assignedToUserId },
-      select: {
-        userId: true,
-        roleName: true,
-        status: true,
-      },
-    })
-
-    if (!assignee || assignee.status !== 'Active' || assignee.roleName !== 'InquiryAssistant') {
-      return { success: false, error: 'Select a valid active InquiryAssistant to assign this inquiry.' }
-    }
-  }
-
   try {
     await prisma.$transaction(async (tx) => {
       const current = await tx.inquiry.findUnique({
         where: { inquiryId: input.inquiryId },
         select: { assignedTo: true, inquiryNo: true, customerNameLegacy: true, customer: { select: { custName: true } } },
       })
+
+      if (!current) throw new Error('Inquiry not found.')
+      // Saving an existing creator assignment is valid even when the creator is an admin.
+      if (current.assignedTo === assignedToUserId) return
+
+      if (assignedToUserId) {
+        const assignee = await tx.userTable.findUnique({
+          where: { userId: assignedToUserId },
+          select: {
+            userId: true,
+            roleName: true,
+            status: true,
+          },
+        })
+
+        if (!assignee || assignee.status !== 'Active' || assignee.roleName !== 'InquiryAssistant') {
+          throw new Error('Select a valid active InquiryAssistant to assign this inquiry.')
+        }
+      }
 
       const now = new Date()
       await tx.inquiry.update({
@@ -1889,6 +1895,7 @@ export async function assignInquiry(input: AssignInquiryInput): Promise<ActionRe
       })
 
       if (current?.assignedTo !== assignedToUserId) {
+        await archiveFollowupNotifications(tx, input.inquiryId)
         const customerName = current?.customer?.custName || current?.customerNameLegacy || `Inquiry #${input.inquiryId}`
         const href = `/inquiry?search=${encodeURIComponent(current?.inquiryNo ?? String(input.inquiryId))}`
         if (assignedToUserId && assignedToUserId !== userId) {

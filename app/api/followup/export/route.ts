@@ -3,6 +3,7 @@ import { auth } from '../../../../auth'
 import { listFollowupsForExport } from '@/features/followup/queries'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
+import { resolveFollowupUserId } from '@/features/followup/userScope'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -28,11 +29,11 @@ export async function GET(req: NextRequest) {
   const website = req.nextUrl.searchParams.get('website')?.trim() ?? ''
   const customerMobile = req.nextUrl.searchParams.get('customerMobile')?.trim() ?? ''
   const inquiryId = req.nextUrl.searchParams.get('inquiryId')?.trim() ?? ''
-  const userId = req.nextUrl.searchParams.get('userId')?.trim() ?? ''
   const makeId = req.nextUrl.searchParams.get('makeId')?.trim() ?? ''
   const modelId = req.nextUrl.searchParams.get('modelId')?.trim() ?? ''
   const variantId = req.nextUrl.searchParams.get('variantId')?.trim() ?? ''
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
+  const userId = resolveFollowupUserId(req.nextUrl.searchParams.get('userId'), ownershipScope, req.nextUrl.searchParams.get('excludeUserId'))
 
   const rows = await listFollowupsForExport({
     search,
@@ -53,6 +54,7 @@ export async function GET(req: NextRequest) {
     customerMobile,
     inquiryId,
     userId,
+    excludeUserId: req.nextUrl.searchParams.get('excludeUserId') ?? '',
     makeId,
     modelId,
     variantId,

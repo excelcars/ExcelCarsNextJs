@@ -40,7 +40,7 @@ export function PartnerInquiryDetails({ inquiryId, route = '/inquiry' }: { inqui
       </div>
       <div className="px-5 py-4">
       {loading ? <p role="status">Loading partner details…</p> : error ? <p role="status">{error}</p> : details ? <>
-        <p className="mb-3 font-semibold text-[#1B2A6B]">{details.partner === 'CARDEKHO' ? 'CarDekho' : 'Justdial'} inquiry</p>
+        <p className="mb-3 font-semibold text-[#1B2A6B]">{details.partner === 'CARDEKHO' ? 'CarDekho' : details.partner === 'JUSTDIAL' ? 'Justdial' : 'Website'} inquiry</p>
         <dl className="divide-y divide-gray-100">{details.fields.map(field => <div key={field.label} className="grid gap-1 py-2 sm:grid-cols-[150px_1fr] sm:gap-3"><dt className="font-medium text-gray-700">{field.label}</dt><dd className="break-words whitespace-pre-wrap text-gray-600">{field.value}</dd></div>)}</dl>
         {details.partner === 'CARDEKHO' ? <p className="mt-4 rounded-lg bg-blue-50 p-3 leading-6 text-blue-900">Make, model, and variant are matched automatically when the catalog has a clear match. If a description is missing or ambiguous, select the correct variant once and remember the mapping for future inquiries.</p> : null}
       </> : null}

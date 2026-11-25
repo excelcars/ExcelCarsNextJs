@@ -18,10 +18,23 @@ async function authorizedUser(inquiryId: number) {
 
 async function mappingTarget(db: Pick<typeof prisma, 'partnerWebhookPayload' | 'inquiryCarDetails' | 'inquiry'>, inquiryId: number, requestedDescription?: string) {
   const cars = await db.inquiryCarDetails.findMany({ where: { fkInquiryId: inquiryId } })
+  const websitePayload = await db.partnerWebhookPayload.findFirst({
+    where: { inquiryId, partner: 'WEBSITE' }, orderBy: { partnerWebhookPayloadId: 'asc' }, select: { partner: true, rawPayload: true },
+  })
+  if (websitePayload?.partner === 'WEBSITE') {
+    const raw = websitePayload.rawPayload
+    const description = raw && typeof raw === 'object' && !Array.isArray(raw) && typeof raw.vehicle_requested === 'string' ? raw.vehicle_requested.trim().slice(0, 200) : ''
+    if (!description || (requestedDescription && partnerVehicleKey(description) !== partnerVehicleKey(requestedDescription))) {
+      throw new PartnerVehicleMappingError('The vehicle description changed or is missing. Refresh the inquiry.')
+    }
+    const car = cars.find(item => item.fkVariantId === null && !item.makeLegacy && !item.modelLegacy && !item.variantLegacy && partnerVehicleKey(item.subVariant ?? '') === partnerVehicleKey(description))
+    if (!car && cars.length) throw new PartnerVehicleMappingError('This vehicle is already mapped or has changed. Refresh the inquiry.')
+    return { description, car: car ?? null, partner: 'WEBSITE' as const }
+  }
   const description = await resolvePartnerMappingDescription(db, inquiryId, cars, requestedDescription)
   const car = cars.find(item => item.fkVariantId === null && partnerVehicleKey(item.subVariant ?? '') === partnerVehicleKey(description))
   if (!car) throw new PartnerVehicleMappingError('This vehicle is already mapped or has changed. Refresh the inquiry.')
-  return { description, car }
+  return { description, car, partner: 'CARDEKHO' as const }
 }
 
 async function olderMatchingCars(db: Pick<Prisma.TransactionClient, 'inquiryCarDetails'>, inquiryId: number, description: string, ownershipWhere: Prisma.InquiryWhereInput) {
@@ -35,7 +48,7 @@ async function olderMatchingCars(db: Pick<Prisma.TransactionClient, 'inquiryCarD
 export async function getQuickVehicleMappingOptions(inquiryId: number, requestedDescription?: string) {
   if (!(await authorizedUser(inquiryId))) return { error: 'You do not have permission to map this inquiry.' }
   try {
-    const { description } = await mappingTarget(prisma, inquiryId, requestedDescription)
+    const { description, partner } = await mappingTarget(prisma, inquiryId, requestedDescription)
     const scope = await getInquiryOwnershipScopeForRoute('/inquiry')
     if (!scope.userId) return { error: 'Your session expired. Sign in again.' }
     const ownershipWhere = scope.restrictToUserId ? buildInquiryOwnershipWhere(scope.restrictToUserId, scope.ownershipMode) : {}
@@ -43,7 +56,7 @@ export async function getQuickVehicleMappingOptions(inquiryId: number, requested
       prisma.carVariantMaster.findMany({ include: { carMakeMaster: true, carModelMaster: true } }),
       prisma.carMakeMaster.findMany({ orderBy: { make: 'asc' }, select: { pkMakeId: true, make: true } }),
       prisma.carModelMaster.findMany({ orderBy: { model: 'asc' }, select: { pkModelId: true, fkMakeId: true, model: true } }),
-      olderMatchingCars(prisma, inquiryId, description, ownershipWhere),
+      partner === 'WEBSITE' ? Promise.resolve([]) : olderMatchingCars(prisma, inquiryId, description, ownershipWhere),
       getAuthorizedUserIdForRoute('/config/catalog'),
     ])
     const options = catalog.flatMap(row => {
@@ -51,7 +64,7 @@ export async function getQuickVehicleMappingOptions(inquiryId: number, requested
       return selection ? [{ variantId: row.pkVariantId, makeId: row.carMakeMaster!.pkMakeId, modelId: row.carModelMaster!.pkModelId,
         make: selection.makeLegacy, model: selection.modelLegacy, variant: selection.variantLegacy }] : []
     }).sort((a, b) => a.make.localeCompare(b.make) || a.model.localeCompare(b.model) || a.variant.localeCompare(b.variant))
-    return { description, options, makes: makes.flatMap(row => cleanCatalogName(row.make) ? [{ id: row.pkMakeId, name: cleanCatalogName(row.make) }] : []),
+    return { description, partner, options, makes: makes.flatMap(row => cleanCatalogName(row.make) ? [{ id: row.pkMakeId, name: cleanCatalogName(row.make) }] : []),
       models: models.flatMap(row => cleanCatalogName(row.model) && row.fkMakeId ? [{ id: row.pkModelId, makeId: row.fkMakeId, name: cleanCatalogName(row.model) }] : []),
       canCreateCatalog: Boolean(catalogUser), olderInquiryCount: new Set(older.map(car => car.fkInquiryId)).size }
   } catch (error) {
@@ -69,22 +82,38 @@ export async function saveQuickVehicleMapping(inquiryId: number, variantId: numb
     const ownershipWhere = scope.restrictToUserId ? buildInquiryOwnershipWhere(scope.restrictToUserId, scope.ownershipMode) : {}
     await ensureInquiryActivityLogTable()
     const updatedOlderCount = await prisma.$transaction(async tx => {
-      const { description, car } = await mappingTarget(tx, inquiryId, options.description)
+      // Serialize mapping attempts, including Website leads with no vehicle row yet.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(42815502, ${inquiryId}::int)`
+      if (!(await canAccessInquiryByOwnership(inquiryId, '/inquiry'))) throw new PartnerVehicleMappingError('You do not have permission to map this inquiry.')
+      const { description, car, partner } = await mappingTarget(tx, inquiryId, options.description)
       const variant = await tx.carVariantMaster.findUnique({ where: { pkVariantId: variantId }, include: { carMakeMaster: true, carModelMaster: true } })
       const selection = variant && partnerVehicleSelection(variant)
       if (!selection) throw new PartnerVehicleMappingError('Select a complete catalog make, model, and variant.')
-      await rememberPartnerVehicleMapping(tx, { inquiryId, userId, existingCars: [car], cars: [{ subVariant: description, fkVariantId: variantId }], description })
+      if (partner === 'WEBSITE') {
+        const descriptionKey = partnerVehicleKey(description)
+        await tx.partnerVehicleMapping.upsert({
+          where: { partner_descriptionKey: { partner, descriptionKey } },
+          create: { partner, descriptionKey, description, variantId, confirmedBy: userId },
+          update: { description, variantId, confirmedBy: userId },
+        })
+      } else {
+        await rememberPartnerVehicleMapping(tx, { inquiryId, userId, existingCars: car ? [car] : [], cars: [{ subVariant: description, fkVariantId: variantId }], description })
+      }
       const now = new Date()
-      const updated = await tx.inquiryCarDetails.updateMany({
-        where: { inquiryCarDetailsId: car.inquiryCarDetailsId, fkInquiryId: inquiryId, fkVariantId: null, subVariant: car.subVariant, inquiry: ownershipWhere },
-        data: { ...selection, updatedDt: now, updatedBy: userId },
-      })
-      if (updated.count !== 1) throw new PartnerVehicleMappingError('The vehicle changed while you were mapping it. Refresh and try again.')
+      if (car) {
+        const updated = await tx.inquiryCarDetails.updateMany({
+          where: { inquiryCarDetailsId: car.inquiryCarDetailsId, fkInquiryId: inquiryId, fkVariantId: null, subVariant: car.subVariant, inquiry: ownershipWhere },
+          data: { ...selection, updatedDt: now, updatedBy: userId },
+        })
+        if (updated.count !== 1) throw new PartnerVehicleMappingError('The vehicle changed while you were mapping it. Refresh and try again.')
+      } else {
+        await tx.inquiryCarDetails.create({ data: { fkInquiryId: inquiryId, subVariant: description, ...selection, createdDt: now, createdBy: userId, updatedDt: now, updatedBy: userId } })
+      }
       await tx.inquiry.update({ where: { inquiryId }, data: { updatedDt: now } })
-      await logInquiryEvent(tx, { inquiryId, eventType: 'partner_vehicle_mapping_confirmed', eventLabel: 'CarDekho vehicle mapping confirmed',
+      await logInquiryEvent(tx, { inquiryId, eventType: 'partner_vehicle_mapping_confirmed', eventLabel: `${partner === 'WEBSITE' ? 'Website' : 'CarDekho'} vehicle mapping confirmed`,
         eventDetail: `${description} → ${selection.makeLegacy} ${selection.modelLegacy} ${selection.variantLegacy} (variant #${variantId})`, actorUserId: userId, createdAt: now })
       const updatedInquiries = new Set<number>()
-      if (options.applyToExisting) {
+      if (options.applyToExisting && partner === 'CARDEKHO') {
         const older = await olderMatchingCars(tx, inquiryId, description, ownershipWhere)
         for (const row of older) {
           if (!row.fkInquiryId) continue

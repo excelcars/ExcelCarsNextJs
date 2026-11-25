@@ -16,7 +16,7 @@ export type FollowupTableRow = {
 
 const JUNK_VALUES = new Set(['null', 'na', 'n/a'])
 const clean = (value: string | null | undefined) => (!value || JUNK_VALUES.has(value.trim().toLowerCase()) ? '' : value)
-const fmtDate = (value: Date | string | null | undefined) => value ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(value)) : ''
+const fmtDate = formatListDate
 const isOverdue = (value: Date | string | null) => value ? new Date(value) < new Date(new Date().toDateString()) : false
 const formatContactOutcome = (value: string | null | undefined) => ({ spoke_to_customer: 'Spoke to customer', no_answer: 'No answer', asked_to_call_back: 'Asked to call back', number_not_working: 'Number not working' }[value ?? ''] ?? '')
 

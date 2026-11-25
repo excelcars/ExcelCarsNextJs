@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/inquiry')
 
   if (!inquiryDateFrom || !inquiryDateTo) return NextResponse.json({ error: 'Choose both From and To dates before exporting.' }, { status: 400 })
-  const rows = await listInquiriesForExport({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, inquiryDateFrom, inquiryDateTo, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, restrictToUserId: ownershipScope.restrictToUserId })
+  const rows = await listInquiriesForExport({ search, status, classification, source, locationId, location, region, regionPeriod, subStatus, followUpDate, inquiryDate, inquiryDateFrom, inquiryDateTo, visitedDate, budgetMin, budgetMax, makeId, modelId, variantId, quickFilter, userId: req.nextUrl.searchParams.get('userId') ?? '', excludeUserId: req.nextUrl.searchParams.get('excludeUserId') ?? '', restrictToUserId: ownershipScope.restrictToUserId })
   if (rows.length > 5000) return NextResponse.json({ error: 'This range contains more than 5,000 inquiries. Please choose a smaller date range.' }, { status: 400 })
   const headers = ['Date of Inquiry', 'Inquiry No', 'WebSite', 'Source Detail', 'Location', 'Customer', 'MobileNo', 'Email', 'Model', 'Variant', 'Sub Variant', 'Year', 'Budget of Customer', 'Visited Date of Customer', 'Classification', 'Status', 'Sub Status', 'Follow Up Date', 'Remark']
   const lines = [headers.map(csvValue).join(',')]

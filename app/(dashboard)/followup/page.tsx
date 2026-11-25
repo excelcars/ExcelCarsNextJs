@@ -4,6 +4,7 @@ import { getUsersForFollowupFilter, listFollowupQueue } from '@/features/followu
 import { FollowupClient } from '@/features/followup/FollowupClient'
 import { canCurrentUserAccessRoute } from '@/lib/access/accessControl'
 import { getInquiryOwnershipScopeForRoute } from '@/lib/access/inquiryOwnership'
+import { resolveFollowupUserId } from '@/features/followup/userScope'
 import { redirect } from 'next/navigation'
 
 export default async function FollowupPage({
@@ -19,6 +20,7 @@ export default async function FollowupPage({
     website?: string
     customerMobile?: string
     inquiryId?: string
+    excludeUserId?: string
     userId?: string
     makeId?: string
     modelId?: string
@@ -46,7 +48,6 @@ export default async function FollowupPage({
   const website = sp.website ?? ''
   const customerMobile = sp.customerMobile ?? ''
   const inquiryId = sp.inquiryId ?? ''
-  const userId = sp.userId ?? ''
   const makeId = sp.makeId ?? ''
   const modelId = sp.modelId ?? ''
   const variantId = sp.variantId ?? ''
@@ -61,6 +62,7 @@ export default async function FollowupPage({
   const budgetFrom = sp.budgetFrom ?? ''
   const budgetTo = sp.budgetTo ?? ''
   const ownershipScope = await getInquiryOwnershipScopeForRoute('/followup')
+  const userId = resolveFollowupUserId(sp.userId, ownershipScope, sp.excludeUserId)
 
   const parsedMakeId = Number(makeId)
   const parsedModelId = Number(modelId)
@@ -77,6 +79,7 @@ export default async function FollowupPage({
       customerMobile,
       inquiryId,
       userId,
+      excludeUserId: sp.excludeUserId,
       makeId,
       modelId,
       variantId,
@@ -110,6 +113,7 @@ export default async function FollowupPage({
   return (
     <FollowupClient
       initialData={data}
+      excludeUserId={sp.excludeUserId ?? ''}
       search={search}
       classification={classification}
       status={status}

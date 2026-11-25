@@ -9,6 +9,7 @@ import * as jsxRuntime from 'react/jsx-runtime'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { matchPartnerVehicle, partnerVehicleSelection, partnerVehicleKey } from '../src/features/inquiry/partnerVehicleCatalog.ts'
 import { readablePartnerPayload } from '../src/features/inquiry/partnerPayload.ts'
+import { websiteVehicleRequest } from '../src/features/inquiry/websiteInquiryDisplay.ts'
 import { cleanCatalogName } from '../src/lib/catalogNames.ts'
 
 function load(path, imports) {
@@ -75,9 +76,25 @@ test('partner details require route permission and inquiry ownership before read
   assert.equal(reads, 1)
 })
 
+test('website details load all approved submitted fields without exposing extra payload keys', async () => {
+  const payload = { lead_id: 'WEBSITE-STAGE-001', lead_type: 'CONTACT_US', name: 'Staging Test', mobile: '9876543210', email: 'test@example.com', vehicle_requested: 'Hyundai Creta', remarks: 'Testing Website webhook', secret: 'hidden' }
+  const api = load('src/features/inquiry/partnerDetails.actions.ts', {
+    '@/lib/access/accessControl': { getAuthorizedUserIdForRoute: async () => 1 },
+    '@/lib/access/inquiryOwnership': { canAccessInquiryByOwnership: async () => true },
+    './partnerPayload': { readablePartnerPayload },
+    '@/lib/db/prisma': { prisma: { partnerWebhookPayload: { findFirst: async ({ where }) => where.partner.in.includes('WEBSITE') ? { partner: 'WEBSITE', receivedAt: new Date(), rawPayload: payload } : null } } },
+  })
+  const details = await api.getInquiryPartnerDetails(57412)
+  assert.equal(details.partner, 'WEBSITE')
+  assert.deepEqual(Array.from(details.fields, field => field.value), Object.values(payload).slice(0, 7))
+  assert.equal(JSON.stringify(details).includes('hidden'), false)
+  assert.equal(readablePartnerPayload('WEBSITE', { remarks: 'x'.repeat(1000) })[0].value.length, 1000)
+})
+
 test('webhook saves resolved catalog fields, keeps original text and retains unmatched inquiries', async () => {
-  let selection = partnerVehicleSelection(variant), created
+  let selection = partnerVehicleSelection(variant), created, websiteMapping = null, vehicleResolutions = 0
   const db = {
+    partnerVehicleMapping: { findUnique: async ({ where }) => { assert.equal(where.partner_descriptionKey.partner, 'WEBSITE'); return websiteMapping } },
     partnerWebhookPayload: { create: async () => ({ partnerWebhookPayloadId: 1 }), update: async () => {} },
     inquirySourceMaster: { findFirst: async () => ({ sourceId: 3, displayName: 'CarDekho' }) },
     inquiryPortalAssignment: { findFirst: async () => null },
@@ -92,7 +109,8 @@ test('webhook saves resolved catalog fields, keeps original text and retains unm
     './eventLog': { ensureInquiryActivityLogTable: async () => {}, logInquiryEvent: async () => {} },
     './sourceMaster.server': { ensureInquirySourceMasterSeed: async () => {} },
     '@/features/notifications/service': { createUserNotification: async () => {} },
-    './partnerVehicleCatalog.server': { resolvePartnerVehicle: async () => selection },
+    './partnerVehicleCatalog.server': { resolvePartnerVehicle: async () => { vehicleResolutions++; return selection } },
+    './partnerVehicleCatalog': catalogModule,
   })
   const payload = { lead_id: 'test-1', buyer_name: 'Test', buyer_mobile: '9000000000', mmv: 'BMW X1 sDrive20d', mfg_year: '2018' }
   assert.equal((await api.receivePartnerInquiry('CARDEKHO', payload)).success, true)
@@ -105,10 +123,68 @@ test('webhook saves resolved catalog fields, keeps original text and retains unm
   assert.equal((await api.receivePartnerInquiry('CARDEKHO', { ...payload, lead_id: '' })).status, 422)
   await api.receivePartnerInquiry('JUSTDIAL', { leadid: 'jd-1', name: 'Test', mobile: '9000000000' })
   assert.equal(created.inquiryCarDetails, undefined)
+  const website = { lead_id: 'web-1', lead_type: 'CONTACT_US', name: 'Test', mobile: '9000000000', vehicle_requested: 'BMW X1 sDrive20d', remarks: 'Website test' }
+  await api.receivePartnerInquiry('WEBSITE', website)
+  assert.equal(created.inquiryCarDetails, undefined)
+  websiteMapping = { variant }
+  await api.receivePartnerInquiry('WEBSITE', { ...website, lead_id: 'web-2' })
+  assert.equal(created.inquiryCarDetails.create.fkVariantId, 10)
+  assert.equal(created.inquiryCarDetails.create.subVariant, website.vehicle_requested)
+  assert.ok(created.remark.includes('Website test'))
+  assert.equal(vehicleResolutions, 2, 'Website requests must not invoke Cardekho vehicle matching')
+})
+
+test('Website quick mapping creates a vehicle from the original payload and remembers it separately', async () => {
+  let owned = true, remembered, logged, locks = 0
+  const cars = []
+  const mapping = load('src/features/inquiry/partnerVehicleMapping.server.ts', { './partnerVehicleCatalog': catalogModule })
+  const db = {
+    $executeRaw: async () => { locks++ },
+    partnerWebhookPayload: { findFirst: async () => ({ partner: 'WEBSITE', rawPayload: { vehicle_requested: 'BMW X1 sDrive20d' } }) },
+    inquiryCarDetails: {
+      findMany: async () => cars,
+      create: async ({ data }) => { cars.push({ ...data, inquiryCarDetailsId: 1 }); return cars[0] },
+    },
+    carVariantMaster: { findMany: async () => [variant], findUnique: async ({ where }) => where.pkVariantId === 10 ? variant : null },
+    carMakeMaster: { findMany: async () => [{ pkMakeId: 1, make: 'BMW' }] },
+    carModelMaster: { findMany: async () => [{ pkModelId: 2, fkMakeId: 1, model: 'X1' }] },
+    partnerVehicleMapping: { upsert: async args => { remembered = args } },
+    inquiry: { update: async () => {} },
+    $transaction: async callback => callback(db),
+  }
+  const api = load('src/features/inquiry/quickVehicleMapping.actions.ts', {
+    'next/cache': { revalidatePath() {} }, '@/lib/db/prisma': { prisma: db },
+    '@/lib/access/accessControl': { getAuthorizedUserIdForRoute: async () => 4 },
+    '@/lib/access/inquiryOwnership': { canAccessInquiryByOwnership: async () => owned,
+      getInquiryOwnershipScopeForRoute: async () => ({ userId: 4, restrictToUserId: 4 }), buildInquiryOwnershipWhere: userId => ({ createdBy: userId }) },
+    '@/lib/catalogNames': { cleanCatalogName }, './partnerVehicleCatalog': catalogModule, './partnerVehicleMapping.server': mapping,
+    './eventLog': { ensureInquiryActivityLogTable: async () => {}, logInquiryEvent: async (_, event) => { logged = event } },
+  })
+  const choices = await api.getQuickVehicleMappingOptions(7)
+  assert.equal(choices.partner, 'WEBSITE')
+  assert.equal(choices.olderInquiryCount, 0)
+  assert.equal(choices.options.length, 1)
+  assert.ok((await api.saveQuickVehicleMapping(7, 10, { description: 'Invented vehicle' })).error)
+  assert.ok((await api.saveQuickVehicleMapping(7, 999)).error)
+  assert.equal(cars.length, 0)
+  owned = false
+  assert.equal((await api.saveQuickVehicleMapping(7, 10)).success, false)
+  owned = true
+  assert.equal((await api.saveQuickVehicleMapping(7, 10, { applyToExisting: true })).success, true)
+  assert.equal(cars.length, 1)
+  assert.equal(cars[0].subVariant, 'BMW X1 sDrive20d')
+  assert.equal(cars[0].fkVariantId, 10)
+  assert.equal(cars[0].createdBy, 4)
+  assert.equal(remembered.create.partner, 'WEBSITE')
+  assert.equal(logged.eventLabel, 'Website vehicle mapping confirmed')
+  assert.ok(locks > 0)
+  assert.equal((await api.saveQuickVehicleMapping(7, 10)).success, false)
+  assert.equal(cars.length, 1)
 })
 
 test('table and compact cards show partner details and retain unmatched vehicle text', () => {
   const imports = {
+    './websiteInquiryDisplay': { websiteVehicleRequest },
     'react/jsx-runtime': jsxRuntime, 'lucide-react': { Mail: () => null, MapPin: () => null, Phone: () => null },
     '@/lib/listFormatters': { cleanListValue: value => value?.trim() ?? '', formatListDate: () => '', formatListMoney: () => '' },
     '@/components/ui': { Badge: () => null }, './PartnerInquiryDetails': { PartnerInquiryDetails: () => jsxRuntime.jsx('span', { children: 'Partner details' }) },
@@ -125,6 +201,17 @@ test('table and compact cards show partner details and retain unmatched vehicle 
   assert.match(card, /BMW &lt;X1&gt;/)
   assert.match(card, /Needs vehicle mapping/)
   assert.match(card, /Partner details/)
+  const websiteRow = { inquiryId: 57412, website: 'Excel Cars Mumbai', sourceDetail: 'Partner lead ID: WEBSITE-STAGE-001', customerNameLegacy: 'Staging Test', mobileno: '9876543210', email: 'test@example.com', remark: 'Website Lead Type: CONTACT_US\nVehicle: Hyundai Creta\nRemarks: Testing Website webhook\nLead ID: WEBSITE-STAGE-001', inquiryCarDetails: [] }
+  for (const Component of [InquiryTableDataCells, InquiryMobileCard]) {
+    const websiteMarkup = renderToStaticMarkup(jsxRuntime.jsx(Component, { row: websiteRow, number: 1, assignedToLabel: 'Unassigned' }))
+    for (const value of ['Hyundai Creta', 'Staging Test', '9876543210', 'test@example.com', 'Testing Website webhook', 'Partner details']) assert.ok(websiteMarkup.includes(value), `Missing ${value}`)
+    assert.match(websiteMarkup, /Needs vehicle mapping/)
+  }
+  assert.equal(websiteVehicleRequest({ ...websiteRow, website: 'Justdial' }), '')
+  const mappedRow = { ...websiteRow, inquiryCarDetails: [{ subVariant: 'Hyundai Creta', year: null, carVariantMaster: variant, makeLegacy: 'BMW', modelLegacy: 'X1', variantLegacy: 'sDrive 20d' }] }
+  for (const Component of [InquiryTableDataCells, InquiryMobileCard]) {
+    assert.doesNotMatch(renderToStaticMarkup(jsxRuntime.jsx(Component, { row: mappedRow, number: 1, assignedToLabel: 'Unassigned' })), /Needs vehicle mapping/)
+  }
 })
 
 test('quick mapping enforces access and updates only the original unmapped vehicle while remembering its description', async () => {
@@ -133,6 +220,7 @@ test('quick mapping enforces access and updates only the original unmapped vehic
   const mapping = load('src/features/inquiry/partnerVehicleMapping.server.ts', { './partnerVehicleCatalog': catalogModule })
   const car = { inquiryCarDetailsId: 8, fkInquiryId: 7, fkVariantId: null, subVariant: 'BMW X1 partner trim', year: 2018 }
   const db = {
+    $executeRaw: async () => 0,
     partnerWebhookPayload: { findFirst: async ({ where }) => { reads++; assert.equal(where.inquiryId, 7); return { rawPayload: { mmv: car.subVariant } } } },
     inquiryCarDetails: {
       findMany: async ({ where }) => {
